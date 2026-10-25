@@ -18,6 +18,7 @@ Using the tools is in grammar-mcp; the Nu language is in nu.
 - `equip(uninstall, source_dir)`: drop the equip; its source is untouched.
 
 An equip is `<author>/<name>`; a call `<author>/<name>:module/path:function`.
+A builtin, `gram` or `grammar`, drops its author everywhere: `commit("gram")`.
 Every call lives in a module of the rig, none at its root.
 
 ## Call target

@@ -18,6 +18,46 @@ pub(crate) enum NamepathRef {
     },
 }
 
+/// The builtins: equips central to the MCP, each called by its bare name.
+pub(crate) const BUILTINS: [(&str, &str); 2] = [
+    ("gram", "sourcetrait"),
+    ("grammar", "sourcetrait"),
+];
+
+/// The `<author>/<name>` a builtin's bare name stands for.
+pub(crate) fn builtin_equip(name: &str) -> Option<String> {
+    BUILTINS
+        .iter()
+        .find(|(builtin, _)| *builtin == name)
+        .map(|(builtin, author)| format!("{author}/{builtin}"))
+}
+
+/// The bare name an equip goes by when it is a builtin.
+pub(crate) fn builtin_name(equip: &str) -> Option<&'static str> {
+    BUILTINS
+        .iter()
+        .find(|(name, author)| equip.split_once('/') == Some((*author, *name)))
+        .map(|(name, _)| *name)
+}
+
+/// What an equip is shown and called by: a builtin's bare name, else itself.
+pub(crate) fn display_equip(equip: &str) -> &str {
+    builtin_name(equip).unwrap_or(equip)
+}
+
+/// `raw` with a head that is a builtin's bare name resolved to its equip.
+pub(crate) fn resolve_builtin(raw: &str) -> String {
+    let (head, rest) = match raw.split_once(':') {
+        Some((head, rest)) => (head, Some(rest)),
+        None => (raw, None),
+    };
+    match (builtin_equip(head), rest) {
+        (Some(equip), Some(rest)) => format!("{equip}:{rest}"),
+        (Some(equip), None) => equip,
+        (None, _) => raw.to_string(),
+    }
+}
+
 /// The whole-namespace pattern.
 pub(crate) const PATTERN_ALL: &str = "*";
 
@@ -103,7 +143,8 @@ impl Namepath {
         if raw.is_empty() {
             return Err(bad(raw, "empty namepath"));
         }
-        let parts: Vec<&str> = raw.split(':').collect();
+        let resolved = resolve_builtin(raw);
+        let parts: Vec<&str> = resolved.split(':').collect();
         match parts.as_slice() {
             [rig] => {
                 check_rig(rig).map_err(|e| bad(raw, e))?;
@@ -190,7 +231,12 @@ impl NamepathPattern {
                 "not a pattern; a pattern ends in `/` or `:`, or is `*` or `.`",
             ));
         };
-        let parts: Vec<&str> = body.split(':').collect();
+        let resolved = if descends && !body.contains(':') {
+            body.to_string()
+        } else {
+            resolve_builtin(body)
+        };
+        let parts: Vec<&str> = resolved.split(':').collect();
         match parts.as_slice() {
             [single] if descends => {
                 if single.contains('/') {

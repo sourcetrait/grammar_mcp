@@ -3,7 +3,7 @@ use crate::*;
 /// Parameters for `commit()`.
 #[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
 pub struct CommitParams {
-    /// The equip to commit: its `<author>/<name>`.
+    /// The equip to commit: its `<author>/<name>`, or a builtin's name.
     pub namepath: String,
 }
 
@@ -25,7 +25,8 @@ impl NuSh {
         &self,
         mcp::Parameters(p): mcp::Parameters<CommitParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let lock = match self.rig_locks.lookup(&p.namepath).await {
+        let equip = resolve_builtin(&p.namepath);
+        let lock = match self.rig_locks.lookup(&equip).await {
             Some(l) => l,
             None => {
                 return Ok(error_to_call_result(
@@ -38,7 +39,7 @@ impl NuSh {
         };
         let _guard = lock.write().await;
         let engine = self.lint_engine.current();
-        match commit_equip(&p.namepath, &engine) {
+        match commit_equip(&equip, &engine) {
             Ok(result) => envelope_to_structured(&CommitEnvelope {
                 added: result.added,
                 modified: result.modified,

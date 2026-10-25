@@ -320,6 +320,89 @@ fn all_matches_every_kind() {
 }
 
 #[test]
+fn a_builtin_resolves_to_its_equip() {
+    assert_eq!(validate("gram").unwrap(), lib_ref("sourcetrait/gram"));
+    assert_eq!(validate("gram:log").unwrap(), mod_ref("sourcetrait/gram", "log"));
+    assert_eq!(
+        validate("gram:log:latest").unwrap(),
+        call_ref("sourcetrait/gram", "log", "latest"),
+    );
+    assert_eq!(
+        validate("grammar:eye:dir").unwrap(),
+        call_ref("sourcetrait/grammar", "eye", "dir"),
+    );
+    assert_eq!(
+        validate("sourcetrait/gram:log:latest").unwrap(),
+        validate("gram:log:latest").unwrap(),
+        "a builtin's full name still reaches it",
+    );
+}
+
+#[test]
+fn any_other_head_still_needs_its_author() {
+    for s in ["gramx:log:latest", "Gram:log:latest", "grams", "sourcetrait:log:latest"] {
+        assert!(validate(s).is_err(), "{s:?} names no builtin and has no author");
+    }
+    assert_eq!(
+        validate("acme/gram:x:y").unwrap(),
+        call_ref("acme/gram", "x", "y"),
+        "an equip named gram by another author keeps its own name",
+    );
+}
+
+#[test]
+fn a_builtin_resolves_in_every_pattern_form() {
+    assert_eq!(
+        pat("gram:"),
+        NamepathPattern::Rig {
+            rig: "sourcetrait/gram".into(),
+        },
+    );
+    assert_eq!(
+        pat("gram:log/"),
+        NamepathPattern::ModuleTree {
+            rig: "sourcetrait/gram".into(),
+            module_path: "log".into(),
+        },
+    );
+    assert_eq!(
+        pat("gram:log:"),
+        NamepathPattern::ModuleCalls {
+            rig: "sourcetrait/gram".into(),
+            module_path: "log".into(),
+        },
+    );
+    assert!(classify("gram:log:latest").covers(&call_ref("sourcetrait/gram", "log", "latest")));
+}
+
+#[test]
+fn a_builtins_name_before_a_slash_is_an_author() {
+    assert_eq!(
+        pat("gram/"),
+        NamepathPattern::Author {
+            author: "gram".into(),
+        },
+    );
+}
+
+#[test]
+fn a_builtin_is_shown_by_its_bare_name() {
+    assert_eq!(display_equip("sourcetrait/gram"), "gram");
+    assert_eq!(display_equip("sourcetrait/grammar"), "grammar");
+    assert_eq!(display_equip("acme/gram"), "acme/gram");
+    assert_eq!(display_equip("sourcetrait/two"), "sourcetrait/two");
+}
+
+#[test]
+fn a_rig_pattern_is_found_in_either_spelling() {
+    assert!(is_rig_pattern("gram:", "sourcetrait/gram"));
+    assert!(is_rig_pattern("sourcetrait/gram:", "sourcetrait/gram"));
+    assert!(!is_rig_pattern("gram:log:", "sourcetrait/gram"));
+    assert!(!is_rig_pattern("acme/gram:", "sourcetrait/gram"));
+    assert!(!is_rig_pattern("@gram", "sourcetrait/gram"));
+}
+
+#[test]
 fn an_unresolved_current_matches_nothing() {
     // `.` is a STUB until purview resolves it to that purview's own patterns.
     // Matching NOTHING is the safe unresolved reading - matching everything

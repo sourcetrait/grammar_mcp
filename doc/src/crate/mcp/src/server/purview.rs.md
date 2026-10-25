@@ -62,6 +62,10 @@ puts it back to what startup would have written.
 An id with no row contributes NOTHING rather than everything, because a typo must NARROW
 the view rather than silently open it.
 
+## fn is_rig_pattern
+Asked by PARSE rather than by string, so `gram:` and `sourcetrait/gram:` are one pattern:
+an install never adds the second spelling beside the first, and an uninstall takes either.
+
 ## fn parse_patterns
 A stored pattern that no longer parses is treated as ABSENT rather than fatal: a purview
 file is agent-authored data, and one bad row must not take `info()` down with it.

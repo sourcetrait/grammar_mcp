@@ -1,0 +1,92 @@
+use serde_json::json;
+use sourcetrait_grammar_mcp::guts::{TestServer, has_error, valid_function_source, write_source};
+use sourcetrait_common::testing::prelude::*;
+
+/// One shared in-process server per test binary: constructing a TestServer runs
+/// the namespace substrate (keypair, equip repo git config), which must not race
+/// itself across parallel tests.
+static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integration, {
+    .using_temp_dir()
+    .setup(|_| TestServer::new())
+});
+
+#[tested]
+fn a_builtin_is_reached_by_its_bare_name() {
+    let t = testing::test!({ .using_temp_dir() });
+    let s = TESTING.harness();
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/gram");
+    let scaffolded = s.scaffold(&["gram:m:tally"]);
+    assert!(!has_error(&scaffolded), "new() takes a builtin's bare name; got {scaffolded}");
+    write_source(&src, "mod.nu", "# the gram rig\nexport module m\n");
+    write_source(
+        &src,
+        "m/tally/mod.nu",
+        &valid_function_source("x: int", "out: int", "{ out: ($args.x + 1) }"),
+    );
+    let committed = s.commit("gram");
+    assert!(!has_error(&committed), "commit() takes a builtin's bare name; got {committed}");
+
+    let called = s.call("gram:m:tally", json!({"x": 41}));
+    assert_eq!(called["result"]["out"].as_i64(), Some(42), "got {called}");
+    let full = s.call("sourcetrait/gram:m:tally", json!({"x": 1}));
+    assert_eq!(full["result"]["out"].as_i64(), Some(2), "the full name still calls; got {full}");
+
+    let inspected = s.inspect("gram:m:tally");
+    assert_eq!(
+        inspected["doc"]["signature"].as_str(),
+        Some("gram:m:tally <x:int> <out:int>"),
+        "a standalone signature names a builtin bare; got {inspected}",
+    );
+
+    let block = "gram # the gram rig\n m\n  tally <x:int> <out:int>\n";
+    let info = s.info();
+    let signatures = info["signatures"].as_str().expect("signatures block");
+    assert!(
+        signatures.starts_with(block),
+        "a builtin leads the block at an author's depth by its bare name; got:\n{signatures}",
+    );
+    assert!(
+        !signatures.lines().any(|line| line == "sourcetrait"),
+        "a builtin is never listed under its author; got:\n{signatures}",
+    );
+
+    let pattern = s.inspect("gram:");
+    assert_eq!(pattern["doc"]["signatures"].as_str(), Some(block), "got {pattern}");
+
+    let configured = s.purview_configure("gram_calls", &["gram:m:"]);
+    assert!(!has_error(&configured), "a purview takes a builtin's bare form; got {configured}");
+    let viewed = s.info_as(&["gram_calls"]);
+    assert_eq!(viewed["signatures"].as_str(), Some(block), "got {viewed}");
+}
+
+#[tested]
+fn an_uninstalled_builtin_takes_its_bare_patterns_with_it() {
+    let t = testing::test!({ .using_temp_dir() });
+    let s = TESTING.harness();
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/grammar");
+    let _ = s.scaffold(&["grammar:eye:dir"]);
+    write_source(
+        &src,
+        "eye/dir/mod.nu",
+        &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
+    );
+    let committed = s.commit("grammar");
+    assert!(!has_error(&committed), "got {committed}");
+    let configured = s.purview_configure("grammar_view", &["grammar:", "grammar:eye:dir"]);
+    assert!(!has_error(&configured), "got {configured}");
+
+    let source = src.parent().expect("a rig source sits in its equip source");
+    let removed = s.equip("uninstall", &source.to_string_lossy());
+    assert!(!has_error(&removed), "got {removed}");
+    let purviews = s.purviews();
+    let ids: Vec<&str> = purviews["purviews"]
+        .as_array()
+        .expect("purviews list")
+        .iter()
+        .filter_map(|row| row[0].as_str())
+        .collect();
+    assert!(
+        !ids.contains(&"grammar_view"),
+        "both bare patterns dangle once the builtin goes, so the row goes; got {purviews}",
+    );
+}

@@ -101,6 +101,8 @@ acme
    area <width:float,height:float> <area:float> # inputs' unit squared
 ```
 `area` is `call("acme/geo:shape:area", {width: 3.0, height: 4.0})`.
+A builtin, `gram` or `grammar`, sits at an author's depth and is called by its
+bare name: `gram:log:latest`.
 `inspect()` takes an exact namepath or a pattern: `author/`, `author/rig:`,
 `.../mod/` its subtree, `.../mod:` its calls, `*` everything, `.` the purview.
 

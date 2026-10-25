@@ -146,10 +146,14 @@ design: a structured nested-JSON tree of the same surface runs roughly 8 KB for 
 rigs.
 
 NOTHING IS STATED THAT CAN BE INFERRED, and the separators are inferable from shape alone:
-depth 0 is an author and depth 1 an equip's rig - always the two levels `<author>/<name>` -
+depth 0 is an author and depth 1 its equip's rig, the two levels of `<author>/<name>`;
 everything deeper is a module UNLESS it carries the two signature groups, which makes it a
 call. So a reader joins author to name with `/`, module segments with `/`, and puts `:`
 before the first module and before the call.
+
+A BUILTIN takes depth 0 alone, under its bare name, and leads the block: its line already
+reads as the namepath an agent calls, `gram:log:latest`, with no author to join. Every
+other rig follows under its author as before.
 
 NO TRAILING HIERARCHY CHARACTERS, and the reasoning generalizes. A trailing separator would
 let a line state its own separator rather than have one inferred, but it fails at exactly
@@ -174,6 +178,11 @@ for "nothing here" - a fresh namespace renders empty for the same reason.
 A rig whose index fails to decode SKIPS with a host-stderr note rather than failing the
 call, so one corrupt rig cannot take the surface down.
 
+## fn rig_signatures
+One rig's slice of the block, walked from the depth its rig line sits above: a builtin's
+one level shallower than an author's rig. The rig's read lock is held only while its index
+is read and walked.
+
 ## struct CallDoc
 There is NO `summary` field, and its absence is deliberate: SUMMARY IS PART OF THE
 SIGNATURE, carried as the trailing ` # ...` exactly as the block does it.
@@ -195,6 +204,8 @@ Every path composes from the NAMEPATH against the COMMITTED canonical tree, so n
 reads `source_path`. Nothing agent-facing composes from it at all, so `source_path` is not
 surfaced to the agent; it stays load-bearing INTERNALLY - `commit` re-reads it and
 `check_source_dir` cross-checks it - so the index field stays.
+
+A call's standalone signature names a builtin by its bare name, as the block does.
 
 ## fn cap_diagnostics
 Caps each SEVERITY independently, so a flood of warnings cannot crowd out the errors that

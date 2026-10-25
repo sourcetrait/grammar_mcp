@@ -36,12 +36,14 @@ Every target HAS a row - startup materializes `default`, and any other id in the
 was checked against the table to get there - which is why the lookup can be a plain `find`
 with no fallback.
 
+A builtin's pattern is written by its bare name, `gram:`, the name an agent reads and calls.
+
 NON-FATAL: the install already succeeded and is not rolled back, so a bookkeeping failure is
 reported to stderr rather than turned into a failed install. It is worth reading though,
 because a `default` that failed to gain the pattern leaves the new rig installed but out of
 view.
 
 ## fn purview_remove_rig
-The bare `author/name:` pattern goes explicitly; anything ELSE that pointed into the rig - a
-module pattern beneath it, an exact call inside it - is now dangling and goes with the prune,
-which is the same sweep every other detection runs.
+The rig's own pattern goes explicitly, in either of a builtin's spellings; anything ELSE
+that pointed into the rig - a module pattern beneath it, an exact call inside it - is now
+dangling and goes with the prune, which is the same sweep every other detection runs.

@@ -1,5 +1,20 @@
 # namepath.rs
 
+## const BUILTINS
+The equips central to the MCP, called by their bare names: `gram:log:latest` rather than
+`sourcetrait/gram:log:latest`. The list is closed and short by design, so a builtin cannot
+shadow an equip anyone installs: every other head still carries its author, and an equip
+named `gram` by another author stays reachable by its full name.
+
+## fn display_equip
+The one place a builtin's full name turns back into its bare one, so the block, a
+standalone signature, and the pattern an install writes all show the name an agent calls.
+
+## fn resolve_builtin
+Resolution rewrites the HEAD alone and runs before any check, so every later rule - the
+equip's shape, the module path, the call's name - sees an ordinary compound and needs no
+builtin arm. Errors still quote the namepath as it was written.
+
 ## const PATTERN_CURRENT
 Parsed HERE so the grammar is complete, but RESOLVED by purview, which is the only
 thing that knows what it names. That split is deliberate and has a consequence worth
@@ -26,6 +41,9 @@ separator already means in an exact namepath. That is why the two module forms d
 The single-segment-with-`/` arm rejects `author/rig/`: after a RIG the separator is `:`,
 because everything past a rig is reached that way. Catching it here gives a legible
 reason rather than an unhelpful "not a pattern".
+
+That arm's body is an AUTHOR, so it is never resolved: `gram/` names the author `gram`,
+while `gram:` is the builtin's rig.
 
 ### fn matches
 THE PER-SIGNATURE PRIMITIVE: one namepath, asked whether this pattern covers it. The

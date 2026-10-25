@@ -751,50 +751,70 @@ pub(crate) async fn render_signatures_within(
     patterns: &[NamepathStr],
 ) -> String {
     let mut out = String::new();
+    let names = registered_rig_names();
+    for name in names.iter().filter(|name| builtin_name(name).is_some()) {
+        if let Some((summary, body)) = rig_signatures(locks, name, 1, patterns).await {
+            push_signature_line(&mut out, 0, display_equip(name), &summary);
+            out.push_str(&body);
+        }
+    }
     let mut current_author: Option<String> = None;
-    for name in registered_rig_names() {
+    for name in names.iter().filter(|name| builtin_name(name).is_none()) {
         let Some((author, leaf)) = name.split_once('/') else {
             continue;
         };
-        let lock = locks.lookup(&name).await;
-        let _guard = match &lock {
-            Some(l) => Some(l.read().await),
-            None => None,
-        };
-        let index = match load_index(&name) {
-            Ok(i) => i,
-            Err(e) => {
-                eprintln!("grammar: signature block skipped {name}: {e}");
-                continue;
-            }
-        };
-        let docs_dir = rig_docs_dir(&name);
-        let mut body = String::new();
-        let showed = push_within_signatures(
-            &mut body,
-            2,
-            &index.functions,
-            &index.modules,
-            &docs_dir,
-            "",
-            &name,
-            patterns,
-        );
-        let rig_namepath = NamepathRef::Rig {
-            rig: name.clone(),
-        };
-        let covered = patterns.iter().any(|p| p.covers(&rig_namepath));
-        if !showed && !covered {
+        let Some((summary, body)) = rig_signatures(locks, name, 2, patterns).await else {
             continue;
-        }
+        };
         if current_author.as_deref() != Some(author) {
             push_signature_line(&mut out, 0, author, "");
             current_author = Some(author.to_string());
         }
-        push_signature_line(&mut out, 1, leaf, &read_summary(&docs_dir, ""));
+        push_signature_line(&mut out, 1, leaf, &summary);
         out.push_str(&body);
     }
     out
+}
+
+/// A rig's summary and its signatures in view from `depth`; None when none are.
+async fn rig_signatures(
+    locks: &RigLocks,
+    name: &str,
+    depth: usize,
+    patterns: &[NamepathStr],
+) -> Option<(String, String)> {
+    let lock = locks.lookup(name).await;
+    let _guard = match &lock {
+        Some(l) => Some(l.read().await),
+        None => None,
+    };
+    let index = match load_index(name) {
+        Ok(i) => i,
+        Err(e) => {
+            eprintln!("grammar: signature block skipped {name}: {e}");
+            return None;
+        }
+    };
+    let docs_dir = rig_docs_dir(name);
+    let mut body = String::new();
+    let showed = push_within_signatures(
+        &mut body,
+        depth,
+        &index.functions,
+        &index.modules,
+        &docs_dir,
+        "",
+        name,
+        patterns,
+    );
+    let rig_namepath = NamepathRef::Rig {
+        rig: name.to_string(),
+    };
+    let covered = patterns.iter().any(|p| p.covers(&rig_namepath));
+    if !showed && !covered {
+        return None;
+    }
+    Some((read_summary(&docs_dir, ""), body))
 }
 
 /// A rig's documentation; `srcdir` is the COMMITTED CANONICAL directory.
@@ -886,7 +906,7 @@ pub(crate) fn inspect_impl(
                 }
             })?;
             let docs_path = format!("{module_path}/{fn_name}");
-            let namepath = format!("{rig}:{module_path}:{fn_name}");
+            let namepath = format!("{}:{module_path}:{fn_name}", display_equip(rig));
             Ok(InspectDoc::Call(CallDoc {
                 src: root
                     .join(module_path)

@@ -175,7 +175,7 @@ fn purview_add_rig(
     // The purview table is namespace meta beside the equip repo: its
     // load-mutate-save is not atomic, so it rides the same repo-wide lock.
     let _repo = equip_repo_lock();
-    let pattern = format!("{rig}:");
+    let pattern = format!("{}:", display_equip(rig));
     let mut rows = match load_purviews() {
         Ok(rows) => rows.unwrap_or_default(),
         Err(e) => {
@@ -191,7 +191,7 @@ fn purview_add_rig(
     }
     for id in targets {
         if let Some(row) = rows.iter_mut().find(|row| row.id == id) {
-            if !row.namepath_patterns.contains(&pattern) {
+            if !row.namepath_patterns.iter().any(|p| is_rig_pattern(p, rig)) {
                 row.namepath_patterns.push(pattern.clone());
             }
         }
@@ -212,9 +212,8 @@ fn purview_remove_rig(rig: &str) {
             return;
         }
     };
-    let pattern = format!("{rig}:");
     for row in rows.iter_mut() {
-        row.namepath_patterns.retain(|p| p != &pattern);
+        row.namepath_patterns.retain(|p| !is_rig_pattern(p, rig));
     }
     prune_dangling(&mut rows);
     if let Err(e) = save_purviews(&rows) {

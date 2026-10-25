@@ -177,6 +177,14 @@ pub(crate) fn resolve_patterns(
     out
 }
 
+/// Is `pattern` the whole-rig pattern of `rig`, in either of a builtin's spellings?
+pub(crate) fn is_rig_pattern(
+    pattern: &str,
+    rig: &str,
+) -> bool {
+    matches!(NamepathPattern::parse(pattern), Ok(NamepathPattern::Rig { rig: named }) if named == rig)
+}
+
 /// Parse pattern strings into the matcher form, dropping any that fail.
 pub(crate) fn parse_patterns(patterns: &[String]) -> Vec<NamepathStr> {
     patterns

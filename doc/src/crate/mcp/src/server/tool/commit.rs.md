@@ -1,6 +1,9 @@
 # commit.rs
 
 ## fn commit
+A builtin's bare name resolves to its equip first, so `commit("gram")` commits
+`sourcetrait/gram`.
+
 Takes the equip's WRITE lock, since a commit wipes and rebuilds the canonical subtree, both
 kinds of it, and a concurrent call reading the rig's index would see it mid-flight.
 
