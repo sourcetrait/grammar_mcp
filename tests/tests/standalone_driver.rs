@@ -6,14 +6,13 @@ use sourcetrait_common::testing::prelude::*;
 static TESTING: testing::Module = testing::module!(Integration, { .using_temp_dir() });
 
 /// A committed rig is usable OUTSIDE the MCP via the standalone `nu` driver
-/// (`NU_LIB_DIRS=<namespace>/rigs nu -c "use rig/<author>/<lib>/<mod>; ..."`).
+/// (`NU_LIB_DIRS=<namespace> nu -c "use equip/<author>/<name>/rig/<mod>; ..."`).
 /// Spawns a real `nu` process, so it is a SYSTEM test.
 #[tested]
 fn committed_rig_invokable_via_standalone_driver() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn_args(t.temp_dir(), &["--id", "drvid"]);
-    let src = t.temp_dir().join("src").join("drvilib");
-    let _ = host.rig_new("sourcetrait/drvilib", &src);
+    let (_, src) = host.equip_new("sourcetrait/drvilib", &t.temp_dir().join("src"));
     write_source(&src, "mod.nu", "export module calc\n");
     write_source(&src, "calc/mod.nu", "export use double\n");
     write_source(
@@ -24,11 +23,11 @@ fn committed_rig_invokable_via_standalone_driver() {
     let committed = host.commit("sourcetrait/drvilib");
     assert!(!has_error_path(&committed), "commit should succeed; got {committed}");
 
-    let rigs_dir = namespace_dir(host.data_home(), "drvid", "default").join("rigs");
+    let namespace = namespace_dir(host.data_home(), "drvid", "default");
     let out = Command::new("nu")
-        .env("NU_LIB_DIRS", &rigs_dir)
+        .env("NU_LIB_DIRS", &namespace)
         .arg("-c")
-        .arg("use rig/sourcetrait/drvilib/calc; calc double {x: 6} | to nuon")
+        .arg("use equip/sourcetrait/drvilib/rig/calc; calc double {x: 6} | to nuon")
         .output()
         .expect("spawn nu");
     let stdout = String::from_utf8_lossy(&out.stdout);

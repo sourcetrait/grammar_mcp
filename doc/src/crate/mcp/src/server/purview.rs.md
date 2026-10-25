@@ -2,7 +2,7 @@
 
 ## const META_DIR
 The namespace's meta directory - where `purviews.nuon` lives, alongside `keypair/`,
-`rigs/` and `host.lock`.
+`equip/` and `host.lock`.
 
 ## const PURVIEW_DEFAULT
 THERE IS NO UNCONFIGURED DEFAULT, which is the invariant the whole subsystem rests on.
@@ -51,8 +51,8 @@ is legal until someone later sets `b -> @a`.
 Materializing `default` once at startup makes "default has a row" an INVARIANT rather
 than a fallback every reader would have to remember, and everything downstream is
 simpler for it: `resolve_patterns` has no absent-default arm, `is_nameable_purview`
-special-cases only `*`, rig install just appends to the rows it finds, and rig removal
-has no "is this namespace configured yet" question to ask.
+special-cases only `*`, an equip install just appends to the rows it finds, and an
+uninstall has no "is this namespace configured yet" question to ask.
 
 It is also why `purview_configure("default", [])` RESETS to `['*']` rather than
 deleting: `default` has no not-existing state, so the delete operation everywhere else

@@ -8,16 +8,16 @@ integration tests exercise the handlers without spawning the binary.
 THE PROCESS-GLOBAL CONSTRAINT is the thing to hold before writing a test here.
 `CONFIG` is a `OnceLock` and `BASE_DIRS` a `LazyLock` that reads XDG at first
 access, so every `TestServer` in ONE test binary shares ONE namespace: one id and
-namespace, one XDG root, one rigs git repo. Per-FILE isolation is therefore free
+namespace, one XDG root, one equip git repo. Per-FILE isolation is therefore free
 (each `tests/*.rs` is its own process) while WITHIN a file tests must use unique
-rig names and must not rely on a pristine namespace. A test that genuinely needs
+equip names and must not rely on a pristine namespace. A test that genuinely needs
 an empty namespace belongs in its own binary or in the system crate.
 
 `--test-threads=1` follows from the same constraint - a shared namespace and one
 git repo race concurrently.
 
 ## fn sweep_dead_test_namespaces
-Each test BINARY gets its own `grammar_inproc_<pid>` root holding a full rigs git
+Each test BINARY gets its own `grammar_inproc_<pid>` root holding a full equip git
 repo and a keypair, and a test harness returns from `main` with no hook to hang
 teardown on: statics never run `Drop`, and there is no atexit here. Left alone
 these accumulate one per run FOREVER - a real sweep found 128 of them, roughly

@@ -47,18 +47,18 @@ fn cli_info_starts_without_the_sourcetrait_environment() {
 }
 
 #[tested]
-fn cli_rig_lifecycle_and_call() {
+fn cli_equip_lifecycle_and_call() {
     let t = testing::test!({ .using_temp_dir() });
-    let src = t.temp_dir().join("src").join("clilib");
-    let src_str = src.to_str().unwrap();
+    let equip = equip_source(&t.temp_dir().join("src"), "sourcetrait/clilib");
+    let src = equip.join("rig");
 
     let established = run_output(
         t.temp_dir(),
-        &["--id", "cid", "cli", "rig", "new", "sourcetrait/clilib", src_str],
+        &["--id", "cid", "cli", "equip", "new", equip.to_str().unwrap()],
     );
     assert!(
         established.status.success(),
-        "cli rig new should exit 0; got {established:?}",
+        "cli equip new should exit 0; got {established:?}",
     );
 
     write_source(&src, "mod.nu", "export module m\n");

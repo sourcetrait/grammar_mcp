@@ -9,12 +9,12 @@ use std::path::Path;
 
 use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{
-    TestServer, has_error, valid_function_source, write_source,
+    TestServer, equip_source, has_error, valid_function_source, write_source,
 };
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
-/// the namespace substrate (keypair, rigs repo git config), which must not race
+/// the namespace substrate (keypair, equip repo git config), which must not race
 /// itself across parallel tests. Every test commits the SAME patlib fixture:
 /// the first establish wins, later ones are idempotent no-change commits.
 static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integration, {
@@ -41,9 +41,12 @@ static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integrat
 /// covered in the same fixture.
 fn commit_patlib(
     s: &TestServer,
-    src: &Path,
+    root: &Path,
 ) {
-    let _ = s.rig("new", "sourcetrait/patlib", src.to_str().unwrap());
+    let source = equip_source(root, "sourcetrait/patlib");
+    let _ = s.equip("new", source.to_str().unwrap());
+    let rig = source.join("rig");
+    let src = rig.as_path();
     write_source(src, "mod.nu", "# the patlib rig\nexport module m\nexport module other\n");
     write_source(src, "m/mod.nu", "# the m module\nexport module deep\nexport module here\nexport use here\n");
     write_source(

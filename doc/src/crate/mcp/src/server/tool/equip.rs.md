@@ -1,19 +1,26 @@
-# rig.rs
+# equip.rs
 
-## enum RigSummary
+## enum EquipSummary
 UNTAGGED: the caller knows the variant from the action it invoked, and the shapes are distinct.
 `uninstall` returns no summary at all - void, matching its idempotent success.
 
-## fn rig
+## fn equip
+The ACTION is checked before the source path, so an unknown action is named as one whatever
+path rode with it. The namepath then comes from the path alone: the equip is wherever its
+source says it is.
+
 `new` and `install` REGISTER THE LOCK FIRST and unregister on failure. That ordering is what
 makes "already registered" a lock-level answer rather than a filesystem race, and it is why
 both error paths call `unregister` explicitly.
 
-`uninstall` on an unknown rig returns success with no summary rather than an error, because
-absent IS the requested state.
+`uninstall` on an unknown equip returns success with no summary rather than an error,
+because absent IS the requested state.
 
-The `_guard` is dropped explicitly before `unregister` in the uninstall path: unregistering
+The guard is dropped explicitly before `unregister` in the uninstall path: unregistering
 while still holding the lock would drop the map entry the guard belongs to.
+
+An install brings a RIG into view only when the equip has one; a lib alone has no calls for
+a purview to show.
 
 ## fn purview_add_rig
 ADDS, never replaces. `default` always carries a row - startup writes it as `['*']` - so the

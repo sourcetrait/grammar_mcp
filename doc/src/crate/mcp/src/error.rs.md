@@ -5,20 +5,20 @@ values. No stringly-keyed disambiguation, no rendered-text middle layer, and no
 JSON-RPC error codes for domain failures.
 
 ## struct Source
-`path` is rigs-dir-relative (`<rig>/<file>`) for a rig-validation diagnostic and NULL
-for a run or interact body diagnostic, because a body diagnostic is located in the
-body and there is no file to name. `position` is 1-based, and `[0, 0]` means
+`path` is equip-repo-relative (`<equip>/<kind>/<file>`) for a validation diagnostic
+and NULL for a run or interact body diagnostic, because a body diagnostic is located in
+the body and there is no file to name. `position` is 1-based, and `[0, 0]` means
 file-level rather than line 0.
 
 Both fields serialize as PRESENT, with `path` as null when absent rather than omitted.
 The whole `Source` is null on the `Diagnostic` for a non-located condition - an eval
-timeout, an unregistered-rig error.
+timeout, an unregistered-equip error.
 
 The shape stays flat - `path` plus `position` - which is what the agent consumes
 directly, rather than a nested source-carrier the reader would have to unwrap.
 
 ## struct Diagnostic
-The single type for both a rig-validation finding and a body-lint finding - one shape
+The single type for both a validation finding and a body-lint finding - one shape
 the wire and the check summary both carry.
 
 THE BUCKET CONVEYS SEVERITY, which is why `severity` is `#[serde(skip)]` - absent from
@@ -28,17 +28,22 @@ Per-condition data (`timeout_ms`, names, reason) lives IN `message`, not a typed
 per-variant field: it is text either way, and a per-variant field would vary its shape
 by kind.
 
-## enum Error
+## enum GrammarMcpError
 Stays the ergonomic typed value the impls build and bubble with `?`; it is not
 serde-tagged on the wire. Two variants carry already-unified rows, and the rest are
 single-condition.
 
-`From<io::Error>` blanket-converts to `Internal { phase: "io" }` so the rig impls can
+`From<io::Error>` blanket-converts to `Internal { phase: "io" }` so the equip impls can
 use `?` freely rather than mapping at every filesystem call.
 
 ### fn kind_str
 The two violation variants `unreachable!()` here deliberately: they render through
 `bucket`, and reaching this arm would mean a caller bypassed that path.
+
+REGISTRATION is `equip::*`, because the unit installed, committed, and addressed by a
+source path is the equip; a rig's tree rules keep `rig::*` and a lib's are `lib::*`.
+`equip::no_rig` stays apart from `equip::not_registered`: the one is an installed equip
+asked for calls it does not have, the other a name nothing answers to.
 
 `module::circular_import` is a TOP-LEVEL namespace rather than a `rig::` kind, because
 a resolution cycle is not a rig-structure rule even when the validator is what finds

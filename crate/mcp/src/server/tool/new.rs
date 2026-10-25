@@ -3,7 +3,7 @@ use crate::*;
 /// Parameters for `new()`.
 #[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
 pub struct NewParams {
-    /// Namepaths to scaffold into existing rigs: a module or a function.
+    /// Namepaths to scaffold into installed equips' rigs: a module or a function.
     pub namepaths: Vec<String>,
 }
 
@@ -17,7 +17,7 @@ pub(crate) struct NewEnvelope {
 impl NuSh {
     #[mcp::tool(
         name = "new",
-        description = "Scaffold modules / functions (by namepath) into existing rigs.",
+        description = "Scaffold modules / functions (by namepath) into an equip's rig.",
         output_schema = mcp::schema_for_type::<NewEnvelope>()
     )]
     pub(crate) async fn scaffold(
@@ -40,7 +40,7 @@ impl NuSh {
                     return Ok(error_to_call_result(
                         GrammarMcpError::NamepathInvalid {
                             namepath: np.clone(),
-                            reason: "new() needs a module or function namepath; use rig(new) to create a rig"
+                            reason: "new() needs a module or function namepath; use equip(new) to create an equip"
                                 .to_string(),
                         },
                         None,
@@ -59,8 +59,8 @@ impl NuSh {
                 Some(l) => locks.push(l),
                 None => {
                     return Ok(error_to_call_result(
-                        GrammarMcpError::RigNotRegistered {
-                            rig: lib.clone(),
+                        GrammarMcpError::EquipNotRegistered {
+                            equip: lib.clone(),
                         },
                         None,
                     ));
@@ -77,7 +77,7 @@ impl NuSh {
                 Ok(true) => {
                     return Ok(error_to_call_result(
                         GrammarMcpError::RigInvalidName {
-                            rig: module_path.clone(),
+                            name: module_path.clone(),
                             reason: format!(
                                 "`{}` already exists; edit it instead of scaffolding over it",
                                 name.clone().unwrap_or_else(|| module_path.clone()),

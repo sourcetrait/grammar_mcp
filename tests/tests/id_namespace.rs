@@ -7,15 +7,14 @@ static TESTING: testing::Module = testing::module!(Integration, { .using_temp_di
 #[tested]
 fn default_id_is_user_env() {
     let t = testing::test!({ .using_temp_dir() });
-    let src = t.temp_dir().join("src").join("mylib");
     let mut host = Host::spawn_full(t.temp_dir(), &[], &[("USER", "udefault")]);
-    let resp = host.rig_new("sourcetrait/mylib", &src);
-    assert!(!has_error_path(&resp), "rig(new) should succeed; got {resp}");
+    let (resp, _) = host.equip_new("sourcetrait/mylib", &t.temp_dir().join("src"));
+    assert!(!has_error_path(&resp), "equip(new) should succeed; got {resp}");
     let lib_dir = namespace_dir(&t.temp_dir().join("data"), "udefault", "default")
-        .join("rigs")
-        .join("rig")
+        .join("equip")
         .join("sourcetrait")
-        .join("mylib");
+        .join("mylib")
+        .join("rig");
     assert!(
         lib_dir.exists(),
         "default-id namespace should land under <user>/default/; expected {}",
@@ -26,15 +25,14 @@ fn default_id_is_user_env() {
 #[tested]
 fn explicit_id_and_namespace_select_their_own_dirs() {
     let t = testing::test!({ .using_temp_dir() });
-    let src = t.temp_dir().join("src").join("mylib");
     let mut host = Host::spawn_args(t.temp_dir(), &["--id", "aid", "--namespace", "ns1"]);
-    let resp = host.rig_new("sourcetrait/mylib", &src);
-    assert!(!has_error_path(&resp), "rig(new) should succeed; got {resp}");
+    let (resp, _) = host.equip_new("sourcetrait/mylib", &t.temp_dir().join("src"));
+    assert!(!has_error_path(&resp), "equip(new) should succeed; got {resp}");
     let lib_dir = namespace_dir(&t.temp_dir().join("data"), "aid", "ns1")
-        .join("rigs")
-        .join("rig")
+        .join("equip")
         .join("sourcetrait")
-        .join("mylib");
+        .join("mylib")
+        .join("rig");
     assert!(lib_dir.exists(), "explicit --id/--namespace should select the namespace; expected {}", lib_dir.display());
 
     let info = host.call("info", json!({}));
@@ -92,11 +90,9 @@ fn without_the_flag_the_namespace_is_still_default() {
 #[tested]
 fn namespaces_are_disjoint() {
     let t = testing::test!({ .using_temp_dir() });
-    let src = t.temp_dir().join("src").join("nslib");
-
     {
         let mut ns1 = Host::spawn_args(t.temp_dir(), &["--id", "aid", "--namespace", "ns1"]);
-        let _ = ns1.rig_new("sourcetrait/nslib", &src);
+        let (_, src) = ns1.equip_new("sourcetrait/nslib", &t.temp_dir().join("src"));
         write_source(&src, "mod.nu", "export module m\n");
         write_source(&src, "m/mod.nu", "export use double\n");
         write_source(

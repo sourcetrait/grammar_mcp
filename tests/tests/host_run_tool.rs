@@ -23,7 +23,7 @@ fn tools_list_and_run_round_trip() {
         "info",
         "new",
         "commit",
-        "rig",
+        "equip",
         "inspect",
         "channel_open",
         "channel_verified",

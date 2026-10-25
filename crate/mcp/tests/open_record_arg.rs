@@ -3,7 +3,7 @@ use sourcetrait_grammar_mcp::guts::{TestServer, error_text, has_error, write_tre
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
-/// the namespace substrate (keypair, rigs repo git config), which must not race
+/// the namespace substrate (keypair, equip repo git config), which must not race
 /// itself across parallel tests.
 static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integration, {
     .using_temp_dir()
@@ -63,8 +63,7 @@ fn run_result_open_record_still_denied() {
 fn commit_inspect_and_call_open_record_arg_field() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("openlib");
-    let _ = s.rig("new", "sourcetrait/openlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/openlib");
     write_tree(
         &src,
         &[

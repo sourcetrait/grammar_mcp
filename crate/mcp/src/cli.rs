@@ -113,31 +113,29 @@ pub enum CliTool {
     Processes,
     /// Cancel an in-flight usage by nonce. Process-scoped.
     Kill { nonce: String },
-    /// Scaffold module / function skeletons by namepath into established rigs.
+    /// Scaffold module / function skeletons by namepath into an equip's rig.
     New { namepaths: Vec<String> },
-    /// Validate + promote a rig's source tree into the namespace.
-    Commit { rig: String },
-    /// Rig administration.
-    Rig {
+    /// Validate + promote an equip's lib and rig from its source into the namespace.
+    Commit { namepath: String },
+    /// Equip administration.
+    Equip {
         #[arg(value_enum)]
-        action: RigCliAction,
-        /// The compound rig name: <author>/<name>.
-        rig: String,
-        /// The rig's source directory (the "are you sure" cross-check).
+        action: EquipCliAction,
+        /// The equip's source: an equip/<author>/<name> directory.
         source_dir: String,
     },
 }
 
-/// The `cli rig` action; an unknown one fails at parse.
+/// The `cli equip` action; an unknown one fails at parse.
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
-pub enum RigCliAction {
+pub enum EquipCliAction {
     New,
     Install,
     Check,
     Uninstall,
 }
 
-impl RigCliAction {
+impl EquipCliAction {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::New => "new",

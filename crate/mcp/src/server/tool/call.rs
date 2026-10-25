@@ -52,14 +52,17 @@ impl NuSh {
             Some(l) => l,
             None => {
                 return Ok(error_to_call_result(
-                    GrammarMcpError::RigNotRegistered {
-                        rig: rig.clone(),
+                    GrammarMcpError::EquipNotRegistered {
+                        equip: rig.clone(),
                     },
                     None,
                 ));
             }
         };
         let _guard = lock.read().await;
+        if let Err(e) = require_rig(&rig) {
+            return Ok(error_to_call_result(e, None));
+        }
         let index = match load_index(&rig) {
             Ok(i) => i,
             Err(e) => {

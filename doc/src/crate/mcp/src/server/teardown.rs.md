@@ -61,14 +61,14 @@ process-table slot and polluting the very /proc sweeps our own orphan discipline
 on.
 
 The reliable producer is `git commit`, which detaches its own auto-maintenance
-(`gc --auto`) - one leaked zombie per commit, and the rig lifecycle commits on every
-`rig new`, `commit` and `uninstall`. It is not git-specific: any external that daemonizes
+(`gc --auto`) - one leaked zombie per commit, and the equip lifecycle commits on every
+`equip new`, `install`, `commit` and `uninstall`. It is not git-specific: any external that daemonizes
 a child lands here identically.
 
 THE RATE IS WORSE THAN ONE PER COMMIT IMPLIES, because it compounds through nested
 process trees. Measured: a host at 6 zombies, and one
 `cargo test -p sourcetrait_grammar_mcp` run took it to 166 - the integration suite does
-dozens of in-process rig commits, and each test binary then exits, orphaning its gc
+dozens of in-process equip commits, and each test binary then exits, orphaning its gc
 children onto the nearest subreaper ancestor, which is the host running the eval. The
 same sample carried `grep` and `awk` zombies from an agent-side Monitor's tail pipeline,
 putting the not-git-specific claim in evidence rather than in principle.

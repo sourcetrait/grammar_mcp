@@ -3,9 +3,10 @@
 ## fn set_lib_dirs_const
 A parse-time CONST, not `$env`, and that is the whole point. nu-parser's
 `find_in_dirs` reads the const var FIRST, falling back to the deprecated
-`$env.NU_LIB_DIRS` - so a body cannot override it, and the MCP's own
-author-parented namespace stays the sole controlled lib path. The box's own
-`NU_LIB_DIRS` is excluded from the seeded env for the same reason.
+`$env.NU_LIB_DIRS` - so a body cannot override it, and the MCP's own namespace
+dir, whose `equip/` holds every installed lib and rig, stays the sole controlled
+lib path. The box's own `NU_LIB_DIRS` is excluded from the seeded env for the same
+reason.
 
 ## struct ParseEngine
 
@@ -20,7 +21,7 @@ file references and therefore need no per-file PWD.
 
 ### fn engine_state_for_file
 The `$env.PWD` it sets is what lets `export use ./<file>.nu` resolve a sibling flat
-helper. The self-view goes FIRST in the dirs list so a rig's own rig-prefixed
+helper. The self-view goes FIRST in the dirs list so an equip's own equip-prefixed
 references resolve against its source during its FIRST commit, before it has been
 placed in the namespace.
 

@@ -74,9 +74,9 @@ fn seed_env(engine_state: &mut nu::EngineState) {
     );
 }
 
-/// Register the canonical rigs dir as the parse-time `$NU_LIB_DIRS` const.
+/// Register the namespace dir as the parse-time `$NU_LIB_DIRS` const.
 fn seed_lib_dirs(engine_state: &mut nu::EngineState) {
-    set_lib_dirs_const(engine_state, &[rigs_dir()]);
+    set_lib_dirs_const(engine_state, &[data_base_dir()]);
 }
 
 /// `EngineState::merge_env` minus the process chdir.

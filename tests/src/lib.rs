@@ -351,19 +351,28 @@ impl Host {
         self.call("call", json!({"namepath": namepath, "args": args}))
     }
 
-    pub fn rig(&mut self, action: &str, name: &str, source_dir: &str) -> Value {
+    pub fn equip(&mut self, action: &str, source_dir: &str) -> Value {
         self.call(
-            "rig",
-            json!({"action": action, "rig": name, "source_dir": source_dir}),
+            "equip",
+            json!({"action": action, "source_dir": source_dir}),
         )
     }
 
-    pub fn rig_new(&mut self, name: &str, src: &Path) -> Value {
-        self.rig("new", name, src.to_str().unwrap())
+    /// `equip(new)` for `name` under `root`, author-prefixing a bare name; the
+    /// response and the equip's rig source.
+    pub fn equip_new(&mut self, name: &str, root: &Path) -> (Value, PathBuf) {
+        let name = if name.contains('/') {
+            name.to_string()
+        } else {
+            format!("sourcetrait/{name}")
+        };
+        let source = equip_source(root, &name);
+        let resp = self.equip("new", source.to_str().unwrap());
+        (resp, source.join("rig"))
     }
 
     pub fn commit(&mut self, name: &str) -> Value {
-        self.call("commit", json!({"rig": name}))
+        self.call("commit", json!({"namepath": name}))
     }
 
     /// The tool names advertised by `tools/list`.
@@ -380,8 +389,13 @@ impl Host {
     }
 }
 
-/// Prepend `sourcetrait/` to a bare rig name in the args of the
-/// rig-addressing tools. Idempotent: a value already carrying `/` (an
+/// An equip's source directory under `root`: `root/equip/<name>`.
+pub fn equip_source(root: &Path, name: &str) -> PathBuf {
+    root.join("equip").join(name)
+}
+
+/// Prepend `sourcetrait/` to a bare equip name in the args of the
+/// namepath-addressing tools. Idempotent: a value already carrying `/` (an
 /// `author/name`) passes through unchanged.
 pub fn author_prefixed(tool: &str, mut args: Value) -> Value {
     fn pfx_lib(s: &str) -> String {
@@ -414,9 +428,9 @@ pub fn author_prefixed(tool: &str, mut args: Value) -> Value {
                 }
             }
         }
-        "rig" | "commit" => {
-            if let Some(l) = args.get("rig").and_then(|v| v.as_str()) {
-                args["rig"] = Value::String(pfx_lib(l));
+        "commit" => {
+            if let Some(l) = args.get("namepath").and_then(|v| v.as_str()) {
+                args["namepath"] = Value::String(pfx_lib(l));
             }
         }
         _ => {}

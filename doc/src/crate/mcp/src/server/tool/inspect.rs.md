@@ -14,6 +14,6 @@ only thing that knows what `.` names, so the parser leaves it unresolved and an 
 `.` matches nothing. Resolving it at this one call site is what makes `inspect(".")` render
 the current view rather than an empty block.
 
-A PATTERN SPANS RIGS, so the per-rig READ locks are taken inside the renderer rather than
+A PATTERN SPANS EQUIPS, so the per-equip READ locks are taken inside the renderer rather than
 around one lookup here. That is why the pattern arm returns early instead of falling through
 to the lock below.

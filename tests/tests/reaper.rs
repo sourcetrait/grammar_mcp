@@ -61,7 +61,7 @@ fn wait_until(secs: u64, mut f: impl FnMut() -> bool) -> bool {
 /// harvested.
 ///
 /// The producer is `git commit`, which detaches its own auto-maintenance (`gc --auto`);
-/// the rig lifecycle commits on `rig new` and on `commit`, so a couple of
+/// the equip lifecycle commits on `equip new` and on `commit`, so a couple of
 /// operations reliably orphans something. The reaper harvests on the watchdog tick once a
 /// zombie is past its grace window, so the bound below is grace + a tick + slack.
 #[tested]
@@ -70,9 +70,8 @@ fn adopted_orphans_are_reaped() {
     let mut host = Host::spawn(t.temp_dir());
     let pid = host.pid();
 
-    let src = t.temp_dir().join("zlib");
-    let est = host.rig_new("zombielib", &src);
-    assert!(!has_error_path(&est), "rig new should succeed; got {est}");
+    let (est, src) = host.equip_new("zombielib", &t.temp_dir().join("zlib"));
+    assert!(!has_error_path(&est), "equip new should succeed; got {est}");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use double\n");
     write_source(
@@ -116,9 +115,8 @@ fn reaping_does_not_steal_exit_statuses() {
 
     for i in 0..3 {
         let name = format!("racelib{i}");
-        let src = t.temp_dir().join(&name);
-        let est = host.rig_new(&name, &src);
-        assert!(!has_error_path(&est), "rig new {i} should succeed; got {est}");
+        let (est, _) = host.equip_new(&name, &t.temp_dir().join(&name));
+        assert!(!has_error_path(&est), "equip new {i} should succeed; got {est}");
 
         // An eval whose external exit status must survive: nushell reports a non-zero
         // exit as an error, so a stolen status would surface here.

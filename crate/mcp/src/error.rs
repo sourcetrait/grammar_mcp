@@ -6,7 +6,7 @@ pub enum Severity {
     Warning,
 }
 
-/// A diagnostic's location; `path` is rigs-dir-relative, or null in a body.
+/// A diagnostic's location; `path` is equip-repo-relative, or null in a body.
 #[derive(Debug, Clone, ser::Serialize, schema::JsonSchema)]
 pub struct Source {
     pub path: Option<String>,
@@ -67,36 +67,50 @@ pub type GrammarMcpResult<T> = Result<T, GrammarMcpError>;
 
 #[derive(Debug, Clone)]
 pub enum GrammarMcpError {
-    RigNotRegistered {
-        rig: String,
+    EquipNotRegistered {
+        equip: String,
     },
-    RigAlreadyRegistered {
-        rig: String,
+    EquipAlreadyRegistered {
+        equip: String,
     },
-    RigInvalidName {
-        rig: String,
+    EquipInvalidName {
+        equip: String,
         reason: String,
     },
-    RigNameDenied {
-        rig: String,
+    EquipNameDenied {
+        equip: String,
+    },
+    EquipInvalidSource {
+        source_dir: String,
+        reason: String,
+    },
+    EquipSourceMissing {
+        path: String,
+    },
+    EquipSourcePathMismatch {
+        equip: String,
+        passed: String,
+        registered: String,
+    },
+    EquipNoKinds {
+        source_dir: String,
+    },
+    EquipNoRig {
+        equip: String,
+    },
+    EquipViolations {
+        diagnostics: Vec<Diagnostic>,
+    },
+    EquipInvalidAction {
+        action: String,
+    },
+    RigInvalidName {
+        name: String,
+        reason: String,
     },
     RigInvalidModulePath {
         module_path: String,
         reason: String,
-    },
-    RigSourceMissing {
-        path: String,
-    },
-    RigSourcePathMismatch {
-        rig: String,
-        passed: String,
-        registered: String,
-    },
-    RigViolations {
-        diagnostics: Vec<Diagnostic>,
-    },
-    RigInvalidAction {
-        action: String,
     },
     FunctionNotDefined {
         rig: String,
@@ -168,14 +182,18 @@ pub enum GrammarMcpError {
 impl GrammarMcpError {
     fn kind_str(&self) -> &'static str {
         match self {
-            Self::RigNotRegistered { .. } => "rig::not_registered",
-            Self::RigAlreadyRegistered { .. } => "rig::already_registered",
+            Self::EquipNotRegistered { .. } => "equip::not_registered",
+            Self::EquipAlreadyRegistered { .. } => "equip::already_registered",
+            Self::EquipInvalidName { .. } => "equip::invalid_name",
+            Self::EquipNameDenied { .. } => "equip::name_denied",
+            Self::EquipInvalidSource { .. } => "equip::invalid_source",
+            Self::EquipSourceMissing { .. } => "equip::source_missing",
+            Self::EquipSourcePathMismatch { .. } => "equip::source_path_mismatch",
+            Self::EquipNoKinds { .. } => "equip::no_kinds",
+            Self::EquipNoRig { .. } => "equip::no_rig",
+            Self::EquipInvalidAction { .. } => "equip::invalid_action",
             Self::RigInvalidName { .. } => "rig::invalid_name",
-            Self::RigNameDenied { .. } => "rig::name_denied",
             Self::RigInvalidModulePath { .. } => "rig::invalid_module_path",
-            Self::RigSourceMissing { .. } => "rig::source_missing",
-            Self::RigSourcePathMismatch { .. } => "rig::source_path_mismatch",
-            Self::RigInvalidAction { .. } => "rig::invalid_action",
             Self::FunctionNotDefined { .. } => "function::not_defined",
             Self::SchemaInvalid { .. } => "schema::invalid",
             Self::NamepathInvalid { .. } => "namepath::invalid",
@@ -196,7 +214,7 @@ impl GrammarMcpError {
             Self::ThreadReturnedError { .. } => "thread::returned_error",
             Self::ModuleCircularImport { .. } => "module::circular_import",
             Self::Internal { .. } => "internal",
-            Self::RigViolations { .. } | Self::LintViolations { .. } => {
+            Self::EquipViolations { .. } | Self::LintViolations { .. } => {
                 unreachable!("violation variants render via bucket, not kind_str")
             }
         }
@@ -204,33 +222,43 @@ impl GrammarMcpError {
 
     fn message(&self) -> String {
         match self {
-            Self::RigNotRegistered { rig } => {
-                format!("rig `{rig}` is not registered")
+            Self::EquipNotRegistered { equip } => {
+                format!("equip `{equip}` is not registered")
             }
-            Self::RigAlreadyRegistered { rig } => {
-                format!("rig `{rig}` is already registered")
+            Self::EquipAlreadyRegistered { equip } => {
+                format!("equip `{equip}` is already registered")
             }
-            Self::RigInvalidName { rig, reason } => {
-                format!("invalid rig name `{rig}`: {reason}")
+            Self::EquipInvalidName { equip, reason } => {
+                format!("invalid equip name `{equip}`: {reason}")
             }
-            Self::RigNameDenied { rig } => {
-                format!("rig name `{rig}` is reserved and cannot be used")
+            Self::EquipNameDenied { equip } => {
+                format!("equip name `{equip}` is reserved and cannot be used")
+            }
+            Self::EquipInvalidSource { source_dir, reason } => {
+                format!("invalid equip source `{source_dir}`: {reason}")
+            }
+            Self::EquipSourceMissing { path } => {
+                format!("equip source path is missing or not a directory: {path}")
+            }
+            Self::EquipSourcePathMismatch {
+                equip,
+                passed,
+                registered,
+            } => format!(
+                "source_dir mismatch for `{equip}`: passed `{passed}`, registered `{registered}`"
+            ),
+            Self::EquipNoKinds { source_dir } => {
+                format!("equip source `{source_dir}` holds neither a lib/ nor a rig/")
+            }
+            Self::EquipNoRig { equip } => format!("equip `{equip}` has no rig"),
+            Self::EquipInvalidAction { action } => format!("unknown equip action `{action}`"),
+            Self::RigInvalidName { name, reason } => {
+                format!("invalid name `{name}`: {reason}")
             }
             Self::RigInvalidModulePath {
                 module_path,
                 reason,
             } => format!("invalid module path `{module_path}`: {reason}"),
-            Self::RigSourceMissing { path } => {
-                format!("rig source path is missing or not a directory: {path}")
-            }
-            Self::RigSourcePathMismatch {
-                rig,
-                passed,
-                registered,
-            } => format!(
-                "source_dir mismatch for `{rig}`: passed `{passed}`, registered `{registered}`"
-            ),
-            Self::RigInvalidAction { action } => format!("unknown rig action `{action}`"),
             Self::FunctionNotDefined {
                 rig,
                 module_path,
@@ -276,7 +304,7 @@ impl GrammarMcpError {
             Self::ThreadReturnedError { reason } => reason.clone(),
             Self::ModuleCircularImport { files } => files.clone(),
             Self::Internal { phase, reason } => format!("internal error [{phase}]: {reason}"),
-            Self::RigViolations { .. } | Self::LintViolations { .. } => {
+            Self::EquipViolations { .. } | Self::LintViolations { .. } => {
                 unreachable!("violation variants render via bucket, not message")
             }
         }
@@ -312,7 +340,7 @@ pub(crate) fn error_to_call_result(
     nonce: Option<datum::Nonce>,
 ) -> mcp::CallToolResult {
     let (errors, warnings) = match error {
-        GrammarMcpError::RigViolations { diagnostics } | GrammarMcpError::LintViolations { diagnostics } => {
+        GrammarMcpError::EquipViolations { diagnostics } | GrammarMcpError::LintViolations { diagnostics } => {
             Diagnostic::bucket(diagnostics)
         }
         single => {

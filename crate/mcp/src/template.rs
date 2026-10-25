@@ -97,14 +97,14 @@ pub(crate) fn build_call_source(
         args_to_nuon(args)
     };
     let target = if module_path.is_empty() {
-        format!("{rig}/{name}")
+        format!("{rig}/rig/{name}")
     } else {
-        format!("{rig}/{module_path}/{name}")
+        format!("{rig}/rig/{module_path}/{name}")
     };
     formatdoc!(
         r#"
         $env.NONCE = "{nonce}"
-        overlay use --prefix rig/{target} as {alias}
+        overlay use --prefix equip/{target} as {alias}
         {alias} {lit}
     "#,
         nonce = nonce,

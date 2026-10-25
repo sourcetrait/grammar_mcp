@@ -41,7 +41,7 @@ A purviews file that EXISTS but will not decode is an ERROR, never a silently em
 therefore silently total view. The rig index already holds itself to that rule and this
 follows it.
 
-`@fae` and `fae` name the same purview here, so a caller can paste a reference straight out
+`@mine` and `mine` name the same purview here, so a caller can paste a reference straight out
 of a purview's configuration without stripping the sigil.
 
 FILTERING EXPANDS `@` references while the reported `purview` field carries the RAW

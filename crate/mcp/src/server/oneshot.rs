@@ -91,20 +91,15 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
                     .scaffold(mcp::Parameters(NewParams { namepaths }))
                     .await
             }
-            CliTool::Commit { rig } => {
+            CliTool::Commit { namepath } => {
                 server
-                    .commit(mcp::Parameters(CommitParams { rig }))
+                    .commit(mcp::Parameters(CommitParams { namepath }))
                     .await
             }
-            CliTool::Rig {
-                action,
-                rig,
-                source_dir,
-            } => {
+            CliTool::Equip { action, source_dir } => {
                 server
-                    .rig(mcp::Parameters(RigParams {
+                    .equip(mcp::Parameters(EquipParams {
                         action: action.as_str().to_string(),
-                        rig,
                         source_dir,
                     }))
                     .await

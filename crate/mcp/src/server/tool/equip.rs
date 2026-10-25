@@ -1,23 +1,21 @@
 use crate::*;
 
-/// Parameters for `rig()`.
+/// Parameters for `equip()`.
 #[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
-pub struct RigParams {
+pub struct EquipParams {
     /// One of: `new`, `install`, `check`, `uninstall`.
     pub action: String,
-    /// The rig: the compound `<author>/<name>`.
-    pub rig: String,
-    /// The rig's source directory: the "are you sure" cross-check.
+    /// The equip's source: an `equip/<author>/<name>` directory.
     pub source_dir: String,
 }
 
-/// `new` summary: the paths scaffolded for the fresh (empty) rig.
+/// `new` summary: the paths scaffolded for the fresh equip's rig.
 #[derive(Debug, ser::Serialize, schema::JsonSchema)]
 pub(crate) struct NewSummary {
     pub created: Vec<String>,
 }
 
-/// `install` summary: the first commit's changed paths, grouped.
+/// `install` summary: the commit's changed paths, grouped.
 #[derive(Debug, ser::Serialize, schema::JsonSchema)]
 pub(crate) struct InstallSummary {
     pub added: Vec<String>,
@@ -36,77 +34,86 @@ pub(crate) struct CheckSummary {
 /// The per-action result; `uninstall` returns no summary.
 #[derive(Debug, ser::Serialize, schema::JsonSchema)]
 #[serde(untagged)]
-pub(crate) enum RigSummary {
+pub(crate) enum EquipSummary {
     New(NewSummary),
     Install(InstallSummary),
     Check(CheckSummary),
 }
 
-/// Success envelope for `rig()`.
+/// Success envelope for `equip()`.
 #[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct RigEnvelope {
+pub(crate) struct EquipEnvelope {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub summary: Option<RigSummary>,
+    pub summary: Option<EquipSummary>,
 }
 
-#[mcp::tool_router(router = rig_router, vis = "pub(crate)")]
+/// The actions `equip()` takes.
+const ACTIONS: [&str; 4] = ["new", "install", "check", "uninstall"];
+
+#[mcp::tool_router(router = equip_router, vis = "pub(crate)")]
 impl NuSh {
     #[mcp::tool(
-        description = "Rig administration: new, install, check, uninstall.",
-        output_schema = mcp::schema_for_type::<RigEnvelope>()
+        description = "Equip administration on an equip/<author>/<name> source dir: new, install, check, uninstall.",
+        output_schema = mcp::schema_for_type::<EquipEnvelope>()
     )]
-    pub(crate) async fn rig(
+    pub(crate) async fn equip(
         &self,
-        mcp::Parameters(p): mcp::Parameters<RigParams>,
+        mcp::Parameters(p): mcp::Parameters<EquipParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let source_dir = std::path::Path::new(&p.source_dir);
+        if !ACTIONS.contains(&p.action.as_str()) {
+            return Ok(error_to_call_result(
+                GrammarMcpError::EquipInvalidAction {
+                    action: p.action.clone(),
+                },
+                None,
+            ));
+        }
+        let source_dir = Path::new(&p.source_dir);
+        let equip = match equip_namepath_of(source_dir) {
+            Ok(equip) => equip,
+            Err(e) => return Ok(error_to_call_result(e, None)),
+        };
         match p.action.as_str() {
             "new" => {
-                let lock = match self.rig_locks.register(&p.rig).await {
+                let lock = match self.rig_locks.register(&equip).await {
                     Ok(l) => l,
                     Err(_) => {
                         return Ok(error_to_call_result(
-                            GrammarMcpError::RigAlreadyRegistered {
-                                rig: p.rig.clone(),
-                            },
+                            GrammarMcpError::EquipAlreadyRegistered { equip },
                             None,
                         ));
                     }
                 };
                 let _guard = lock.write().await;
-                match establish_rig(&p.rig, source_dir) {
-                    Ok(()) => {
-                        let created =
-                            vec![source_dir.join("mod.nu").to_string_lossy().into_owned()];
-                        envelope_to_structured(&RigEnvelope {
-                            summary: Some(RigSummary::New(NewSummary { created })),
-                        })
-                    }
+                match establish_equip(&equip, source_dir) {
+                    Ok(created) => envelope_to_structured(&EquipEnvelope {
+                        summary: Some(EquipSummary::New(NewSummary { created })),
+                    }),
                     Err(e) => {
-                        self.rig_locks.unregister(&p.rig).await;
+                        self.rig_locks.unregister(&equip).await;
                         Ok(error_to_call_result(e, None))
                     }
                 }
             }
             "install" => {
-                let lock = match self.rig_locks.register(&p.rig).await {
+                let lock = match self.rig_locks.register(&equip).await {
                     Ok(l) => l,
                     Err(_) => {
                         return Ok(error_to_call_result(
-                            GrammarMcpError::RigAlreadyRegistered {
-                                rig: p.rig.clone(),
-                            },
+                            GrammarMcpError::EquipAlreadyRegistered { equip },
                             None,
                         ));
                     }
                 };
                 let _guard = lock.write().await;
                 let engine = self.lint_engine.current();
-                match install_impl(&p.rig, source_dir, &engine) {
+                match install_equip(&equip, source_dir, &engine) {
                     Ok(result) => {
-                        purview_add_rig(&p.rig, &self.current_purview.ids());
-                        envelope_to_structured(&RigEnvelope {
-                            summary: Some(RigSummary::Install(InstallSummary {
+                        if rig_dir(&equip).exists() {
+                            purview_add_rig(&equip, &self.current_purview.ids());
+                        }
+                        envelope_to_structured(&EquipEnvelope {
+                            summary: Some(EquipSummary::Install(InstallSummary {
                                 added: result.added,
                                 modified: result.modified,
                                 removed: result.removed,
@@ -114,62 +121,48 @@ impl NuSh {
                         })
                     }
                     Err(e) => {
-                        self.rig_locks.unregister(&p.rig).await;
+                        self.rig_locks.unregister(&equip).await;
                         Ok(error_to_call_result(e, None))
                     }
                 }
             }
             "check" => {
-                let lock = match self.rig_locks.lookup(&p.rig).await {
-                    Some(l) => l,
-                    None => {
-                        return Ok(error_to_call_result(
-                            GrammarMcpError::RigNotRegistered {
-                                rig: p.rig.clone(),
-                            },
-                            None,
-                        ));
-                    }
+                let Some(lock) = self.rig_locks.lookup(&equip).await else {
+                    return Ok(error_to_call_result(
+                        GrammarMcpError::EquipNotRegistered { equip },
+                        None,
+                    ));
                 };
                 let _guard = lock.read().await;
-                if let Err(e) = check_source_dir(&p.rig, &p.source_dir) {
+                if let Err(e) = check_source_dir(&equip, source_dir) {
                     return Ok(error_to_call_result(e, None));
                 }
                 let engine = self.lint_engine.current();
-                match check_rig(&p.rig, &engine) {
-                    Ok(result) => envelope_to_structured(&RigEnvelope {
-                        summary: Some(RigSummary::Check(check_summary_from(&result))),
+                match check_equip(&equip, &engine) {
+                    Ok(result) => envelope_to_structured(&EquipEnvelope {
+                        summary: Some(EquipSummary::Check(check_summary_from(&result))),
                     }),
                     Err(e) => Ok(error_to_call_result(e, None)),
                 }
             }
-            "uninstall" => {
-                let lock = match self.rig_locks.lookup(&p.rig).await {
-                    Some(l) => l,
-                    None => {
-                        return envelope_to_structured(&RigEnvelope { summary: None });
-                    }
+            _ => {
+                let Some(lock) = self.rig_locks.lookup(&equip).await else {
+                    return envelope_to_structured(&EquipEnvelope { summary: None });
                 };
-                let _guard = lock.write().await;
-                if let Err(e) = check_source_dir(&p.rig, &p.source_dir) {
+                let guard = lock.write().await;
+                if let Err(e) = check_source_dir(&equip, source_dir) {
                     return Ok(error_to_call_result(e, None));
                 }
-                match uninstall_impl(&p.rig) {
+                match uninstall_equip(&equip) {
                     Ok(()) => {
-                        drop(_guard);
-                        self.rig_locks.unregister(&p.rig).await;
-                        purview_remove_rig(&p.rig);
-                        envelope_to_structured(&RigEnvelope { summary: None })
+                        drop(guard);
+                        self.rig_locks.unregister(&equip).await;
+                        purview_remove_rig(&equip);
+                        envelope_to_structured(&EquipEnvelope { summary: None })
                     }
                     Err(e) => Ok(error_to_call_result(e, None)),
                 }
             }
-            other => Ok(error_to_call_result(
-                GrammarMcpError::RigInvalidAction {
-                    action: other.to_string(),
-                },
-                None,
-            )),
         }
     }
 }
@@ -179,9 +172,9 @@ fn purview_add_rig(
     rig: &str,
     current_ids: &[String],
 ) {
-    // The purview table is namespace meta beside the rigs repo: its
+    // The purview table is namespace meta beside the equip repo: its
     // load-mutate-save is not atomic, so it rides the same repo-wide lock.
-    let _repo = rigs_repo_lock();
+    let _repo = equip_repo_lock();
     let pattern = format!("{rig}:");
     let mut rows = match load_purviews() {
         Ok(rows) => rows.unwrap_or_default(),
@@ -211,7 +204,7 @@ fn purview_add_rig(
 
 /// Drop an uninstalled rig from every purview that named it.
 fn purview_remove_rig(rig: &str) {
-    let _repo = rigs_repo_lock();
+    let _repo = equip_repo_lock();
     let mut rows = match load_purviews() {
         Ok(rows) => rows.unwrap_or_default(),
         Err(e) => {

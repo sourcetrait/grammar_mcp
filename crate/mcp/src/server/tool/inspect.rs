@@ -65,8 +65,8 @@ impl NuSh {
             Some(l) => l,
             None => {
                 return Ok(error_to_call_result(
-                    GrammarMcpError::RigNotRegistered {
-                        rig: rig.clone(),
+                    GrammarMcpError::EquipNotRegistered {
+                        equip: rig.clone(),
                     },
                     None,
                 ));

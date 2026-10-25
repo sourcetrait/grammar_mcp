@@ -16,7 +16,7 @@ Nu bodies evaluated by the MCP. The Nu language itself is in the nu skill.
 - `purview()` and kin: scope what `info()` shows (Purviews below).
 - `channel_*` / `remote_channel*`: notification lanes (below).
 
-Rig authoring (`rig`, `new`, `commit`) is in GrammarMcpDevelopment.
+Equip authoring (`equip`, `new`, `commit`) is in grammar-mcp-dev.
 
 ## run()
 `args` binds to `$args`; the body's last value must match `result_schema`.
@@ -73,10 +73,11 @@ $data | to json | save -f ($env.XDGX_SHM_DIR | path join $rel)
 ```
 shm isn't for logs; the cache log dir already holds a body's output.
 
-## Rigs in a body
-Import the module, never the rig root, then drive it by name:
+## Equips in a body
+Import a lib's or a rig's module, never an equip's root, then drive it by name:
 ```nu
-use rig/<author>/<rig>/<module>
+use equip/<author>/<name>/lib/<module>
+use equip/<author>/<name>/rig/<module>
 <module> <export> <params>
 ```
 

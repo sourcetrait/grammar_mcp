@@ -21,7 +21,7 @@ fn deny_removes_tools_from_list() {
         "call",
         "new",
         "commit",
-        "rig",
+        "equip",
         "channel_open",
         "channel_verified",
         "channel_close",
@@ -73,7 +73,7 @@ fn deny_full_set_leaves_core_four() {
         t.temp_dir(),
         &[
             "--deny",
-            "run,rerun,interact,call,new,commit,rig,channel_open,channel_verified,channel_close,config_channel,purviews,purview_configure,purview_extend,purview,remote_channel_open,remote_channel_close,remote_channels",
+            "run,rerun,interact,call,new,commit,equip,channel_open,channel_verified,channel_close,config_channel,purviews,purview_configure,purview_extend,purview,remote_channel_open,remote_channel_close,remote_channels",
         ],
     );
     let mut names = host.tool_names();

@@ -176,9 +176,8 @@ fn the_one_shot_cli_survives_a_cycle_too() {
 fn a_rig_carrying_a_cycle_fails_validation_and_the_host_lives() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn(t.temp_dir());
-    let src = t.temp_dir().join("circlib");
-    let est = host.rig_new("sourcetrait/circlib", &src);
-    assert!(!has_error_path(&est), "rig new should succeed; got {est}");
+    let (est, src) = host.equip_new("sourcetrait/circlib", t.temp_dir());
+    assert!(!has_error_path(&est), "equip new should succeed; got {est}");
 
     // The same cycle, one level down, with the child also being a call target - the
     // shape a real rig would carry.
@@ -191,16 +190,15 @@ fn a_rig_carrying_a_cycle_fails_validation_and_the_host_lives() {
     );
 
     let id = host.request(
-        "rig",
+        "equip",
         json!({
             "action": "check",
-            "rig": "sourcetrait/circlib",
-            "source_dir": src.to_str().unwrap(),
+            "source_dir": src.parent().unwrap().to_str().unwrap(),
         }),
     );
     let resp = expect_alive(&mut host, id, "a rig validated with a circular `use`");
 
-    // `rig check` reports through its SUCCESS summary rather than an error envelope, so
+    // `equip check` reports through its SUCCESS summary rather than an error envelope, so
     // the diagnostic lives in summary.errors rather than where the other cases carry it.
     let kinds: Vec<String> = structured(&resp)["summary"]["errors"]
         .as_array()

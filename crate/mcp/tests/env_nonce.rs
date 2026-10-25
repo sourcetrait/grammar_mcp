@@ -3,7 +3,7 @@ use sourcetrait_grammar_mcp::guts::{TestServer, has_error, write_tree};
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
-/// the namespace substrate (keypair, rigs repo git config), which must not race
+/// the namespace substrate (keypair, equip repo git config), which must not race
 /// itself across parallel tests.
 static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integration, {
     .using_temp_dir()
@@ -41,8 +41,7 @@ fn run_nested_helper_inherits_nonce() {
 fn call_target_sees_nonce() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("noncelib");
-    let _ = s.rig("new", "sourcetrait/noncelib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/noncelib");
     write_tree(
         &src,
         &[

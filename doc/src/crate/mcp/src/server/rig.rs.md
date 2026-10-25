@@ -1,49 +1,60 @@
 # rig.rs
 
-The rig substrate is a full nu ECOSYSTEM, not merely a `call()` registry. Call targets are
-the indexed "bins", but EVERY export - call target or plain helper - is importable from a
-body and from external nu scripting.
+The equip substrate is a full nu ECOSYSTEM, not merely a `call()` registry. A rig's call
+targets are the indexed "bins", but EVERY export - a rig's call target or helper, a lib's
+module - is importable from a body and from external nu scripting.
 
 ## const META_FILE
-This file is ALSO the rig-detection marker: an `<author>/<name>` subdir under `rig/`
-carrying it IS a rig. Detection keys on the exact filename, so a namespace written under the
-legacy name needs `migrate_meta_to_nuon` rather than an optional dual-read.
+This file is ALSO the rig-detection marker: an installed equip whose `rig/` carries it HAS a
+rig, and `LIB_META_FILE` marks its lib the same way. Detection keys on the exact filenames.
 
-## const LEGACY_META_FILE
-The legacy JSON index filename, against the house rule that anything persisted is NUON. It
-exists only so `migrate_meta_to_nuon` can find a namespace written under it and retire it.
+## const EQUIP_KINDS
+The lib comes FIRST because the rig may import it: validation and the copy run in this order,
+and a lib-only equip is as legitimate as a rig-only one. `cli` is absent by design - the MCP
+never takes an equip's interactive kind.
 
-## fn is_valid_rig
-EXACTLY `<author>/<name>`: two parts, each a valid ident, neither `main`. A BARE rig with no
-slash is REJECTED: there is one spelling of a rig everywhere, with no default-author
+## fn is_valid_equip
+EXACTLY `<author>/<name>`: two parts, each a valid ident, neither `main`. A BARE equip with no
+slash is REJECTED: there is one spelling of an equip everywhere, with no default-author
 shorthand to disambiguate.
 
+## fn equip_namepath_of
+The namepath comes from the PATH, so the source's location is the one statement of the
+equip's name: `.../equip/<author>/<name>` and nothing else. A `.` or `..` component is refused
+rather than normalized, because the registered source is compared component-wise later and a
+normalized alias would name a different directory than the one it spells.
+
+## fn require_rig
+Two refusals, kept apart: an equip that is not installed is `equip::not_registered`, while an
+installed one with no rig is `equip::no_rig`. A call or a scaffold into a lib-only equip is a
+misunderstanding of what was installed, not a typo in its name.
+
 ## struct RigLocks
-The outer mutex guards only MAP MUTATION; the per-rig `RwLock` is what serializes work.
-Call takes a READ lock, and commit / new / install / uninstall take WRITE, so different rigs
+The outer mutex guards only MAP MUTATION; the per-equip `RwLock` is what serializes work.
+Call takes a READ lock, and commit / new / install / uninstall take WRITE, so different equips
 are fully parallel on the read/validate side.
 
-## static RIGS_REPO_LOCK / fn rigs_repo_lock
-The repo-wide write lock the per-rig locks cannot supply. The earlier belief that "git's
-index locking serializes the subprocess commits" was WRONG and measured so: git fails a
-second writer on an existing `.git/index.lock` immediately rather than waiting, so two
-concurrent lifecycle ops on DIFFERENT rigs through one host spuriously failed (five of five
-parallel integration sweeps, `index.lock` in each). One repo, one lock, held only across the
+## static EQUIP_REPO_LOCK / fn equip_repo_lock
+The repo-wide write lock the per-equip locks cannot supply. The belief that "git's index
+locking serializes the subprocess commits" was WRONG and measured so: git fails a second
+writer on an existing `.git/index.lock` immediately rather than waiting, so two concurrent
+lifecycle ops on DIFFERENT rigs through one host spuriously failed (five of five parallel
+integration sweeps, `index.lock` in each). One repo, one lock, held only across the
 canonical-tree wipe/copy plus the git section - validation is the expensive half and stays
-outside the hold, so different-rig validations still parallelize. The purview table rides
-the same lock (`purview_add_rig`/`purview_remove_rig`): it is namespace meta beside the
-repo whose load-mutate-save is not atomic. Namespace isolation per `(id, namespace)` still
-means no cross-process race to guard; this lock is for one process's own concurrency.
+outside the hold, so different-equip validations still parallelize. The purview table rides
+the same lock (`purview_add_rig`/`purview_remove_rig`): it is namespace meta beside the repo
+whose load-mutate-save is not atomic. Namespace isolation per `(id, namespace)` still means no
+cross-process race to guard; this lock is for one process's own concurrency.
 
 ### fn hydrate_from_disk
-Pre-creates a lock per registered rig at startup, keying on the meta file's presence, so a
-`lookup` during serving never has to decide whether a directory is a rig.
+Pre-creates a lock per installed equip at startup, keying on either kind's meta file, so a
+`lookup` during serving never has to decide whether a directory is an equip.
 
 ## fn ensure_keypair
 `allowed_signers` is rewritten from the current pubkey on EVERY startup rather than only at
 creation, so it cannot drift out of step with the key it authorizes.
 
-## fn ensure_rigs_repo
+## fn ensure_equip_repo
 The empty init commit exists so HEAD is valid immediately - a fresh repo with no commit
 makes the first `git status --porcelain` comparison meaningless.
 
@@ -55,11 +66,11 @@ PER-REPO configuration only. Nothing here leaks into the user's global git confi
 `commit.gpgSign` being set locally is what makes every lifecycle commit signed implicitly
 rather than by remembering a flag.
 
-## fn establish_rig
-Writes an establish-time index recording `source_dir` BEFORE any validation, because that
-recorded path is what every later `commit` re-reads and what `check_source_dir`
-cross-checks. The rig exists as an addressable empty thing first, and gains content on its
-first commit.
+## fn establish_equip
+Writes an establish-time rig index recording `<source_dir>/rig` BEFORE any validation,
+because that recorded path is what every later `commit` re-reads, by its parent, and what
+`check_source_dir` cross-checks. The equip exists as an addressable empty rig first, and
+gains content on its first commit.
 
 ## fn scaffold_leaf
 EMITS THE CASCADE CONVENTION: a call gets BOTH `export module` and `export use`, while a
@@ -86,9 +97,14 @@ Normalizing HERE rather than at each consumer is what keeps the block, the stand
 signature and inspect's `summary` fields agreeing. `details` is prose and keeps its
 newlines, which is why it stays on `read_doc`.
 
-## fn registered_rig_names
+## fn registered_equip_names
 The plain sort of the compound `<author>/<name>` gives author-then-name ordering for free,
-since the author is the leading segment.
+since the author is the leading segment. The repository's own `.git` is skipped by its dot,
+and a directory carrying neither kind's meta is not an equip.
+
+## fn registered_rig_names
+The installed equips WITH a rig - the only ones that have calls, so the signature block and
+the purview pruning read this set rather than every equip.
 
 ## fn with_summary
 Shared by the block and the standalone form, so a summary is attached the same way wherever
@@ -130,10 +146,10 @@ design: a structured nested-JSON tree of the same surface runs roughly 8 KB for 
 rigs.
 
 NOTHING IS STATED THAT CAN BE INFERRED, and the separators are inferable from shape alone:
-depth 0 is an author and depth 1 a rig - a rig is ALWAYS the two levels
-`<author>/<name>` - everything deeper is a module UNLESS it carries the two signature
-groups, which makes it a call. So a reader joins author to rig with `/`, module segments
-with `/`, and puts `:` before the first module and before the call.
+depth 0 is an author and depth 1 an equip's rig - always the two levels `<author>/<name>` -
+everything deeper is a module UNLESS it carries the two signature groups, which makes it a
+call. So a reader joins author to name with `/`, module segments with `/`, and puts `:`
+before the first module and before the call.
 
 NO TRAILING HIERARCHY CHARACTERS, and the reasoning generalizes. A trailing separator would
 let a line state its own separator rather than have one inferred, but it fails at exactly
@@ -191,30 +207,46 @@ mod.nu leading comment and a `main` doc comment divide identically.
 
 ## fn check_summary_length
 A WARNING rather than an error, so an over-long summary COMMITS and then surfaces in
-`rig(check)`. Only Error-severity rows block.
+`equip(check)`. Only Error-severity rows block.
 
 ## const NAME_DENYLIST
 These names would collide with conventional directory meanings inside a namespace, so they
-are refused at establish and scaffold rather than being allowed to produce a confusing tree.
+are refused wherever an equip is named rather than being allowed to produce a confusing
+tree.
 
 ## struct SelfView
-A temp `<tmp>/rig/<author>/<rig>` symlink to the source, prepended to `NU_LIB_DIRS`, so a
-rig's OWN rig-prefixed `use` resolves against itself during its FIRST commit - before it has
-been placed in the namespace at all.
+A temp `<tmp>/equip/<author>/<name>/<kind>` symlink per source kind, prepended to
+`NU_LIB_DIRS`, so an equip's OWN equip-prefixed `use` - a rig importing its own lib or its
+own modules - resolves against the source during its FIRST commit, before it has been placed
+in the namespace at all. ONE view serves both kinds, which is what lets a rig's import of its
+lib see the lib installed with it rather than a stale committed copy.
 
 The symlink is needed because a call target's `main` parses DURING the rig's own load,
-before the rig finishes registering: a bare in-tree self-reference would resolve to nothing
-and surface as "External command failed", so the view gives its rig-prefixed `use`
-something to resolve against.
+before the equip finishes registering: a bare in-tree self-reference would resolve to
+nothing and surface as "External command failed", so the view gives its equip-prefixed
+`use` something to resolve against.
 
-The sequence number is what keeps two concurrent validations from sharing a view directory.
+The sequence number is what keeps two concurrent validations from sharing a view directory,
+and the view exists before its first link, so a failed link drops it whole.
 
-## fn validate_rig_source
-Reports ALL findings AND builds the index and docs in the SAME walk, so a commit never
-parses the tree twice.
+## fn validate_equip_source
+Reports ALL findings across both kinds AND builds the rig's index and docs in the SAME walk,
+so a commit never parses the tree twice. A finding's path carries `<equip>/<kind>/`, so it
+names the kind it belongs to.
 
 `ValidationResult::is_empty()` means "no ERROR-severity diagnostics" - errors gate a commit,
 warnings advise.
+
+## fn validate_lib_tree
+A lib is plain nushell: no cascade, no call rules, no reserved term. Its one structural
+rule is `.nu` alone, with no exemption for a `.gitignore` or a README, and nothing
+executable.
+
+## fn validate_lib_file
+Each file parses as a module of its own, against the same engine and self-view a rig
+gets, so a lib module importing a sibling or another equip resolves it as nushell would at
+serve. The cycle check runs BEFORE reporting parse errors, for the reason it does in
+`validate_flat_file`.
 
 ## fn validate_walk
 A CALL IS AN EDGE MODULE: the walk validates it in place and never recurses into it, which
@@ -284,20 +316,24 @@ An empty `record<>` is the UNFLESHED SKELETON and is rejected, which is what sto
 scaffolded stub from committing as if it were finished. `Type::Nothing` is the legitimate
 void.
 
-## fn commit_impl
+## fn registered_source
+The equip's source is the PARENT of either kind's recorded source, the rig's first. A
+registration is the per-kind meta alone, so there is no equip-level record to drift from the
+kinds it describes.
+
+## fn promote_equip
 VALIDATES, never regenerates - author content and docs survive a commit untouched.
 
-The canonical subtree is WIPED before the copy, and since `copy_dir_recursive` skips
-dotfiles the prior `.meta/` goes with the wipe and is rebuilt from this validation rather
-than merged with the last one.
+The equip's canonical subtree is WIPED before the copy, both kinds with it, so a kind gone
+from the source leaves the namespace and each `.meta/` is rebuilt from this validation
+rather than merged with the last one.
 
 An empty porcelain means idempotent no-op: grouped-but-empty result and NO commit, so
-re-committing an unchanged rig does not accumulate history.
+re-committing an unchanged equip does not accumulate history.
 
-## fn install_impl
-ATOMIC by rollback: a validation failure wipes the freshly-built canonical and commits the
-removal, so nothing stays half-registered. That matters because `establish_rig` has already
-created the subtree by the time validation runs.
+## fn install_equip
+ATOMIC by order: the source is validated whole before anything is written, so a failed
+install leaves nothing registered and nothing to roll back.
 
 ## fn copy_rig_tree
 Mirrors the validator's carried set exactly. Root `.assets/` and `.docs/` copy VERBATIM
@@ -308,22 +344,7 @@ what keeps a client `.git` out of the signed repo.
 enters the repo and is NOT a validation exemption: the walk covers the full filesystem, so
 an ignored-but-invalid file still blocks the commit.
 
-## fn migrate_meta_to_nuon
-MANDATORY rather than optional, because DETECTION keys on the meta filename: an unmigrated
-namespace would not error, it would simply report no rigs and answer `not_registered` to
-every call.
-
-Idempotent. A namespace with no legacy file is a no-op, and a rig somehow carrying both
-keeps the `.nuon` it already has and drops the stale `.json`.
-
 ## fn ensure_substrate
-The migration runs BEFORE hydration, or an unmigrated namespace hydrates as empty.
-
-A failure to CONVERT is fatal to startup, on the reasoning that a half-migrated namespace
-serving an empty rig set is the worse outcome. A failure to COMMIT the conversion is only
-logged, since the files on disk are already correct and the next commit sweeps the repo
-clean.
-
 `ensure_default_purview` runs AFTER hydration so the prune inside it judges against the real
 registered set, and it is non-fatal: purview bookkeeping must not stop the host from
 serving.

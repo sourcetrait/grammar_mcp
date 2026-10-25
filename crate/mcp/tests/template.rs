@@ -90,28 +90,28 @@ fn run_source_multi_line_body() {
 #[test]
 fn call_source_typed_args() {
     let got = build_call_source("sourcetrait/calc", "math", "double", json!({"x": 6}), "nonce123");
-    let expected = "$env.NONCE = \"nonce123\"\noverlay use --prefix rig/sourcetrait/calc/math/double as __call\n__call {x: 6}\n";
+    let expected = "$env.NONCE = \"nonce123\"\noverlay use --prefix equip/sourcetrait/calc/rig/math/double as __call\n__call {x: 6}\n";
     assert_eq!(got, expected);
 }
 
 #[test]
 fn call_source_nested_module_path() {
     let got = build_call_source("sourcetrait/calc", "math/trig", "sin", json!({"x": 1}), "nonce123");
-    let expected = "$env.NONCE = \"nonce123\"\noverlay use --prefix rig/sourcetrait/calc/math/trig/sin as __call\n__call {x: 1}\n";
+    let expected = "$env.NONCE = \"nonce123\"\noverlay use --prefix equip/sourcetrait/calc/rig/math/trig/sin as __call\n__call {x: 1}\n";
     assert_eq!(got, expected);
 }
 
 #[test]
 fn call_source_void_args() {
     let got = build_call_source("acme/util", "net", "ping", json!({}), "nonce123");
-    let expected = "$env.NONCE = \"nonce123\"\noverlay use --prefix rig/acme/util/net/ping as __call\n__call null\n";
+    let expected = "$env.NONCE = \"nonce123\"\noverlay use --prefix equip/acme/util/rig/net/ping as __call\n__call null\n";
     assert_eq!(got, expected);
 }
 
 #[test]
 fn call_source_keyword_named_target_is_aliased() {
     let got = build_call_source("sourcetrait/demo", "almost/rpg", "run", json!({"x": 6}), "nonce123");
-    let expected = "$env.NONCE = \"nonce123\"\noverlay use --prefix rig/sourcetrait/demo/almost/rpg/run as __call\n__call {x: 6}\n";
+    let expected = "$env.NONCE = \"nonce123\"\noverlay use --prefix equip/sourcetrait/demo/rig/almost/rpg/run as __call\n__call {x: 6}\n";
     assert_eq!(got, expected);
     assert!(
         !expected.contains("\nrun "),

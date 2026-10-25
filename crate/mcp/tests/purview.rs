@@ -10,7 +10,8 @@
 use std::path::Path;
 
 use sourcetrait_grammar_mcp::guts::{
-    TestServer, error_kind, has_error, rig_block, valid_function_source, write_source,
+    TestServer, equip_source, error_kind, has_error, rig_block, valid_function_source,
+    write_source,
 };
 use sourcetrait_common::testing::prelude::*;
 
@@ -112,10 +113,11 @@ fn purview_state_is_sequenced() {
 /// exclude.
 fn commit_rig(
     s: &TestServer,
-    src: &Path,
+    root: &Path,
     name: &str,
 ) {
-    let _ = s.rig("new", name, src.to_str().unwrap());
+    let rig = s.new_rig(root, name);
+    let src = rig.as_path();
     write_source(src, "mod.nu", "export module m\n");
     write_source(src, "m/mod.nu", "export module go\nexport use go\n");
     write_source(
@@ -528,7 +530,8 @@ fn installing_adds_the_rig_to_default_without_narrowing_the_view(t: &testing::Te
     reset_purviews(s);
     commit_rig(s, &t.temp_dir().join("pvprior"), "sourcetrait/pvprior");
 
-    let src = t.temp_dir().join("pvfresh");
+    let eq = equip_source(&t.temp_dir().join("pvfresh"), "sourcetrait/pvfresh");
+    let src = eq.join("rig");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export module go\nexport use go\n");
     write_source(
@@ -536,7 +539,7 @@ fn installing_adds_the_rig_to_default_without_narrowing_the_view(t: &testing::Te
         "m/go/mod.nu",
         &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
     );
-    let installed = s.rig("install", "sourcetrait/pvfresh", src.to_str().unwrap());
+    let installed = s.equip("install", eq.to_str().unwrap());
     assert!(!has_error(&installed), "install failed: {installed}");
 
     let patterns = patterns_of(s, "default").expect("default always has a row");
@@ -555,11 +558,12 @@ fn installing_adds_the_rig_to_default_without_narrowing_the_view(t: &testing::Te
 fn uninstalling_drops_its_pattern_from_every_purview(t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
     reset_purviews(s);
-    let src = t.temp_dir().join("pvtemp");
-    commit_rig(s, &src, "sourcetrait/pvtemp");
+    let root = t.temp_dir().join("pvtemp");
+    commit_rig(s, &root, "sourcetrait/pvtemp");
     let _ = s.purview_configure("holds/it", &["sourcetrait/pvtemp:", "*"]);
 
-    let removed = s.rig("uninstall", "sourcetrait/pvtemp", src.to_str().unwrap());
+    let eq = equip_source(&root, "sourcetrait/pvtemp");
+    let removed = s.equip("uninstall", eq.to_str().unwrap());
     assert!(!has_error(&removed), "uninstall failed: {removed}");
     assert_eq!(
         patterns_of(s, "holds/it"),

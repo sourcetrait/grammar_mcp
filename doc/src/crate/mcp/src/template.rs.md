@@ -39,10 +39,10 @@ regardless.
 ## fn build_call_source
 Three pieces, each load-bearing under nu 0.114 and none of them obvious:
 
-The overlaid path is the TARGET's own module, not the rig root. 0.114 (PR #18303)
-stopped implicitly importing a module's submodules, so the pre-0.114 form - a
-root `use` plus a module-qualified drive - binds nothing the drive can traverse
-and is dead.
+The overlaid path is the TARGET's own module under the equip's rig,
+`equip/<author>/<name>/rig/...`, not the rig root. 0.114 (PR #18303) stopped
+implicitly importing a module's submodules, so the pre-0.114 form - a root `use`
+plus a module-qualified drive - binds nothing the drive can traverse and is dead.
 
 `as __call` sidesteps the keyword collision described under `CALL_ALIAS`.
 
@@ -51,7 +51,7 @@ Without it the overlay flattens them bare into the eval scope, where one named
 `open` would shadow the builtin for everything else in that eval.
 
 Importing the target alone rather than the whole rig costs nothing: the target's
-own `use rig/...` self-references bind at THAT file's parse against the const
+own `use equip/...` references bind at THAT file's parse against the const
 `$NU_LIB_DIRS`, never through this import.
 
 ## fn build_interact_source

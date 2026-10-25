@@ -163,20 +163,31 @@ impl TestServer {
         Self::envelope(self.rt.block_on(self.nush.call(mcp::Parameters(p))))
     }
 
-    pub fn commit(&self, rig: &str) -> json::Value {
+    pub fn commit(&self, namepath: &str) -> json::Value {
         let p = CommitParams {
-            rig: rig.to_string(),
+            namepath: namepath.to_string(),
         };
         Self::envelope(self.rt.block_on(self.nush.commit(mcp::Parameters(p))))
     }
 
-    pub fn rig(&self, action: &str, rig: &str, source_dir: &str) -> json::Value {
-        let p = RigParams {
+    pub fn equip(&self, action: &str, source_dir: &str) -> json::Value {
+        let p = EquipParams {
             action: action.to_string(),
-            rig: rig.to_string(),
             source_dir: source_dir.to_string(),
         };
-        Self::envelope(self.rt.block_on(self.nush.rig(mcp::Parameters(p))))
+        Self::envelope(self.rt.block_on(self.nush.equip(mcp::Parameters(p))))
+    }
+
+    /// `equip(new)` at `root`'s source for `name`, returning its rig source.
+    pub fn new_rig(
+        &self,
+        root: &std::path::Path,
+        name: &str,
+    ) -> std::path::PathBuf {
+        let source = equip_source(root, name);
+        let env = self.equip("new", &source.to_string_lossy());
+        assert!(!has_error(&env), "equip(new) for {name} failed: {env}");
+        source.join("rig")
     }
 
     pub fn scaffold(&self, namepaths: &[&str]) -> json::Value {
@@ -304,9 +315,9 @@ impl TestServer {
         )
     }
 
-    /// The in-process rigs git repo dir.
-    pub fn rigs_dir(&self) -> std::path::PathBuf {
-        crate::rigs_dir()
+    /// The in-process equip git repo dir.
+    pub fn equip_root(&self) -> std::path::PathBuf {
+        crate::equip_root()
     }
 
     /// The per-call log dir for a run-family nonce.
@@ -317,9 +328,14 @@ impl TestServer {
             .to_path_buf()
     }
 
-    /// The canonical committed dir for a rig by its compound `author/name`.
+    /// The committed rig of an equip by its compound `author/name`.
     pub fn rig_dir(&self, name: &str) -> std::path::PathBuf {
-        crate::rigs_dir().join("rig").join(name)
+        crate::rig_dir(name)
+    }
+
+    /// The committed lib of an equip by its compound `author/name`.
+    pub fn lib_dir(&self, name: &str) -> std::path::PathBuf {
+        crate::lib_dir(name)
     }
 
     /// A rig's committed index, decoded into the JSON shape assertions use.
@@ -421,6 +437,14 @@ pub fn rig_block(
         "rig `{leaf}` is absent from the block:\n{signatures}",
     );
     format!("{}\n", out.join("\n"))
+}
+
+/// An equip's source directory under `root`: `root/equip/<name>`.
+pub fn equip_source(
+    root: &std::path::Path,
+    name: &str,
+) -> std::path::PathBuf {
+    root.join("equip").join(name)
 }
 
 pub fn write_source(dir: &std::path::Path, rel: &str, contents: &str) {

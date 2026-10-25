@@ -6,7 +6,7 @@ use sourcetrait_grammar_mcp::guts::{
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
-/// the namespace substrate (keypair, rigs repo git config), which must not race
+/// the namespace substrate (keypair, equip repo git config), which must not race
 /// itself across parallel tests.
 static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integration, {
     .using_temp_dir()
@@ -87,9 +87,7 @@ fn info_returns_static_server_state() {
 fn info_renders_a_committed_rig_as_a_signature_block() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("treelib");
-    let est = s.rig("new", "sourcetrait/treelib", src.to_str().unwrap());
-    assert!(!has_error(&est), "establish failed: {est}");
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/treelib");
     for (module_path, name, args_inner, result_inner, body) in [
         ("solo", "rootfn", "x: int", "out: int", "{ out: ($args.x + 1) }"),
         (
@@ -133,9 +131,7 @@ fn info_renders_a_committed_rig_as_a_signature_block() {
 fn the_indentation_is_the_hierarchy() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("implib");
-    let est = s.rig("new", "sourcetrait/implib", src.to_str().unwrap());
-    assert!(!has_error(&est), "establish failed: {est}");
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/implib");
     write_source(&src, "mod.nu", "export module math\n");
     write_source(&src, "math/mod.nu", "export use double\n");
     write_source(
@@ -157,8 +153,7 @@ fn the_indentation_is_the_hierarchy() {
 fn summaries_ride_the_line_and_are_omitted_when_absent() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("doctreelib");
-    let _ = s.rig("new", "sourcetrait/doctreelib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/doctreelib");
     write_source(&src, "mod.nu", "# the doctree rig\nexport module m\n");
     write_source(&src, "m/mod.nu", "# the m module\nexport use fn\n");
     write_source(
@@ -180,8 +175,7 @@ fn summaries_ride_the_line_and_are_omitted_when_absent() {
 fn a_void_renders_as_empty_angles() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("voidlib");
-    let _ = s.rig("new", "sourcetrait/voidlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/voidlib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use ping\n");
     write_source(
@@ -203,8 +197,7 @@ fn a_void_renders_as_empty_angles() {
 fn a_multi_line_summary_is_flattened_onto_its_line() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("wraplib");
-    let _ = s.rig("new", "sourcetrait/wraplib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/wraplib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use go\n");
     // A doc comment whose SUMMARY - everything before the first blank line -
@@ -236,8 +229,7 @@ fn a_multi_line_summary_is_flattened_onto_its_line() {
 fn a_mixed_module_states_its_own_call_separator() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("mixedlib");
-    let _ = s.rig("new", "sourcetrait/mixedlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/mixedlib");
     write_source(&src, "mod.nu", "export module m\n");
     // `m` holds BOTH a submodule and a direct call. This is the case that sank
     // the trailing-character format - no single character describes it - and it
@@ -272,9 +264,8 @@ fn an_author_heads_its_group_exactly_once() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
     for leaf in ["onelib", "twolib"] {
-        let src = t.temp_dir().join(leaf);
         let name = format!("sourcetrait/{leaf}");
-        let _ = s.rig("new", &name, src.to_str().unwrap());
+        let src = s.new_rig(t.temp_dir(), &name);
         write_source(&src, "mod.nu", "export module m\n");
         write_source(&src, "m/mod.nu", "export use go\n");
         write_source(

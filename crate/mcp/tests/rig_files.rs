@@ -3,12 +3,13 @@ use std::path::Path;
 
 use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{
-    TestServer, error_kind, error_kinds, has_error, has_kind, valid_function_source, write_source,
+    TestServer, equip_source, error_kind, error_kinds, has_error, has_kind, valid_function_source,
+    write_source,
 };
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
-/// the namespace substrate (keypair, rigs repo git config), which must not race
+/// the namespace substrate (keypair, equip repo git config), which must not race
 /// itself across parallel tests.
 static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integration, {
     .using_temp_dir()
@@ -31,7 +32,7 @@ fn author_valid_base(src: &Path) {
     );
 }
 
-/// git-tracked paths under `name` in the in-process namespace's rigs repo (a
+/// git-tracked paths under `name` in the in-process namespace's equip repo (a
 /// read-only inspection of the commit's output; git is a substrate tool).
 fn git_ls_files(repo: &Path, name: &str) -> Vec<String> {
     let out = std::process::Command::new("git")
@@ -52,8 +53,7 @@ fn git_ls_files(repo: &Path, name: &str) -> Vec<String> {
 fn assets_data_files_carried_recursively() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("assetlib");
-    let _ = s.rig("new", "sourcetrait/assetlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/assetlib");
     author_valid_base(&src);
     write_source(&src, ".assets/data.json", "{\"k\": 1}\n");
     write_source(&src, ".assets/notes.txt", "hello\n");
@@ -73,8 +73,7 @@ fn assets_data_files_carried_recursively() {
 fn assets_denies_script_extension() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("assetshlib");
-    let _ = s.rig("new", "sourcetrait/assetshlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/assetshlib");
     author_valid_base(&src);
     write_source(&src, ".assets/run.sh", "echo hi\n");
     let env = s.commit("sourcetrait/assetshlib");
@@ -89,8 +88,7 @@ fn assets_denies_script_extension() {
 fn assets_dotfiles_judged_by_extension() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("assetdotlib");
-    let _ = s.rig("new", "sourcetrait/assetdotlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/assetdotlib");
     author_valid_base(&src);
     write_source(&src, ".assets/.gitignore", "*.tmp\n");
     write_source(&src, ".assets/.foo", "opaque\n");
@@ -113,8 +111,7 @@ fn assets_dotfiles_judged_by_extension() {
 fn assets_denies_executable_bit() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("assetxlib");
-    let _ = s.rig("new", "sourcetrait/assetxlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/assetxlib");
     author_valid_base(&src);
     write_source(&src, ".assets/data.json", "{}\n");
     chmod_x(&src.join(".assets/data.json"));
@@ -130,8 +127,7 @@ fn assets_denies_executable_bit() {
 fn docs_md_txt_carried() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("doclib");
-    let _ = s.rig("new", "sourcetrait/doclib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/doclib");
     author_valid_base(&src);
     write_source(&src, ".docs/guide.md", "# guide\n");
     write_source(&src, ".docs/notes.txt", "notes\n");
@@ -146,8 +142,7 @@ fn docs_md_txt_carried() {
 fn docs_denies_other_extensions_and_plain_dotfile() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("docdenylib");
-    let _ = s.rig("new", "sourcetrait/docdenylib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/docdenylib");
     author_valid_base(&src);
     write_source(&src, ".docs/data.json", "{}\n");
     let json_env = s.commit("sourcetrait/docdenylib");
@@ -171,8 +166,7 @@ fn docs_denies_other_extensions_and_plain_dotfile() {
 fn docs_allows_gitignore() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("docgitlib");
-    let _ = s.rig("new", "sourcetrait/docgitlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/docgitlib");
     author_valid_base(&src);
     write_source(&src, ".docs/guide.md", "# guide\n");
     write_source(&src, ".docs/.gitignore", "*.bak\n");
@@ -184,8 +178,7 @@ fn docs_allows_gitignore() {
 fn docs_denies_executable_bit() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("docxlib");
-    let _ = s.rig("new", "sourcetrait/docxlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/docxlib");
     author_valid_base(&src);
     write_source(&src, ".docs/guide.md", "# guide\n");
     chmod_x(&src.join(".docs/guide.md"));
@@ -201,8 +194,7 @@ fn docs_denies_executable_bit() {
 fn root_sanctioned_files_carried() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("rootlib");
-    let _ = s.rig("new", "sourcetrait/rootlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/rootlib");
     author_valid_base(&src);
     write_source(&src, "README.md", "# rootlib\n");
     write_source(&src, "LEGAL.md", "legal\n");
@@ -221,8 +213,7 @@ fn root_sanctioned_files_carried() {
 fn root_denies_unexpected_non_nu_file() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("rootdenylib");
-    let _ = s.rig("new", "sourcetrait/rootdenylib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/rootdenylib");
     author_valid_base(&src);
     write_source(&src, "data.json", "{}\n");
     let env = s.commit("sourcetrait/rootdenylib");
@@ -237,8 +228,7 @@ fn root_denies_unexpected_non_nu_file() {
 fn sanctioned_file_in_module_dir_denied_root_only() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("modreadmelib");
-    let _ = s.rig("new", "sourcetrait/modreadmelib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/modreadmelib");
     author_valid_base(&src);
     write_source(&src, "m/README.md", "# nope\n");
     let env = s.commit("sourcetrait/modreadmelib");
@@ -253,8 +243,7 @@ fn sanctioned_file_in_module_dir_denied_root_only() {
 fn executable_nu_file_denied() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("xnulib");
-    let _ = s.rig("new", "sourcetrait/xnulib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/xnulib");
     author_valid_base(&src);
     chmod_x(&src.join("m/double/mod.nu"));
     let env = s.commit("sourcetrait/xnulib");
@@ -269,8 +258,7 @@ fn executable_nu_file_denied() {
 fn gitignore_allowed_at_root_and_module() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("gitlib");
-    let _ = s.rig("new", "sourcetrait/gitlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/gitlib");
     author_valid_base(&src);
     write_source(&src, ".gitignore", "*.tmp\n");
     write_source(&src, "m/.gitignore", "scratch/\n");
@@ -285,8 +273,7 @@ fn gitignore_allowed_at_root_and_module() {
 fn gitignore_honored_at_commit_staging_only() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("honorlib");
-    let _ = s.rig("new", "sourcetrait/honorlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/honorlib");
     author_valid_base(&src);
     write_source(&src, ".gitignore", "ignored.md\n");
     write_source(&src, ".docs/ignored.md", "secret\n");
@@ -299,13 +286,13 @@ fn gitignore_honored_at_commit_staging_only() {
         canon.join(".docs/ignored.md").exists(),
         "ignored file is still copied to the canonical on disk"
     );
-    let tracked = git_ls_files(&s.rigs_dir(), "rig/sourcetrait/honorlib");
+    let tracked = git_ls_files(&s.equip_root(), "sourcetrait/honorlib/rig");
     assert!(
         tracked.iter().any(|p| p.ends_with(".docs/kept.md")),
         "kept.md should be tracked; got {tracked:?}"
     );
     assert!(
-        tracked.iter().any(|p| p.ends_with("honorlib/.gitignore")),
+        tracked.iter().any(|p| p.ends_with("honorlib/rig/.gitignore")),
         ".gitignore should be tracked; got {tracked:?}"
     );
     assert!(
@@ -318,8 +305,7 @@ fn gitignore_honored_at_commit_staging_only() {
 fn nested_assets_dir_is_skipped_not_carried() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("nestlib");
-    let _ = s.rig("new", "sourcetrait/nestlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/nestlib");
     author_valid_base(&src);
     write_source(&src, "m/.assets/data.json", "{}\n");
     let env = s.commit("sourcetrait/nestlib");
@@ -334,20 +320,20 @@ fn nested_assets_dir_is_skipped_not_carried() {
 }
 
 #[tested]
-fn rig_name_denylist() {
+fn equip_name_denylist() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
     for denied in ["docs", "tools", "bin", "target"] {
-        let src = t.temp_dir().join(format!("src_{denied}"));
-        let env = s.rig("new", &format!("sourcetrait/{denied}"), src.to_str().unwrap());
+        let eq = equip_source(t.temp_dir(), &format!("sourcetrait/{denied}"));
+        let env = s.equip("new", eq.to_str().unwrap());
         assert_eq!(
             error_kind(&env),
-            Some("rig::name_denied"),
-            "rig name `{denied}` should be denied; got {env}"
+            Some("equip::name_denied"),
+            "equip name `{denied}` should be denied; got {env}"
         );
     }
-    let src = t.temp_dir().join("okname");
-    let ok = s.rig("new", "sourcetrait/okname", src.to_str().unwrap());
+    let eq = equip_source(t.temp_dir(), "sourcetrait/okname");
+    let ok = s.equip("new", eq.to_str().unwrap());
     assert!(!has_error(&ok), "a normal name should succeed; got {ok}");
 }
 
@@ -355,11 +341,12 @@ fn rig_name_denylist() {
 fn install_carries_assets_and_is_callable() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("shipassetlib");
+    let eq = equip_source(t.temp_dir(), "sourcetrait/shipassetlib");
+    let src = eq.join("rig");
     author_valid_base(&src);
     write_source(&src, ".assets/locale/en/main.ftl", "k = v\n");
     write_source(&src, "README.md", "# ship\n");
-    let env = s.rig("install", "sourcetrait/shipassetlib", src.to_str().unwrap());
+    let env = s.equip("install", eq.to_str().unwrap());
     assert!(!has_error(&env), "install should succeed; got {env}");
     let canon = s.rig_dir("sourcetrait/shipassetlib");
     assert!(

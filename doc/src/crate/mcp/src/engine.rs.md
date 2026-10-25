@@ -1,7 +1,7 @@
 # engine.rs
 
 ## fn base_context
-THE shared constructor, and the sharing is the point: `build_base` and the rig
+THE shared constructor, and the sharing is the point: `build_base` and the equip
 validator's `ParseEngine::new_full` both call it, so the two cannot drift about
 what command set a rig may legally call. If the two diverged - the validator
 missing a layer the eval engine has - a rig calling `str snake-case` would fail

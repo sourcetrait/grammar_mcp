@@ -6,8 +6,9 @@ NO FILESYSTEM PATH IS RESOLVED FROM THE NAMEPATH. The traversal defense is the i
 `.meta/rig.nuon` via `index_node` and function-name membership, and the template then drives
 the module-qualified name - no filesystem path is composed from the namepath at all.
 
-The rig's READ lock is held across the whole dispatch, so a concurrent `commit` cannot swap
-the canonical tree out from under a running call.
+The equip's READ lock is held across the whole dispatch, so a concurrent `commit` cannot
+swap the canonical tree out from under a running call. A lib-only equip answers
+`equip::no_rig` under that lock, before the index is read.
 
 `None` is passed for the cache body: call targets are NOT rerunnable, because the body is the
 committed rig's own and the handle would point at something the agent does not own.

@@ -57,7 +57,7 @@ impl ParseEngine {
         if let Some(extra) = &self.extra_lib_dir {
             dirs.push(extra.clone());
         }
-        dirs.push(rigs_dir());
+        dirs.push(data_base_dir());
         set_lib_dirs_const(&mut clone, &dirs);
         clone
     }

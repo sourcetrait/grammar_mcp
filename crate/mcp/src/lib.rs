@@ -43,8 +43,8 @@ pub(crate) mod server {
         pub(crate) mod info;
         pub(crate) mod inspect;
         pub(crate) mod interact;
+        pub(crate) mod equip;
         pub(crate) mod kill;
-        pub(crate) mod rig;
         pub(crate) mod new;
         pub(crate) mod processes;
         pub(crate) mod purview_configure;
@@ -156,14 +156,13 @@ pub(crate) use crate::{
         },
         executor::Executor,
         rig::{
-            RigLocks, ValidationResult, check_rig,
-            check_source_dir, commit_impl, ensure_substrate, establish_rig,
+            RigLocks, ValidationResult, check_equip,
+            check_source_dir, commit_equip, ensure_substrate, establish_equip,
             render_signatures_within, SignaturesDoc,
-            InspectDoc, index_node, inspect_impl, install_impl, is_reserved_term, is_valid_ident,
-            is_valid_rig,
-            is_valid_module_path,
-            rigs_dir, rigs_repo_lock, load_index, registered_rig_names, scaffold_leaf,
-            scaffold_leaf_exists, uninstall_impl,
+            InspectDoc, equip_namepath_of, equip_repo_lock, equip_root, index_node, inspect_impl,
+            install_equip, is_reserved_term, is_valid_equip, is_valid_ident,
+            is_valid_module_path, lib_dir, load_index, registered_rig_names, require_rig, rig_dir,
+            scaffold_leaf, scaffold_leaf_exists, uninstall_equip,
         },
         lint::{LINT_VIOLATION_CAP, lint_body},
         liveness::acquire as acquire_host_lock,
@@ -210,6 +209,7 @@ pub(crate) use crate::{
             channel_verified::ChannelVerifiedParams,
             commit::CommitParams,
             config_channel::ConfigChannelParams,
+            equip::EquipParams,
             common::{
                 CachedRunBody, InFlightEntry, InFlightKind, NuSh, RemoteLinkEntry, RunParams,
                 convert_schemas, dispatch_interact, dispatch_pooled, envelope_to_structured,
@@ -218,7 +218,6 @@ pub(crate) use crate::{
             info::InfoParams,
             inspect::InspectParams,
             kill::KillParams,
-            rig::RigParams,
             new::NewParams,
             processes::ProcessesParams,
             purview_configure::PurviewConfigureParams,
@@ -300,7 +299,7 @@ pub(crate) use sourcetrait_common::{
 pub(crate) use crate::nuin::{SignatureParameterTrait, SignatureTrait};
 
 pub(crate) mod ser {
-    pub(crate) use ::serde::{Deserialize, Serialize};
+    pub(crate) use ::serde::{Deserialize, Serialize, de::DeserializeOwned};
 }
 
 pub(crate) mod schema {
@@ -366,12 +365,12 @@ pub(crate) mod tku {
 }
 
 pub(crate) mod json {
-    pub(crate) use serde_json::{Value, from_slice, from_value, to_value, to_vec};
+    pub(crate) use serde_json::{Value, from_value, to_value, to_vec};
 }
 
 pub use crate::{
     cli::{
-        Cli, CliEnv, CliTool, CliCmd, RigCliAction,
+        Cli, CliEnv, CliTool, CliCmd, EquipCliAction,
     },
     config::{
         DeniableTool,

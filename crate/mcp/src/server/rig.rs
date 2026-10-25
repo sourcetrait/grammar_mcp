@@ -26,10 +26,29 @@ pub(crate) struct IndexModule {
     pub modules: Vec<IndexModule>,
 }
 
+/// A lib's index: the source it was committed from.
+#[derive(Debug, Clone, ser::Serialize, ser::Deserialize)]
+pub(crate) struct LibIndex {
+    pub source_path: PathBuf,
+}
+
+/// The rig's index, under its kind directory.
 pub(crate) const META_FILE: &str = ".meta/rig.nuon";
 
-/// The pre-NUON index filename; nothing writes it any more.
-const LEGACY_META_FILE: &str = ".meta/library.json";
+/// The lib's index, under its kind directory.
+pub(crate) const LIB_META_FILE: &str = ".meta/lib.nuon";
+
+/// The kind holding an equip's calls.
+pub(crate) const KIND_RIG: &str = "rig";
+
+/// The kind holding an equip's plain modules.
+pub(crate) const KIND_LIB: &str = "lib";
+
+/// The kinds the MCP installs: a lib first, since its rig may import it.
+pub(crate) const EQUIP_KINDS: [&str; 2] = [KIND_LIB, KIND_RIG];
+
+/// The directory that names an equip, in its source path and the namespace.
+pub(crate) const EQUIP_DIR: &str = "equip";
 
 
 pub(crate) fn keypair_dir() -> PathBuf {
@@ -48,22 +67,28 @@ pub(crate) fn allowed_signers_path() -> PathBuf {
     keypair_dir().join("allowed_signers")
 }
 
-pub(crate) fn rigs_dir() -> PathBuf {
-    data_base_dir().join("rigs")
+/// The namespace's signed repository of installed equips.
+pub(crate) fn equip_root() -> PathBuf {
+    data_base_dir().join(EQUIP_DIR)
 }
 
-pub(crate) const RIG_TYPE_DIR: &str = "rig";
-
-pub(crate) fn rig_dir(rig: &str) -> PathBuf {
-    rigs_dir().join(RIG_TYPE_DIR).join(rig)
+/// An installed equip's directory, its kinds beneath it.
+pub(crate) fn equip_dir(equip: &str) -> PathBuf {
+    equip_root().join(equip)
 }
 
-pub(crate) fn rig_repo_rel(rig: &str) -> String {
-    format!("{RIG_TYPE_DIR}/{rig}")
+/// An installed equip's rig.
+pub(crate) fn rig_dir(equip: &str) -> PathBuf {
+    equip_dir(equip).join(KIND_RIG)
 }
 
-pub(crate) fn is_valid_rig(rig: &str) -> bool {
-    match rig.split_once('/') {
+/// An installed equip's lib.
+pub(crate) fn lib_dir(equip: &str) -> PathBuf {
+    equip_dir(equip).join(KIND_LIB)
+}
+
+pub(crate) fn is_valid_equip(equip: &str) -> bool {
+    match equip.split_once('/') {
         Some((author, name)) => {
             !name.contains('/')
                 && is_valid_ident(author)
@@ -75,16 +100,88 @@ pub(crate) fn is_valid_rig(rig: &str) -> bool {
     }
 }
 
-pub(crate) fn rig_meta_path(rig: &str) -> PathBuf {
-    rig_dir(rig).join(META_FILE)
+pub(crate) fn rig_meta_path(equip: &str) -> PathBuf {
+    rig_dir(equip).join(META_FILE)
 }
 
-pub(crate) fn rig_meta_dir(rig: &str) -> PathBuf {
-    rig_dir(rig).join(".meta")
+pub(crate) fn lib_meta_path(equip: &str) -> PathBuf {
+    lib_dir(equip).join(LIB_META_FILE)
 }
 
-pub(crate) fn rig_docs_dir(rig: &str) -> PathBuf {
-    rig_meta_dir(rig).join("docs")
+pub(crate) fn rig_meta_dir(equip: &str) -> PathBuf {
+    rig_dir(equip).join(".meta")
+}
+
+pub(crate) fn rig_docs_dir(equip: &str) -> PathBuf {
+    rig_meta_dir(equip).join("docs")
+}
+
+/// The equip a source path names: its last two components under `equip/`.
+pub(crate) fn equip_namepath_of(source_dir: &Path) -> Result<String, GrammarMcpError> {
+    let invalid = |reason: &str| GrammarMcpError::EquipInvalidSource {
+        source_dir: source_dir.display().to_string(),
+        reason: reason.to_string(),
+    };
+    let mut parts: Vec<&str> = Vec::new();
+    for component in source_dir.components() {
+        match component {
+            std::path::Component::Normal(part) => match part.to_str() {
+                Some(s) => parts.push(s),
+                None => return Err(invalid("the path is not valid UTF-8")),
+            },
+            std::path::Component::RootDir => {}
+            _ => return Err(invalid("the path must not hold `.` or `..`")),
+        }
+    }
+    let [.., marker, author, name] = parts.as_slice() else {
+        return Err(invalid("source_dir must be an `equip/<author>/<name>` directory"));
+    };
+    if *marker != EQUIP_DIR {
+        return Err(invalid("source_dir must be an `equip/<author>/<name>` directory"));
+    }
+    let equip = format!("{author}/{name}");
+    check_equip_name(&equip)?;
+    Ok(equip)
+}
+
+/// Refuse an equip name that is malformed, reserved, or denied.
+fn check_equip_name(equip: &str) -> Result<(), GrammarMcpError> {
+    let Some((author, name)) = equip.split_once('/').filter(|(_, n)| !n.contains('/')) else {
+        return Err(GrammarMcpError::EquipInvalidName {
+            equip: equip.to_string(),
+            reason: "an equip is the compound `<author>/<name>`".to_string(),
+        });
+    };
+    for seg in [author, name] {
+        if !is_valid_ident(seg) || is_reserved_term(seg) {
+            return Err(GrammarMcpError::EquipInvalidName {
+                equip: equip.to_string(),
+                reason: "author and name must match [a-zA-Z_][a-zA-Z0-9_-]* and not be the reserved `main`"
+                    .to_string(),
+            });
+        }
+    }
+    if NAME_DENYLIST.contains(&name) {
+        return Err(GrammarMcpError::EquipNameDenied {
+            equip: equip.to_string(),
+        });
+    }
+    Ok(())
+}
+
+/// Refuse an equip that is not installed, or one with no rig.
+pub(crate) fn require_rig(equip: &str) -> Result<(), GrammarMcpError> {
+    if !equip_dir(equip).exists() {
+        return Err(GrammarMcpError::EquipNotRegistered {
+            equip: equip.to_string(),
+        });
+    }
+    if !rig_meta_path(equip).exists() {
+        return Err(GrammarMcpError::EquipNoRig {
+            equip: equip.to_string(),
+        });
+    }
+    Ok(())
 }
 
 
@@ -100,34 +197,10 @@ impl RigLocks {
     }
 
     pub(crate) async fn hydrate_from_disk(&self) -> io::Result<()> {
-        let dir = rigs_dir().join(RIG_TYPE_DIR);
-        if !dir.exists() {
-            return Ok(());
-        }
         let mut map = self.map.lock().await;
-        for author_entry in fs::read_dir(&dir)? {
-            let author_entry = author_entry?;
-            if !author_entry.file_type()?.is_dir() {
-                continue;
-            }
-            let author = match author_entry.file_name().into_string() {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
-            for lib_entry in fs::read_dir(author_entry.path())? {
-                let lib_entry = lib_entry?;
-                if !lib_entry.file_type()?.is_dir() {
-                    continue;
-                }
-                let name = match lib_entry.file_name().into_string() {
-                    Ok(s) => s,
-                    Err(_) => continue,
-                };
-                if lib_entry.path().join(META_FILE).exists() {
-                    map.entry(format!("{author}/{name}"))
-                        .or_insert_with(|| Arc::new(tk::AsyncRwLock::new(())));
-                }
-            }
+        for equip in registered_equip_names() {
+            map.entry(equip)
+                .or_insert_with(|| Arc::new(tk::AsyncRwLock::new(())));
         }
         Ok(())
     }
@@ -162,16 +235,11 @@ impl RigLocks {
 pub(crate) struct AlreadyRegistered;
 
 
-/// Serializes mutations of the ONE rigs repo and its namespace meta.
-///
-/// The per-rig RwLocks serialize same-rig work only; concurrent lifecycle ops on
-/// DIFFERENT rigs still race git's `index.lock`, which fails the second writer
-/// rather than waiting. One repo, one lock; read paths and validation stay
-/// outside the hold.
-static RIGS_REPO_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// Serializes mutations of the ONE equip repo and its namespace meta.
+static EQUIP_REPO_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-pub(crate) fn rigs_repo_lock() -> std::sync::MutexGuard<'static, ()> {
-    RIGS_REPO_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+pub(crate) fn equip_repo_lock() -> std::sync::MutexGuard<'static, ()> {
+    EQUIP_REPO_LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 
@@ -206,8 +274,8 @@ pub(crate) fn ensure_keypair() -> io::Result<()> {
     Ok(())
 }
 
-pub(crate) fn ensure_rigs_repo() -> io::Result<()> {
-    let dir = rigs_dir();
+pub(crate) fn ensure_equip_repo() -> io::Result<()> {
+    let dir = equip_root();
     fs::create_dir_all(&dir)?;
     let git_dir = dir.join(".git");
     if !git_dir.exists() {
@@ -215,7 +283,7 @@ pub(crate) fn ensure_rigs_repo() -> io::Result<()> {
         configure_repo(&dir)?;
         run_git(
             &dir,
-            &["commit", "--allow-empty", "-m", "init rigs repo"],
+            &["commit", "--allow-empty", "-m", "init equip repo"],
         )?;
     } else {
         configure_repo(&dir)?;
@@ -290,39 +358,17 @@ fn validate_new_names(
     module_path: &str,
     name: Option<&str>,
 ) -> Result<(), GrammarMcpError> {
-    let (author, lib_name) = match rig.split_once('/') {
-        Some((a, n)) if !n.contains('/') => (a, n),
-        _ => {
-            return Err(GrammarMcpError::RigInvalidName {
-                rig: rig.to_string(),
-                reason: "rig must be the compound `<author>/<name>`".to_string(),
-            });
-        }
-    };
-    for seg in [author, lib_name] {
-        if !is_valid_ident(seg) || is_reserved_term(seg) {
-            return Err(GrammarMcpError::RigInvalidName {
-                rig: seg.to_string(),
-                reason: "author/name must match [a-zA-Z_][a-zA-Z0-9_-]* and not be the reserved `main`"
-                    .to_string(),
-            });
-        }
-    }
-    if NAME_DENYLIST.contains(&lib_name) {
-        return Err(GrammarMcpError::RigNameDenied {
-            rig: rig.to_string(),
-        });
-    }
+    check_equip_name(rig)?;
     if !is_valid_module_path(module_path) {
         return Err(GrammarMcpError::RigInvalidName {
-            rig: module_path.to_string(),
+            name: module_path.to_string(),
             reason: "invalid module path".to_string(),
         });
     }
     for seg in module_path.split('/').filter(|s| !s.is_empty()) {
         if is_reserved_term(seg) {
             return Err(GrammarMcpError::RigInvalidName {
-                rig: seg.to_string(),
+                name: seg.to_string(),
                 reason: "reserved `main` cannot name a module".to_string(),
             });
         }
@@ -330,7 +376,7 @@ fn validate_new_names(
     if let Some(n) = name {
         if !is_valid_ident(n) || is_reserved_term(n) {
             return Err(GrammarMcpError::RigInvalidName {
-                rig: n.to_string(),
+                name: n.to_string(),
                 reason: "invalid or reserved (`main`) function name".to_string(),
             });
         }
@@ -338,21 +384,24 @@ fn validate_new_names(
     Ok(())
 }
 
-pub(crate) fn establish_rig(rig: &str, source_path: &std::path::Path) -> Result<(), GrammarMcpError> {
-    validate_new_names(rig, "", None)?;
-    let _repo = rigs_repo_lock();
-    let canonical = rig_dir(rig);
-    if canonical.exists() {
-        return Err(GrammarMcpError::RigAlreadyRegistered {
-            rig: rig.to_string(),
+/// Register an empty equip at its source: a rig with an empty root `mod.nu`.
+pub(crate) fn establish_equip(
+    equip: &str,
+    source_dir: &Path,
+) -> Result<Vec<String>, GrammarMcpError> {
+    check_equip_name(equip)?;
+    let _repo = equip_repo_lock();
+    if equip_dir(equip).exists() {
+        return Err(GrammarMcpError::EquipAlreadyRegistered {
+            equip: equip.to_string(),
         });
     }
-    let meta_dir = canonical.join(".meta");
-    fs::create_dir_all(&canonical)?;
+    let rig_source = source_dir.join(KIND_RIG);
+    let canonical = rig_dir(equip);
+    fs::create_dir_all(canonical.join(".meta"))?;
     fs::write(canonical.join("mod.nu"), b"")?;
-    fs::create_dir_all(&meta_dir)?;
     let index = RigIndex {
-        source_path: source_path.to_path_buf(),
+        source_path: rig_source.clone(),
         functions: Vec::new(),
         modules: Vec::new(),
     };
@@ -361,18 +410,17 @@ pub(crate) fn establish_rig(rig: &str, source_path: &std::path::Path) -> Result<
         reason,
     })?;
     fs::write(canonical.join(META_FILE), index_nuon.as_bytes())?;
-    let rel = rig_repo_rel(rig);
-    run_git(&rigs_dir(), &["add", "--", &rel])?;
+    run_git(&equip_root(), &["add", "--", equip])?;
     run_git(
-        &rigs_dir(),
-        &["commit", "-m", &format!("new rig {rig}")],
+        &equip_root(),
+        &["commit", "-m", &format!("new equip {equip}")],
     )?;
-    fs::create_dir_all(source_path)?;
-    let root_modnu = source_path.join("mod.nu");
+    fs::create_dir_all(&rig_source)?;
+    let root_modnu = rig_source.join("mod.nu");
     if !root_modnu.exists() {
         fs::write(&root_modnu, b"")?;
     }
-    Ok(())
+    Ok(vec![root_modnu.to_string_lossy().into_owned()])
 }
 
 pub(crate) fn scaffold_leaf_exists(
@@ -380,6 +428,7 @@ pub(crate) fn scaffold_leaf_exists(
     module_path: &str,
     name: Option<&str>,
 ) -> Result<bool, GrammarMcpError> {
+    require_rig(rig)?;
     let index = load_index(rig)?;
     let mut dir = index.source_path.clone();
     for seg in module_path.split('/').filter(|s| !s.is_empty()) {
@@ -398,11 +447,7 @@ pub(crate) fn scaffold_leaf(
     name: Option<&str>,
 ) -> Result<Vec<String>, GrammarMcpError> {
     validate_new_names(rig, module_path, name)?;
-    if !rig_dir(rig).exists() {
-        return Err(GrammarMcpError::RigNotRegistered {
-            rig: rig.to_string(),
-        });
-    }
+    require_rig(rig)?;
     let index = load_index(rig)?;
     let sp = index.source_path.clone();
     let mut created: Vec<String> = Vec::new();
@@ -416,7 +461,7 @@ pub(crate) fn scaffold_leaf(
             let terminal_module = name.is_none() && i == segs.len() - 1;
             if terminal_module && child.exists() {
                 return Err(GrammarMcpError::RigInvalidName {
-                    rig: module_path.to_string(),
+                    name: module_path.to_string(),
                     reason: "module already exists; edit it instead of scaffolding over it"
                         .to_string(),
                 });
@@ -436,7 +481,7 @@ pub(crate) fn scaffold_leaf(
         let fn_dir = dir.join(fn_name);
         if fn_dir.exists() {
             return Err(GrammarMcpError::RigInvalidName {
-                rig: fn_name.to_string(),
+                name: fn_name.to_string(),
                 reason: "function already exists; edit it instead of scaffolding over it"
                     .to_string(),
             });
@@ -480,26 +525,40 @@ pub(crate) fn is_valid_module_path(s: &str) -> bool {
 }
 
 
-/// Render the index as NUON - the house format for anything we persist.
-pub(crate) fn index_to_nuon(index: &RigIndex) -> Result<String, String> {
-    let json = json::to_value(index).map_err(|e| e.to_string())?;
+/// Render a kind's index as NUON - the house format for anything we persist.
+fn meta_to_nuon<T: ser::Serialize>(meta: &T) -> Result<String, String> {
+    let json = json::to_value(meta).map_err(|e| e.to_string())?;
     let value = json_value_to_nu_value(&json);
     nu::to_nuon(&nu::EngineState::new(), &value, nu::ToNuonConfig::default())
         .map_err(|e| e.to_string())
 }
 
-/// Parse an index back out of NUON, the mirror of `index_to_nuon`.
-pub(crate) fn index_from_nuon(text: &str) -> Result<RigIndex, String> {
+/// Parse a kind's index back out of NUON, the mirror of `meta_to_nuon`.
+fn meta_from_nuon<T: ser::DeserializeOwned>(text: &str) -> Result<T, String> {
     let value = nu::from_nuon(text, None).map_err(|e| e.to_string())?;
     let json_compat = nu::JsonValue::from_value(value).map_err(|e| e.to_string())?;
     let json = json::to_value(&json_compat).map_err(|e| e.to_string())?;
     json::from_value(json).map_err(|e| e.to_string())
 }
 
+pub(crate) fn index_to_nuon(index: &RigIndex) -> Result<String, String> {
+    meta_to_nuon(index)
+}
+
+pub(crate) fn index_from_nuon(text: &str) -> Result<RigIndex, String> {
+    meta_from_nuon(text)
+}
+
 pub(crate) fn load_index(rig: &str) -> io::Result<RigIndex> {
     let text = fs::read_to_string(rig_meta_path(rig))?;
     index_from_nuon(&text)
         .map_err(|e| io::Error::other(format!("decode index for {rig}: {e}")))
+}
+
+pub(crate) fn load_lib_index(equip: &str) -> io::Result<LibIndex> {
+    let text = fs::read_to_string(lib_meta_path(equip))?;
+    meta_from_nuon(&text)
+        .map_err(|e| io::Error::other(format!("decode lib index for {equip}: {e}")))
 }
 
 
@@ -524,36 +583,48 @@ fn read_doc(docs_dir: &std::path::Path, docs_path: &str, file: &str) -> String {
     fs::read_to_string(dir.join(file)).unwrap_or_default()
 }
 
-/// Every registered rig's compound `<author>/<name>`, sorted.
-pub(crate) fn registered_rig_names() -> Vec<String> {
-    let dir = rigs_dir().join(RIG_TYPE_DIR);
+/// Every installed equip's compound `<author>/<name>`, sorted.
+pub(crate) fn registered_equip_names() -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
-    if let Ok(read) = fs::read_dir(&dir) {
-        for author_entry in read.flatten() {
-            if !author_entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+    let Ok(authors) = fs::read_dir(equip_root()) else {
+        return names;
+    };
+    for author_entry in authors.flatten() {
+        if !author_entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let Ok(author) = author_entry.file_name().into_string() else {
+            continue;
+        };
+        if author.starts_with('.') {
+            continue;
+        }
+        let Ok(equips) = fs::read_dir(author_entry.path()) else {
+            continue;
+        };
+        for equip_entry in equips.flatten() {
+            if !equip_entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
                 continue;
             }
-            let Ok(author) = author_entry.file_name().into_string() else {
+            let Ok(name) = equip_entry.file_name().into_string() else {
                 continue;
             };
-            let Ok(libs) = fs::read_dir(author_entry.path()) else {
-                continue;
-            };
-            for lib_entry in libs.flatten() {
-                if !lib_entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                    continue;
-                }
-                if !lib_entry.path().join(META_FILE).exists() {
-                    continue;
-                }
-                if let Ok(name) = lib_entry.file_name().into_string() {
-                    names.push(format!("{author}/{name}"));
-                }
+            let equip = format!("{author}/{name}");
+            if rig_meta_path(&equip).exists() || lib_meta_path(&equip).exists() {
+                names.push(equip);
             }
         }
     }
     names.sort();
     names
+}
+
+/// Every installed equip with a rig, sorted.
+pub(crate) fn registered_rig_names() -> Vec<String> {
+    registered_equip_names()
+        .into_iter()
+        .filter(|equip| rig_meta_path(equip).exists())
+        .collect()
 }
 
 /// One space per depth level - the indentation IS the structure.
@@ -788,17 +859,8 @@ pub(crate) fn inspect_impl(
     module_path: &str,
     name: Option<&str>,
 ) -> Result<InspectDoc, GrammarMcpError> {
-    if !is_valid_rig(rig) {
-        return Err(GrammarMcpError::RigInvalidName {
-            rig: rig.to_string(),
-            reason: "rig must be the compound `<author>/<name>`".to_string(),
-        });
-    }
-    if !rig_dir(rig).exists() {
-        return Err(GrammarMcpError::RigNotRegistered {
-            rig: rig.to_string(),
-        });
-    }
+    check_equip_name(rig)?;
+    require_rig(rig)?;
     if !is_valid_module_path(module_path) {
         return Err(GrammarMcpError::RigInvalidModulePath {
             module_path: module_path.to_string(),
@@ -901,7 +963,7 @@ fn prefix_diagnostic_paths(result: &mut ValidationResult, rig: &str) {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct ValidationResult {
     pub diagnostics: Vec<Diagnostic>,
     pub functions: Vec<IndexFunction>,
@@ -1007,6 +1069,7 @@ enum Zone {
     Source,
     Doc,
     Asset,
+    Lib,
 }
 
 impl Zone {
@@ -1015,6 +1078,7 @@ impl Zone {
             Zone::Source => "rig::source_extension_denied",
             Zone::Doc => "rig::doc_extension_denied",
             Zone::Asset => "rig::asset_extension_denied",
+            Zone::Lib => "lib::extension_denied",
         }
     }
 
@@ -1023,6 +1087,7 @@ impl Zone {
             Zone::Source => "rig::source_executable_denied",
             Zone::Doc => "rig::doc_executable_denied",
             Zone::Asset => "rig::asset_executable_denied",
+            Zone::Lib => "lib::executable_denied",
         }
     }
 }
@@ -1088,7 +1153,7 @@ fn check_not_executable(
             path: Some(rel),
             position: [0, 0],
         }),
-        "rig files must not be executable (+x); clear the executable bit",
+        "equip files must not be executable (+x); clear the executable bit",
     ));
 }
 
@@ -1164,8 +1229,8 @@ struct SelfView {
 static SELF_VIEW_SEQ: AtomicU64 = AtomicU64::new(0);
 
 impl SelfView {
-    fn new(rig: &str, source: &std::path::Path) -> Option<Self> {
-        if !is_valid_rig(rig) {
+    fn new(equip: &str, source_dir: &Path, kinds: &[&str]) -> Option<Self> {
+        if !is_valid_equip(equip) {
             return None;
         }
         let base = std::env::temp_dir().join(format!(
@@ -1173,10 +1238,13 @@ impl SelfView {
             process::id(),
             SELF_VIEW_SEQ.fetch_add(1, Ordering::Relaxed),
         ));
-        let link = base.join(RIG_TYPE_DIR).join(rig);
-        fs::create_dir_all(link.parent()?).ok()?;
-        std::os::unix::fs::symlink(source, &link).ok()?;
-        Some(Self { base })
+        let view = Self { base };
+        for kind in kinds {
+            let link = view.base.join(EQUIP_DIR).join(equip).join(kind);
+            fs::create_dir_all(link.parent()?).ok()?;
+            std::os::unix::fs::symlink(source_dir.join(kind), &link).ok()?;
+        }
+        Some(view)
     }
 }
 
@@ -1186,18 +1254,15 @@ impl Drop for SelfView {
     }
 }
 
-pub(crate) fn validate_rig_source(
-    rig: &str,
-    root: &std::path::Path,
+/// Validate an equip's source kinds against one self-view, building the rig's index.
+pub(crate) fn validate_equip_source(
+    equip: &str,
+    source_dir: &Path,
+    kinds: &[&str],
     engine: &ParseEngine,
 ) -> io::Result<ValidationResult> {
-    let mut result = ValidationResult {
-        diagnostics: Vec::new(),
-        functions: Vec::new(),
-        modules: Vec::new(),
-        docs: Vec::new(),
-    };
-    let self_view = SelfView::new(rig, root);
+    let mut result = ValidationResult::default();
+    let self_view = SelfView::new(equip, source_dir, kinds);
     let scoped;
     let walk_engine = match &self_view {
         Some(view) => {
@@ -1206,11 +1271,113 @@ pub(crate) fn validate_rig_source(
         }
         None => engine,
     };
-    let (modules, functions) = validate_walk(root, root, walk_engine, "", &mut result)?;
-    result.modules = modules;
-    result.functions = functions;
+    for kind in kinds {
+        let root = source_dir.join(kind);
+        let mut found = ValidationResult::default();
+        if *kind == KIND_LIB {
+            validate_lib_tree(&root, &root, walk_engine, &mut found)?;
+        } else {
+            let (modules, functions) = validate_walk(&root, &root, walk_engine, "", &mut found)?;
+            found.modules = modules;
+            found.functions = functions;
+        }
+        prefix_diagnostic_paths(&mut found, &format!("{equip}/{kind}"));
+        result.diagnostics.append(&mut found.diagnostics);
+        if *kind == KIND_RIG {
+            result.functions = found.functions;
+            result.modules = found.modules;
+            result.docs = found.docs;
+        }
+    }
     result.diagnostics = cap_diagnostics(result.diagnostics, LINT_VIOLATION_CAP);
     Ok(result)
+}
+
+/// Walk a lib: `.nu` files alone, none executable, each parsed by the engine.
+fn validate_lib_tree(
+    root: &Path,
+    dir: &Path,
+    engine: &ParseEngine,
+    result: &mut ValidationResult,
+) -> io::Result<()> {
+    let mut entries: Vec<fs::DirEntry> = fs::read_dir(dir)?.collect::<io::Result<_>>()?;
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        if error_count(&result.diagnostics) > LINT_VIOLATION_CAP {
+            return Ok(());
+        }
+        let path = entry.path();
+        let ft = entry.file_type()?;
+        if ft.is_dir() {
+            validate_lib_tree(root, &path, engine, result)?;
+        } else if ft.is_file() {
+            check_not_executable(root, &path, Zone::Lib, &mut result.diagnostics);
+            if ext_lower(&path).as_deref() == Some("nu") {
+                validate_lib_file(root, &path, engine, result)?;
+            } else {
+                push_ext_denied(
+                    root,
+                    &path,
+                    Zone::Lib,
+                    "a lib holds .nu files alone",
+                    &mut result.diagnostics,
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Parse one lib file as a module; its import cycle or parse errors are findings.
+fn validate_lib_file(
+    root: &Path,
+    path: &Path,
+    engine: &ParseEngine,
+    result: &mut ValidationResult,
+) -> io::Result<()> {
+    let source = fs::read_to_string(path)?;
+    let rel = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .into_owned();
+    let fname = path.to_string_lossy().into_owned();
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("lib");
+    let parent = path.parent().unwrap_or_else(|| Path::new(""));
+    let wrapper_name = format!("__lib_{stem}");
+    let (wrapped, prefix_len) = wrap_as_module(&source, &wrapper_name);
+    let engine_state = engine.engine_state_for_file(parent);
+    let mut ws = nu::StateWorkingSet::new(&engine_state);
+    let _ = ws.files.push(PathBuf::from(&fname), nu::Span::unknown());
+    let files_before = ws.num_files();
+    let _ = nu::parse(&mut ws, Some(&fname), wrapped.as_bytes(), false);
+    if let Some(cycle) = detect_import_cycle(&ws, files_before) {
+        result.diagnostics.push(Diagnostic::error(
+            "module::circular_import",
+            Some(Source {
+                path: Some(rel),
+                position: [0, 0],
+            }),
+            cycle,
+        ));
+        return Ok(());
+    }
+    for err in &ws.parse_errors {
+        let span_start = err.span().start.saturating_sub(prefix_len);
+        let (line, _col) = span_to_line_col(&source, span_start);
+        result.diagnostics.push(Diagnostic::error(
+            "lib::parse_error",
+            Some(Source {
+                path: Some(rel.clone()),
+                position: [line, 0],
+            }),
+            format!("parse error: {err:?}"),
+        ));
+    }
+    Ok(())
 }
 
 fn validate_walk(
@@ -2249,12 +2416,12 @@ fn parse_git_changes(porcelain: &str) -> CommitResult {
     result
 }
 
-fn write_meta(
-    name: &str,
-    source_path: &std::path::Path,
+fn write_rig_meta(
+    equip: &str,
+    source_path: &Path,
     result: &ValidationResult,
 ) -> Result<(), GrammarMcpError> {
-    let canonical = rig_dir(name);
+    let canonical = rig_dir(equip);
     let meta_dir = canonical.join(".meta");
     fs::create_dir_all(&meta_dir)?;
     let index = RigIndex {
@@ -2285,131 +2452,175 @@ fn write_meta(
     Ok(())
 }
 
-pub(crate) fn commit_impl(name: &str, engine: &ParseEngine) -> Result<CommitResult, GrammarMcpError> {
-    if !is_valid_rig(name) {
-        return Err(GrammarMcpError::RigInvalidName {
-            rig: name.to_string(),
-            reason: "rig must be the compound `<author>/<name>`".to_string(),
+fn write_lib_meta(
+    equip: &str,
+    source_path: &Path,
+) -> Result<(), GrammarMcpError> {
+    fs::create_dir_all(lib_dir(equip).join(".meta"))?;
+    let index = LibIndex {
+        source_path: source_path.to_path_buf(),
+    };
+    let index_nuon = meta_to_nuon(&index).map_err(|reason| GrammarMcpError::Internal {
+        phase: "commit::serialize_lib_index".to_string(),
+        reason,
+    })?;
+    fs::write(lib_meta_path(equip), index_nuon.as_bytes())?;
+    Ok(())
+}
+
+/// The source an installed equip was committed from: its kinds' parent.
+fn registered_source(equip: &str) -> Result<PathBuf, GrammarMcpError> {
+    let kind_source = if rig_meta_path(equip).exists() {
+        load_index(equip)?.source_path
+    } else if lib_meta_path(equip).exists() {
+        load_lib_index(equip)?.source_path
+    } else {
+        return Err(GrammarMcpError::EquipNotRegistered {
+            equip: equip.to_string(),
+        });
+    };
+    kind_source
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| GrammarMcpError::Internal {
+            phase: "equip::registered_source".to_string(),
+            reason: format!("`{}` has no parent", kind_source.display()),
+        })
+}
+
+/// The kinds an equip's source holds, in install order.
+fn source_kinds(source_dir: &Path) -> Vec<&'static str> {
+    EQUIP_KINDS
+        .iter()
+        .copied()
+        .filter(|kind| source_dir.join(kind).is_dir())
+        .collect()
+}
+
+/// The kinds an equip's source holds, refusing a missing source or one with none.
+fn require_source_kinds(source_dir: &Path) -> Result<Vec<&'static str>, GrammarMcpError> {
+    if !source_dir.is_dir() {
+        return Err(GrammarMcpError::EquipSourceMissing {
+            path: source_dir.display().to_string(),
         });
     }
-    let lib_root = rig_dir(name);
-    if !lib_root.exists() {
-        return Err(GrammarMcpError::RigNotRegistered {
-            rig: name.to_string(),
+    let kinds = source_kinds(source_dir);
+    if kinds.is_empty() {
+        return Err(GrammarMcpError::EquipNoKinds {
+            source_dir: source_dir.display().to_string(),
         });
     }
-    let index = load_index(name)?;
-    let source_path = index.source_path.clone();
-    if !source_path.exists() || !source_path.is_dir() {
-        return Err(GrammarMcpError::RigSourceMissing {
-            path: source_path.display().to_string(),
-        });
-    }
-    let mut result = validate_rig_source(name, &source_path, engine)?;
-    prefix_diagnostic_paths(&mut result, name);
+    Ok(kinds)
+}
+
+/// Validate an equip's source, then commit its kinds in place of the last ones.
+fn promote_equip(
+    equip: &str,
+    source_dir: &Path,
+    engine: &ParseEngine,
+    verb: &str,
+) -> Result<CommitResult, GrammarMcpError> {
+    let kinds = require_source_kinds(source_dir)?;
+    let result = validate_equip_source(equip, source_dir, &kinds, engine)?;
     if !result.is_empty() {
-        return Err(GrammarMcpError::RigViolations {
+        return Err(GrammarMcpError::EquipViolations {
             diagnostics: result.diagnostics,
         });
     }
-    let _repo = rigs_repo_lock();
-    if lib_root.exists() {
-        fs::remove_dir_all(&lib_root)?;
+    let _repo = equip_repo_lock();
+    let canonical = equip_dir(equip);
+    if canonical.exists() {
+        fs::remove_dir_all(&canonical)?;
     }
-    if let Some(parent) = lib_root.parent() {
-        fs::create_dir_all(parent)?;
+    for kind in &kinds {
+        let kind_source = source_dir.join(kind);
+        if *kind == KIND_LIB {
+            copy_tree_all(&kind_source, &lib_dir(equip))?;
+            write_lib_meta(equip, &kind_source)?;
+        } else {
+            copy_dir_recursive(&kind_source, &rig_dir(equip))?;
+            write_rig_meta(equip, &kind_source, &result)?;
+        }
     }
-    copy_dir_recursive(&source_path, &lib_root)?;
-    write_meta(name, &source_path, &result)?;
-    let rel = rig_repo_rel(name);
-    run_git(&rigs_dir(), &["add", "--", &rel])?;
-    let porcelain = run_git_output(&rigs_dir(), &["status", "--porcelain", "--", &rel])?;
+    run_git(&equip_root(), &["add", "--", equip])?;
+    let porcelain = run_git_output(&equip_root(), &["status", "--porcelain", "--", equip])?;
     let changed = parse_git_changes(&porcelain);
     if changed.is_empty() {
         return Ok(changed);
     }
     run_git(
-        &rigs_dir(),
-        &["commit", "-m", &format!("commit rig {name}")],
+        &equip_root(),
+        &["commit", "-m", &format!("{verb} equip {equip}")],
     )?;
     Ok(changed)
 }
 
+/// Re-commit an installed equip from its registered source.
+pub(crate) fn commit_equip(equip: &str, engine: &ParseEngine) -> Result<CommitResult, GrammarMcpError> {
+    check_equip_name(equip)?;
+    if !equip_dir(equip).exists() {
+        return Err(GrammarMcpError::EquipNotRegistered {
+            equip: equip.to_string(),
+        });
+    }
+    let source_dir = registered_source(equip)?;
+    promote_equip(equip, &source_dir, engine, "commit")
+}
 
-pub(crate) fn check_source_dir(rig: &str, source_dir: &str) -> Result<(), GrammarMcpError> {
-    let index = load_index(rig)?;
-    let registered = index.source_path.to_string_lossy().into_owned();
+pub(crate) fn check_source_dir(equip: &str, source_dir: &Path) -> Result<(), GrammarMcpError> {
+    let registered = registered_source(equip)?;
     if registered != source_dir {
-        return Err(GrammarMcpError::RigSourcePathMismatch {
-            rig: rig.to_string(),
-            passed: source_dir.to_string(),
-            registered,
+        return Err(GrammarMcpError::EquipSourcePathMismatch {
+            equip: equip.to_string(),
+            passed: source_dir.display().to_string(),
+            registered: registered.display().to_string(),
         });
     }
     Ok(())
 }
 
-pub(crate) fn install_impl(
-    rig: &str,
-    source_dir: &std::path::Path,
+/// Install an equip from its source, validated whole before anything is written.
+pub(crate) fn install_equip(
+    equip: &str,
+    source_dir: &Path,
     engine: &ParseEngine,
 ) -> Result<CommitResult, GrammarMcpError> {
-    establish_rig(rig, source_dir)?;
-    match commit_impl(rig, engine) {
-        Ok(result) => Ok(result),
-        Err(e) => {
-            let _repo = rigs_repo_lock();
-            let lib_root = rig_dir(rig);
-            if lib_root.exists() {
-                let _ = fs::remove_dir_all(&lib_root);
-                let rel = rig_repo_rel(rig);
-                let _ = run_git(&rigs_dir(), &["add", "--", &rel]);
-                let _ = run_git(
-                    &rigs_dir(),
-                    &["commit", "-m", &format!("rollback failed install {rig}")],
-                );
-            }
-            Err(e)
-        }
+    check_equip_name(equip)?;
+    if equip_dir(equip).exists() {
+        return Err(GrammarMcpError::EquipAlreadyRegistered {
+            equip: equip.to_string(),
+        });
     }
+    promote_equip(equip, source_dir, engine, "install")
 }
 
-pub(crate) fn uninstall_impl(rig: &str) -> Result<(), GrammarMcpError> {
-    let _repo = rigs_repo_lock();
-    let lib_root = rig_dir(rig);
-    if !lib_root.exists() {
+pub(crate) fn uninstall_equip(equip: &str) -> Result<(), GrammarMcpError> {
+    let _repo = equip_repo_lock();
+    let canonical = equip_dir(equip);
+    if !canonical.exists() {
         return Ok(());
     }
-    fs::remove_dir_all(&lib_root)?;
-    let rel = rig_repo_rel(rig);
-    run_git(&rigs_dir(), &["add", "--", &rel])?;
+    fs::remove_dir_all(&canonical)?;
+    run_git(&equip_root(), &["add", "--", equip])?;
     run_git(
-        &rigs_dir(),
-        &["commit", "-m", &format!("uninstall rig {rig}")],
+        &equip_root(),
+        &["commit", "-m", &format!("uninstall equip {equip}")],
     )?;
     Ok(())
 }
 
-pub(crate) fn check_rig(
-    rig: &str,
+pub(crate) fn check_equip(
+    equip: &str,
     engine: &ParseEngine,
 ) -> Result<ValidationResult, GrammarMcpError> {
-    let lib_root = rig_dir(rig);
-    if !lib_root.exists() {
-        return Err(GrammarMcpError::RigNotRegistered {
-            rig: rig.to_string(),
+    if !equip_dir(equip).exists() {
+        return Err(GrammarMcpError::EquipNotRegistered {
+            equip: equip.to_string(),
         });
     }
-    let index = load_index(rig)?;
-    let source_path = index.source_path.clone();
-    if !source_path.exists() || !source_path.is_dir() {
-        return Err(GrammarMcpError::RigSourceMissing {
-            path: source_path.display().to_string(),
-        });
-    }
-    let mut result = validate_rig_source(rig, &source_path, engine)?;
-    prefix_diagnostic_paths(&mut result, rig);
-    Ok(result)
+    let source_dir = registered_source(equip)?;
+    let kinds = require_source_kinds(&source_dir)?;
+    Ok(validate_equip_source(equip, &source_dir, &kinds, engine)?)
 }
 
 fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> io::Result<()> {
@@ -2456,58 +2667,11 @@ fn copy_tree_all(src: &std::path::Path, dst: &std::path::Path) -> io::Result<()>
 }
 
 
-/// One-time migration: `.meta/library.json` to `.meta/rig.nuon`.
-fn migrate_meta_to_nuon() -> io::Result<usize> {
-    let root = rigs_dir().join(RIG_TYPE_DIR);
-    if !root.exists() {
-        return Ok(0);
-    }
-    let mut migrated = 0usize;
-    for author in fs::read_dir(&root)? {
-        let author = author?;
-        if !author.file_type()?.is_dir() {
-            continue;
-        }
-        for lib in fs::read_dir(author.path())? {
-            let lib = lib?;
-            if !lib.file_type()?.is_dir() {
-                continue;
-            }
-            let legacy = lib.path().join(LEGACY_META_FILE);
-            if !legacy.exists() {
-                continue;
-            }
-            let target = lib.path().join(META_FILE);
-            if !target.exists() {
-                let bytes = fs::read(&legacy)?;
-                let index: RigIndex = json::from_slice(&bytes)
-                    .map_err(|e| io::Error::other(format!("decode {}: {e}", legacy.display())))?;
-                let nuon = index_to_nuon(&index)
-                    .map_err(|e| io::Error::other(format!("render {}: {e}", target.display())))?;
-                fs::write(&target, nuon.as_bytes())?;
-            }
-            fs::remove_file(&legacy)?;
-            migrated += 1;
-        }
-    }
-    Ok(migrated)
-}
-
 pub(crate) async fn ensure_substrate() -> io::Result<Arc<RigLocks>> {
     {
-        let _repo = rigs_repo_lock();
+        let _repo = equip_repo_lock();
         ensure_keypair()?;
-        ensure_rigs_repo()?;
-    }
-    let migrated = migrate_meta_to_nuon()?;
-    if migrated > 0 {
-        eprintln!("grammar: migrated {migrated} rig index file(s) to NUON");
-        let dir = rigs_dir();
-        if let Err(e) = run_git(&dir, &["add", "--", RIG_TYPE_DIR])
-            .and_then(|()| run_git(&dir, &["commit", "-m", "migrate rig index to NUON"]))
-        {
-            eprintln!("grammar: index migration not committed: {e}");
-        }
+        ensure_equip_repo()?;
     }
     let locks = Arc::new(RigLocks::new());
     locks.hydrate_from_disk().await?;

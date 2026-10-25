@@ -149,10 +149,10 @@ impl Namepath {
 }
 
 fn check_rig(rig: &str) -> Result<(), &'static str> {
-    if is_valid_rig(rig) {
+    if is_valid_equip(rig) {
         Ok(())
     } else {
-        Err("rig must be the compound `<author>/<name>` (e.g. `sourcetrait/grammar`)")
+        Err("an equip must be the compound `<author>/<name>` (e.g. `acme/geo`)")
     }
 }
 

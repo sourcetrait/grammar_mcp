@@ -1,12 +1,12 @@
 use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{
-    TestServer, error_kind, error_kinds, error_messages, error_text, has_error,
+    TestServer, equip_source, error_kind, error_kinds, error_messages, error_text, has_error,
     valid_function_source, write_source,
 };
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
-/// the namespace substrate (keypair, rigs repo git config), which must not race
+/// the namespace substrate (keypair, equip repo git config), which must not race
 /// itself across parallel tests.
 static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integration, {
     .using_temp_dir()
@@ -17,8 +17,7 @@ static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integrat
 fn commit_accepts_path_self_call_target() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("selflib");
-    let _ = s.rig("new", "sourcetrait/selflib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/selflib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use whereami\n");
     write_source(
@@ -37,8 +36,7 @@ fn commit_accepts_path_self_call_target() {
 fn commit_accepts_path_self_in_mod_nu_const() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("modselflib");
-    let _ = s.rig("new", "sourcetrait/modselflib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/modselflib");
     write_source(
         &src,
         "mod.nu",
@@ -61,8 +59,7 @@ fn commit_accepts_path_self_in_mod_nu_const() {
 fn commit_happy_path_writes_repo_and_meta() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("happylib");
-    let _ = s.rig("new", "sourcetrait/happylib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/happylib");
     write_source(&src, "mod.nu", "export module math\n");
     write_source(&src, "math/mod.nu", "export use double\n");
     write_source(
@@ -95,8 +92,7 @@ fn commit_happy_path_writes_repo_and_meta() {
 fn commit_rejects_mod_nu_with_syntax_error() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("badmodlib");
-    let _ = s.rig("new", "sourcetrait/badmodlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/badmodlib");
     write_source(&src, "mod.nu", "export module foo\nexport\n");
     write_source(&src, "foo/mod.nu", "");
     let env = s.commit("sourcetrait/badmodlib");
@@ -112,8 +108,7 @@ fn commit_rejects_mod_nu_with_syntax_error() {
 fn commit_rejects_mod_nu_referencing_missing_file() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("missingreflib");
-    let _ = s.rig("new", "sourcetrait/missingreflib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/missingreflib");
     write_source(&src, "mod.nu", "export use ./does_not_exist.nu\n");
     let env = s.commit("sourcetrait/missingreflib");
     assert!(has_error(&env), "missing-ref mod.nu should reject; got {env}");
@@ -128,8 +123,7 @@ fn commit_rejects_mod_nu_referencing_missing_file() {
 fn commit_accepts_multiline_def_signature() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("multilinelib");
-    let _ = s.rig("new", "sourcetrait/multilinelib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/multilinelib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use thing\n");
     write_source(
@@ -145,8 +139,7 @@ fn commit_accepts_multiline_def_signature() {
 fn commit_rejects_function_with_syntax_error() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("syntaxlib");
-    let _ = s.rig("new", "sourcetrait/syntaxlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/syntaxlib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export module broken\n");
     write_source(
@@ -167,8 +160,7 @@ fn commit_rejects_function_with_syntax_error() {
 fn commit_rejects_main_without_output_type() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("badlib1");
-    let _ = s.rig("new", "sourcetrait/badlib1", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/badlib1");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use thing\n");
     write_source(
@@ -190,8 +182,7 @@ fn commit_rejects_main_without_output_type() {
 fn commit_accepts_call_target_with_helper_export() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("helperexportlib");
-    let _ = s.rig("new", "sourcetrait/helperexportlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/helperexportlib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use thing\n");
     write_source(
@@ -217,8 +208,7 @@ fn commit_accepts_call_target_with_helper_export() {
 fn commit_rejects_main_empty_record_output() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("badlib3");
-    let _ = s.rig("new", "sourcetrait/badlib3", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/badlib3");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use thing\n");
     write_source(
@@ -240,8 +230,7 @@ fn commit_rejects_main_empty_record_output() {
 fn commit_accepts_mod_nu_with_inline_const() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("constmodlib");
-    let _ = s.rig("new", "sourcetrait/constmodlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/constmodlib");
     write_source(&src, "mod.nu", "export module sub\nconst X = 42\n");
     write_source(&src, "sub/mod.nu", "");
     let env = s.commit("sourcetrait/constmodlib");
@@ -255,8 +244,7 @@ fn commit_accepts_mod_nu_with_inline_const() {
 fn commit_accepts_mod_nu_with_inline_alias() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("aliasmodlib");
-    let _ = s.rig("new", "sourcetrait/aliasmodlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/aliasmodlib");
     write_source(&src, "mod.nu", "export module sub\nalias foo = ls\n");
     write_source(&src, "sub/mod.nu", "");
     let env = s.commit("sourcetrait/aliasmodlib");
@@ -270,8 +258,7 @@ fn commit_accepts_mod_nu_with_inline_alias() {
 fn commit_rejects_mod_nu_with_let() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("letmodlib");
-    let _ = s.rig("new", "sourcetrait/letmodlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/letmodlib");
     write_source(&src, "mod.nu", "let x = 5\n");
     let env = s.commit("sourcetrait/letmodlib");
     assert!(has_error(&env));
@@ -286,8 +273,7 @@ fn commit_rejects_mod_nu_with_let() {
 fn commit_accepts_mod_nu_with_only_comments() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("commentedmodlib");
-    let _ = s.rig("new", "sourcetrait/commentedmodlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/commentedmodlib");
     write_source(&src, "mod.nu", "# this rig is empty\n# more comment\n");
     let env = s.commit("sourcetrait/commentedmodlib");
     assert!(
@@ -300,8 +286,7 @@ fn commit_accepts_mod_nu_with_only_comments() {
 fn commit_accepts_mod_nu_with_inline_def() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("badlib4");
-    let _ = s.rig("new", "sourcetrait/badlib4", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/badlib4");
     write_source(&src, "mod.nu", "export module sub\ndef helper [] { 99 }\n");
     write_source(&src, "sub/mod.nu", "");
 
@@ -316,8 +301,7 @@ fn commit_accepts_mod_nu_with_inline_def() {
 fn commit_aggregates_multiple_violations() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("badlib5");
-    let _ = s.rig("new", "sourcetrait/badlib5", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/badlib5");
     write_source(&src, "mod.nu", "export module a\nextern noise []\n");
     write_source(&src, "a/mod.nu", "export use skel\nexport use noout\n");
     write_source(
@@ -351,8 +335,7 @@ fn commit_aggregates_multiple_violations() {
 fn commit_caps_structural_violations() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("caplib");
-    let _ = s.rig("new", "sourcetrait/caplib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/caplib");
     write_source(
         &src,
         "mod.nu",
@@ -368,8 +351,7 @@ fn commit_caps_structural_violations() {
 fn commit_rejects_root_call_target() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("rootfnlib");
-    let _ = s.rig("new", "sourcetrait/rootfnlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/rootfnlib");
     write_source(&src, "mod.nu", "export use thing\n");
     write_source(
         &src,
@@ -393,8 +375,7 @@ fn commit_rejects_root_call_target() {
 fn commit_succeeds_then_check_warns_long_summary() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("doclib");
-    let _ = s.rig("new", "sourcetrait/doclib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/doclib");
     let long = "x".repeat(81);
     write_source(&src, "mod.nu", &format!("# {long}\nexport module m\n"));
     write_source(&src, "m/mod.nu", "export use thing\n");
@@ -409,7 +390,7 @@ fn commit_succeeds_then_check_warns_long_summary() {
         "an over-long summary is advisory; commit should succeed; got {committed}"
     );
 
-    let check = s.rig("check", "sourcetrait/doclib", src.to_str().unwrap());
+    let check = s.equip("check", src.parent().unwrap().to_str().unwrap());
     let summary = &check["summary"];
     assert_eq!(
         summary["ok"].as_bool(),
@@ -432,8 +413,7 @@ fn commit_succeeds_then_check_warns_long_summary() {
 fn commit_accepts_short_summary() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("okdoclib");
-    let _ = s.rig("new", "sourcetrait/okdoclib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/okdoclib");
     write_source(
         &src,
         "mod.nu",
@@ -453,17 +433,17 @@ fn commit_accepts_short_summary() {
 }
 
 #[tested]
-fn rig_new_reestablish_duplicate_errors() {
+fn equip_new_reestablish_duplicate_errors() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("duplib");
-    let r1 = s.rig("new", "sourcetrait/duplib", src.to_str().unwrap());
-    assert!(!has_error(&r1), "first rig(new) should succeed; got {r1}");
-    let r2 = s.rig("new", "sourcetrait/duplib", src.to_str().unwrap());
+    let eq = equip_source(t.temp_dir(), "sourcetrait/duplib");
+    let r1 = s.equip("new", eq.to_str().unwrap());
+    assert!(!has_error(&r1), "first equip(new) should succeed; got {r1}");
+    let r2 = s.equip("new", eq.to_str().unwrap());
     assert!(has_error(&r2), "duplicate establish should error; got {r2}");
     assert_eq!(
         error_kind(&r2),
-        Some("rig::already_registered"),
+        Some("equip::already_registered"),
         "got {r2}"
     );
 }
@@ -472,8 +452,7 @@ fn rig_new_reestablish_duplicate_errors() {
 fn commit_picks_up_mutated_source() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("livelib");
-    let _ = s.rig("new", "sourcetrait/livelib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/livelib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use thing\n");
     write_source(
@@ -511,8 +490,7 @@ fn commit_validates_by_name_cross_rig_use() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
 
-    let base = t.temp_dir().join("baselib");
-    let _ = s.rig("new", "sourcetrait/baselib", base.to_str().unwrap());
+    let base = s.new_rig(t.temp_dir(), "sourcetrait/baselib");
     write_source(&base, "mod.nu", "export module m\n");
     write_source(&base, "m/mod.nu", "export use double\n");
     write_source(
@@ -526,14 +504,13 @@ fn commit_validates_by_name_cross_rig_use() {
         "baselib commit should succeed; got {committed_base}"
     );
 
-    let consumer = t.temp_dir().join("consumer");
-    let _ = s.rig("new", "sourcetrait/consumer", consumer.to_str().unwrap());
+    let consumer = s.new_rig(t.temp_dir(), "sourcetrait/consumer");
     write_source(&consumer, "mod.nu", "export module app\n");
     write_source(&consumer, "app/mod.nu", "export use compute\n");
     write_source(
         &consumer,
         "app/compute/mod.nu",
-        "use rig/sourcetrait/baselib/m\nexport def main [args: record<x: int>]: nothing -> record<out: int> {\n    m double {x: $args.x}\n}\n",
+        "use equip/sourcetrait/baselib/rig/m\nexport def main [args: record<x: int>]: nothing -> record<out: int> {\n    m double {x: $args.x}\n}\n",
     );
     let committed = s.commit("sourcetrait/consumer");
     assert!(
@@ -553,15 +530,14 @@ fn commit_validates_by_name_cross_rig_use() {
 fn commit_and_call_resolves_authored_self_ref() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("selfreflib");
-    let _ = s.rig("new", "sourcetrait/selfreflib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/selfreflib");
     write_source(&src, "mod.nu", "export module base\nexport module top\n");
     write_source(&src, "base/mod.nu", "export def val []: nothing -> int { 21 }\n");
     write_source(&src, "top/mod.nu", "export use double\n");
     write_source(
         &src,
         "top/double/mod.nu",
-        "use rig/sourcetrait/selfreflib/base\nexport def main [args: nothing]: nothing -> record<out: int> {\n    { out: ((base val) * 2) }\n}\n",
+        "use equip/sourcetrait/selfreflib/rig/base\nexport def main [args: nothing]: nothing -> record<out: int> {\n    { out: ((base val) * 2) }\n}\n",
     );
     let committed = s.commit("sourcetrait/selfreflib");
     assert!(
@@ -580,8 +556,7 @@ fn commit_and_call_resolves_authored_self_ref() {
 fn commit_accepts_organizational_file() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("orglib");
-    let _ = s.rig("new", "sourcetrait/orglib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/orglib");
     write_source(&src, "mod.nu", "export use ./util.nu\n");
     write_source(
         &src,
@@ -599,8 +574,7 @@ fn commit_accepts_organizational_file() {
 fn commit_accepts_mod_nu_with_export_const_and_def() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("modutillib");
-    let _ = s.rig("new", "sourcetrait/modutillib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/modutillib");
     write_source(
         &src,
         "mod.nu",
@@ -623,8 +597,7 @@ fn commit_accepts_mod_nu_with_export_const_and_def() {
 fn commit_rejects_empty_record_skeleton() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("skellib");
-    let _ = s.rig("new", "sourcetrait/skellib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/skellib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use thing\n");
     write_source(
@@ -645,8 +618,7 @@ fn commit_rejects_empty_record_skeleton() {
 fn commit_rejects_private_def_named_reserved() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("pdeflib");
-    let _ = s.rig("new", "sourcetrait/pdeflib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/pdeflib");
     write_source(&src, "mod.nu", "export use ./util.nu\n");
     write_source(&src, "util.nu", "export const LIMIT = 5\ndef main [] { 1 }\n");
     let env = s.commit("sourcetrait/pdeflib");
@@ -662,8 +634,7 @@ fn commit_rejects_private_def_named_reserved() {
 fn commit_rejects_module_named_reserved() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("modreslib");
-    let _ = s.rig("new", "sourcetrait/modreslib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/modreslib");
     std::fs::create_dir_all(src.join("main")).unwrap();
     write_source(&src, "mod.nu", "export module main\n");
     write_source(&src, "main/mod.nu", "");
@@ -680,8 +651,7 @@ fn commit_rejects_module_named_reserved() {
 fn commit_rejects_const_named_reserved() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("constreslib");
-    let _ = s.rig("new", "sourcetrait/constreslib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/constreslib");
     write_source(&src, "mod.nu", "export const main = 5\nexport module m\n");
     write_source(&src, "m/mod.nu", "export use thing\n");
     write_source(
@@ -702,8 +672,7 @@ fn commit_rejects_const_named_reserved() {
 fn commit_rejects_record_key_reserved() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("rkeylib");
-    let _ = s.rig("new", "sourcetrait/rkeylib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/rkeylib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use thing\n");
     write_source(
@@ -724,8 +693,7 @@ fn commit_rejects_record_key_reserved() {
 fn commit_rejects_cellpath_member_reserved() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("cpathlib");
-    let _ = s.rig("new", "sourcetrait/cpathlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/cpathlib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use thing\n");
     write_source(
@@ -746,8 +714,7 @@ fn commit_rejects_cellpath_member_reserved() {
 fn commit_accepts_reserved_as_quoted_string_value() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("strvallib");
-    let _ = s.rig("new", "sourcetrait/strvallib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/strvallib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use thing\n");
     write_source(
@@ -763,11 +730,12 @@ fn commit_accepts_reserved_as_quoted_string_value() {
 }
 
 #[tested]
-fn rig_new_and_scaffold_function() {
+fn equip_new_and_scaffold_function() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("scaffolded");
-    let r1 = s.rig("new", "sourcetrait/scaffolded", src.to_str().unwrap());
+    let eq = equip_source(t.temp_dir(), "sourcetrait/scaffolded");
+    let src = eq.join("rig");
+    let r1 = s.equip("new", eq.to_str().unwrap());
     assert!(!has_error(&r1), "establish should succeed; got {r1}");
     let meta = s.rig_index("sourcetrait/scaffolded");
     assert_eq!(
@@ -817,8 +785,7 @@ fn rig_new_and_scaffold_function() {
 fn scaffolded_call_commits_as_wired() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("wiredlib");
-    let _ = s.rig("new", "sourcetrait/wiredlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/wiredlib");
     let _ = s.scaffold(&["sourcetrait/wiredlib:math:double"]);
     std::fs::write(
         src.join("math").join("double").join("mod.nu"),
@@ -842,8 +809,7 @@ fn scaffolded_call_commits_as_wired() {
 fn new_leaf_guard_refuses_existing_function() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("guarded");
-    let _ = s.rig("new", "sourcetrait/guarded", src.to_str().unwrap());
+    let _ = s.new_rig(t.temp_dir(), "sourcetrait/guarded");
     let _ = s.scaffold(&["sourcetrait/guarded:m:f"]);
     let dup = s.scaffold(&["sourcetrait/guarded:m:f"]);
     assert!(
@@ -862,7 +828,7 @@ fn scaffold_into_unregistered_rig_errors() {
     );
     assert_eq!(
         error_kind(&env),
-        Some("rig::not_registered"),
+        Some("equip::not_registered"),
         "got {env}"
     );
 }
@@ -871,8 +837,7 @@ fn scaffold_into_unregistered_rig_errors() {
 fn commit_validates_and_upserts_source() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("clib");
-    let _ = s.rig("new", "sourcetrait/clib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/clib");
     let _ = s.scaffold(&["sourcetrait/clib:math:double"]);
     std::fs::write(
         src.join("math").join("double").join("mod.nu"),
@@ -903,8 +868,7 @@ fn commit_validates_and_upserts_source() {
 fn commit_rejects_unfleshed_skeleton() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("sklib");
-    let _ = s.rig("new", "sourcetrait/sklib", src.to_str().unwrap());
+    let _ = s.new_rig(t.temp_dir(), "sourcetrait/sklib");
     let _ = s.scaffold(&["sourcetrait/sklib:m:raw"]);
     let env = s.commit("sourcetrait/sklib");
     assert!(
@@ -917,8 +881,7 @@ fn commit_rejects_unfleshed_skeleton() {
 fn commit_rejects_main_in_flat_file() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("flatmainlib");
-    let _ = s.rig("new", "sourcetrait/flatmainlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/flatmainlib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use ./impl.nu\n");
     write_source(
@@ -938,8 +901,7 @@ fn commit_rejects_main_in_flat_file() {
 fn commit_rejects_call_wired_via_export_module() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("wirelib");
-    let _ = s.rig("new", "sourcetrait/wirelib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/wirelib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export module double\n");
     write_source(
@@ -959,8 +921,7 @@ fn commit_rejects_call_wired_via_export_module() {
 fn commit_rejects_call_with_submodule() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("leaflib");
-    let _ = s.rig("new", "sourcetrait/leaflib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/leaflib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use call\n");
     write_source(
@@ -981,8 +942,7 @@ fn commit_rejects_call_with_submodule() {
 fn commit_rejects_orphan_module() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("orphanlib");
-    let _ = s.rig("new", "sourcetrait/orphanlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/orphanlib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use double\n");
     write_source(
@@ -1003,8 +963,7 @@ fn commit_rejects_orphan_module() {
 fn commit_accepts_nu_cmd_extra_command() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("extralib");
-    let _ = s.rig("new", "sourcetrait/extralib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/extralib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export module snake\nexport use snake\n");
     write_source(
@@ -1029,8 +988,7 @@ fn commit_accepts_nu_cmd_extra_command() {
 fn commit_accepts_call_with_flat_helper() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = t.temp_dir().join("callhelperlib");
-    let _ = s.rig("new", "sourcetrait/callhelperlib", src.to_str().unwrap());
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/callhelperlib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use thing\n");
     write_source(&src, "m/thing/helper.nu", "export def doubler [n: int] { $n * 2 }\n");
