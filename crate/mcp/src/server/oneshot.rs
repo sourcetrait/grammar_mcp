@@ -86,11 +86,6 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
                     .await
             }
             CliTool::Kill { nonce } => server.kill(mcp::Parameters(KillParams { nonce })).await,
-            CliTool::Learn { harness_dir } => {
-                server
-                    .learn(mcp::Parameters(LearnParams { harness_dir }))
-                    .await
-            }
             CliTool::New { namepaths } => {
                 server
                     .scaffold(mcp::Parameters(NewParams { namepaths }))

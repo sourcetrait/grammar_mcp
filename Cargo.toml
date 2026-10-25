@@ -21,7 +21,6 @@ clap = { version = "4", features = ["derive"] }
 directories = { version = "6" }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 indoc = { version = "2" }
-liquid = { version = "0.26" }
 nix = { version = "0.31", features = ["fs", "process", "signal", "user"] }
 rmcp = { version = "1.7", features = ["server", "transport-io", "schemars", "macros"] }
 rustls = { version = "0.23", default-features = false, features = ["logging", "ring", "std", "tls12"] }

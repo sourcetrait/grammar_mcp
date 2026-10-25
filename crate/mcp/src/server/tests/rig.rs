@@ -17,7 +17,7 @@ fn obj(s: &str) -> mcp::JsonObject {
 /// render could quietly change the value's type on the way back.
 #[test]
 fn the_index_round_trips_through_nuon_across_the_schema_grammar() {
-    let args = r#"{"n":"int","p":"path","fill":{},"u":{"oneof<>":["int",null]}}"#;
+    let args = r#"{"n":"int","p":"path","extra":{},"u":{"oneof<>":["int",null]}}"#;
     let result = r#"{"rows":[{"name":"string","tags":["string"]}],"nested":{"a":"bool"}}"#;
     let index = RigIndex {
         source_path: PathBuf::from("/tmp/proj/thing"),

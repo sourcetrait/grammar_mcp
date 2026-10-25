@@ -113,8 +113,6 @@ pub enum CliTool {
     Processes,
     /// Cancel an in-flight usage by nonce. Process-scoped.
     Kill { nonce: String },
-    /// Generate the /nu skill at <harness_dir>/skills/nu/SKILL.md.
-    Learn { harness_dir: String },
     /// Scaffold module / function skeletons by namepath into established rigs.
     New { namepaths: Vec<String> },
     /// Validate + promote a rig's source tree into the namespace.

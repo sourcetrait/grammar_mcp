@@ -256,13 +256,6 @@ impl TestServer {
         crate::purviews_path()
     }
 
-    pub fn learn(&self, harness_dir: &str) -> json::Value {
-        let p = LearnParams {
-            harness_dir: harness_dir.to_string(),
-        };
-        Self::envelope(self.rt.block_on(self.nush.learn(mcp::Parameters(p))))
-    }
-
     pub fn processes(&self) -> json::Value {
         Self::envelope(
             self.rt

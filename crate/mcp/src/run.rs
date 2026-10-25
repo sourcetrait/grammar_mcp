@@ -86,7 +86,7 @@ fn resolve_work_dir(
 pub(crate) fn parse_deniable(s: &str) -> Result<DeniableTool, String> {
     DeniableTool::from_name(s).ok_or_else(|| {
         format!(
-            "unknown tool `{s}`; deniable tools: run, rerun, interact, call, learn, new, \
+            "unknown tool `{s}`; deniable tools: run, rerun, interact, call, new, \
              commit, rig, channel_open, channel_verified, channel_close, config_channel, \
              purviews, purview_configure, purview_extend, purview, \
              remote_channel_open, remote_channel_close, remote_channels",

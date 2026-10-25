@@ -25,7 +25,6 @@ clap.workspace = true
 directories.workspace = true
 futures-util.workspace = true
 indoc.workspace = true
-liquid.workspace = true
 nix.workspace = true
 nu-cmd-extra.workspace = true
 nu-cmd-lang.workspace = true

@@ -19,9 +19,6 @@ impl NuSh {
         if !deny.denies(DeniableTool::Call) {
             router += Self::call_router();
         }
-        if !deny.denies(DeniableTool::Learn) {
-            router += Self::learn_router();
-        }
         if !deny.denies(DeniableTool::New) {
             router += Self::new_router();
         }

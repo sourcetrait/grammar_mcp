@@ -44,7 +44,6 @@ pub(crate) mod server {
         pub(crate) mod inspect;
         pub(crate) mod interact;
         pub(crate) mod kill;
-        pub(crate) mod learn;
         pub(crate) mod rig;
         pub(crate) mod new;
         pub(crate) mod processes;
@@ -219,7 +218,6 @@ pub(crate) use crate::{
             info::InfoParams,
             inspect::InspectParams,
             kill::KillParams,
-            learn::LearnParams,
             rig::RigParams,
             new::NewParams,
             processes::ProcessesParams,

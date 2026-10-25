@@ -243,7 +243,7 @@ fn args_fence_open_record_list_element() {
 
 #[test]
 fn args_open_record_roundtrip() {
-    for s in [r#"{"fill":{}}"#, r#"{"a":"int","fill":{}}"#] {
+    for s in [r#"{"extra":{}}"#, r#"{"a":"int","extra":{}}"#] {
         let nu = args_schema_to_nu(&obj(s)).unwrap();
         assert_eq!(nu_to_args_schema(&nu).unwrap(), obj(s), "roundtrip {s}");
     }
