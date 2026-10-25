@@ -1,3 +1,4 @@
+use crate::*;
 
-pub const NOSPAN: nu_protocol::Span = nu_protocol::Span::unknown();
-
+/// The span of a value that has no place in the caller's source.
+pub(crate) const NOSPAN: nu::Span = nu::Span::unknown();

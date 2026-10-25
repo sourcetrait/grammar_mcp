@@ -18,13 +18,13 @@ name = "nu_plugin_soak"
 path = "src/main.rs"
 
 [dependencies]
-dir_walker.workspace = true
 humantime.workspace = true
 liquid.workspace = true
-nu-ansi-term.workspace = true
+nu-path.workspace = true
 nu-plugin.workspace = true
 nu-protocol.workspace = true
 snafu.workspace = true
+walkdir.workspace = true
 
 [dev-dependencies]
 nu-plugin-test-support.workspace = true

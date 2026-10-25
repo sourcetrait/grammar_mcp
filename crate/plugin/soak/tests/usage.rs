@@ -5,7 +5,7 @@ use nu_protocol::Value;
 use sourcetrait_common::tooling;
 
 const SPAN: nu_protocol::Span = nu_protocol::Span::test_data();
-const HELLO: LazyLock<Value> = LazyLock::new(|| Value::test_string("Hello, World!"));
+static HELLO: LazyLock<Value> =LazyLock::new(|| Value::test_string("Hello, World!"));
 
 fn plug() -> PluginTest {
     PluginTest::new("soak", SoakPlugin.into()).unwrap()

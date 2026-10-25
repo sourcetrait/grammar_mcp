@@ -1,8 +1,8 @@
 use crate::*;
 
-/// Combines a Path and a Nu Span
+/// A path and the span of the argument it came from.
 #[derive(Debug)]
-pub struct PathSpan<'a> {
-    pub path: &'a Path,
-    pub span: nu_protocol::Span,
+pub(crate) struct PathSpan<'a> {
+    pub(crate) path: &'a Path,
+    pub(crate) span: nu::Span,
 }
