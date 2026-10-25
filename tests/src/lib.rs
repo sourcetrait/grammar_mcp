@@ -394,12 +394,29 @@ pub fn equip_source(root: &Path, name: &str) -> PathBuf {
     root.join("equip").join(name)
 }
 
+/// A plugin directory under `root` holding each built plugin under its kind's directory.
+pub fn bundle_plugins(root: &Path, plugins: &[(&str, &str)]) -> PathBuf {
+    let dir = root.join("plugin");
+    for (kind, name) in plugins {
+        let kind_dir = dir.join(kind);
+        std::fs::create_dir_all(&kind_dir).expect("mkdir the plugin kind's dir");
+        let built = grammar_mcp_bin().with_file_name(name);
+        std::fs::copy(&built, kind_dir.join(name)).unwrap_or_else(|e| {
+            panic!("copy {}: {e}; build it with `cargo build --bin {name}`", built.display())
+        });
+    }
+    dir
+}
+
+/// The builtins' bare names, which the host resolves itself.
+const BUILTINS: [&str; 2] = ["gram", "grammar"];
+
 /// Prepend `sourcetrait/` to a bare equip name in the args of the
 /// namepath-addressing tools. Idempotent: a value already carrying `/` (an
-/// `author/name`) passes through unchanged.
+/// `author/name`) passes through unchanged, as does a builtin's bare name.
 pub fn author_prefixed(tool: &str, mut args: Value) -> Value {
     fn pfx_lib(s: &str) -> String {
-        if s.is_empty() || s.contains('/') {
+        if s.is_empty() || s.contains('/') || BUILTINS.contains(&s) {
             s.to_string()
         } else {
             format!("sourcetrait/{s}")
@@ -407,7 +424,7 @@ pub fn author_prefixed(tool: &str, mut args: Value) -> Value {
     }
     fn pfx_np(s: &str) -> String {
         let lib = s.split(':').next().unwrap_or(s);
-        if lib.is_empty() || lib.contains('/') {
+        if lib.is_empty() || lib.contains('/') || BUILTINS.contains(&lib) {
             s.to_string()
         } else {
             format!("sourcetrait/{s}")

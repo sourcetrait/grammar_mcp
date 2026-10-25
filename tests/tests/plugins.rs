@@ -83,7 +83,7 @@ fn the_user_registry_is_never_read() {
 fn each_kind_is_read() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
-    let plugin_dir = bundle(root, &[("core", "nu_plugin_soak"), ("rig", "nu_plugin_eye")]);
+    let plugin_dir = bundle_plugins(root, &[("core", "nu_plugin_soak"), ("rig", "nu_plugin_eye")]);
     let mut host = Host::spawn_full(
         &root.join("scratch"),
         &["--id", "plug", "--namespace", "default"],
@@ -101,7 +101,7 @@ fn each_kind_is_read() {
 fn a_plugin_outside_the_kinds_is_not_read() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
-    let plugin_dir = bundle(root, &[("", "nu_plugin_soak"), ("extra", "nu_plugin_eye")]);
+    let plugin_dir = bundle_plugins(root, &[("", "nu_plugin_soak"), ("extra", "nu_plugin_eye")]);
     let mut host = Host::spawn_full(
         &root.join("scratch"),
         &["--id", "plug", "--namespace", "default"],
@@ -118,7 +118,7 @@ fn a_plugin_outside_the_kinds_is_not_read() {
 fn the_soak_and_eye_plugins_register_list_and_run() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
-    let plugin_dir = bundle(root, &[("grammar", "nu_plugin_eye"), ("grammar", "nu_plugin_soak")]);
+    let plugin_dir = bundle_plugins(root, &[("grammar", "nu_plugin_eye"), ("grammar", "nu_plugin_soak")]);
     let mut host = Host::spawn_full(
         &root.join("scratch"),
         &["--id", "plug", "--namespace", "default"],
@@ -201,21 +201,7 @@ fn modified(path: &Path) -> std::time::SystemTime {
 
 /// A plugin directory holding the built `nu_plugin_soak` as the grammar's.
 fn bundle_soak(root: &Path) -> PathBuf {
-    bundle(root, &[("grammar", "nu_plugin_soak")])
-}
-
-/// A plugin directory holding each built plugin under its kind's directory.
-fn bundle(root: &Path, plugins: &[(&str, &str)]) -> PathBuf {
-    let dir = root.join("plugin");
-    for (kind, name) in plugins {
-        let kind_dir = dir.join(kind);
-        std::fs::create_dir_all(&kind_dir).expect("mkdir the plugin kind's dir");
-        let built = grammar_mcp_bin().with_file_name(name);
-        std::fs::copy(&built, kind_dir.join(name)).unwrap_or_else(|e| {
-            panic!("copy {}: {e}; build it with `cargo build --bin {name}`", built.display())
-        });
-    }
-    dir
+    bundle_plugins(root, &[("grammar", "nu_plugin_soak")])
 }
 
 /// The plugin names `info()` lists.
