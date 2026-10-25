@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "crate/plugin/core",
+  "crate/plugin/eye",
   "crate/plugin/soak",
   "crate/mcp",
   "tests",
@@ -24,6 +25,7 @@ directories = { version = "6" }
 env_logger = { version = "0.11" }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 humantime = { version = "2" }
+ignore = { version = "0.4" }
 indoc = { version = "2" }
 liquid = { version = "0.26" }
 nix = { version = "0.31", features = ["fs", "process", "signal", "user"] }
@@ -49,6 +51,7 @@ nu-cmd-lang = { version = "0.116.1" }
 nu-cmd-plugin = { version = "0.116.1" }
 nu-command = { version = "0.116.1" }
 nu-engine = { version = "0.116.1" }
+nu-glob = { version = "0.116.1" }
 nu-json = { version = "0.116.1" }
 nu-parser = { version = "0.116.1" }
 nu-path = { version = "0.116.1" }
