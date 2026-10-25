@@ -44,6 +44,13 @@ the OptZip layout, `bin/grammar-mcp` beside `plugin/`; a cargo target dir has no
 `plugin/`, so a dev or test host carries no plugins unless the override names a
 directory. No layout is guessed between the two.
 
+## const PLUGIN_KINDS
+The plugin directory keeps its plugins apart by kind: `core/` nushell's own,
+pulled from crates.io at the engine's version, `grammar/` the grammar's, and
+`rig/` custom ones. The kinds are read alone, so a binary loose in the plugin
+directory, or under any other name, is never registered; a kind not present
+is simply empty.
+
 ## fn bundled_plugins
 Canonicalized, because the registry records the path `plugin add` resolved, and
 the staleness test compares against it.
@@ -58,8 +65,7 @@ namespace.
 CHANGE TIME, NOT MODIFICATION TIME. An OptZip unpacks every file at mtime 0,
 its archive reproducible, so a plugin's mtime predates any registry and a
 plugin replaced in place kept its old signatures: measured, a host restarted
-over a replaced `nu_plugin_inc` dated at the epoch left the registry
-unwritten. The kernel sets ctime whenever a file is written, copied, unpacked,
+over a replaced plugin dated at the epoch left the registry unwritten. The kernel sets ctime whenever a file is written, copied, unpacked,
 or renamed into place, and no archive can carry one, so a changed plugin
 always counts as newer than the registry, at the cost of one more
 registration after a mere `chmod`.

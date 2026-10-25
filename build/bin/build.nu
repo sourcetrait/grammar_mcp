@@ -1,4 +1,4 @@
-# Build grammar-mcp, nushell, and the core plugins into a signed OptZip.
+# Build grammar-mcp and its plugins, with nushell's own, into a signed OptZip.
 #
 # Usage: `nu build.nu [--debug]`, from anywhere.
 #
@@ -29,10 +29,10 @@ def main [
     let file: string = (optzip file_name $NAME $semver $target.os $target.arch)
     print $"building ($NAME) ($semver) for ($target.os) ($target.arch)"
     bundle compile $ROOT $profile
-    print 'installing nushell'
-    let nu_bin: path = (bundle nushell $ROOT $profile)
+    print 'installing nushell and its core plugins'
+    let nu_root: path = (bundle nushell $ROOT $profile)
     print 'laying out the package'
-    let tree: path = (bundle layout $ROOT $profile $nu_bin)
+    let tree: path = (bundle layout $ROOT $profile $nu_root)
     print 'packing and signing'
     let out: path = (optzip pack $tree $NAME ($ROOT | path join 'target' 'pkg' $file) $signer)
     print $out

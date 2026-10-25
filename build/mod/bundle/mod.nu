@@ -6,6 +6,15 @@ const MCP_CRATE = 'sourcetrait_grammar_mcp'
 # The file-name prefix of a plugin binary, the one the MCP registers by.
 const PLUGIN_PREFIX = 'nu_plugin_'
 
+# nushell's core plugins, pulled from crates.io at the engine's version.
+const CORE_PLUGINS = [
+    'nu_plugin_formats'
+    'nu_plugin_gstat'
+    'nu_plugin_inc'
+    'nu_plugin_polars'
+    'nu_plugin_query'
+]
+
 # The skills the package carries, from `agent/skill/`.
 const SKILLS = ['nu' 'grammar-mcp' 'grammar-mcp-dev']
 
@@ -17,17 +26,18 @@ export def compile [root: path, profile: string]: nothing -> nothing {
     ^cargo build --manifest-path ($root | path join 'Cargo.toml') ...$flags ...$packages
 }
 
-# Install nushell at the engine's version under `target/nu/<profile>`.
+# Install nushell and its core plugins at the engine's version from crates.io.
 #
-# Returns the installed `nu`. Cargo skips the build when that version is
-# already installed there.
+# Returns the install's root, `target/nu/<profile>`, its binaries in `bin/`.
+# Cargo skips a crate already installed there at that version.
 export def nushell [root: path, profile: string]: nothing -> path {
     let version: string = (engine_version $root)
     let nu_root: path = ($root | path join 'target' 'nu' $profile)
     let flags: list<string> = (if $profile == 'debug' { ['--debug'] } else { [] })
-    (^cargo install nu --version $"=($version)" --locked --root $nu_root
-        --target-dir ($root | path join 'target' 'nu' 'build') ...$flags)
-    $nu_root | path join 'bin' 'nu'
+    let crates: list<string> = (['nu'] | append $CORE_PLUGINS | each {|crate| $"($crate)@($version)" })
+    (^cargo install --locked --root $nu_root
+        --target-dir ($root | path join 'target' 'nu' 'build') ...$flags ...$crates)
+    $nu_root
 }
 
 # The engine's nushell version: `nu-protocol`'s in the workspace lock.
@@ -45,18 +55,27 @@ export def package_semver [root: path, profile: string]: nothing -> string {
 }
 
 # Assemble the package's tree in `target/pkg/<profile>`; returns it.
-export def layout [root: path, profile: string, nu_bin: path]: nothing -> path {
+#
+# `plugin/core/` holds nushell's core plugins from `nu_root`, the install
+# nushell made, and `plugin/grammar/` the workspace's own.
+export def layout [root: path, profile: string, nu_root: path]: nothing -> path {
     let built: path = ($root | path join 'target' $profile)
     let tree: path = ($root | path join 'target' 'pkg' $profile)
     if ($tree | path exists) {
         rm --recursive $tree
     }
     mkdir ($tree | path join 'bin')
-    mkdir ($tree | path join 'plugin')
-    cp $nu_bin ($tree | path join 'bin' 'nu')
+    cp ($nu_root | path join 'bin' 'nu') ($tree | path join 'bin' 'nu')
     cp ($built | path join 'grammar-mcp') ($tree | path join 'bin' 'grammar-mcp')
-    for plugin in (plugin_bins $root) {
-        cp ($built | path join $plugin) ($tree | path join 'plugin' $plugin)
+    let core: path = ($tree | path join 'plugin' 'core')
+    mkdir $core
+    for plugin in $CORE_PLUGINS {
+        cp ($nu_root | path join 'bin' $plugin) ($core | path join $plugin)
+    }
+    let grammar: path = ($tree | path join 'plugin' 'grammar')
+    mkdir $grammar
+    for plugin in (plugin_targets $root | get bin) {
+        cp ($built | path join $plugin) ($grammar | path join $plugin)
     }
     for skill in $SKILLS {
         mkdir ($tree | path join 'skill' $skill)
@@ -73,11 +92,6 @@ def profile_flags [profile: string, flag: string]: nothing -> list<string> {
         'debug' => [],
         _ => { error make {msg: $"no cargo profile `($profile)`: release or debug"} },
     }
-}
-
-# The plugin binaries, by cargo's metadata.
-def plugin_bins [root: path]: nothing -> list<string> {
-    plugin_targets $root | get bin
 }
 
 # Each workspace binary named as a plugin, with its package, by cargo's metadata.

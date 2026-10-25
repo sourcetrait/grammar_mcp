@@ -1,5 +1,6 @@
 //! The MCP's own plugin registry: a host registers the plugins its plugin
-//! directory bundles, lists them, and runs them, and it reads no other registry.
+//! directory bundles by kind, lists them, and runs them, and it reads no other
+//! registry.
 
 use std::path::{Path, PathBuf};
 
@@ -11,44 +12,44 @@ static TESTING: testing::Module = testing::module!(Integration, { .using_temp_di
 
 const PLUGIN_DIR_ENV: &str = "GRAMMAR_MCP_PLUGIN_DIR";
 
-/// A host whose plugin directory holds `nu_plugin_inc` registers it at startup,
-/// lists it in `info()`, and runs `inc` in a body.
+/// A host whose plugin directory holds `grammar/nu_plugin_soak` registers it at
+/// startup, lists it in `info()`, and runs `soak str` in a body.
 #[tested]
 fn a_bundled_plugin_is_registered_listed_and_run() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
-    let plugin_dir = bundle_inc(root);
+    let plugin_dir = bundle_soak(root);
     let mut host = Host::spawn_full(
         &root.join("scratch"),
         &["--id", "plug", "--namespace", "default"],
         &[(PLUGIN_DIR_ENV, plugin_dir.to_str().expect("utf-8 path"))],
     );
 
-    assert_eq!(plugin_names(&mut host), vec!["inc".to_string()], "the bundled plugin is listed");
+    assert_eq!(plugin_names(&mut host), vec!["soak".to_string()], "the bundled plugin is listed");
     let resp = host.run(json!({
         "args_schema": {},
-        "result_schema": {"version": "string"},
+        "result_schema": {"rendered": "string"},
         "args": {},
-        "body": "{ version: ('1.2.3' | inc --patch) }",
+        "body": "{ rendered: ({name: World} | soak str 'Hello, {{ name }}!') }",
     }));
     assert!(!has_error_path(&resp), "a body runs the bundled plugin; got {resp}");
     assert_eq!(
-        structured(&resp)["result"]["version"].as_str(),
-        Some("1.2.4"),
-        "inc bumps the patch; got {resp}",
+        structured(&resp)["result"]["rendered"].as_str(),
+        Some("Hello, World!"),
+        "soak renders; got {resp}",
     );
 }
 
 /// The user's own registry is never read: a host whose plugin directory is
 /// empty lists nothing, though its `XDG_CONFIG_HOME` holds a registry naming
-/// `inc`.
+/// `soak`.
 #[tested]
 fn the_user_registry_is_never_read() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
 
-    // A registry naming inc, written by a host that bundles it.
-    let plugin_dir = bundle_inc(root);
+    // A registry naming soak, written by a host that bundles it.
+    let plugin_dir = bundle_soak(root);
     let first = Host::spawn_full(
         &root.join("scratch_a"),
         &["--id", "plug", "--namespace", "default"],
@@ -77,6 +78,39 @@ fn the_user_registry_is_never_read() {
     assert!(plugin_names(&mut host).is_empty(), "no plugin comes from the user's registry");
 }
 
+/// Each kind is read: a plugin under `core/` and one under `rig/` both list.
+#[tested]
+fn each_kind_is_read() {
+    let t = testing::test!({ .using_temp_dir() });
+    let root = t.temp_dir();
+    let plugin_dir = bundle(root, &[("core", "nu_plugin_soak"), ("rig", "nu_plugin_eye")]);
+    let mut host = Host::spawn_full(
+        &root.join("scratch"),
+        &["--id", "plug", "--namespace", "default"],
+        &[(PLUGIN_DIR_ENV, plugin_dir.to_str().expect("utf-8 path"))],
+    );
+
+    let mut names = plugin_names(&mut host);
+    names.sort();
+    assert_eq!(names, vec!["eye".to_string(), "soak".to_string()], "both kinds are listed");
+}
+
+/// A plugin outside the kinds is never registered: one loose in the plugin
+/// directory and one under another name both stay unread.
+#[tested]
+fn a_plugin_outside_the_kinds_is_not_read() {
+    let t = testing::test!({ .using_temp_dir() });
+    let root = t.temp_dir();
+    let plugin_dir = bundle(root, &[("", "nu_plugin_soak"), ("extra", "nu_plugin_eye")]);
+    let mut host = Host::spawn_full(
+        &root.join("scratch"),
+        &["--id", "plug", "--namespace", "default"],
+        &[(PLUGIN_DIR_ENV, plugin_dir.to_str().expect("utf-8 path"))],
+    );
+
+    assert!(plugin_names(&mut host).is_empty(), "no plugin outside the kinds is listed");
+}
+
 /// The release's own plugins, soak and eye, register at startup, list in
 /// `info()`, and run in a body: a template rendered both ways and a tree
 /// listed both ways.
@@ -84,7 +118,7 @@ fn the_user_registry_is_never_read() {
 fn the_soak_and_eye_plugins_register_list_and_run() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
-    let plugin_dir = bundle(root, &["nu_plugin_eye", "nu_plugin_soak"]);
+    let plugin_dir = bundle(root, &[("grammar", "nu_plugin_eye"), ("grammar", "nu_plugin_soak")]);
     let mut host = Host::spawn_full(
         &root.join("scratch"),
         &["--id", "plug", "--namespace", "default"],
@@ -133,28 +167,28 @@ fn the_soak_and_eye_plugins_register_list_and_run() {
 fn a_replaced_plugin_re_registers_whatever_its_mtime() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
-    let plugin_dir = bundle_inc(root);
+    let plugin_dir = bundle_soak(root);
     let scratch = root.join("scratch");
     let args = ["--id", "plug", "--namespace", "default"];
     let envs = [(PLUGIN_DIR_ENV, plugin_dir.to_str().expect("utf-8 path"))];
 
     let mut first = Host::spawn_full(&scratch, &args, &envs);
-    assert_eq!(plugin_names(&mut first), vec!["inc".to_string()], "the bundled plugin is listed");
+    assert_eq!(plugin_names(&mut first), vec!["soak".to_string()], "the bundled plugin is listed");
     let registry = namespace_dir(first.data_home(), "plug", "default").join("plugin.msgpackz");
     let registered = modified(&registry);
     drop(first);
 
-    let inc = plugin_dir.join("nu_plugin_inc");
-    std::fs::remove_file(&inc).expect("remove the bundled plugin");
-    std::fs::copy(grammar_mcp_bin().with_file_name("nu_plugin_inc"), &inc).expect("bundle it again");
+    let soak = plugin_dir.join("grammar").join("nu_plugin_soak");
+    std::fs::remove_file(&soak).expect("remove the bundled plugin");
+    std::fs::copy(grammar_mcp_bin().with_file_name("nu_plugin_soak"), &soak).expect("bundle it again");
     std::fs::File::options()
         .write(true)
-        .open(&inc)
+        .open(&soak)
         .and_then(|file| file.set_modified(std::time::UNIX_EPOCH))
         .expect("date the plugin at the epoch");
 
     let mut second = Host::spawn_full(&scratch, &args, &envs);
-    assert_eq!(plugin_names(&mut second), vec!["inc".to_string()], "the replaced plugin is listed");
+    assert_eq!(plugin_names(&mut second), vec!["soak".to_string()], "the replaced plugin is listed");
     assert!(modified(&registry) > registered, "the replaced plugin re-registers");
 }
 
@@ -165,18 +199,19 @@ fn modified(path: &Path) -> std::time::SystemTime {
         .unwrap_or_else(|e| panic!("stat {}: {e}", path.display()))
 }
 
-/// A plugin directory holding the built `nu_plugin_inc`, the test host's sibling.
-fn bundle_inc(root: &Path) -> PathBuf {
-    bundle(root, &["nu_plugin_inc"])
+/// A plugin directory holding the built `nu_plugin_soak` as the grammar's.
+fn bundle_soak(root: &Path) -> PathBuf {
+    bundle(root, &[("grammar", "nu_plugin_soak")])
 }
 
-/// A plugin directory holding the built `names`, the test host's siblings.
-fn bundle(root: &Path, names: &[&str]) -> PathBuf {
+/// A plugin directory holding each built plugin under its kind's directory.
+fn bundle(root: &Path, plugins: &[(&str, &str)]) -> PathBuf {
     let dir = root.join("plugin");
-    std::fs::create_dir_all(&dir).expect("mkdir the plugin dir");
-    for name in names {
+    for (kind, name) in plugins {
+        let kind_dir = dir.join(kind);
+        std::fs::create_dir_all(&kind_dir).expect("mkdir the plugin kind's dir");
         let built = grammar_mcp_bin().with_file_name(name);
-        std::fs::copy(&built, dir.join(name)).unwrap_or_else(|e| {
+        std::fs::copy(&built, kind_dir.join(name)).unwrap_or_else(|e| {
             panic!("copy {}: {e}; build it with `cargo build --bin {name}`", built.display())
         });
     }

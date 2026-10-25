@@ -1,7 +1,6 @@
 [workspace]
 resolver = "3"
 members = [
-  "crate/plugin/core",
   "crate/plugin/eye",
   "crate/plugin/soak",
   "crate/mcp",
@@ -22,7 +21,6 @@ keywords = ["sourcetrait", "grammar"]
 bitcode = { version = "0.6" }
 clap = { version = "4", features = ["derive"] }
 directories = { version = "6" }
-env_logger = { version = "0.11" }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 humantime = { version = "2" }
 ignore = { version = "0.4" }
@@ -59,11 +57,6 @@ nu-plugin = { version = "0.116.1" }
 nu-plugin-engine = { version = "0.116.1" }
 nu-plugin-test-support = { version = "0.116.1" }
 nu-protocol = { version = "0.116.1" }
-nu_plugin_formats = { version = "0.116.1" }
-nu_plugin_gstat = { version = "0.116.1" }
-nu_plugin_inc = { version = "0.116.1" }
-nu_plugin_polars = { version = "0.116.1" }
-nu_plugin_query = { version = "0.116.1" }
 nuon = { version = "0.116.1" }
 
 sourcetrait_common = {

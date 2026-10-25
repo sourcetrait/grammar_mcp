@@ -9,6 +9,9 @@ const REGISTRY_FILE: &str = "plugin.msgpackz";
 /// The file-name prefix nushell requires of a plugin binary.
 const PLUGIN_PREFIX: &str = "nu_plugin_";
 
+/// The plugin directory's kinds: nushell's core, the grammar's own, a rig's.
+const PLUGIN_KINDS: [&str; 3] = ["core", "grammar", "rig"];
+
 /// The cache subdir a registration writes its output to.
 const REGISTRATION_LOG_DIR: &str = "plugins";
 
@@ -41,12 +44,15 @@ pub(crate) fn plugin_dir() -> Option<PathBuf> {
     Some(exe.parent()?.parent()?.join("plugin"))
 }
 
-/// Each `nu_plugin_*` file the plugin directory holds, canonicalized.
+/// Each `nu_plugin_*` file under the plugin directory's kinds, canonicalized.
 pub(crate) fn bundled_plugins() -> Vec<PathBuf> {
-    let Some(entries) = plugin_dir().and_then(|dir| fs::read_dir(dir).ok()) else {
+    let Some(dir) = plugin_dir() else {
         return Vec::new();
     };
-    let mut found: Vec<PathBuf> = entries
+    let mut found: Vec<PathBuf> = PLUGIN_KINDS
+        .iter()
+        .filter_map(|kind| fs::read_dir(dir.join(kind)).ok())
+        .flatten()
         .filter_map(|entry| entry.ok().map(|e| e.path()))
         .filter(|path| {
             path.is_file()
