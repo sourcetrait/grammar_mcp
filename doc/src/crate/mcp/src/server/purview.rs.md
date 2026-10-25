@@ -8,6 +8,14 @@ The namespace's meta directory - where `purviews.nuon` lives, alongside `keypair
 THERE IS NO UNCONFIGURED DEFAULT, which is the invariant the whole subsystem rests on.
 See `ensure_default_purview`.
 
+## const PURVIEW_CORE
+The builtins together, each by a reference to its own purview, so removing one builtin's
+purview takes it out of `core` with no edit to `core` itself.
+
+## fn seed_builtin
+Seeds only what is ABSENT: a row a user wrote keeps what it holds, so installing a builtin
+again never undoes their configuration.
+
 ## struct PurviewRow
 `namepath_patterns` is the DESIGN's own column name, so the persisted table reads as it
 was specified rather than as an implementation happened to name it.
@@ -86,6 +94,10 @@ both ends have rows.
 A row pruned down to NOTHING is dropped rather than kept as an empty purview, because an
 empty pattern list is already the DELETE operation on the configure tool. A surviving
 empty row would be a state the tool surface cannot otherwise produce.
+
+It runs until a pass drops nothing, since a dropped row leaves every reference to it
+dangling: uninstalling a builtin empties its own purview, and the next pass takes its
+`@` out of `core`.
 
 ## struct CurrentPurview
 SESSION-RESIDENT by design - it is a VIEW rather than a configuration, so it belongs in

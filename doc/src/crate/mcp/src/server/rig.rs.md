@@ -61,6 +61,10 @@ makes the first `git status --porcelain` comparison meaningless.
 `configure_repo` runs on every startup, not just creation, so a moved keypair path
 re-applies rather than leaving a repo that silently cannot sign.
 
+It reports whether it made the repository. A namespace whose repository this startup made
+is NEW, and a new namespace is the one moment the host installs anything on a user's
+behalf.
+
 ## fn configure_repo
 PER-REPO configuration only. Nothing here leaks into the user's global git config, and
 `commit.gpgSign` being set locally is what makes every lifecycle commit signed implicitly
@@ -357,11 +361,28 @@ enters the repo and is NOT a validation exemption: the walk covers the full file
 an ignored-but-invalid file still blocks the commit.
 
 ## fn ensure_substrate
-`ensure_default_purview` runs AFTER hydration so the prune inside it judges against the real
-registered set, and it is non-fatal: purview bookkeeping must not stop the host from
+A NEW namespace gets the builtins; an existing one is never touched, so a builtin a user
+uninstalled stays uninstalled, and nothing installs again on their behalf.
+
+`ensure_default_purview` is non-fatal: purview bookkeeping must not stop the host from
 serving.
 
-`ensure_plugin_registry` runs last and is non-fatal for the same reason. It belongs to the
+`ensure_plugin_registry` is non-fatal for the same reason, and runs BEFORE the builtins,
+since grammar's rig calls plugin commands its validation must know. It belongs to the
 substrate because every engine base loads the registry it writes, so it must land before
 the first base is built, on every entry point: the server, the one-shot CLI, and the test
 server.
+
+The locks hydrate LAST, so they hold the builtins installed a moment before.
+
+## fn bundled_equip_dir
+The deploy's own `equip/`, beside `bin/` as the plugins' `plugin/` is, so a deploy carries
+the builtins' sources and the host finds them without being told where.
+
+## fn install_builtins
+Each builtin installs as `equip install` would, validated whole, its source the deploy's
+copy. One the deploy doesn't hold is skipped, and a failure goes to stderr while the host
+serves on: a builtin is a convenience, never a condition of serving.
+
+The seeding runs once, for the builtins that installed: each one's own purview and its
+reference in `core`. `default` keeps the `['*']` a new namespace starts with.

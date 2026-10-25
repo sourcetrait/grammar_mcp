@@ -14,6 +14,9 @@ pub(crate) const PURVIEW_CURRENT: &str = ".";
 /// Everything: both a built-in purview id and a namepath pattern.
 pub(crate) const PURVIEW_ALL: &str = "*";
 
+/// The builtins' own purviews together, each by reference.
+pub(crate) const PURVIEW_CORE: &str = "core";
+
 pub(crate) fn purviews_path() -> PathBuf {
     data_base_dir().join(META_DIR).join(PURVIEWS_FILE)
 }
@@ -153,6 +156,31 @@ pub(crate) fn ensure_default_purview() -> Result<(), GrammarMcpError> {
     save_purviews(&rows)
 }
 
+/// Seed a builtin's purviews where absent: its own row, and its `@` in `core`.
+pub(crate) fn seed_builtin(
+    rows: &mut Vec<PurviewRow>,
+    name: &str,
+) {
+    if !rows.iter().any(|row| row.id == name) {
+        rows.push(PurviewRow {
+            id: name.to_string(),
+            namepath_patterns: vec![format!("{name}:")],
+        });
+    }
+    let reference = format!("{PURVIEW_REF}{name}");
+    match rows.iter_mut().find(|row| row.id == PURVIEW_CORE) {
+        Some(row) => {
+            if !row.namepath_patterns.contains(&reference) {
+                row.namepath_patterns.push(reference);
+            }
+        }
+        None => rows.push(PurviewRow {
+            id: PURVIEW_CORE.to_string(),
+            namepath_patterns: vec![reference],
+        }),
+    }
+}
+
 /// The namepath patterns a set of ids puts in view, in order and deduplicated.
 pub(crate) fn resolve_patterns(
     ids: &[String],
@@ -225,30 +253,39 @@ enum PatternNeed {
     Nothing,
 }
 
-/// Drop patterns no registered rig can satisfy, returning what was pruned.
+/// Drop patterns no registered rig or purview satisfies, until none dangles.
 pub(crate) fn prune_dangling(rows: &mut Vec<PurviewRow>) -> Vec<String> {
     let names = registered_rig_names();
-    let ids: Vec<String> = rows.iter().map(|row| row.id.clone()).collect();
     let mut pruned: Vec<String> = Vec::new();
-    for row in rows.iter_mut() {
-        row.namepath_patterns.retain(|pattern| {
-            let live = match pattern_requires(pattern) {
-                None => true,
-                Some(PatternNeed::Nothing) => false,
-                Some(PatternNeed::Author(author)) => names
-                    .iter()
-                    .any(|n| n.split_once('/').is_some_and(|(a, _)| a == author)),
-                Some(PatternNeed::Rig(rig)) => names.iter().any(|n| n == &rig),
-                Some(PatternNeed::Purview(id)) => ids.iter().any(|k| k == &id),
-            };
-            if !live && !pruned.contains(pattern) {
-                pruned.push(pattern.clone());
-            }
-            live
-        });
+    loop {
+        let ids: Vec<String> = rows.iter().map(|row| row.id.clone()).collect();
+        let mut dropped = false;
+        for row in rows.iter_mut() {
+            row.namepath_patterns.retain(|pattern| {
+                let live = match pattern_requires(pattern) {
+                    None => true,
+                    Some(PatternNeed::Nothing) => false,
+                    Some(PatternNeed::Author(author)) => names
+                        .iter()
+                        .any(|n| n.split_once('/').is_some_and(|(a, _)| a == author)),
+                    Some(PatternNeed::Rig(rig)) => names.iter().any(|n| n == &rig),
+                    Some(PatternNeed::Purview(id)) => ids.iter().any(|k| k == &id),
+                };
+                if !live {
+                    dropped = true;
+                    if !pruned.contains(pattern) {
+                        pruned.push(pattern.clone());
+                    }
+                }
+                live
+            });
+        }
+        let before = rows.len();
+        rows.retain(|row| !row.namepath_patterns.is_empty());
+        if !dropped && rows.len() == before {
+            return pruned;
+        }
     }
-    rows.retain(|row| !row.namepath_patterns.is_empty());
-    pruned
 }
 
 /// What changed between two pattern sets, as `(added, removed)`.

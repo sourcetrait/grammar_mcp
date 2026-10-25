@@ -109,6 +109,7 @@ bare name: `gram:log:latest`.
 ## Purviews
 Named namepath patterns that filter what `info()` shows; not access control.
 - `default`: a fresh session's view, `['*']` unless configured.
+- `core`: `@gram` and `@grammar`, each builtin's own purview.
 - `.`: the current view; `*`: everything; `@id`: another purview's patterns.
 - `purview(ids)` replaces the view; `purview_extend(ids)` adds to it.
 - `purview_configure(id, patterns)`: set one; `[]` deletes, or resets `default`.

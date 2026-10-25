@@ -173,8 +173,8 @@ pub(crate) use crate::{
         lint::{LINT_VIOLATION_CAP, lint_body},
         liveness::acquire as acquire_host_lock,
         namepath::{
-            Namepath, NamepathPattern, NamepathRef, NamepathStr, builtin_name, display_equip,
-            resolve_builtin,
+            BUILTINS, Namepath, NamepathPattern, NamepathRef, NamepathStr, builtin_equip,
+            builtin_name, display_equip, resolve_builtin,
         },
         oneshot::run_oneshot,
         parse_engine::{
@@ -183,11 +183,11 @@ pub(crate) use crate::{
         },
         pin::{clear_pins, effective_supervisor, pin, reap_pins},
         purview::{
-            CurrentPurview, PURVIEW_ALL, PURVIEW_DEFAULT, PurviewRow,
+            CurrentPurview, PURVIEW_ALL, PURVIEW_CORE, PURVIEW_DEFAULT, PURVIEW_REF, PurviewRow,
             PurviewView, is_derived_purview, is_rig_pattern, is_valid_purview_id, load_purviews,
             ensure_default_purview, expand_values, is_nameable_purview, is_valid_purview_ref,
             parse_patterns, pattern_delta, prune_dangling, purview_ref, purview_views,
-            purviews_path, resolve_patterns, save_purviews,
+            purviews_path, resolve_patterns, save_purviews, seed_builtin,
         },
         remote::{
             codec::{

@@ -36,7 +36,9 @@ Every target HAS a row - startup materializes `default`, and any other id in the
 was checked against the table to get there - which is why the lookup can be a plain `find`
 with no fallback.
 
-A builtin's pattern is written by its bare name, `gram:`, the name an agent reads and calls.
+A BUILTIN seeds its own purview and its reference in `core`, then brings `@core` wherever any
+other rig brings `<rig>:` - never into `core` or a builtin's own row, where it would only
+make a cycle.
 
 NON-FATAL: the install already succeeded and is not rolled back, so a bookkeeping failure is
 reported to stderr rather than turned into a failed install. It is worth reading though,

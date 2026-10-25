@@ -50,6 +50,9 @@ pub(crate) const EQUIP_KINDS: [&str; 2] = [KIND_LIB, KIND_RIG];
 /// The directory that names an equip, in its source path and the namespace.
 pub(crate) const EQUIP_DIR: &str = "equip";
 
+/// The environment variable that overrides the deploy's equip directory.
+pub(crate) const EQUIP_DIR_ENV: &str = "GRAMMAR_MCP_EQUIP_DIR";
+
 
 pub(crate) fn keypair_dir() -> PathBuf {
     data_base_dir().join("keypair")
@@ -274,21 +277,22 @@ pub(crate) fn ensure_keypair() -> io::Result<()> {
     Ok(())
 }
 
-pub(crate) fn ensure_equip_repo() -> io::Result<()> {
+/// Make the namespace's equip repository when absent; true when this call made it.
+pub(crate) fn ensure_equip_repo() -> io::Result<bool> {
     let dir = equip_root();
     fs::create_dir_all(&dir)?;
     let git_dir = dir.join(".git");
-    if !git_dir.exists() {
-        run_git(&dir, &["init", "-b", "main"])?;
+    if git_dir.exists() {
         configure_repo(&dir)?;
-        run_git(
-            &dir,
-            &["commit", "--allow-empty", "-m", "init equip repo"],
-        )?;
-    } else {
-        configure_repo(&dir)?;
+        return Ok(false);
     }
-    Ok(())
+    run_git(&dir, &["init", "-b", "main"])?;
+    configure_repo(&dir)?;
+    run_git(
+        &dir,
+        &["commit", "--allow-empty", "-m", "init equip repo"],
+    )?;
+    Ok(true)
 }
 
 fn configure_repo(dir: &std::path::Path) -> io::Result<()> {
@@ -2696,16 +2700,68 @@ fn copy_tree_all(src: &std::path::Path, dst: &std::path::Path) -> io::Result<()>
 
 
 pub(crate) async fn ensure_substrate() -> io::Result<Arc<RigLocks>> {
-    {
+    let fresh = {
         let _repo = equip_repo_lock();
         ensure_keypair()?;
-        ensure_equip_repo()?;
-    }
-    let locks = Arc::new(RigLocks::new());
-    locks.hydrate_from_disk().await?;
+        ensure_equip_repo()?
+    };
     if let Err(e) = ensure_default_purview() {
         eprintln!("grammar: default purview not materialized: {e:?}");
     }
     ensure_plugin_registry();
+    if fresh {
+        install_builtins();
+    }
+    let locks = Arc::new(RigLocks::new());
+    locks.hydrate_from_disk().await?;
     Ok(locks)
+}
+
+/// The deploy's equip directory: the override, else `<exe dir>/../equip`.
+pub(crate) fn bundled_equip_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os(EQUIP_DIR_ENV) {
+        return Some(PathBuf::from(dir));
+    }
+    let exe = std::env::current_exe().ok()?;
+    Some(exe.parent()?.parent()?.join(EQUIP_DIR))
+}
+
+/// Install each builtin the deploy holds and seed its purviews.
+fn install_builtins() {
+    let Some(dir) = bundled_equip_dir() else {
+        return;
+    };
+    let engine = LintEngine::new().current();
+    let mut installed: Vec<&str> = Vec::new();
+    for (name, author) in BUILTINS {
+        let source = dir.join(author).join(name);
+        if !source.is_dir() {
+            continue;
+        }
+        let equip = format!("{author}/{name}");
+        match install_equip(&equip, &source, &engine) {
+            Ok(_) => installed.push(name),
+            Err(e) => eprintln!(
+                "grammar: builtin {equip} not installed from {}: {e:?}",
+                source.display(),
+            ),
+        }
+    }
+    if installed.is_empty() {
+        return;
+    }
+    let _repo = equip_repo_lock();
+    let mut rows = match load_purviews() {
+        Ok(rows) => rows.unwrap_or_default(),
+        Err(e) => {
+            eprintln!("grammar: builtin purviews not seeded: {e:?}");
+            return;
+        }
+    };
+    for name in installed {
+        seed_builtin(&mut rows, name);
+    }
+    if let Err(e) = save_purviews(&rows) {
+        eprintln!("grammar: builtin purviews not seeded: {e:?}");
+    }
 }

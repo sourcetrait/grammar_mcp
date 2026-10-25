@@ -175,13 +175,20 @@ fn purview_add_rig(
     // The purview table is namespace meta beside the equip repo: its
     // load-mutate-save is not atomic, so it rides the same repo-wide lock.
     let _repo = equip_repo_lock();
-    let pattern = format!("{}:", display_equip(rig));
     let mut rows = match load_purviews() {
         Ok(rows) => rows.unwrap_or_default(),
         Err(e) => {
             eprintln!("grammar: purview not updated for {rig}: {e:?}");
             return;
         }
+    };
+    let builtin = builtin_name(rig);
+    let pattern = match builtin {
+        Some(name) => {
+            seed_builtin(&mut rows, name);
+            format!("{PURVIEW_REF}{PURVIEW_CORE}")
+        }
+        None => format!("{rig}:"),
     };
     let mut targets: Vec<String> = vec![PURVIEW_DEFAULT.to_string()];
     for id in current_ids {
@@ -190,8 +197,13 @@ fn purview_add_rig(
         }
     }
     for id in targets {
+        if builtin.is_some() && (id == PURVIEW_CORE || builtin_equip(&id).is_some()) {
+            continue;
+        }
         if let Some(row) = rows.iter_mut().find(|row| row.id == id) {
-            if !row.namepath_patterns.iter().any(|p| is_rig_pattern(p, rig)) {
+            let present = row.namepath_patterns.contains(&pattern)
+                || row.namepath_patterns.iter().any(|p| is_rig_pattern(p, rig));
+            if !present {
                 row.namepath_patterns.push(pattern.clone());
             }
         }
