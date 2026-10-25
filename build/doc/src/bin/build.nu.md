@@ -18,4 +18,5 @@ lives in from any working directory.
 ## def main
 The signer resolves first, before any build, because a repository without a
 usable key cannot produce a package and should say so in a second rather than
-after the release builds.
+after the release builds. gram's equip is checked beside it for the same
+reason.

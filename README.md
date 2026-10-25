@@ -13,6 +13,14 @@ Tested with:
 - ChatGPT Codex
 - Mistral Vibe CLI (GLM)
 
+Building
+--------------------------------------------------------------------------------
+`nu build.nu` builds the release, a signed OptZip in `target/pkg/` carrying the
+MCP, nushell, their plugins, and the grammar and gram equips.
+
+It requires gram's repository cloned beside this one, as `gram`: `ext/gram`
+links to it, and the package carries its equip.
+
 Repository
 --------------------------------------------------------------------------------
 

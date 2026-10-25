@@ -5,7 +5,8 @@
 # The package lands in `target/pkg/`,
 # `grammar-mcp_<semver>_<os>_<arch>.opt.tar.zst`; its path is the last line.
 # It is signed by the repository's gpg commit key, or by `gpg.signingkey`, a
-# full fingerprint, with `gpg.homedir` the GnuPG home.
+# full fingerprint, with `gpg.homedir` the GnuPG home. gram's repository must
+# sit beside this one, as `gram`: the package carries its equip.
 
 const MOD_DIR = (path self | path expand | path dirname | path dirname | path join 'mod')
 const BUNDLE = ($MOD_DIR | path join 'bundle')
@@ -24,6 +25,7 @@ def main [
 ]: nothing -> nothing {
     let profile: string = if $debug { 'debug' } else { 'release' }
     let signer: record<key: string, home: oneof<nothing, string>> = (optzip signer $ROOT)
+    bundle require_gram $ROOT
     let target: record<os: string, arch: string> = (optzip target)
     let semver: string = (bundle package_semver $ROOT $profile)
     let file: string = (optzip file_name $NAME $semver $target.os $target.arch)

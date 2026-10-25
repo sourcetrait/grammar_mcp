@@ -18,6 +18,23 @@ const CORE_PLUGINS = [
 # The skills the package carries, from `agent/skill/`.
 const SKILLS = ['nu' 'grammar-mcp' 'grammar-mcp-dev']
 
+# The builtins' equips the package carries: grammar's own, gram's through `ext/gram`.
+const EQUIPS = [
+    [name source];
+    [grammar [equip sourcetrait grammar]]
+    [gram [ext gram equip sourcetrait gram]]
+]
+
+# Refuse a build without gram's equip, which `ext/gram` links from gram's repository.
+export def require_gram [root: path]: nothing -> nothing {
+    let dir: path = ($root | path join 'ext' 'gram' 'equip' 'sourcetrait' 'gram')
+    if not ($dir | path exists) {
+        error make {
+            msg: $"no gram equip at ($dir): gram's repository must sit beside this one, as `gram`"
+        }
+    }
+}
+
 # Build the MCP and its plugins in cargo's `release` or `debug` profile.
 export def compile [root: path, profile: string]: nothing -> nothing {
     let flags: list<string> = (profile_flags $profile '--release')
@@ -57,7 +74,8 @@ export def package_semver [root: path, profile: string]: nothing -> string {
 # Assemble the package's tree in `target/pkg/<profile>`; returns it.
 #
 # `plugin/core/` holds nushell's core plugins from `nu_root`, the install
-# nushell made, and `plugin/grammar/` the workspace's own.
+# nushell made, `plugin/grammar/` the workspace's own, and `equip/` the
+# builtins' sources.
 export def layout [root: path, profile: string, nu_root: path]: nothing -> path {
     let built: path = ($root | path join 'target' $profile)
     let tree: path = ($root | path join 'target' 'pkg' $profile)
@@ -76,6 +94,11 @@ export def layout [root: path, profile: string, nu_root: path]: nothing -> path 
     mkdir $grammar
     for plugin in (plugin_targets $root | get bin) {
         cp ($built | path join $plugin) ($grammar | path join $plugin)
+    }
+    for equip in $EQUIPS {
+        let dest: path = ($tree | path join 'equip' 'sourcetrait' $equip.name)
+        mkdir ($dest | path dirname)
+        cp --recursive ($root | path join ...$equip.source) $dest
     }
     for skill in $SKILLS {
         mkdir ($tree | path join 'skill' $skill)
