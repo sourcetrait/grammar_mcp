@@ -126,6 +126,45 @@ fn the_soak_and_eye_plugins_register_list_and_run() {
     assert!(git.contains("hello.txt.liquid"), "eye git lists the template; got {git}");
 }
 
+/// A bundled plugin replaced in place re-registers though it is dated at the
+/// epoch, as an OptZip unpacks every file: the registry follows the file's
+/// change, not its modification time.
+#[tested]
+fn a_replaced_plugin_re_registers_whatever_its_mtime() {
+    let t = testing::test!({ .using_temp_dir() });
+    let root = t.temp_dir();
+    let plugin_dir = bundle_inc(root);
+    let scratch = root.join("scratch");
+    let args = ["--id", "plug", "--namespace", "default"];
+    let envs = [(PLUGIN_DIR_ENV, plugin_dir.to_str().expect("utf-8 path"))];
+
+    let mut first = Host::spawn_full(&scratch, &args, &envs);
+    assert_eq!(plugin_names(&mut first), vec!["inc".to_string()], "the bundled plugin is listed");
+    let registry = namespace_dir(first.data_home(), "plug", "default").join("plugin.msgpackz");
+    let registered = modified(&registry);
+    drop(first);
+
+    let inc = plugin_dir.join("nu_plugin_inc");
+    std::fs::remove_file(&inc).expect("remove the bundled plugin");
+    std::fs::copy(grammar_mcp_bin().with_file_name("nu_plugin_inc"), &inc).expect("bundle it again");
+    std::fs::File::options()
+        .write(true)
+        .open(&inc)
+        .and_then(|file| file.set_modified(std::time::UNIX_EPOCH))
+        .expect("date the plugin at the epoch");
+
+    let mut second = Host::spawn_full(&scratch, &args, &envs);
+    assert_eq!(plugin_names(&mut second), vec!["inc".to_string()], "the replaced plugin is listed");
+    assert!(modified(&registry) > registered, "the replaced plugin re-registers");
+}
+
+/// A file's modification time.
+fn modified(path: &Path) -> std::time::SystemTime {
+    std::fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .unwrap_or_else(|e| panic!("stat {}: {e}", path.display()))
+}
+
 /// A plugin directory holding the built `nu_plugin_inc`, the test host's sibling.
 fn bundle_inc(root: &Path) -> PathBuf {
     bundle(root, &["nu_plugin_inc"])

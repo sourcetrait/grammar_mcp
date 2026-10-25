@@ -80,18 +80,25 @@ pub(crate) fn ensure_plugin_registry() {
     }
 }
 
-/// Whether `bin` is missing from the registry or built after it was written.
+/// Whether `bin` is missing from the registry or changed after it was written.
 fn needs_registration(
     bin: &Path,
     contents: Option<&nu::PluginRegistryFile>,
     registered_at: Option<SystemTime>,
 ) -> bool {
     let listed = contents.is_some_and(|c| c.plugins.iter().any(|item| item.filename == bin));
-    let built_at = fs::metadata(bin).and_then(|m| m.modified()).ok();
-    match (listed, registered_at, built_at) {
-        (true, Some(registered), Some(built)) => built > registered,
+    let changed_at = fs::metadata(bin).ok().map(|metadata| changed_time(&metadata));
+    match (listed, registered_at, changed_at) {
+        (true, Some(registered), Some(changed)) => changed > registered,
         _ => true,
     }
+}
+
+/// When a file last changed on this filesystem, which no archive can set.
+fn changed_time(metadata: &fs::Metadata) -> SystemTime {
+    let seconds = u64::try_from(metadata.ctime()).unwrap_or(0);
+    let nanos = u32::try_from(metadata.ctime_nsec()).unwrap_or(0);
+    UNIX_EPOCH + Duration::new(seconds, nanos)
 }
 
 /// Run nushell's own `plugin add` for each binary, into `registry`.

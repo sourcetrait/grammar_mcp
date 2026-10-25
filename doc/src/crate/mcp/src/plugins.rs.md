@@ -50,8 +50,19 @@ the staleness test compares against it.
 
 ## fn ensure_plugin_registry
 Registration spawns each plugin to read its signatures, so it runs only for a
-binary the registry lacks or one built after the registry was written - a new
-install, a rebuilt plugin, or another binary's turn at the namespace.
+binary the registry lacks or one whose file changed after the registry was
+written - a new install, a rebuilt plugin, or another binary's turn at the
+namespace.
+
+## fn changed_time
+CHANGE TIME, NOT MODIFICATION TIME. An OptZip unpacks every file at mtime 0,
+its archive reproducible, so a plugin's mtime predates any registry and a
+plugin replaced in place kept its old signatures: measured, a host restarted
+over a replaced `nu_plugin_inc` dated at the epoch left the registry
+unwritten. The kernel sets ctime whenever a file is written, copied, unpacked,
+or renamed into place, and no archive can carry one, so a changed plugin
+always counts as newer than the registry, at the cost of one more
+registration after a mere `chmod`.
 
 ## fn register_plugins
 NUSHELL'S OWN `plugin add`, evaluated on a stateful base, rather than a second

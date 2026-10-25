@@ -248,7 +248,7 @@ pub(crate) use std::{
     io::{self, Write},
     hash::{Hash},
     marker::PhantomData,
-    os::unix::fs::OpenOptionsExt,
+    os::unix::fs::{MetadataExt, OpenOptionsExt},
     ops::ControlFlow,
     panic::{AssertUnwindSafe, catch_unwind},
     path::{PathBuf,Path},
@@ -257,7 +257,7 @@ pub(crate) use std::{
         Arc, LazyLock, OnceLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 pub(crate) use clap::Parser;
