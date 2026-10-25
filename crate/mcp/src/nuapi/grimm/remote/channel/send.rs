@@ -33,7 +33,7 @@ impl nu::Command for GrimmRemoteChannelSend {
             .vocab_required(&Self::DEF_MCP_NOM, nu::SyntaxShape::String)
             .vocab_required(&Self::DEF_MODEL, nu::SyntaxShape::String)
             .vocab_required(&Self::DEF_EVENT, data_shape())
-            .input_output_types(vec![(nu::Type::Nothing, nu::Type::String)])
+            .input_output_types(vec![(nu::Type::Nothing, event_id_type())])
     }
 
     fn description(&self) -> &str { Self::DEF.description }
@@ -56,7 +56,7 @@ impl nu::Command for GrimmRemoteChannelSend {
             spill_remote_event(event_nuon, Vec::new()).map_err(|e| shell_error(&e, call.head))?;
         find_link_send(&mcp_nom, id.clone(), model, wire_event_nuon, payloads)
             .map_err(|e| shell_error(&e, call.head))?;
-        Ok(nu::PipelineData::Value(nu::Value::string(id, call.head), None))
+        Ok(nu::PipelineData::Value(event_id_record(id, call.head), None))
     }
 }
 
@@ -75,7 +75,7 @@ impl nu::Command for GrimmRemoteChannelSendWith {
                 nu::SyntaxShape::Table(nu::CollectionColumns::from(vec![])),
                 "the files table<src: path, dest: path>: local src -> receiver dest name",
             )
-            .input_output_types(vec![(nu::Type::Nothing, nu::Type::String)])
+            .input_output_types(vec![(nu::Type::Nothing, event_id_type())])
             .category(nu::Category::Custom("grimm".to_string()))
     }
 
@@ -103,7 +103,7 @@ impl nu::Command for GrimmRemoteChannelSendWith {
             spill_remote_event(event_nuon, payloads).map_err(|e| shell_error(&e, call.head))?;
         find_link_send(&mcp_nom, id.clone(), model, wire_event_nuon, payloads)
             .map_err(|e| shell_error(&e, call.head))?;
-        Ok(nu::PipelineData::Value(nu::Value::string(id, call.head), None))
+        Ok(nu::PipelineData::Value(event_id_record(id, call.head), None))
     }
 }
 

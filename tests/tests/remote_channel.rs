@@ -32,18 +32,27 @@ fn consumer_connects_verifies_and_receives_a_packet() {
     );
     let mut c = Consumer::attach(host, &ch.ca);
 
-    // A body-driven grimm channel send must arrive on the real WSS client.
+    // A body-driven grimm channel send must arrive on the real WSS client, and the
+    // record it returns, bound by a `let`, must name the packet that arrived.
     let resp = c.host.run(json!({
         "args_schema": {},
-        "result_schema": {"ok": "bool"},
+        "result_schema": {"event_id": "string"},
         "args": {},
-        "body": "grimm channel send \"test/Ping\" {msg: \"hello-wss\"}; {ok: true}",
+        "body": "let sent = (grimm channel send \"test/Ping\" {msg: \"hello-wss\"}); {event_id: $sent.event_id}",
     }));
     assert!(!has_error_path(&resp), "channel_send body failed: {resp}");
+    let event_id = structured(&resp)["result"]["event_id"]
+        .as_str()
+        .expect("the send returns {event_id}")
+        .to_string();
 
     let packet = c
         .await_packet(|p| p.model == "test/Ping", Duration::from_secs(10))
         .expect("consumer should receive the test/Ping over WSS");
+    assert_eq!(
+        packet.id, event_id,
+        "the returned event_id is the id of the packet that arrived; got {packet:?}",
+    );
     assert!(
         packet.event.contains("hello-wss"),
         "the packet event should carry the payload; got {packet:?}",
@@ -309,6 +318,45 @@ fn remote_send_spills_oversized_event() {
     );
 }
 
+/// `grimm remote_channel_send_with` returns `{event_id}`, and that id is the one
+/// the sender's own Sent notice carries; the files reach the receiver beside the
+/// relayed packet.
+#[tested]
+fn remote_send_with_returns_its_event_id() {
+    let t = testing::test!({ .using_temp_dir() });
+    let root = t.temp_dir();
+    let (mut a, mut b, nom_a, nom_b) = spawn_two_hosts(&root);
+    pair(&mut a, &mut b, &nom_a);
+
+    let src = root.join("note.txt");
+    std::fs::write(&src, "files-1").expect("write the attachment");
+    let resp = a.host.run(json!({
+        "args_schema": {"nom": "string", "src": "string"},
+        "result_schema": {"id": "string"},
+        "args": {"nom": nom_b, "src": src.to_str().expect("utf-8 path")},
+        "body": "let sent = (grimm remote_channel_send_with $args.nom \"test/Files\" {note: \"files-1\"} [[src dest]; [$args.src \"note.txt\"]]); {id: $sent.event_id}",
+    }));
+    assert!(!has_error_path(&resp), "remote_channel_send_with body failed: {resp}");
+    let send_id = structured(&resp)["result"]["id"]
+        .as_str()
+        .expect("the send returns {event_id}")
+        .to_string();
+
+    a.await_packet(
+        |p| p.model == "mcp/remote/Sent" && p.event.contains(&send_id),
+        Duration::from_secs(15),
+    )
+    .expect("A's own Sent carries the returned event_id");
+    let relayed = b
+        .await_packet(
+            |p| p.model == "test/Files" && p.from == format!("mcp/remote/{nom_a}"),
+            Duration::from_secs(15),
+        )
+        .expect("B should receive the relayed test/Files");
+    assert!(relayed.event.contains("files-1"), "the relayed event carries the payload; got {relayed:?}");
+    assert!(relayed.attached.is_some(), "the relayed packet names its delivery dir; got {relayed:?}");
+}
+
 // ---- helpers ----
 
 fn mcp_nom(c: &mut Consumer) -> String {
@@ -320,7 +368,7 @@ fn mcp_nom(c: &mut Consumer) -> String {
 
 /// Drive `grimm remote channel send` from a body and return the message id.
 fn remote_send(c: &mut Consumer, peer_nom: &str, model: &str, event_body: &str) -> String {
-    let body = format!("let id = (grimm remote channel send $args.nom \"{model}\" {{{event_body}}}); {{id: $id}}");
+    let body = format!("let sent = (grimm remote channel send $args.nom \"{model}\" {{{event_body}}}); {{id: $sent.event_id}}");
     let resp = c.host.run(json!({
         "args_schema": {"nom": "string"},
         "result_schema": {"id": "string"},

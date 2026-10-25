@@ -53,6 +53,16 @@ satisfies any table type.
 Both members are column-OPEN: an empty `CollectionColumns` declares no required
 columns, so any record or table binds.
 
+## fn event_id_record
+One record for the three sends, so `grimm channel send` and the two remote
+sends cannot drift from the `{event_id}` their documented examples give. A
+`let` is where nushell enforces a declared output type, so a decl returning
+other than it declares fails there, as a bare `Type mismatch`: a string under
+a record signature did exactly that.
+
+## fn event_id_type
+The declared half of the same contract, shared by the three signatures.
+
 ## fn register_nuapi
 MUST run before `nu::parse`. The parser resolves command names at parse time, so a
 decl added afterwards is invisible to the body that needed it.

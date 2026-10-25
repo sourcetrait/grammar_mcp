@@ -84,6 +84,22 @@ pub(crate) fn optional_data_shape() -> nu::SyntaxShape {
     ])
 }
 
+/// The record every `grimm` send returns: the message id under `event_id`.
+pub(crate) fn event_id_record(
+    id: impl Into<String>,
+    span: nu::Span,
+) -> nu::Value {
+    nu::Value::record(nu::record! { "event_id" => nu::Value::string(id, span) }, span)
+}
+
+/// The output type every `grimm` send declares: `record<event_id: string>`.
+pub(crate) fn event_id_type() -> nu::Type {
+    nu::Type::Record(nu::CollectionColumns::from(vec![(
+        "event_id".to_string(),
+        nu::Type::String,
+    )]))
+}
+
 /// Register the `grimm *` decls into the working set an eval will parse with.
 pub(crate) fn register_nuapi(
     working_set: &mut nu::StateWorkingSet,

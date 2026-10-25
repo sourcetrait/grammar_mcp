@@ -1,13 +1,13 @@
 # remote_send.rs
 
 Body-facing grimm decls (registered in register_nuapi, ch14), NOT MCP tools - an
-agent's willful, non-blocking send to a linked peer. Both mint a message id off the
-channel NonceGen, look up the open link by mcp_nom (find_link_send, link.rs),
-enqueue, and return the id IMMEDIATELY; the delivery outcome lands async as
-mcp/remote/Sent|Unsent on the sender's own Channel, driven by the transport WRITE
-(link.rs SendTracker - Sent covers the whole transmission, files + message). The
-aggregate-write semantics + the receiver relay live in link.rs; these decls are the
-thin body surface over it.
+agent's willful, non-blocking send to a linked peer. Both mint a message id off
+the channel NonceGen, look up the open link by mcp_nom (find_link_send,
+link.rs), enqueue, and return it IMMEDIATELY as `{event_id}`; the delivery
+outcome lands async as mcp/remote/Sent|Unsent on the sender's own Channel,
+driven by the transport WRITE (link.rs SendTracker - Sent covers the whole
+transmission, files + message). The aggregate-write semantics + the receiver
+relay live in link.rs; these decls are the thin body surface over it.
 
 ## struct GrimmRemoteChannelSend / struct GrimmRemoteChannelSendWith
 Two decls, not one with an optional attachment, because for a REMOTE send the

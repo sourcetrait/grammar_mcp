@@ -9,8 +9,8 @@ NAMES on the wire rather than carrying. The contract is STRUCTURAL - the ergonom
 path is the next argument - so nobody has to be talked out of putting data on the
 wire.
 
-It returns the message id so an author can correlate what it sent with what the
-agent later fetches.
+It returns the message id as `{event_id}`, the record its signature declares, so
+an author can correlate what it sent with what the agent later fetches.
 
 ### fn run
 ORDER IS DELIBERATE THROUGHOUT, and each step is placed where it is for a reason.

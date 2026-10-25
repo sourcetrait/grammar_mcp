@@ -7,7 +7,7 @@ Nu bodies evaluated by the MCP. The Nu language itself is in the nu skill.
 
 ## Tools
 - `run()`: evaluate a typed nu body on a stateless thread.
-- `interact()`: the same on a persistent thread; env, `cd`, and defs carry over.
+- `interact()`: the same on a persistent thread; env and `cd` carry over.
 - `call()`: invoke a committed rig function by namepath.
 - `rerun()`: re-evaluate a cached `run()` body by its nonce with fresh args.
 - `processes()` / `kill()`: list in-flight calls; cancel one by nonce.
@@ -87,6 +87,7 @@ use equip/<author>/<name>/rig/<module>
 - `grimm remote channel send <peer_nom> <model> <event>`: to a linked host.
 - `grimm remote_channel_send_with <peer_nom> <model> <event> <attached>`:
   the same, with `attached` a `table<src, dest>` of files.
+- Each send returns `{event_id}`, its message id.
 - `grimm get_config_all` / `get_config <key>`: read the live config.
 - `grimm pin_config <key> <pid> <value>`: pin `supervisor.*` until pid exits.
 

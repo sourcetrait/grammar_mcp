@@ -22,6 +22,10 @@ fn interact_persistence_is_sequenced() {
             cd_persists_across_interact_calls(t);
             testing::StepState(s, p)
         })
+        .step("a_def_does_not_persist_across_interact_calls", |t, s, p| {
+            a_def_does_not_persist_across_interact_calls(t);
+            testing::StepState(s, p)
+        })
         .step("interact_state_does_not_leak_into_run", |t, s, p| {
             interact_state_does_not_leak_into_run(t);
             testing::StepState(s, p)
@@ -76,6 +80,36 @@ fn cd_persists_across_interact_calls(_t: &testing::Testable<'_, '_, '_>) {
         "{ cwd: $env.PWD }",
     );
     assert_eq!(second["result"]["cwd"].as_str(), Some("/tmp"), "cd should propagate; got {second}");
+}
+
+/// env and `cd` carry over, which is interact's purpose; a def never does. The
+/// body runs inside the `def --env __interact` wrapper, so a def it makes is
+/// scoped to that call - visible within it, gone from the next.
+fn a_def_does_not_persist_across_interact_calls(_t: &testing::Testable<'_, '_, '_>) {
+    let s = TESTING.harness();
+    let first = s.interact(
+        json!({"noop": "int"}),
+        json!({"seen": "bool"}),
+        json!({"noop": 0}),
+        "def interact_scoped_probe [] { 1 }\n{ seen: ('interact_scoped_probe' in (scope commands | get name)) }",
+    );
+    assert_eq!(
+        first["result"]["seen"].as_bool(),
+        Some(true),
+        "the def should be visible within the call that made it; got {first}",
+    );
+
+    let second = s.interact(
+        json!({"noop": "int"}),
+        json!({"seen": "bool"}),
+        json!({"noop": 0}),
+        "{ seen: ('interact_scoped_probe' in (scope commands | get name)) }",
+    );
+    assert_eq!(
+        second["result"]["seen"].as_bool(),
+        Some(false),
+        "a def must not persist into the next interact call; got {second}",
+    );
 }
 
 fn interact_state_does_not_leak_into_run(_t: &testing::Testable<'_, '_, '_>) {

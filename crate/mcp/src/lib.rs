@@ -108,7 +108,8 @@ pub(crate) use crate::{
             send::GrimmChannelSend,
         },
         common::{
-            NuapiCall, data_shape, register_nuapi, require_record_or_table,
+            NuapiCall, data_shape, event_id_record, event_id_type, register_nuapi,
+            require_record_or_table,
         },
         config::{GrimmGetConfig, GrimmGetConfigAll, GrimmPinConfig},
         dbg::GrimmDbg,
