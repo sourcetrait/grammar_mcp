@@ -6,6 +6,8 @@ Harness MCP powered by Nushell.
 
 Agent-maintained documentation is located in [./doc/ai/doc.yaml](doc/ai).
 
+Skills are located in [./agent/skill](agent/skill).
+
 Tested with:
 - Claude Code
 - ChatGPT Codex
