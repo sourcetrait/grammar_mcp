@@ -1354,7 +1354,9 @@ fn validate_lib_file(
     let _ = ws.files.push(PathBuf::from(&fname), nu::Span::unknown());
     let files_before = ws.num_files();
     let _ = nu::parse(&mut ws, Some(&fname), wrapped.as_bytes(), false);
-    if let Some(cycle) = detect_import_cycle(&ws, files_before) {
+    if !ws.parse_errors.is_empty()
+        && let Some(cycle) = detect_import_cycle(&ws, files_before)
+    {
         result.diagnostics.push(Diagnostic::error(
             "module::circular_import",
             Some(Source {
@@ -1768,7 +1770,9 @@ fn validate_flat_file(
     let _ = ws.files.push(PathBuf::from(&fname), nu::Span::unknown());
     let files_before = ws.num_files();
     let _ = nu::parse(&mut ws, Some(&fname), wrapped.as_bytes(), false);
-    if let Some(cycle) = detect_import_cycle(&ws, files_before) {
+    if !ws.parse_errors.is_empty()
+        && let Some(cycle) = detect_import_cycle(&ws, files_before)
+    {
         result.diagnostics.push(Diagnostic::error(
             "module::circular_import",
             Some(Source {
@@ -1971,7 +1975,9 @@ fn validate_mod_nu_ast(
     let files_before = working_set.num_files();
     let outer_block = nu::parse(&mut working_set, Some(fname), wrapped.as_bytes(), false);
 
-    if let Some(cycle) = detect_import_cycle(&working_set, files_before) {
+    if !working_set.parse_errors.is_empty()
+        && let Some(cycle) = detect_import_cycle(&working_set, files_before)
+    {
         diagnostics.push(Diagnostic::error(
             "module::circular_import",
             Some(Source {
@@ -2130,7 +2136,9 @@ fn validate_function_file_ast(
     let files_before = working_set.num_files();
     let _ = nu::parse(&mut working_set, Some(fname), wrapped.as_bytes(), false);
 
-    if let Some(cycle) = detect_import_cycle(&working_set, files_before) {
+    if !working_set.parse_errors.is_empty()
+        && let Some(cycle) = detect_import_cycle(&working_set, files_before)
+    {
         diagnostics.push(Diagnostic::error(
             "module::circular_import",
             Some(Source {

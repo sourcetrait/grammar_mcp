@@ -147,6 +147,40 @@ fn lib_only_equip_installs_and_imports_without_calls() {
 }
 
 #[tested]
+fn a_diamond_shaped_lib_is_no_cycle() {
+    let t = testing::test!({ .using_temp_dir() });
+    let s = TESTING.harness();
+    let eq = equip_source(t.temp_dir(), "sourcetrait/diamondlib");
+    let lib = eq.join("lib");
+    write_source(&lib, "base/mod.nu", "export def one []: nothing -> int { 1 }\n");
+    write_source(&lib, "left/mod.nu", "use ../base\nexport def two []: nothing -> int { (base one) + 1 }\n");
+    write_source(&lib, "right/mod.nu", "use ../base\nexport def three []: nothing -> int { (base one) + 2 }\n");
+    write_source(
+        &lib,
+        "top/mod.nu",
+        "use ../left\nuse ../right\nexport def sum []: nothing -> int { (left two) + (right three) }\n",
+    );
+    let rig = eq.join("rig");
+    write_source(&rig, "mod.nu", "export module m\n");
+    write_source(&rig, "m/mod.nu", "export module a\nexport use a\nexport module b\nexport use b\nexport module c\nexport use c\n");
+    for call in ["a", "b", "c"] {
+        write_source(
+            &rig,
+            &format!("m/{call}/mod.nu"),
+            "use equip/sourcetrait/diamondlib/lib/top\nexport def main [args: nothing]: nothing -> record<out: int> {\n    { out: (top sum) }\n}\n",
+        );
+    }
+    let env = s.equip("install", eq.to_str().unwrap());
+    assert!(
+        !has_error(&env),
+        "a module shared down two branches registers more than once in a clean parse, \
+         and that is no cycle; got {env}",
+    );
+    let called = s.call("sourcetrait/diamondlib:m:b", json!({}));
+    assert_eq!(called["result"]["out"].as_i64(), Some(5), "got {called}");
+}
+
+#[tested]
 fn install_skips_the_cli() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();

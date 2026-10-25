@@ -245,7 +245,7 @@ executable.
 ## fn validate_lib_file
 Each file parses as a module of its own, against the same engine and self-view a rig
 gets, so a lib module importing a sibling or another equip resolves it as nushell would at
-serve. The cycle check runs BEFORE reporting parse errors, for the reason it does in
+serve. A failed parse is checked for a cycle before its errors are reported, as in
 `validate_flat_file`.
 
 ## fn validate_walk
@@ -274,9 +274,10 @@ that parse error separately - returning edges from a broken parse would produce 
 misleading orphan diagnostic on top of the real one.
 
 ## fn validate_flat_file
-The cycle check runs BEFORE reporting parse errors, for the same reason it does in the eval
-path: a cycle's own parse errors are unstable in variant and payload and useless in every
-form.
+A FAILED parse is checked for a cycle BEFORE its errors are reported, as the eval path
+does: a cycle's own parse errors are unstable in variant and payload and useless in every
+form. A clean parse is never checked, since a diamond-shaped import graph registers its
+shared modules many times without any cycle.
 
 ## fn scan_reserved_terms
 `main` may appear ONLY as a call target's exported sentinel. The scan checks path components

@@ -1,8 +1,17 @@
 # cycle.rs
 
 ## const CYCLE_REPEATS
-A legitimate tree registers each file ONCE, so three is already impossible without
-resolution doubling back on itself.
+A runaway registers its files over and over, so a file seen fewer than three times is
+not one. Repetition alone is NOT a cycle: nushell registers a module once per import
+path, so a lib shaped like a diamond - one shared module under several - registers that
+module many times in a clean parse. gram's lib does exactly that.
+
+## const CYCLE_HOPS
+What a runaway has and a diamond does not. A relative cycle never folds its `..`, so its
+spellings pile up hops until the path stops resolving, while a legitimate relative chain
+carries only as many as its import depth. Eight is past any sane module depth and far
+short of the hops a runaway reaches before the path limit, even under the longest
+directory names.
 
 ## fn detect_import_cycle
 nushell HAS a circular-import detector - `FileStack::push` - and it does not fire
@@ -20,9 +29,12 @@ carrying a couple of `export def`s reports `ModuleMissingModNuFile` with a
 several-thousand-character path. Matching either one silently misses the other.
 
 What IS invariant is the RUNAWAY itself - the same file registered over and over
-under different spellings. Canonicalizing collapses them, and we can do that
-soundly where nushell cannot, because we ask the FILESYSTEM rather than folding
-text.
+under spellings that keep growing their `..` hops. Canonicalizing collapses them,
+and we can do that soundly where nushell cannot, because we ask the FILESYSTEM
+rather than folding text.
+
+Callers ask only once a parse has FAILED: a runaway always ends in a parse error,
+and a clean parse is never a cycle however often it registered a shared module.
 
 `baseline` is `num_files()` taken BEFORE the parse, so only this parse's own
 registrations count. Without it the interact lane, whose working set accumulates

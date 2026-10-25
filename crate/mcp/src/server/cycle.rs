@@ -1,7 +1,10 @@
 use crate::*;
 
-/// How many times one file must be registered before it is a cycle.
+/// How many times one file must be registered before it can be a cycle.
 const CYCLE_REPEATS: usize = 3;
+
+/// How many `..` hops one spelling of a repeated file must carry to be a runaway.
+const CYCLE_HOPS: usize = 8;
 
 /// How many files a cycle message names before it stops listing them.
 const CYCLE_NAMED: usize = 4;
@@ -11,17 +14,25 @@ pub(crate) fn detect_import_cycle(
     working_set: &nu::StateWorkingSet,
     baseline: usize,
 ) -> Option<String> {
-    let mut counts: HashMap<PathBuf, usize> = HashMap::new();
+    let mut seen: HashMap<PathBuf, (usize, usize)> = HashMap::new();
     for cached in working_set.files().skip(baseline) {
-        let Ok(canonical) = std::fs::canonicalize(&*cached.name) else {
+        let spelling = Path::new(&*cached.name);
+        let Ok(canonical) = std::fs::canonicalize(spelling) else {
             continue;
         };
-        *counts.entry(canonical).or_default() += 1;
+        let hops = spelling
+            .components()
+            .filter(|c| matches!(c, std::path::Component::ParentDir))
+            .count();
+        let entry = seen.entry(canonical).or_default();
+        entry.0 += 1;
+        entry.1 = entry.1.max(hops);
     }
 
-    let mut repeated: Vec<(PathBuf, usize)> = counts
+    let mut repeated: Vec<(PathBuf, usize)> = seen
         .into_iter()
-        .filter(|(_, seen)| *seen >= CYCLE_REPEATS)
+        .filter(|(_, (count, hops))| *count >= CYCLE_REPEATS && *hops >= CYCLE_HOPS)
+        .map(|(path, (count, _))| (path, count))
         .collect();
     if repeated.is_empty() {
         return None;
