@@ -1,13 +1,10 @@
 # The grammar-mcp release: cargo's builds, nushell, and the package's tree.
 
-# The workspace packages a release builds: the MCP and its core plugins.
-const CRATES = ['sourcetrait_grammar_mcp' 'sourcetrait_grammar_plugin']
+# The MCP's package: its binary is the release's, its version the release's.
+const MCP_CRATE = 'sourcetrait_grammar_mcp'
 
-# The package whose version names the release.
-const VERSION_CRATE = 'sourcetrait_grammar_mcp'
-
-# The package whose binaries are the bundled plugins.
-const PLUGIN_CRATE = 'sourcetrait_grammar_plugin'
+# The file-name prefix of a plugin binary, the one the MCP registers by.
+const PLUGIN_PREFIX = 'nu_plugin_'
 
 # The skills the package carries, from `agent/skill/`.
 const SKILLS = ['nu' 'grammar-mcp' 'grammar-mcp-dev']
@@ -15,7 +12,8 @@ const SKILLS = ['nu' 'grammar-mcp' 'grammar-mcp-dev']
 # Build the MCP and its plugins in cargo's `release` or `debug` profile.
 export def compile [root: path, profile: string]: nothing -> nothing {
     let flags: list<string> = (profile_flags $profile '--release')
-    let packages: list<string> = ($CRATES | each {|crate| ['-p' $crate] } | flatten)
+    let crates: list<string> = ([$MCP_CRATE] | append (plugin_targets $root | get package | uniq))
+    let packages: list<string> = ($crates | each {|crate| ['-p' $crate] } | flatten)
     ^cargo build --manifest-path ($root | path join 'Cargo.toml') ...$flags ...$packages
 }
 
@@ -41,7 +39,7 @@ export def engine_version [root: path]: nothing -> string {
 # The release's semver, the MCP crate's version, `+dbg` for `debug`.
 export def package_semver [root: path, profile: string]: nothing -> string {
     let version: string = (
-        cargo_metadata $root | get packages | where name == $VERSION_CRATE | get version.0
+        cargo_metadata $root | get packages | where name == $MCP_CRATE | get version.0
     )
     if $profile == 'debug' { $"($version)+dbg" } else { $version }
 }
@@ -77,10 +75,21 @@ def profile_flags [profile: string, flag: string]: nothing -> list<string> {
     }
 }
 
-# The plugin crate's binaries, by cargo's metadata.
+# The plugin binaries, by cargo's metadata.
 def plugin_bins [root: path]: nothing -> list<string> {
-    (cargo_metadata $root | get packages | where name == $PLUGIN_CRATE | get 0.targets
-        | where {|target| 'bin' in $target.kind } | get name | sort)
+    plugin_targets $root | get bin
+}
+
+# Each workspace binary named as a plugin, with its package, by cargo's metadata.
+def plugin_targets [root: path]: nothing -> table<package: string, bin: string> {
+    (cargo_metadata $root | get packages
+        | each {|package|
+            $package.targets
+                | where {|target| ('bin' in $target.kind) and ($target.name | str starts-with $PLUGIN_PREFIX) }
+                | each {|target| {package: $package.name, bin: $target.name} }
+        }
+        | flatten
+        | sort-by bin)
 }
 
 # cargo's metadata for the workspace's own packages.

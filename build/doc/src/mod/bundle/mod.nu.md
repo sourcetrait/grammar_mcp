@@ -3,8 +3,8 @@
 What grammar-mcp's release holds, as against how an OptZip is packed.
 
 ## def compile
-The MCP and the plugin crate build in one cargo invocation, so one lockfile
-resolves both against the same nushell crates and the plugins speak the
+The MCP and the plugin crates build in one cargo invocation, so one lockfile
+resolves them all against the same nushell crates and the plugins speak the
 engine's nu-plugin-protocol.
 
 ## def nushell
@@ -20,6 +20,7 @@ the release cannot linger in it. `chmod u=rwX,go=rX` leaves directories and
 executables at 0755 and everything else at 0644, the modes the archive
 records.
 
-## def plugin_bins
-The plugin binaries come from cargo's metadata, so a plugin added to the
-plugin crate reaches the package with no second list to keep.
+## def plugin_targets
+A plugin is any workspace binary named `nu_plugin_*`, the prefix the MCP
+registers a bundled plugin by, read from cargo's metadata, so a plugin crate
+added under `crate/plugin/` reaches the package with no list to keep.
