@@ -520,8 +520,8 @@ pub fn valid_function_source(args_schema: &str, result_schema: &str, body: &str)
 /// The on-disk namespace subtree for `(id, namespace)` under a data home.
 pub fn namespace_dir(data_home: &Path, id: &str, namespace: &str) -> PathBuf {
     data_home
-        .join("sourcetrait")
         .join("grammar")
+        .join("mcp")
         .join(id)
         .join(namespace)
 }

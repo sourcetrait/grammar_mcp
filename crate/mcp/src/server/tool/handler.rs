@@ -84,13 +84,13 @@ impl mcp::ServerHandler for NuSh {
         .with_title(title);
         info.instructions = Some(format!(
             "Evaluation artifacts are cached at \
-             $XDG_CACHE_HOME/sourcetrait/grammar/{id}/{namespace}/{{runs,interacts,calls}}/<nonce>/{{stdout,stderr}}; \
+             $XDG_CACHE_HOME/grammar/mcp/{id}/{namespace}/{{runs,interacts,calls}}/<nonce>/{{stdout,stderr}}; \
              a run's cached body co-locates at \
-             $XDG_CACHE_HOME/sourcetrait/grammar/{id}/{namespace}/runs/<nonce>/body.nuon \
+             $XDG_CACHE_HOME/grammar/mcp/{id}/{namespace}/runs/<nonce>/body.nuon \
              (the rerun(nonce) handle). \
              Registered rigs live in a signed git repo at \
-             $XDG_DATA_HOME/sourcetrait/grammar/{id}/{namespace}/rigs/; signing keypair at \
-             $XDG_DATA_HOME/sourcetrait/grammar/{id}/{namespace}/keypair/. \
+             $XDG_DATA_HOME/grammar/mcp/{id}/{namespace}/rigs/; signing keypair at \
+             $XDG_DATA_HOME/grammar/mcp/{id}/{namespace}/keypair/. \
              This server's namespace: id `{id}`, namespace `{namespace}`.",
         ));
         info

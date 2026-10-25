@@ -23,8 +23,8 @@ pub(crate) static BASE_DIRS: LazyLock<dirs::BaseDirs> =
 pub(crate) fn cache_base_dir() -> PathBuf {
     BASE_DIRS
         .cache_dir()
-        .join(consts::SOURCETRAIT)
         .join(consts::GRAMMAR)
+        .join(consts::MCP)
         .join(&config().id)
         .join(&config().namespace)
 }
@@ -32,8 +32,8 @@ pub(crate) fn cache_base_dir() -> PathBuf {
 pub(crate) fn data_base_dir() -> PathBuf {
     BASE_DIRS
         .data_dir()
-        .join(consts::SOURCETRAIT)
         .join(consts::GRAMMAR)
+        .join(consts::MCP)
         .join(&config().id)
         .join(&config().namespace)
 }
