@@ -127,7 +127,9 @@ pub(crate) use crate::{
     mode::Mode,
     nu::CallExt,
     nu::FromValue,
-    plugins::{list_registered_plugins, load_plugin_decls, registry_mtime},
+    plugins::{
+        ensure_plugin_registry, list_registered_plugins, load_plugin_decls, registry_mtime,
+    },
     error::{Diagnostic, Severity, Source, error_to_call_result},
     server::{
         blocked::shadow_host_fatal_decls,
@@ -147,7 +149,10 @@ pub(crate) use crate::{
             },
         },
         cycle::detect_import_cycle,
-        embed::{EVAL_STACK_SIZE, InteractEngine, build_base, eval_stateless},
+        embed::{
+            EVAL_STACK_SIZE, EvalFailure, InteractEngine, build_base, eval_in_process,
+            eval_stateless,
+        },
         emergency::{
             BackgroundJobsWarningEmergency, ChannelSpamErrorEmergency,
             ChannelSpamWarningEmergency, CpuWarningEmergency, CriticalEmergency,
@@ -275,7 +280,6 @@ pub(crate) mod nu {
     pub(crate) use nu_json::Value as JsonValue;
     pub(crate) use nu_parser::parse;
     pub(crate) use nu_parser::{FlatShape, flatten_block};
-    pub(crate) use nu_config::{CliOverrides, SystemEnv, resolve_paths};
     pub(crate) use nu_plugin_engine::load_plugin_file;
     pub(crate) use nu_protocol::{
         BlockId, Category, CollectionColumns, DeclId, FromValue, Module, PipelineData,

@@ -3,6 +3,11 @@
 One module serves both the eval engines' plugin LOADING and the host's plugin
 ENUMERATION, deliberately, so the two views of the registry cannot drift.
 
+THE MCP OWNS ITS REGISTRY. Its plugins are the ones it ships, built at its own
+engine's version, never the user's shell registry: nu-plugin-protocol loads a
+plugin only where the two versions caret-match, so a system registry kept for
+another nushell is a registry of plugins that fail to load here.
+
 ## struct PluginInfo
 A tuple struct, so it serializes as the positional `[name, version]` pair rather
 than a two-key object. Both slots are inferable from position, and an `Invalid`
@@ -10,6 +15,13 @@ registry item yields a `null` second slot rather than dropping it - the pair
 keeps its arity whatever the plugin reported.
 
 ## fn registry_path
+Per NAMESPACE, in its data dir beside the equip repository: a plugin added from
+interact() is that namespace's state and persists with it. Two binaries serving
+one namespace take turns: nushell's upsert matches by plugin NAME, so each
+registration replaces the other's entry rather than doubling it.
+
+None until the namespace is configured, never a panic: an engine built where no
+host configured one, the validator in a unit test, simply carries no plugins.
 
 ## fn read_registry
 Silent-skip is the discipline here, not laziness: a missing or unreadable
@@ -17,16 +29,36 @@ registry has to leave every non-plugin body fully usable, so a failure at any
 step returns None and the engine simply carries no plugin decls.
 
 ## fn registry_mtime
-MTIME RATHER THAN CONTENT, because it is the one signal that catches BOTH ways
-the registry can move: a `plugin add/rm` driven through interact(), and an
-external edit from the user's own shell. Intercepting the commands would have
-caught only the first, and the second is what a user editing their own registry
-does.
+MTIME RATHER THAN CONTENT, because it is the one signal that catches every way
+the registry can move: the startup registration, a `plugin add/rm` driven
+through interact(), and an edit from outside.
 
 The Executor snapshots it when it builds the stateless base and re-stats it once
 per dispatch. That is affordable only because a stat is roughly
 sub-microsecond - the check is on the hot path, and it fires a rebuild only on an
 actual change.
+
+## fn plugin_dir
+A sibling resolved from the executable, the environment first. The default is
+the OptZip layout, `bin/grammar-mcp` beside `plugin/`; a cargo target dir has no
+`plugin/`, so a dev or test host carries no plugins unless the override names a
+directory. No layout is guessed between the two.
+
+## fn bundled_plugins
+Canonicalized, because the registry records the path `plugin add` resolved, and
+the staleness test compares against it.
+
+## fn ensure_plugin_registry
+Registration spawns each plugin to read its signatures, so it runs only for a
+binary the registry lacks or one built after the registry was written - a new
+install, a rebuilt plugin, or another binary's turn at the namespace.
+
+## fn register_plugins
+NUSHELL'S OWN `plugin add`, evaluated on a stateful base, rather than a second
+registration path through nu-plugin-engine: what lands in the file is exactly
+what the user's `plugin add` would write. Its output goes to the cache dir like
+any eval's, and a failure is reported and survived, since a host without plugins
+still serves every other body.
 
 ## fn load_plugin_decls
 Registers DECLS ONLY - no plugin process spawns here, because nushell spawns

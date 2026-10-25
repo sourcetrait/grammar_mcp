@@ -2686,5 +2686,6 @@ pub(crate) async fn ensure_substrate() -> io::Result<Arc<RigLocks>> {
     if let Err(e) = ensure_default_purview() {
         eprintln!("grammar: default purview not materialized: {e:?}");
     }
+    ensure_plugin_registry();
     Ok(locks)
 }

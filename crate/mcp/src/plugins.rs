@@ -1,26 +1,132 @@
 use crate::*;
 
+/// The environment variable that overrides the bundled plugin directory.
+pub(crate) const PLUGIN_DIR_ENV: &str = "GRAMMAR_MCP_PLUGIN_DIR";
+
+/// The registry's file name in the namespace's data dir.
+const REGISTRY_FILE: &str = "plugin.msgpackz";
+
+/// The file-name prefix nushell requires of a plugin binary.
+const PLUGIN_PREFIX: &str = "nu_plugin_";
+
+/// The cache subdir a registration writes its output to.
+const REGISTRATION_LOG_DIR: &str = "plugins";
+
 /// One plugin as a positional `[name, version]` pair (version may be null).
 #[derive(Debug, ser::Serialize, schema::JsonSchema)]
 pub(crate) struct PluginInfo(pub String, pub Option<String>);
 
+/// The registry this namespace owns, `<data dir>/plugin.msgpackz`, once set.
 pub(crate) fn registry_path() -> Option<PathBuf> {
-    nu::resolve_paths(&nu::SystemEnv, &nu::CliOverrides::default())
-        .ok()
-        .map(|(cfg_dirs, _)| cfg_dirs.config_home)
-        .map(|cfg_home| cfg_home.join("plugin.msgpackz").into())
+    CONFIG.get()?;
+    Some(data_base_dir().join(REGISTRY_FILE))
 }
 
 pub(crate) fn read_registry() -> Option<nu::PluginRegistryFile> {
-    let path = registry_path()?;
-    let mut file = fs::File::open(&path).ok()?;
+    let mut file = fs::File::open(registry_path()?).ok()?;
     nu::PluginRegistryFile::read_from(&mut file, None).ok()
 }
 
 /// Last-modified time of the plugin registry file; None when it is absent.
 pub(crate) fn registry_mtime() -> Option<SystemTime> {
-    let path = registry_path()?;
-    fs::metadata(&path).and_then(|m| m.modified()).ok()
+    fs::metadata(registry_path()?).and_then(|m| m.modified()).ok()
+}
+
+/// The bundled plugin directory: the override, else `<exe dir>/../plugin`.
+pub(crate) fn plugin_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os(PLUGIN_DIR_ENV) {
+        return Some(PathBuf::from(dir));
+    }
+    let exe = std::env::current_exe().ok()?;
+    Some(exe.parent()?.parent()?.join("plugin"))
+}
+
+/// Each `nu_plugin_*` file the plugin directory holds, canonicalized.
+pub(crate) fn bundled_plugins() -> Vec<PathBuf> {
+    let Some(entries) = plugin_dir().and_then(|dir| fs::read_dir(dir).ok()) else {
+        return Vec::new();
+    };
+    let mut found: Vec<PathBuf> = entries
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with(PLUGIN_PREFIX))
+        })
+        .filter_map(|path| path.canonicalize().ok())
+        .collect();
+    found.sort();
+    found
+}
+
+/// Register each bundled plugin the registry lacks or holds older than it.
+pub(crate) fn ensure_plugin_registry() {
+    let Some(registry) = registry_path() else {
+        return;
+    };
+    let contents = read_registry();
+    let registered_at = registry_mtime();
+    let stale: Vec<PathBuf> = bundled_plugins()
+        .into_iter()
+        .filter(|bin| needs_registration(bin, contents.as_ref(), registered_at))
+        .collect();
+    if stale.is_empty() {
+        return;
+    }
+    if let Err(e) = register_plugins(&registry, stale) {
+        eprintln!("grammar: plugins not registered into {}: {e}", registry.display());
+    }
+}
+
+/// Whether `bin` is missing from the registry or built after it was written.
+fn needs_registration(
+    bin: &Path,
+    contents: Option<&nu::PluginRegistryFile>,
+    registered_at: Option<SystemTime>,
+) -> bool {
+    let listed = contents.is_some_and(|c| c.plugins.iter().any(|item| item.filename == bin));
+    let built_at = fs::metadata(bin).and_then(|m| m.modified()).ok();
+    match (listed, registered_at, built_at) {
+        (true, Some(registered), Some(built)) => built > registered,
+        _ => true,
+    }
+}
+
+/// Run nushell's own `plugin add` for each binary, into `registry`.
+fn register_plugins(
+    registry: &Path,
+    bins: Vec<PathBuf>,
+) -> Result<(), String> {
+    let log_dir = cache_base_dir().join(REGISTRATION_LOG_DIR);
+    fs::create_dir_all(&log_dir).map_err(|e| format!("create {}: {e}", log_dir.display()))?;
+    let config = render_nuon(&path_value(registry))?;
+    let mut source = String::new();
+    for bin in &bins {
+        let bin = render_nuon(&path_value(bin))?;
+        source.push_str(&format!("plugin add --plugin-config {config} {bin}\n"));
+    }
+    std::thread::Builder::new()
+        .stack_size(EVAL_STACK_SIZE)
+        .name("nu-plugin-register".to_string())
+        .spawn(move || {
+            let mut engine = build_base(Mode::Stateful);
+            let cancel = Arc::new(AtomicBool::new(false));
+            eval_in_process(&mut engine, &log_dir, &source, cancel, false)
+                .map(|_| ())
+                .map_err(|failure| match failure {
+                    EvalFailure::Reported(reason) | EvalFailure::CircularImport(reason) => reason,
+                })
+        })
+        .map_err(|e| format!("spawn the registration thread: {e}"))?
+        .join()
+        .map_err(|_| "the registration thread panicked".to_string())?
+}
+
+/// A path as a nushell string value, for rendering into a source line.
+fn path_value(path: &Path) -> nu::Value {
+    nu::Value::string(path.to_string_lossy().into_owned(), nu::Span::unknown())
 }
 
 pub(crate) fn load_plugin_decls(engine_state: &mut nu::EngineState) {

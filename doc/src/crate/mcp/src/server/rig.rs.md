@@ -349,3 +349,8 @@ an ignored-but-invalid file still blocks the commit.
 `ensure_default_purview` runs AFTER hydration so the prune inside it judges against the real
 registered set, and it is non-fatal: purview bookkeeping must not stop the host from
 serving.
+
+`ensure_plugin_registry` runs last and is non-fatal for the same reason. It belongs to the
+substrate because every engine base loads the registry it writes, so it must land before
+the first base is built, on every entry point: the server, the one-shot CLI, and the test
+server.
