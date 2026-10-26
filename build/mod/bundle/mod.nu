@@ -77,7 +77,7 @@ export def package_semver [root: path, profile: string]: nothing -> string {
 # nushell made, `plugin/grammar/` the workspace's own, and `equip/` the
 # builtins' sources.
 export def layout [root: path, profile: string, nu_root: path]: nothing -> path {
-    let built: path = ($root | path join 'target' $profile)
+    let built: path = (cargo_metadata $root | get target_directory | path join $profile)
     let tree: path = ($root | path join 'target' 'pkg' $profile)
     if ($tree | path exists) {
         rm --recursive $tree

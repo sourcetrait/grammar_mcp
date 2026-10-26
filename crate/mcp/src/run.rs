@@ -1,24 +1,26 @@
 use crate::*;
 
-fn set_cli_env_path(k: &'static str, v: &Option<PathBuf>) {
-    let Some(v) = v else { return };
-    let v = expand_path(v).expect("Valid ENV value");
+fn set_cli_env_path(k: &'static str, v: &Option<PathBuf>) -> Result<(), String> {
+    let Some(v) = v else { return Ok(()) };
+    let v = expand_path(v)?;
     unsafe { std::env::set_var(k, v) }
+    Ok(())
 }
 
-pub(crate) fn set_cli_env(cli: &Cli) {
-    let Some(env) = &cli.env else { return };
+pub(crate) fn set_cli_env(cli: &Cli) -> Result<(), String> {
+    let Some(env) = &cli.env else { return Ok(()) };
 
-    set_cli_env_path("XDG_CACHE_HOME", &env.xdg_cache_home);
-    set_cli_env_path("XDG_CONFIG_HOME", &env.xdg_config_home);
-    set_cli_env_path("XDG_DATA_HOME", &env.xdg_data_home);
-    set_cli_env_path("XDG_STATE_HOME", &env.xdg_state_home);
+    set_cli_env_path("XDG_CACHE_HOME", &env.xdg_cache_home)?;
+    set_cli_env_path("XDG_CONFIG_HOME", &env.xdg_config_home)?;
+    set_cli_env_path("XDG_DATA_HOME", &env.xdg_data_home)?;
+    set_cli_env_path("XDG_STATE_HOME", &env.xdg_state_home)?;
 
     if let Some(vars) = &env.vars {
         for (var,val) in vars {
             unsafe { std::env::set_var(var, val); }
         }
     }
+    Ok(())
 }
 
 pub fn run_main() -> process::ExitCode {
@@ -27,20 +29,41 @@ pub fn run_main() -> process::ExitCode {
 }
 
 pub fn run_with(cli: Cli) -> process::ExitCode {
-    set_cli_env(&cli);
+    if let Err(reason) = set_cli_env(&cli) {
+        eprintln!("{reason}");
+        return process::ExitCode::from(2);
+    }
     run(cli)
 }
 
 fn run(cli: Cli) -> process::ExitCode {
-    let runtime = tokio::runtime::Builder::new_multi_thread()
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .thread_stack_size(EVAL_STACK_SIZE)
         .build()
-        .expect("tokio runtime");
-    runtime.block_on(async { tk::spawn(serve_or_oneshot(cli)).await.expect("host task") })
+    {
+        Ok(runtime) => runtime,
+        Err(e) => {
+            eprintln!("grammar: the tokio runtime: {e}");
+            return process::ExitCode::FAILURE;
+        }
+    };
+    runtime.block_on(async {
+        match tk::spawn(serve_or_oneshot(cli)).await {
+            Ok(code) => code,
+            Err(e) => {
+                eprintln!("grammar: the host task: {e}");
+                process::ExitCode::FAILURE
+            }
+        }
+    })
 }
 
 async fn serve_or_oneshot(cli: Cli) -> process::ExitCode {
+    if let Err(reason) = check_base_dirs() {
+        eprintln!("{reason}");
+        return process::ExitCode::from(2);
+    }
     let (config, command) = match resolve_config(cli) {
         Ok(resolved) => resolved,
         Err(reason) => {
@@ -54,10 +77,13 @@ async fn serve_or_oneshot(cli: Cli) -> process::ExitCode {
         return process::ExitCode::from(2);
     }
     match command {
-        None => {
-            run_server().await;
-            process::ExitCode::SUCCESS
-        }
+        None => match run_server().await {
+            Ok(()) => process::ExitCode::SUCCESS,
+            Err(reason) => {
+                eprintln!("grammar: {reason}");
+                process::ExitCode::FAILURE
+            }
+        },
         Some(CliCmd::Cli { tool }) => run_oneshot(tool).await,
     }
 }

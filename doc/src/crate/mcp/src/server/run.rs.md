@@ -21,15 +21,16 @@ eval children and its background jobs onto the box unreaped, because the stdio p
 only ever learns about a CLEAN client disconnect. None of it reaches SIGKILL - that is
 what the host lock is for.
 
-The REMOTE ACCEPTOR listener is spawned last before serving, and only when
-`[remote].listen` is configured, so a host that accepts inbound remote links has one
-bound before it answers MCP traffic. Like the host lock it is non-fatal: a bind or
-cert failure logs and the host serves on, since a broken remote listener must never
-sink the MCP (`spawn_remote_listener_from_config`, server/remote/link.rs).
+NOTHING FROM OUTSIDE PANICS IT. The substrate, the stdio handshake, and the service's
+join each come back as an `Err` naming what failed, which `serve_or_oneshot` prints and
+exits 1 on. rmcp's `serve` refuses a first message it cannot take, a notification
+before any request, and that is the client's error to report, never a host panic.
+Claude Code's `server/discover` probe is no such message: rmcp answers it and stays
+open for either protocol era.
 
-The final two lines are the clean-shutdown path: the client closed stdin, so the
-channel is told we are going away and every in-flight eval is cancelled and reaped, so
-a disconnect mid-eval leaks no process tree.
+The shutdown path runs once the service ends, whatever ended it: the channel is told
+we are going away and every in-flight eval is cancelled and reaped, so a disconnect
+mid-eval leaks no process tree.
 
 ## const CLOSE_FLUSH_GRACE
 Bounded because a peer that has already gone must never hold the shutdown open.

@@ -26,3 +26,7 @@ tellable-apart in the client's own listing.
 `instructions` renders the cache-path surface LIVE from the resolved config rather than as a
 static string, so what it names is what this host actually uses. The agent-facing operational
 craft beyond those paths lives in the `/nu` skill, not here.
+
+The same config answers `server/discover` in the 2026-07-28 era, rmcp building the
+DiscoverResult from it, so a client that never sends `initialize` still gets the title and
+the instructions.

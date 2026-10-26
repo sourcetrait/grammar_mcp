@@ -428,7 +428,7 @@ pub(crate) fn default_id() -> String {
 }
 
 pub(crate) fn default_work_dir(id: &str) -> PathBuf {
-    BASE_DIRS.home_dir().join("proj").join("equip").join(id)
+    base_dirs().home_dir().join("proj").join("equip").join(id)
 }
 
 /// Expand `~` and `$VAR` references so config files stay portable.

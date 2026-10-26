@@ -1,9 +1,12 @@
 use crate::*;
 
-pub(crate) async fn run_server() {
+/// Serve MCP over stdio until the client leaves; the error says why it could not.
+pub(crate) async fn run_server() -> Result<(), String> {
     install_child_subreaper();
     ensure_cert_profile();
-    let rig_locks = ensure_substrate().await.expect("ensure_substrate");
+    let rig_locks = ensure_substrate()
+        .await
+        .map_err(|e| format!("the equip substrate: {e}"))?;
     let nonce_gen = Arc::new(datum::NonceGenerator::new());
     let lint_engine = Arc::new(LintEngine::new());
     let server = NuSh::new(nonce_gen, rig_locks, lint_engine);
@@ -27,10 +30,16 @@ pub(crate) async fn run_server() {
     let in_flight = server.in_flight.clone();
     let env_jobs = server.env_jobs.clone();
     spawn_signal_sweep(in_flight.clone(), env_jobs.clone());
-    let service = server.serve(mcp::stdio()).await.expect("serve stdio");
-    service.waiting().await.expect("service waiting");
+    let service = server
+        .serve(mcp::stdio())
+        .await
+        .map_err(|e| format!("serve stdio: {e}"))?;
+    let served = service.waiting().await;
     close_channel_for_shutdown().await;
     teardown_all_in_flight(&in_flight, &env_jobs).await;
+    served
+        .map(|_| ())
+        .map_err(|e| format!("the stdio service: {e}"))
 }
 
 /// RFC 6455 "going away" - a server shutting down, which is exactly this.

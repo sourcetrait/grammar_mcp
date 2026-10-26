@@ -67,7 +67,7 @@ impl NuSh {
 
 #[mcp::tool_handler(router = self.tool_router)]
 impl mcp::ServerHandler for NuSh {
-    fn get_info(&self) -> mcp::ServerInfo {
+    fn get_info(&self) -> mcp::ServerConfig {
         let id = &config().id;
         let namespace = &config().namespace;
         let title = if namespace == "default" {
@@ -75,24 +75,21 @@ impl mcp::ServerHandler for NuSh {
         } else {
             format!("grammar ({namespace})")
         };
-        let mut info = mcp::ServerInfo::default();
-        info.capabilities = mcp::ServerCapabilities::builder().enable_tools().build();
-        info.server_info = mcp::Implementation::new(
-            consts::GRAMMAR,
-            env!("CARGO_PKG_VERSION"),
-        )
-        .with_title(title);
-        info.instructions = Some(format!(
-            "Evaluation artifacts are cached at \
-             $XDG_CACHE_HOME/grammar/mcp/{id}/{namespace}/{{runs,interacts,calls}}/<nonce>/{{stdout,stderr}}; \
-             a run's cached body co-locates at \
-             $XDG_CACHE_HOME/grammar/mcp/{id}/{namespace}/runs/<nonce>/body.nuon \
-             (the rerun(nonce) handle). \
-             Installed equips live in a signed git repo at \
-             $XDG_DATA_HOME/grammar/mcp/{id}/{namespace}/equip/; signing keypair at \
-             $XDG_DATA_HOME/grammar/mcp/{id}/{namespace}/keypair/. \
-             This server's namespace: id `{id}`, namespace `{namespace}`.",
-        ));
-        info
+        mcp::ServerConfig::new(mcp::ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(
+                mcp::Implementation::new(consts::GRAMMAR, env!("CARGO_PKG_VERSION"))
+                    .with_title(title),
+            )
+            .with_instructions(format!(
+                "Evaluation artifacts are cached at \
+                 $XDG_CACHE_HOME/grammar/mcp/{id}/{namespace}/{{runs,interacts,calls}}/<nonce>/{{stdout,stderr}}; \
+                 a run's cached body co-locates at \
+                 $XDG_CACHE_HOME/grammar/mcp/{id}/{namespace}/runs/<nonce>/body.nuon \
+                 (the rerun(nonce) handle). \
+                 Installed equips live in a signed git repo at \
+                 $XDG_DATA_HOME/grammar/mcp/{id}/{namespace}/equip/; signing keypair at \
+                 $XDG_DATA_HOME/grammar/mcp/{id}/{namespace}/keypair/. \
+                 This server's namespace: id `{id}`, namespace `{namespace}`.",
+            ))
     }
 }

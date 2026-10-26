@@ -9,8 +9,8 @@ implementation to keep in step.
 DENY DOES NOT APPLY on this path. It gates agent REGISTRATION at router assembly, and
 this bypasses the router entirely, so the operator always has the whole tool set.
 
-The exit codes are 0 for success, 1 for an error envelope or an rmcp-boundary error,
-and 2 for unparseable operator input. The `error` wrapper on the envelope is the only
+The exit codes are 0 for success, 1 for an error envelope, an rmcp-boundary error, or
+an equip substrate that cannot be built, and 2 for unparseable operator input. The `error` wrapper on the envelope is the only
 discriminator needed for the first two.
 
 Three caveats are by design rather than gaps: `interact` is single-shot because the

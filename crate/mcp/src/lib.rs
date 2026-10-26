@@ -140,7 +140,8 @@ pub(crate) use crate::{
     server::{
         blocked::shadow_host_fatal_decls,
         cache::{
-            BASE_DIRS, BODY_FILE, CacheKind, cache_base_dir, cache_dir, call_log_dir,
+            BODY_FILE, CacheKind, base_dirs, cache_base_dir, cache_dir, call_log_dir,
+            check_base_dirs,
             data_base_dir, run_body_file,
         },
         cert::ensure_cert_profile,
@@ -331,7 +332,7 @@ pub(crate) mod mcp {
         handler::server::router::tool::ToolRouter,
         handler::server::tool::schema_for_type,
         handler::server::wrapper::Parameters,
-        model::{CallToolResult, Implementation, JsonObject, ServerCapabilities, ServerInfo},
+        model::{CallToolResult, Implementation, JsonObject, ServerCapabilities, ServerConfig},
         tool, tool_handler, tool_router,
         transport::stdio,
     };

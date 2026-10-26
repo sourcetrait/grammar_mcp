@@ -8,7 +8,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.0-3"
+version = "0.0.0-4"
 edition = "2024"
 authors = ["SourceTrait <development@sourcetrait.com"]
 license = "AGPL-3.0-or-later"
@@ -27,7 +27,7 @@ ignore = { version = "0.4" }
 indoc = { version = "2" }
 liquid = { version = "0.26" }
 nix = { version = "0.31", features = ["fs", "process", "signal", "user"] }
-rmcp = { version = "1.7", features = ["server", "transport-io", "schemars", "macros"] }
+rmcp = { version = "3.7", features = ["server", "transport-io", "schemars", "macros"] }
 rustls = { version = "0.23", default-features = false, features = ["logging", "ring", "std", "tls12"] }
 schemars = { version = "1" }
 serde = { version = "1", features = ["derive"] }

@@ -9,6 +9,10 @@ cannot drift apart from the enum that selects them.
 precisely what lets every in-process test isolate its state under a per-binary
 tempdir - the harness sets those variables before the first access here.
 
+It is `None` where no home directory can be found. `serve_or_oneshot` runs
+`check_base_dirs` before anything reads it and exits 2 without one, so
+`base_dirs`, the one reader, finds it set.
+
 ## fn cache_base_dir
 ID FIRST, then namespace, so an agent's whole state across every namespace is ONE
 subtree to wipe or back up. The vendor and app segments above that keep the tree

@@ -32,6 +32,11 @@ protocol. A target dir under `target/nu/` keeps their builds incremental,
 and cargo skips a crate outright when that version is already installed.
 
 ## def layout
+The binaries come from the target directory cargo built into, `cargo
+metadata`'s `target_directory`, which honors `CARGO_TARGET_DIR` and cargo's
+config. A `target/` assumed beside the manifest would hand the package
+whatever an earlier build left there whenever the environment names another.
+
 The tree is emptied and rebuilt rather than updated, so a file dropped from
 the release cannot linger in it. `plugin/` keeps its plugins apart by kind:
 `core/` nushell's, `grammar/` the workspace's own; `rig/`, for custom

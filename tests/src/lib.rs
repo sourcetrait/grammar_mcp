@@ -127,7 +127,25 @@ impl Host {
         Self::spawn_core(scratch, args, &[], Some(cwd), None)
     }
 
+    /// A host with its stderr in `stderr_log` and nothing sent: the test owns
+    /// the first message, as a client probing before `initialize` does.
+    pub fn spawn_uninitialized(scratch: &Path, stderr_log: &Path) -> Self {
+        Self::start(scratch, &[], &[], None, Some(stderr_log))
+    }
+
     fn spawn_core(
+        scratch: &Path,
+        args: &[&str],
+        envs: &[(&str, &str)],
+        cwd: Option<&Path>,
+        stderr_log: Option<&Path>,
+    ) -> Self {
+        let mut host = Self::start(scratch, args, envs, cwd, stderr_log);
+        host.initialize();
+        host
+    }
+
+    fn start(
         scratch: &Path,
         args: &[&str],
         envs: &[(&str, &str)],
@@ -160,7 +178,7 @@ impl Host {
         let mut child = cmd.spawn().expect("spawn grammar-mcp");
         let stdin = child.stdin.take().expect("host stdin");
         let stdout = BufReader::new(child.stdout.take().expect("host stdout"));
-        let mut host = Self {
+        Self {
             child,
             stdin,
             stdout,
@@ -168,9 +186,7 @@ impl Host {
             data_home,
             cache_home,
             pending: HashMap::new(),
-        };
-        host.initialize();
-        host
+        }
     }
 
     /// The spawned host's pid - for tests that inspect its process tree from /proc
@@ -255,6 +271,40 @@ impl Host {
         }
     }
 
+    /// `try_read_id` for any JSON-RPC id, a string one included, as Claude
+    /// Code's `server-discover-probe-1`.
+    pub fn try_read_value_id(
+        &mut self,
+        expected: &Value,
+    ) -> Option<Value> {
+        if let Some(id) = expected.as_u64() {
+            return self.try_read_id(id);
+        }
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            if Instant::now() >= deadline {
+                return None;
+            }
+            let mut line = String::new();
+            match self.stdout.read_line(&mut line) {
+                Ok(0) | Err(_) => return None,
+                Ok(_) => {}
+            }
+            let Ok(msg) = serde_json::from_str::<Value>(line.trim()) else {
+                continue;
+            };
+            match msg.get("id") {
+                Some(id) if id == expected => return Some(msg),
+                Some(id) => {
+                    if let Some(id) = id.as_u64() {
+                        self.pending.insert(id, msg);
+                    }
+                }
+                None => {}
+            }
+        }
+    }
+
     /// Wait for the child to exit on its own, returning its status; None on timeout.
     ///
     /// Unlike `signal_and_wait` this sends nothing - it observes a host that is
@@ -320,7 +370,8 @@ impl Host {
         }
     }
 
-    fn initialize(&mut self) {
+    /// The legacy handshake: `initialize`, then `notifications/initialized`.
+    pub fn initialize(&mut self) {
         let id = self.next_id();
         self.send(&json!({
             "jsonrpc": "2.0",
