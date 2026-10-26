@@ -88,7 +88,8 @@ slot-map per id coordinates the two connections: the Deliver sets model+event+th
 expected dest set, each file's last chunk marks a dest done, try_finalize fires ONCE
 (map remove) when the Deliver is in AND every dest has landed -> relay via emit
 (verification-gated). The receiver sends NOTHING back - its Sent already fired from
-the sender's write, and a relay failure is logged locally, not surfaced remotely. The
+the sender's write, and a refused relay (an unverified Channel among the causes) is
+logged on the receiver alone, never reported to the sender as Unsent. The
 slot-map is what makes the files EXIST on disk before the agent observes the emission
 (understood/17). land_file_chunk appends under <inbox>/<peer_nom>/<id>/<dest> - the
 same inbox the Channel's own attachments use, so a relayed packet's `attached` ref

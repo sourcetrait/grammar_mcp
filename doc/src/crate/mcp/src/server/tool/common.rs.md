@@ -53,6 +53,11 @@ which is assembled deny-filtered at construction.
 The process-wide handle, NOT a fresh one. An eval reaches the channel through the same
 global, so a per-NuSh handle would diverge from what bodies actually emit on.
 
+### field remote_links
+A clone of link.rs's process-wide registry, so the tools and the grimm sends see one
+map. It is keyed by alias in both roles: a listener registers its link under the alias
+it opened, as a connector does.
+
 ### field channel_open_lock
 ASYNC because it is held across an await; the channel's own state lock is a std Mutex
 precisely because the emit path must never need a runtime handle. The two locks differ in

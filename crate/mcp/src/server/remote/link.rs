@@ -804,10 +804,7 @@ fn land_file_chunk(
     Ok(last)
 }
 
-/// Relay the packet for an inbound delivery onto the local Channel - through
-/// `emit`, so it reaches only a verified peer (a remote link comes up after the
-/// agent verifies its Channel, so this is Verified in the normal case; if not,
-/// the refusal becomes the receipt the sender reports as Unsent).
+/// Relay an inbound delivery onto the local Channel through its verified gate.
 fn relay_to_channel(
     ctx: &RecvContext,
     id: &str,

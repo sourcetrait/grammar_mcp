@@ -94,8 +94,7 @@ pub struct NuSh {
     pub(crate) channel_open_lock: Arc<tk::AsyncMutex<()>>,
     /// Which purview ids this host has in view; SESSION-resident.
     pub(crate) current_purview: Arc<CurrentPurview>,
-    /// Open mTLS links to remote grammar hosts - a clone of the process-global
-    /// registry, keyed by alias (initiator) or peer datum::Nom (accepted).
+    /// The process-wide registry of established remote links, keyed by alias.
     pub(crate) remote_links: Arc<std::sync::Mutex<HashMap<String, RemoteLinkEntry>>>,
     pub(crate) tool_router: mcp::ToolRouter<NuSh>,
 }

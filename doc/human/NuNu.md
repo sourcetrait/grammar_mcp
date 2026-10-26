@@ -7,7 +7,8 @@ human rein file, as the literal tool schema documentation.
 
 # MCP
 
-Grammar MCP tool calls primarily use parameters and results in the text form of:
+Grammar MCP tool calls primarily use parameters and results in the JSON-escaped
+text form of:
 - Nu
 - NUON
 - Namepath (`<author>/<name>:<module/path>:<function>`)
@@ -41,6 +42,7 @@ record<
 # TOOL: grammar/nu
   definition: string
   data: string
+	timeout?: string (nu: duration)
 
 Executes the provided Nu language definition against the NUON `$data` provided.
 
