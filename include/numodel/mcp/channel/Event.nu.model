@@ -1,24 +1,10 @@
-# Channel event envelope
+# Channel packet
 @namepath mcp/channel/Event
 @version 0.0.0-1
 record<
-  id: string,  # base62, generated on send
-  from: string,  # namepath, sender
-  model: string,  # namepath, for the numodel of the msg data. arbitrary or defined
-  msg: oneof<  # the msg either spilled to inbox or inlined
-        record<  # spilled to inbox; msg.nuon
-            nuon: path,
-            size: filesize,
-        >,
-        record<  # actual data inline
-            data: oneof<record<>, table<>>,  # there always need to be some form of data
-            attached: oneof<
-                nothing,  # no attachments provided
-                table<  # attachments
-                    file: path,  # relative to the inbox
-                    size: filesize,
-                >
-            >,  # path relative to msg's inbox/attached/<path>
-        >,
-    >
+  id: string,  # base62, minted by the host per packet
+  from: string,  # stamped by the host: thread/<nonce>, mcp, or mcp/remote/<nom>
+  model: string,  # namepath of the event's shape; mcp/ is the host's alone
+  event: oneof<record<>, table<>>,  # the summary, or {spilled_event_path, event_bytes}
+  attached: string,  # present only with files: <id>.nuon, or <sender nom>/<send id>
 >

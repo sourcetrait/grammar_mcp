@@ -24,20 +24,15 @@ impl GrimmChannelSend {
                 result_fn: || nu::Value::record(
                     nu::record! {
                         "id" => nu::Value::string("987654321X", SPAN),
-                        "from" => nu::Value::string("mcp/nu/Execute", SPAN),
-                        "msg" => nu::Value::record(
+                        "from" => nu::Value::string("thread/0123456789A", SPAN),
+                        "model" => nu::Value::string("my/adhoc/Thing", SPAN),
+                        "event" => nu::Value::record(
                             nu::record! {
-                                "data" => nu::Value::record(
-                                    nu::record! {
-                                        "foo" => nu::Value::string("bar", SPAN),
-                                        "num" => nu::Value::int(3, SPAN),
-                                    },
-                                    SPAN
-                                ),
-                                "attached" => nu::Value::nothing(SPAN),
+                                "foo" => nu::Value::string("bar", SPAN),
+                                "num" => nu::Value::int(3, SPAN),
                             },
                             SPAN
-                        )
+                        ),
                     },
                     SPAN
                 ),
