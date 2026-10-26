@@ -4,7 +4,6 @@ description: Grammar MCP tools - run, call, schemas, lint, shm, channels
 ---
 # Grammar MCP
 Nu bodies evaluated by the MCP. The Nu language itself is in the nu skill.
-A body runs as `nu --mcp -n` would, std included; `print` goes to the call's stderr log.
 
 ## Tools
 - `run()`: evaluate a typed nu body on a stateless thread.
