@@ -83,10 +83,12 @@ notification can never disagree about what a condition reported. That sharing is
 what made the `from` collision above easy to get wrong.
 
 ## fn Emergency::to_nuon_line
-Every field is a flat scalar - int, float, or a string with no embedded newlines - so
-the record never spans lines. That is how this file sidesteps the newline hazard the
-`grimm dbg` lane has to escape for: an API taking arbitrary agent data cannot make the
-same promise.
+Every field is a flat scalar, but a string field can still carry a newline - a spam
+error's `action` holds an error's message - and `to nuon` writes a newline inside a
+string raw. The render therefore goes through `escape_line`, as a packet's does, so
+every record of `emergency.nuonl` stays on one line; the escapes read back as the
+original characters, a compact render's raw newlines sitting only inside quoted
+strings.
 
 ## fn emergency_log_path
 `mcp_nom` namespaces it per PROCESS because the cache root is only

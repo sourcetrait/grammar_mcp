@@ -229,6 +229,7 @@ impl Emergency {
             &nu::Value::record(r, span),
             nu::ToNuonConfig::default(),
         )
+        .map(|line| escape_line(&line))
         .map_err(|e| e.to_string())
     }
 }
