@@ -62,26 +62,30 @@ impl NuSh {
                 ));
             }
         }
-        let mut rows = match load_purviews() {
-            Ok(rows) => rows.unwrap_or_default(),
-            Err(error) => return Ok(error_to_call_result(error, None)),
+        let rows = {
+            let _repo = equip_repo_lock();
+            let mut rows = match load_purviews() {
+                Ok(rows) => rows.unwrap_or_default(),
+                Err(error) => return Ok(error_to_call_result(error, None)),
+            };
+            rows.retain(|row| row.id != p.purview);
+            let namepaths = if p.namepaths.is_empty() && p.purview == PURVIEW_DEFAULT {
+                vec![PURVIEW_ALL.to_string()]
+            } else {
+                p.namepaths.clone()
+            };
+            if !namepaths.is_empty() {
+                rows.push(PurviewRow {
+                    id: p.purview.clone(),
+                    namepath_patterns: namepaths,
+                });
+            }
+            prune_dangling(&mut rows);
+            if let Err(error) = save_purviews(&rows) {
+                return Ok(error_to_call_result(error, None));
+            }
+            rows
         };
-        rows.retain(|row| row.id != p.purview);
-        let namepaths = if p.namepaths.is_empty() && p.purview == PURVIEW_DEFAULT {
-            vec![PURVIEW_ALL.to_string()]
-        } else {
-            p.namepaths.clone()
-        };
-        if !namepaths.is_empty() {
-            rows.push(PurviewRow {
-                id: p.purview.clone(),
-                namepath_patterns: namepaths,
-            });
-        }
-        prune_dangling(&mut rows);
-        if let Err(error) = save_purviews(&rows) {
-            return Ok(error_to_call_result(error, None));
-        }
         self.current_purview.retain_known(Some(&rows));
         let values = rows
             .iter()

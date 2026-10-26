@@ -15,3 +15,8 @@ same state startup would put it back in.
 
 A DELETION MUST NOT leave the session pointing at something gone, which is what
 `retain_known` is for immediately after the save.
+
+The load, change, and save ride the equip repository's lock, as an install's and an
+uninstall's purview writes do, so two writers never interleave on the table and lose
+one's change. The guard is scoped to that block and dropped before the signature
+render awaits.
