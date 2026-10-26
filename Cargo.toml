@@ -42,7 +42,6 @@ tokio-tungstenite = { version = "0.30", default-features = false, features = ["h
 tokio-util = { version = "0.7", features = ["codec"] }
 toml = { version = "0.8" }
 walkdir = { version = "2" }
-xxhash-rust = { version = "0.8", features = ["xxh3"] }
 zstd = { version = "0.13" }
 
 nu-cmd-extra = { version = "0.116.1" }
