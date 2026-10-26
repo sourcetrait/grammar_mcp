@@ -19,6 +19,13 @@ Composes the per-call dir but deliberately does NOT create it. The dispatch
 prologue owns `create_dir_all` and passes the dir into the eval, so there is one
 place that decides a call's artifacts exist.
 
+## fn call_log_dir
+The one place a nonce becomes a call's log dir at run time, for the host decls
+that act for the running call. The nonce comes from `$env.NONCE`, which a body
+can rewrite, so the base62 check lives HERE rather than at the tool boundary.
+All three kinds are searched because the nonce alone does not say which surface
+made the call, and a nonce names one call across all of them.
+
 ## fn run_body_file
 Co-locating the body with that call's stdout and stderr means ONE prune of
 `runs/<nonce>/` reclaims logs and body together - there is no separate closure id

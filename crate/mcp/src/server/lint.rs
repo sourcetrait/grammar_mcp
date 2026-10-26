@@ -24,6 +24,9 @@ const REGEX_RECEIVERS: &[&str] = &[
 const PARSE_PATH_RECEIVERS: &[&str] = &["use", "overlay use", "source", "source-env"];
 
 
+/// The name a linted body is parsed under.
+const LINT_FILE: &str = "body.nu";
+
 const MSG_HARDCODED_VARIABLE: &str = "hardcoded path literal; lift it to args";
 const MSG_DENIED_COMMAND: &str = "denied external command; use a nushell builtin";
 
@@ -32,7 +35,8 @@ pub(crate) fn lint_body(parse_engine: &ParseEngine, args_type: &str, body: &str)
     let (wrapped, prefix_len) = wrap_as_def_body(body, args_type);
     let engine_state = parse_engine.engine_state();
     let mut ws = nu::StateWorkingSet::new(engine_state);
-    let outer = nu::parse(&mut ws, Some("body.nu"), wrapped.as_bytes(), false);
+    let outer = nu::parse(&mut ws, Some(LINT_FILE), wrapped.as_bytes(), false);
+    let body_start = file_start(&ws, LINT_FILE) + prefix_len;
 
     let body_block_id = match find_def_body_id(&outer, &ws) {
         Some(id) => id,
@@ -41,7 +45,7 @@ pub(crate) fn lint_body(parse_engine: &ParseEngine, args_type: &str, body: &str)
 
     let mut diagnostics = Vec::new();
     let body_block = ws.get_block(body_block_id);
-    let _ = walk_block(body_block, &ws, body, prefix_len, &mut diagnostics);
+    let _ = walk_block(body_block, &ws, body, body_start, &mut diagnostics);
     diagnostics
 }
 
@@ -84,12 +88,12 @@ fn walk_block(
     block: &nu::Block,
     ws: &nu::StateWorkingSet,
     body: &str,
-    prefix_len: usize,
+    body_start: usize,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> ControlFlow<()> {
     for p in &block.pipelines {
         for elem in &p.elements {
-            walk_expr(&elem.expr, ws, body, prefix_len, diagnostics)?;
+            walk_expr(&elem.expr, ws, body, body_start, diagnostics)?;
         }
     }
     ControlFlow::Continue(())
@@ -99,19 +103,19 @@ fn walk_expr(
     e: &nu::Expression,
     ws: &nu::StateWorkingSet,
     body: &str,
-    prefix_len: usize,
+    body_start: usize,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> ControlFlow<()> {
     match &e.expr {
         nu::Expr::Directory(s, _) | nu::Expr::Filepath(s, _) | nu::Expr::GlobPattern(s, _) => {
-            check_path(s, e.span.start, body, prefix_len, diagnostics)?;
+            check_path(s, e.span.start, body, body_start, diagnostics)?;
         }
         nu::Expr::String(s) | nu::Expr::RawString(s) => {
-            check_path(s, e.span.start, body, prefix_len, diagnostics)?;
+            check_path(s, e.span.start, body, body_start, diagnostics)?;
         }
         nu::Expr::StringInterpolation(parts) => {
             for part in parts {
-                walk_expr(part, ws, body, prefix_len, diagnostics)?;
+                walk_expr(part, ws, body, body_start, diagnostics)?;
             }
         }
         nu::Expr::Call(call) => {
@@ -138,34 +142,34 @@ fn walk_expr(
                         if skip_this {
                             continue;
                         }
-                        walk_expr(ae, ws, body, prefix_len, diagnostics)?;
+                        walk_expr(ae, ws, body, body_start, diagnostics)?;
                     }
                     nu::Argument::Named((_n, _s, value)) => {
                         if let Some(ae) = value {
-                            walk_expr(ae, ws, body, prefix_len, diagnostics)?;
+                            walk_expr(ae, ws, body, body_start, diagnostics)?;
                         }
                     }
                     nu::Argument::Unknown(ae) | nu::Argument::Spread(ae) => {
-                        walk_expr(ae, ws, body, prefix_len, diagnostics)?;
+                        walk_expr(ae, ws, body, body_start, diagnostics)?;
                     }
                 }
             }
         }
         nu::Expr::ExternalCall(head, ext_args) => {
-            check_external_head(head, body, prefix_len, diagnostics)?;
-            walk_expr(head, ws, body, prefix_len, diagnostics)?;
+            check_external_head(head, body, body_start, diagnostics)?;
+            walk_expr(head, ws, body, body_start, diagnostics)?;
             for arg in ext_args.iter() {
                 let inner = match arg {
                     nu::ExternalArgument::Regular(e) | nu::ExternalArgument::Spread(e) => e,
                 };
-                walk_expr(inner, ws, body, prefix_len, diagnostics)?;
+                walk_expr(inner, ws, body, body_start, diagnostics)?;
             }
         }
         nu::Expr::FullCellPath(fcp) => {
-            walk_expr(&fcp.head, ws, body, prefix_len, diagnostics)?;
+            walk_expr(&fcp.head, ws, body, body_start, diagnostics)?;
         }
         nu::Expr::BinaryOp(lhs, op, rhs) => {
-            walk_expr(lhs, ws, body, prefix_len, diagnostics)?;
+            walk_expr(lhs, ws, body, body_start, diagnostics)?;
             let is_regex_op = if let nu::Expr::Operator(operator) = &op.expr {
                 matches!(
                     operator,
@@ -176,7 +180,7 @@ fn walk_expr(
                 false
             };
             if !is_regex_op {
-                walk_expr(rhs, ws, body, prefix_len, diagnostics)?;
+                walk_expr(rhs, ws, body, body_start, diagnostics)?;
             }
         }
         nu::Expr::Block(id)
@@ -184,30 +188,30 @@ fn walk_expr(
         | nu::Expr::Subexpression(id)
         | nu::Expr::RowCondition(id) => {
             let b = ws.get_block(*id);
-            walk_block(b, ws, body, prefix_len, diagnostics)?;
+            walk_block(b, ws, body, body_start, diagnostics)?;
         }
         nu::Expr::UnaryNot(inner) => {
-            walk_expr(inner, ws, body, prefix_len, diagnostics)?;
+            walk_expr(inner, ws, body, body_start, diagnostics)?;
         }
         nu::Expr::Collect(_, inner) => {
-            walk_expr(inner, ws, body, prefix_len, diagnostics)?;
+            walk_expr(inner, ws, body, body_start, diagnostics)?;
         }
         nu::Expr::List(items) => {
             for item in items {
                 match item {
                     nu::ListItem::Item(ae) | nu::ListItem::Spread(_, ae) => {
-                        walk_expr(ae, ws, body, prefix_len, diagnostics)?;
+                        walk_expr(ae, ws, body, body_start, diagnostics)?;
                     }
                 }
             }
         }
         nu::Expr::Table(t) => {
             for col in t.columns.iter() {
-                walk_expr(col, ws, body, prefix_len, diagnostics)?;
+                walk_expr(col, ws, body, body_start, diagnostics)?;
             }
             for row in t.rows.iter() {
                 for cell in row.iter() {
-                    walk_expr(cell, ws, body, prefix_len, diagnostics)?;
+                    walk_expr(cell, ws, body, body_start, diagnostics)?;
                 }
             }
         }
@@ -215,45 +219,45 @@ fn walk_expr(
             for item in items {
                 match item {
                     nu::RecordItem::Pair(k, v) => {
-                        walk_expr(k, ws, body, prefix_len, diagnostics)?;
-                        walk_expr(v, ws, body, prefix_len, diagnostics)?;
+                        walk_expr(k, ws, body, body_start, diagnostics)?;
+                        walk_expr(v, ws, body, body_start, diagnostics)?;
                     }
                     nu::RecordItem::Spread(_, e) => {
-                        walk_expr(e, ws, body, prefix_len, diagnostics)?;
+                        walk_expr(e, ws, body, body_start, diagnostics)?;
                     }
                 }
             }
         }
         nu::Expr::Range(r) => {
             if let Some(e) = &r.from {
-                walk_expr(e, ws, body, prefix_len, diagnostics)?;
+                walk_expr(e, ws, body, body_start, diagnostics)?;
             }
             if let Some(e) = &r.next {
-                walk_expr(e, ws, body, prefix_len, diagnostics)?;
+                walk_expr(e, ws, body, body_start, diagnostics)?;
             }
             if let Some(e) = &r.to {
-                walk_expr(e, ws, body, prefix_len, diagnostics)?;
+                walk_expr(e, ws, body, body_start, diagnostics)?;
             }
         }
         nu::Expr::MatchBlock(arms) => {
             for (pat, arm_body) in arms {
-                walk_pattern(&pat.pattern, ws, body, prefix_len, diagnostics)?;
-                walk_expr(arm_body, ws, body, prefix_len, diagnostics)?;
+                walk_pattern(&pat.pattern, ws, body, body_start, diagnostics)?;
+                walk_expr(arm_body, ws, body, body_start, diagnostics)?;
             }
         }
         nu::Expr::AttributeBlock(ab) => {
             for attr in &ab.attributes {
-                walk_expr(&attr.expr, ws, body, prefix_len, diagnostics)?;
+                walk_expr(&attr.expr, ws, body, body_start, diagnostics)?;
             }
-            walk_expr(&ab.item, ws, body, prefix_len, diagnostics)?;
+            walk_expr(&ab.item, ws, body, body_start, diagnostics)?;
         }
         nu::Expr::GlobInterpolation(parts, _) => {
             for part in parts {
-                walk_expr(part, ws, body, prefix_len, diagnostics)?;
+                walk_expr(part, ws, body, body_start, diagnostics)?;
             }
         }
         nu::Expr::Keyword(kw) => {
-            walk_expr(&kw.expr, ws, body, prefix_len, diagnostics)?;
+            walk_expr(&kw.expr, ws, body, body_start, diagnostics)?;
         }
         _ => {}
     }
@@ -264,21 +268,21 @@ fn walk_pattern(
     pat: &nu::Pattern,
     ws: &nu::StateWorkingSet,
     body: &str,
-    prefix_len: usize,
+    body_start: usize,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> ControlFlow<()> {
     match pat {
         nu::Pattern::Expression(e) => {
-            walk_expr(e, ws, body, prefix_len, diagnostics)?;
+            walk_expr(e, ws, body, body_start, diagnostics)?;
         }
         nu::Pattern::Record(items) => {
             for (_key, sub) in items {
-                walk_pattern(&sub.pattern, ws, body, prefix_len, diagnostics)?;
+                walk_pattern(&sub.pattern, ws, body, body_start, diagnostics)?;
             }
         }
         nu::Pattern::List(subs) | nu::Pattern::Or(subs) => {
             for sub in subs {
-                walk_pattern(&sub.pattern, ws, body, prefix_len, diagnostics)?;
+                walk_pattern(&sub.pattern, ws, body, body_start, diagnostics)?;
             }
         }
         _ => {}
@@ -291,7 +295,7 @@ fn check_path(
     s: &str,
     span_start: usize,
     body: &str,
-    prefix_len: usize,
+    body_start: usize,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> ControlFlow<()> {
     let trimmed = s.trim();
@@ -311,7 +315,7 @@ fn check_path(
         || trimmed.starts_with("./")
         || trimmed.starts_with("../");
     if flag {
-        let body_offset = span_start.saturating_sub(prefix_len);
+        let body_offset = span_start.saturating_sub(body_start);
         let (line, col) = span_to_line_col(body, body_offset);
         let candidate = Diagnostic::error(
             "lint::hardcoded_variable",
@@ -329,7 +333,7 @@ fn check_path(
 fn check_external_head(
     head: &nu::Expression,
     body: &str,
-    prefix_len: usize,
+    body_start: usize,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> ControlFlow<()> {
     let name = match &head.expr {
@@ -342,7 +346,7 @@ fn check_external_head(
     };
     let basename = name.rsplit('/').next().unwrap_or(name);
     if DENYLIST_EXTERNALS.contains(&basename) {
-        let body_offset = head.span.start.saturating_sub(prefix_len);
+        let body_offset = head.span.start.saturating_sub(body_start);
         let (line, col) = span_to_line_col(body, body_offset);
         let candidate = Diagnostic::error(
             "lint::denied_command",

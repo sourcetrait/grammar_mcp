@@ -1,28 +1,30 @@
 # common.rs
 
 ## struct NuapiCall
-The log dir is a plain Rust value `eval_in_process` already holds. It is NOT in
-engine state, NOT in `$env`, and nothing is seeded into the body's environment to
-carry it - each decl is registered into the working set that eval is about to parse
-with, so the dir rides ON THE DECL and the existing render/merge_delta carries it
-at no extra cost.
+The call a host decl acts for, resolved at RUN time from the stack's
+`$env.NONCE`, which every call template sets and every job a call spawns
+inherits, so a long run's packets still land in its launching call's trace. The
+log dir follows from the nonce alone (`call_log_dir`), and the origin with it.
+The nonce is random enough that run, call and interact need no distinguishing
+prefix.
 
-A stateless eval builds its own working set, so its dir is isolated BY
-CONSTRUCTION even under full concurrency. That is also why the dir rides on the
-decl rather than in a cell on the base engine: the base is Arc-cloned into every
-eval, so a cell there would be shared and raced.
+NOT BOUND AT PARSE TIME, and that is the point. A decl carrying its call's log
+dir served every call but one: the interact engine persists, and a module an
+earlier interact call parsed keeps its binding to that call's decl, so a later
+call's `grimm dbg` appended to the earlier call's trace - measured on the old
+host, the second call's mark landed in the first call's file and the second
+call's trace was never written.
 
-The interact lane is serial and its engine persists, so re-registering SHADOWS the
-previous decl each call - one decl of storage per call, the same bounded and
-already-accepted growth as its `vars` table, cleared by a lane respawn.
+A body that rewrites `$env.NONCE` redirects its own artifacts; the nonce is
+checked base62 before it names a path, so it can name only a call's own dir.
 
-### fn new
-The origin falls out of the log dir's own path rather than being threaded through
-the eval signatures, because the dir is NAMED for the eval's nonce. The nonce is
-random enough that run, call and interact need no distinguishing prefix.
+### fn stderr_log
+Opened to append, as `eval_in_process` opens the stderr log, so this writer and
+an external's never overwrite each other.
 
 ### fn origin
-Host-stamped, and a body cannot forge it because it never supplies it.
+Host-stamped from the nonce: a body can claim another origin only by rewriting
+its own `$env.NONCE`, and only one naming a call whose log dir exists.
 
 ### fn append_debug
 `to nuon` renders compactly - no pretty-printing newlines between fields - but it
@@ -75,10 +77,11 @@ is a stronger trap than a signing scheme, because there is no reachable entry
 point to authenticate. A committed rig CAN call them,
 but only because its call-target body runs inside an eval.
 
-The config trio carries no per-call state - it reads process-global config and the
-pin layer - so it takes no `NuapiCall`. It registers here anyway rather than on
-the base, because this site is what keeps the whole family unreachable outside an
-eval.
+Every decl here is stateless: `dbg` and `send` find their call at run time, and
+the config trio reads process-global config and the pin layer. They register
+here anyway rather than on the base, because this site is what keeps the whole
+family unreachable outside an eval; the registration is the access control, not
+the routing.
 
 A CLEAN COMMIT PROVES NOTHING ABOUT RESOLUTION: `grimm ...` has its own command
 head, so the validator parses it as an implicit external whether or not the decl

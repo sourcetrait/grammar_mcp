@@ -124,7 +124,7 @@ fn register_plugins(
         .stack_size(EVAL_STACK_SIZE)
         .name("nu-plugin-register".to_string())
         .spawn(move || {
-            let mut engine = build_base(Mode::Stateful);
+            let mut engine = startup(Mode::Stateful);
             let cancel = Arc::new(AtomicBool::new(false));
             eval_in_process(&mut engine, &log_dir, &source, cancel, false)
                 .map(|_| ())

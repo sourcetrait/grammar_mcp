@@ -44,6 +44,10 @@ The config is built from `Config::default()` rather than field-by-field so the
 harness picks up every embedded default, `[channel]` included, without restating
 them; only the id, namespace and work dir are test-specific.
 
+nushell's config dirs are resolved here as the host resolves them at startup,
+since every engine reads them; the lint and template drivers below call this
+first, because they build an engine without a `TestServer`.
+
 ## struct TestServer
 
 ### fn new

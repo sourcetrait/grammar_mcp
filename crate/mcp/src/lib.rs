@@ -86,6 +86,7 @@ pub(crate) mod nuapi {
             }
         }
     }
+    pub(crate) mod print;
 }
 #[cfg(test)]
 mod tests {
@@ -93,6 +94,7 @@ mod tests {
 }
 pub(crate) mod cli;
 pub(crate) mod config;
+pub(crate) mod config_dirs;
 pub(crate) mod consts;
 pub(crate) mod engine;
 pub(crate) mod mode;
@@ -108,8 +110,8 @@ pub(crate) use crate::{
             send::GrimmChannelSend,
         },
         common::{
-            NuapiCall, data_shape, event_id_record, event_id_type, register_nuapi,
-            require_record_or_table,
+            NuapiCall, STDERR_FILE, STDOUT_FILE, data_shape, event_id_record, event_id_type,
+            register_nuapi, require_record_or_table,
         },
         config::{GrimmGetConfig, GrimmGetConfigAll, GrimmPinConfig},
         dbg::GrimmDbg,
@@ -117,25 +119,29 @@ pub(crate) use crate::{
             send::{GrimmRemoteChannelSend, GrimmRemoteChannelSendWith},
         },
     },
+    nuapi::print::HostPrint,
     config::{
         CONFIG, Config, ConfigToml, DEFAULT_NAMESPACE, DenySet, RemoteConfig,
         RemoteRole, SpamThresholds, SupervisorConfig, TEST_NAMESPACE, config, default_id,
         default_work_dir, expand_path, fraction_field,
     },
-    engine::base_context,
+    config_dirs::{config_dirs, init_config_dirs},
+    engine::startup,
     mcp::ServiceExt,
     mode::Mode,
     nu::CallExt,
     nu::FromValue,
+    nu::IntoValue,
     plugins::{
         ensure_plugin_registry, list_registered_plugins, load_plugin_decls, registry_mtime,
+        registry_path,
     },
     error::{Diagnostic, Severity, Source, error_to_call_result},
     server::{
         blocked::shadow_host_fatal_decls,
         cache::{
-            BASE_DIRS, BODY_FILE, CacheKind, cache_base_dir, cache_dir, data_base_dir,
-            run_body_file,
+            BASE_DIRS, BODY_FILE, CacheKind, cache_base_dir, cache_dir, call_log_dir,
+            data_base_dir, run_body_file,
         },
         cert::ensure_cert_profile,
         channel::{
@@ -150,8 +156,8 @@ pub(crate) use crate::{
         },
         cycle::detect_import_cycle,
         embed::{
-            EVAL_STACK_SIZE, EvalFailure, InteractEngine, build_base, eval_in_process,
-            eval_stateless,
+            EVAL_STACK_SIZE, EvalFailure, InteractEngine, eval_in_process, eval_stateless,
+            merge_env_no_chdir,
         },
         emergency::{
             BackgroundJobsWarningEmergency, ChannelSpamErrorEmergency,
@@ -178,8 +184,8 @@ pub(crate) use crate::{
         },
         oneshot::run_oneshot,
         parse_engine::{
-            LintEngine, ParseEngine, set_lib_dirs_const, span_to_line_col, wrap_as_def_body,
-            wrap_as_module,
+            LIB_DIRS_CONST, LintEngine, PLUGIN_DIRS_CONST, ParseEngine, dirs_value, file_start,
+            set_dirs_const, span_text, span_to_line_col, wrap_as_def_body, wrap_as_module,
         },
         pin::{clear_pins, effective_supervisor, pin, reap_pins},
         purview::{
@@ -277,6 +283,8 @@ pub(crate) mod nu {
     pub(crate) use nu_cmd_plugin::add_plugin_command_context;
     pub(crate) use nu_command::add_shell_command_context;
     pub(crate) use nu_command::tls::CRYPTO_PROVIDER;
+    pub(crate) use nu_config::{CliOverrides, EnvAccess, NushellConfigDirs, SystemEnv, resolve_paths};
+    pub(crate) use nu_engine::convert_env_values;
     pub(crate) use nu_engine::eval_block;
     pub(crate) use nu_engine::CallExt;
     pub(crate) use nu_engine::command_prelude::Call;
@@ -285,10 +293,11 @@ pub(crate) mod nu {
     pub(crate) use nu_parser::{FlatShape, flatten_block};
     pub(crate) use nu_plugin_engine::load_plugin_file;
     pub(crate) use nu_protocol::{
-        BlockId, Category, CollectionColumns, DeclId, FromValue, Module, PipelineData,
+        BlockId, ByteStreamSource, ByteStreamType, Category, CollectionColumns, Config, DeclId,
+        FromValue, IntoValue, Module, PipelineData,
         PluginRegistryFile, Example,
         PluginRegistryItemData, Record, ShellError, Signals, Signature, Span, SyntaxShape, Type,
-        Value, VarId, record,
+        Value, VarId, record, write_all_and_flush,
         ast::{
             Argument, Block, Comparison, Expr, Expression, ExternalArgument, ListItem,
             Operator, Pattern, RecordItem,
@@ -296,7 +305,9 @@ pub(crate) mod nu {
         debugger::WithoutDebug,
         engine::{Command, EngineState, Job, Jobs, Mail, Stack, StateWorkingSet, ThreadJob},
     };
+    pub(crate) use nu_protocol::ast::Call as AstCall;
     pub(crate) use nu_protocol::shell_error::generic::GenericError;
+    pub(crate) use nu_std::load_standard_library;
     pub(crate) use nuon::{ToNuonConfig, from_nuon, to_nuon};
 }
 

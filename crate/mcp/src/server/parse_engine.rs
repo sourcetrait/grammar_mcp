@@ -5,30 +5,40 @@ pub(crate) struct ParseEngine {
     extra_lib_dir: Option<PathBuf>,
 }
 
-pub(crate) fn set_lib_dirs_const(engine_state: &mut nu::EngineState, dirs: &[PathBuf]) {
+/// The parse-time constant naming the lib dirs.
+pub(crate) const LIB_DIRS_CONST: &str = "$NU_LIB_DIRS";
+
+/// The parse-time constant naming the plugin dirs.
+pub(crate) const PLUGIN_DIRS_CONST: &str = "$NU_PLUGIN_DIRS";
+
+/// Set the parse-time list constant `name` to `dirs`.
+pub(crate) fn set_dirs_const(engine_state: &mut nu::EngineState, name: &str, dirs: &[PathBuf]) {
     let mut ws = nu::StateWorkingSet::new(engine_state);
     let var_id = ws.add_variable(
-        b"$NU_LIB_DIRS".to_vec(),
+        name.as_bytes().to_vec(),
         nu::Span::unknown(),
         nu::Type::List(Box::new(nu::Type::String)),
         false,
     );
-    let vals: Vec<nu::Value> = dirs
-        .iter()
-        .map(|d| nu::Value::string(d.to_string_lossy().into_owned(), nu::Span::unknown()))
-        .collect();
-    ws.set_variable_const_val(var_id, nu::Value::list(vals, nu::Span::unknown()));
+    ws.set_variable_const_val(var_id, dirs_value(dirs));
     let delta = ws.render();
     let _ = engine_state.merge_delta(delta);
 }
 
+/// Dirs as a nushell list of strings.
+pub(crate) fn dirs_value(dirs: &[PathBuf]) -> nu::Value {
+    let vals: Vec<nu::Value> = dirs
+        .iter()
+        .map(|d| nu::Value::string(d.to_string_lossy().into_owned(), nu::Span::unknown()))
+        .collect();
+    nu::Value::list(vals, nu::Span::unknown())
+}
+
 impl ParseEngine {
+    /// A parse engine started as the eval engines are, full command set included.
     pub(crate) fn new_full() -> Self {
-        let mut engine_state = base_context();
-        load_plugin_decls(&mut engine_state);
-        engine_state.generate_nu_constant();
         Self {
-            engine_state,
+            engine_state: startup(Mode::Stateless),
             extra_lib_dir: None,
         }
     }
@@ -58,7 +68,7 @@ impl ParseEngine {
             dirs.push(extra.clone());
         }
         dirs.push(data_base_dir());
-        set_lib_dirs_const(&mut clone, &dirs);
+        set_dirs_const(&mut clone, LIB_DIRS_CONST, &dirs);
         clone
     }
 }
@@ -99,6 +109,20 @@ impl LintEngine {
         }
         holder.engine.clone()
     }
+}
+
+/// Where `fname`'s text begins in the span space its working set shares.
+pub(crate) fn file_start(working_set: &nu::StateWorkingSet, fname: &str) -> usize {
+    working_set
+        .get_span_for_filename(fname)
+        .map_or(0, |span| span.start)
+}
+
+/// The text `span` covers in `text`, which begins at `text_start` in span space.
+pub(crate) fn span_text(text: &str, text_start: usize, span: nu::Span) -> Option<&str> {
+    let start = span.start.checked_sub(text_start)?;
+    let end = span.end.checked_sub(text_start)?;
+    text.get(start..end)
 }
 
 pub(crate) fn span_to_line_col(source: &str, byte_offset: usize) -> (usize, usize) {

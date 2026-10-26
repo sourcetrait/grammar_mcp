@@ -20,28 +20,6 @@ the envelope as its own kind rather than as a string that happens to read a cert
 `From<String>` is what keeps every ordinary `?` site in this file untouched by that
 distinction.
 
-## fn build_base
-The `shadow_host_fatal_decls` call MUST follow the shell context that defines the real
-`exit` / `exec` / `panic`, because name resolution takes the last-registered decl - the
-shadow only wins if it is registered second.
-
-`generate_nu_constant` must follow the plugin load, or `$nu.plugin-path` is empty.
-
-No `setsid()`: the host is a child of the MCP client and cannot detach its own
-controlling terminal. The TLS crypto provider is installed in `NuSh::new`, not here,
-since nushell reads its own OnceLock once per process.
-
-## fn seed_env
-The whole OS env goes in because externals need `$env.PATH`.
-
-`NU_LIB_DIRS` is EXCLUDED so the box's own value cannot override the parse-time const
-seeded below - that const is the sole controlled lib path, and letting the environment
-win would let a body reach outside the namespace.
-
-The EQUIP trio is set directly from CONFIG rather than inherited: eval is in-process
-with no spawn-env to carry them, and they are not in the host's own environment, so the
-host seeds them itself.
-
 ## fn merge_env_no_chdir
 NOT nushell's own `merge_env`, and this is the single most consequential deviation in
 the file. `merge_env` ends by calling `std::env::set_current_dir` with the stack's
@@ -58,6 +36,10 @@ bare field assignment is the correct substitute.
 
 Dropping the chdir also drops `merge_env`'s only error path, which is why this is
 infallible.
+
+`startup` uses it too: nushell's `ensure_path` writes the `PATH` list into the stack
+the conversion is given, and nushell keeps that stack for its whole run, so the host
+drains it into the engine or keeps a string `PATH`.
 
 Worth knowing even though it does not apply here: nushell resolves an external child's
 cwd from `$env.PWD` rather than from the process, so externals behave identically either
@@ -76,6 +58,11 @@ construction: applying it to an external `try_clone()`s the File into the child'
 no redirect at all.
 
 `register_nuapi` must precede the parse, because command names resolve at parse time.
+
+## fn open_log
+Empty, then reopened to APPEND: `print` opens the stderr log itself, by the call's
+nonce, and only append keeps its bytes and an external's - which writes through a dup
+of this fd - from overwriting each other.
 
 `files_before` is taken BEFORE the parse so the cycle check counts only what THIS parse
 registered - the interact lane's working set accumulates across calls and would

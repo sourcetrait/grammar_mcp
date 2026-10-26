@@ -30,4 +30,4 @@ nu-plugin-test-support.workspace = true
 sourcetrait_common.workspace = true
 
 [package.metadata]
-reign = "ai"
+rein = "ai"

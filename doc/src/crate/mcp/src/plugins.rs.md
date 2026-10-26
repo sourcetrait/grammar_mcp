@@ -82,6 +82,9 @@ Registers DECLS ONLY - no plugin process spawns here, because nushell spawns
 those lazily on first invocation. That is what makes the same call cheap enough
 for the equip validator to make too: it pays the registry read and nothing else.
 
+`plugin_path` is set here, where the registry is read, as nushell sets it only
+when it reads one; the config dirs' `plugin_file` names the same file.
+
 The failed-plugin count gets one summary line to stderr rather than a per-plugin
 report, since `load_plugin_file` has already printed each individual error by the
 time it returns.

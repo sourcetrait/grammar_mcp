@@ -48,6 +48,7 @@ nu-cmd-extra = { version = "0.116.1" }
 nu-cmd-lang = { version = "0.116.1" }
 nu-cmd-plugin = { version = "0.116.1" }
 nu-command = { version = "0.116.1" }
+nu-config = { version = "0.116.1", features = ["plugin"] }
 nu-engine = { version = "0.116.1" }
 nu-glob = { version = "0.116.1" }
 nu-json = { version = "0.116.1" }
@@ -57,10 +58,11 @@ nu-plugin = { version = "0.116.1" }
 nu-plugin-engine = { version = "0.116.1" }
 nu-plugin-test-support = { version = "0.116.1" }
 nu-protocol = { version = "0.116.1" }
+nu-std = { version = "0.116.1" }
 nuon = { version = "0.116.1" }
 
 sourcetrait_common = {
-    path = "../sourcetrait_common/crates/sourcetrait_common",
+    path = "../common/crates/sourcetrait_common",
     version = ">=0.0.0-0",
     default-features = false,
     features = [

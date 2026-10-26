@@ -19,5 +19,5 @@ Exercises the `catch_unwind` guard: the host survives and the eval errors, and o
 the interact lane the engine resets.
 
 ## fn register_test_hooks
-Called by `build_base` for BOTH modes, so a hook is reachable on the stateless pool
-and the interact lane alike.
+Called by `engine::startup` for every engine, so a hook is reachable on the
+stateless pool and the interact lane alike, and the parse engine knows it.

@@ -3,23 +3,55 @@ use crate::*;
 /// The file the embedded API appends to, inside this call's nonce log dir.
 pub(crate) const DEBUG_FILE: &str = "debug.nuonl";
 
-/// Per-eval state every `grimm *` decl carries: where this call's artifacts go.
-#[derive(Clone)]
+/// The call's stderr log, inside its nonce log dir.
+pub(crate) const STDERR_FILE: &str = "stderr";
+
+/// The call's stdout log, inside its nonce log dir.
+pub(crate) const STDOUT_FILE: &str = "stdout";
+
+/// The call a host decl acts for: where its artifacts go, and its origin.
 pub(crate) struct NuapiCall {
     log_dir: PathBuf,
     origin: String,
 }
 
 impl NuapiCall {
-    pub(crate) fn new(log_dir: PathBuf) -> Self {
-        let nonce = log_dir
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        Self {
+    /// The call whose nonce the stack's `$env.NONCE` names, an error outside one.
+    pub(crate) fn current(
+        engine_state: &nu::EngineState,
+        stack: &nu::Stack,
+        span: nu::Span,
+    ) -> Result<Self, nu::ShellError> {
+        let nonce = stack
+            .get_env_var(engine_state, "NONCE")
+            .and_then(|value| value.as_str().ok())
+            .ok_or_else(|| {
+                nu::GenericError::new("no call here", "`$env.NONCE` names no call", span)
+            })?;
+        let log_dir = call_log_dir(nonce).ok_or_else(|| {
+            nu::GenericError::new(
+                "no call log here",
+                format!("no call's log dir answers to the nonce `{nonce}`"),
+                span,
+            )
+        })?;
+        Ok(Self {
             log_dir,
             origin: format!("thread/{nonce}"),
-        }
+        })
+    }
+
+    /// This call's stderr log, opened to append after every other writer.
+    pub(crate) fn stderr_log(&self, span: nu::Span) -> Result<fs::File, nu::ShellError> {
+        let path = self.log_dir.join(STDERR_FILE);
+        fs::OpenOptions::new().append(true).open(&path).map_err(|e| {
+            nu::GenericError::new(
+                format!("cannot open {}", path.display()),
+                e.to_string(),
+                span,
+            )
+            .into()
+        })
     }
 
     /// The host-stamped `from` for anything this eval emits.
@@ -101,13 +133,9 @@ pub(crate) fn event_id_type() -> nu::Type {
 }
 
 /// Register the `grimm *` decls into the working set an eval will parse with.
-pub(crate) fn register_nuapi(
-    working_set: &mut nu::StateWorkingSet,
-    log_dir: &std::path::Path,
-) {
-    let call = NuapiCall::new(log_dir.to_path_buf());
-    working_set.add_decl(Box::new(GrimmDbg::new(call.clone())));
-    working_set.add_decl(Box::new(GrimmChannelSend::new(call)));
+pub(crate) fn register_nuapi(working_set: &mut nu::StateWorkingSet) {
+    working_set.add_decl(Box::new(GrimmDbg));
+    working_set.add_decl(Box::new(GrimmChannelSend));
     working_set.add_decl(Box::new(GrimmGetConfigAll));
     working_set.add_decl(Box::new(GrimmGetConfig));
     working_set.add_decl(Box::new(GrimmPinConfig));

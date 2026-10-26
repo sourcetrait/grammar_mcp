@@ -31,56 +31,8 @@ impl EvalFailure {
     }
 }
 
-/// Build an engine base for the given mode.
-pub(crate) fn build_base(mode: Mode) -> nu::EngineState {
-    let mut engine_state = base_context();
-    if matches!(mode, Mode::Stateful) {
-        engine_state = nu::add_plugin_command_context(engine_state);
-    }
-    shadow_host_fatal_decls(&mut engine_state);
-    load_plugin_decls(&mut engine_state);
-    engine_state.generate_nu_constant();
-    seed_env(&mut engine_state);
-    seed_lib_dirs(&mut engine_state);
-    #[cfg(feature = "test-hooks")]
-    crate::server::test_hooks::register_test_hooks(&mut engine_state);
-    engine_state
-}
-
-/// Seed the process env into `$env`, plus the ambient EQUIP trio.
-fn seed_env(engine_state: &mut nu::EngineState) {
-    if let Ok(cwd) = std::env::current_dir() {
-        engine_state.add_env_var(
-            "PWD".to_string(),
-            nu::Value::string(cwd.to_string_lossy().into_owned(), nu::Span::unknown()),
-        );
-    }
-    for (key, val) in std::env::vars() {
-        if key == "PWD" || key == "NU_LIB_DIRS" {
-            continue;
-        }
-        engine_state.add_env_var(key, nu::Value::string(val, nu::Span::unknown()));
-    }
-    let cfg = config();
-    let span = nu::Span::unknown();
-    engine_state.add_env_var("EQUIP_ID".to_string(), nu::Value::string(cfg.id.clone(), span));
-    engine_state.add_env_var(
-        "EQUIP_NAMESPACE".to_string(),
-        nu::Value::string(cfg.namespace.clone(), span),
-    );
-    engine_state.add_env_var(
-        "EQUIP_WORK_DIR".to_string(),
-        nu::Value::string(cfg.work_dir.to_string_lossy().into_owned(), span),
-    );
-}
-
-/// Register the namespace dir as the parse-time `$NU_LIB_DIRS` const.
-fn seed_lib_dirs(engine_state: &mut nu::EngineState) {
-    set_lib_dirs_const(engine_state, &[data_base_dir()]);
-}
-
 /// `EngineState::merge_env` minus the process chdir.
-fn merge_env_no_chdir(
+pub(crate) fn merge_env_no_chdir(
     engine_state: &mut nu::EngineState,
     stack: &mut nu::Stack,
 ) {
@@ -100,6 +52,15 @@ fn merge_env_no_chdir(
     }
 }
 
+/// A call's log, created empty, then opened to append so every writer's bytes land.
+fn open_log(path: &Path) -> Result<fs::File, String> {
+    fs::File::create(path).map_err(|e| format!("create {}: {e}", path.display()))?;
+    fs::OpenOptions::new()
+        .append(true)
+        .open(path)
+        .map_err(|e| format!("open {}: {e}", path.display()))
+}
+
 /// Evaluate a synthesized source string against `engine_state`.
 pub(crate) fn eval_in_process(
     engine_state: &mut nu::EngineState,
@@ -108,17 +69,15 @@ pub(crate) fn eval_in_process(
     cancel: Arc<AtomicBool>,
     persist: bool,
 ) -> Result<json::Value, EvalFailure> {
-    let stdout_file = fs::File::create(log_dir.join("stdout"))
-        .map_err(|e| format!("open {}/stdout: {e}", log_dir.display()))?;
-    let stderr_file = fs::File::create(log_dir.join("stderr"))
-        .map_err(|e| format!("open {}/stderr: {e}", log_dir.display()))?;
+    let stdout_file = open_log(&log_dir.join(STDOUT_FILE))?;
+    let stderr_file = open_log(&log_dir.join(STDERR_FILE))?;
     let mut stack = nu::Stack::new()
         .stdout_file(stdout_file)
         .stderr_file(stderr_file)
         .capture_all();
     engine_state.set_signals(nu::Signals::new(cancel));
     let mut working_set = nu::StateWorkingSet::new(engine_state);
-    register_nuapi(&mut working_set, log_dir);
+    register_nuapi(&mut working_set);
     let files_before = working_set.num_files();
     let block = nu::parse(&mut working_set, None, source.as_bytes(), false);
     if !working_set.parse_errors.is_empty() {
@@ -223,7 +182,7 @@ impl InteractEngine {
             .stack_size(EVAL_STACK_SIZE)
             .name("nu-interact".to_string())
             .spawn(move || {
-                let mut engine = build_base(Mode::Stateful);
+                let mut engine = startup(Mode::Stateful);
                 engine.jobs = env_jobs.clone();
                 while let Some(req) = rx.blocking_recv() {
                     let _finish = FinishGuard(req.finished.clone());
@@ -239,7 +198,7 @@ impl InteractEngine {
                                     nu::Jobs::default();
                                 env_jobs.clear_poison();
                             }
-                            engine = build_base(Mode::Stateful);
+                            engine = startup(Mode::Stateful);
                             engine.jobs = env_jobs.clone();
                             Err("panic during interact eval (caught); interact session reset"
                                 .to_string()

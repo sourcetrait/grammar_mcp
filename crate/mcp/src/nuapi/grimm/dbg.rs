@@ -2,15 +2,7 @@ use crate::*;
 
 /// `grimm dbg <data>` - append a record or table to this eval's `debug.nuonl`.
 #[derive(Clone)]
-pub(crate) struct GrimmDbg {
-    call: NuapiCall,
-}
-
-impl GrimmDbg {
-    pub(crate) fn new(call: NuapiCall) -> Self {
-        Self { call }
-    }
-}
+pub(crate) struct GrimmDbg;
 
 impl nu::Command for GrimmDbg {
     fn name(&self) -> &str {
@@ -37,7 +29,7 @@ impl nu::Command for GrimmDbg {
     ) -> Result<nu::PipelineData, nu::ShellError> {
         let data: nu::Value = call.req(engine_state, stack, 0)?;
         require_record_or_table(&data, call.head)?;
-        self.call.append_debug(&data, call.head)?;
+        NuapiCall::current(engine_state, stack, call.head)?.append_debug(&data, call.head)?;
         Ok(nu::PipelineData::Empty)
     }
 }

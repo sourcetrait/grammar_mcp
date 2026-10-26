@@ -305,6 +305,10 @@ export. Quoted string VALUES keep their quotes in the token so they never match,
 references parse as InternalCall or External so they skip. That leaves exactly
 identifier-position `main` outside the sentinel.
 
+A token's text is read through `span_text`, from the file's start in the span space,
+never by the raw span: the engine's own files, the standard library's first, sit ahead of
+this one, and a raw read returns nothing, which would pass `main` anywhere silently.
+
 All three parse sites register the file's ABSOLUTE path as the parse fname AND push it onto
 `working_set.files` before parsing. The PUSH is the load-bearing half: `path self` reads
 `working_set.files.top()`, not the parse fname - the fname only feeds span mapping - so
@@ -326,6 +330,11 @@ different ways. `SyntaxShape` Display renders an empty-field record as the bare 
 directory and glob to string. Structure is still VALIDATED against the parsed signature -
 positional shape and output Type - so the text is used for the schema and the parse for the
 contract.
+
+That text is sliced from the wrapped source by the block's span less the file's start in
+the span space (`file_start`), as every reported position here is measured. Measured from
+zero, the slices come back empty once the engine holds files of its own - the standard
+library's - and the call target drops from the index with no diagnostic.
 
 ## fn check_args_record_positional
 An empty `record<>` is the UNFLESHED SKELETON and is rejected, which is what stops a

@@ -24,7 +24,7 @@ impl Executor {
     /// Build the base once, snapshot the registry mtime, pre-fill the buffer.
     pub(crate) fn new(env_jobs: Arc<std::sync::Mutex<nu::Jobs>>, ready_target: usize) -> Self {
         let holder = BaseHolder {
-            engine: Arc::new(build_base(Mode::Stateless)),
+            engine: Arc::new(startup(Mode::Stateless)),
             generation: 0,
             registry_mtime: registry_mtime(),
         };
@@ -77,7 +77,7 @@ impl Executor {
             if current == holder.registry_mtime {
                 return;
             }
-            holder.engine = Arc::new(build_base(Mode::Stateless));
+            holder.engine = Arc::new(startup(Mode::Stateless));
             holder.generation += 1;
             holder.registry_mtime = current;
         }

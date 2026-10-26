@@ -1,9 +1,9 @@
 # dbg.rs
 
 ## struct GrimmDbg
-THE DEBUG LANE, and it is deliberately not a print. fd 1 is the JSON-RPC channel,
-so a body that printed would corrupt the protocol stream; and a value written here
-keeps its TYPES, because it goes out as NUON rather than as text.
+THE DEBUG LANE, and it is deliberately not a print: `print` writes text to the
+call's stderr log, while a value written here keeps its TYPES, because it goes
+out as NUON.
 
 What it is FOR: the interesting values are often MID-body rather than in the
 return, and this puts them beside the stdout and stderr the eval already captures,

@@ -1,14 +1,13 @@
 # engine.rs
 
 ## fn base_context
-THE shared constructor, and the sharing is the point: `build_base` and the equip
-validator's `ParseEngine::new_full` both call it, so the two cannot drift about
-what command set a rig may legally call. If the two diverged - the validator
-missing a layer the eval engine has - a rig calling `str snake-case` would fail
-commit while running fine, and the diagnostic would be an `ExtraPositional`
-naming the builtin head the parser mis-bound, nothing in it suggesting a
-missing engine layer. The shared constructor rather than two parallel ones
-removes that failure mode by construction.
+THE shared command set, and the sharing is the point: every engine the host
+builds starts here, through `startup`, so the eval engines and the equip
+validator cannot drift about what command set a rig may legally call. If the
+two diverged - the validator missing a layer the eval engine has - a rig calling
+`str snake-case` would fail commit while running fine, and the diagnostic would
+be an `ExtraPositional` naming the builtin head the parser mis-bound, nothing in
+it suggesting a missing engine layer.
 
 `is_mcp = true` is load-bearing and easy to read as decoration: it routes an
 external command's stdin to null. The host's own stdin IS the JSON-RPC channel,
@@ -18,3 +17,62 @@ so without it an external could steal the protocol stream.
 this file: nushell gates its foreground-process-group handling on it, so
 externals spawn with no setpgid and there is no process group to kill. That is
 why the teardown walks /proc instead.
+
+## fn startup
+THE HOST'S ONE STARTUP, following nushell's own `main` (nu 0.116.1,
+`src/main.rs`) in its order, so a body sees the shell `nu --mcp -n` gives but
+for the host's deltas: the namespace as the lib dirs, the namespace's plugin
+registry, the `plugin` commands in the stateful mode alone, the shadowed
+host-fatal decls, and a `print` writing to the call's log. Every engine is built
+here - the stateless eval base, the interact engine, the registration engine,
+and the parse engine behind the lint and the validator - so validation still
+equals serving.
+
+The order carries three constraints:
+
+- `config_dirs` before `generate_nu_constant`: nu-protocol builds every `$nu`
+  path from it, and on 0.116.1 an empty `home_dir` makes `$nu.home-dir` raise
+  `setting $nu.home-dir failed`, the other paths reading empty.
+- `NU_PLUGIN_DIRS`, `$env.config`, and `ENV_CONVERSIONS` before the process
+  env, `NU_VERSION` after it: nushell lets a parent's value win for the first
+  three and sets its own version last, so the parent shell's `NU_VERSION` never
+  survives.
+- The shadows after the shell context, since name resolution takes the
+  last-registered decl; the standard library and the plugin decls before the
+  constant, so `$nu.plugin-path` reads the registry.
+
+A failure converting the env or loading std is reported and survived, as a
+failed plugin load is: the engine still serves every body that needs neither.
+
+No `setsid()`: the host is a child of the MCP client and cannot detach its own
+controlling terminal. The TLS crypto provider is installed in `NuSh::new`, not
+here, since nushell reads its own OnceLock once per process.
+
+## fn add_print
+On every engine, as nushell's own startup puts `print` on its own, so the
+validator parses it as the eval runs it; it finds its call at run time
+(`nuapi/print.rs`).
+
+## fn seed_env
+The whole OS env goes in because externals need `$env.PATH`.
+
+`NU_LIB_DIRS` is EXCLUDED so the box's own value cannot override the lib dirs
+seeded below - the namespace is the sole controlled lib path, and letting the
+environment win would let a body reach outside the namespace.
+
+The EQUIP trio is set directly from CONFIG rather than inherited: eval is
+in-process with no spawn-env to carry them, and they are not in the host's own
+environment, so the host seeds them itself.
+
+## fn convert_env
+nushell's own conversion: with no `ENV_CONVERSIONS` entries it changes nothing
+but `PATH`, which its `ensure_path` turns into a list; an external's child env
+gets it back as a string.
+
+## fn seed_lib_dirs
+The env var mirrors the constant, as nushell sets both; the constant is what
+the parser reads first (`server/parse_engine.rs`).
+
+## fn seed_version
+The build's `NU_VERSION` (`build.rs`, from the lockfile's nu-protocol), the
+engine's own.

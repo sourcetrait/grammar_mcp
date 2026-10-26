@@ -6,15 +6,7 @@ const UNVERIFIED_EMIT_REASON: &str = "emit before verification";
 
 /// `grimm channel send <model> <event> [attached]` - the state-update lane.
 #[derive(Clone)]
-pub(crate) struct GrimmChannelSend {
-    call: NuapiCall,
-}
-
-impl GrimmChannelSend {
-    pub(crate) fn new(call: NuapiCall) -> Self {
-        Self { call }
-    }
-}
+pub(crate) struct GrimmChannelSend;
 
 impl nu::Command for GrimmChannelSend {
     fn name(&self) -> &str { Self::DEF.name }
@@ -57,7 +49,7 @@ impl nu::Command for GrimmChannelSend {
         }
 
         let channel = channel_handle();
-        let from = self.call.origin();
+        let from = NuapiCall::current(engine_state, stack, call.head)?.origin();
 
         match channel.status().phase {
             ChannelPhase::Closed => {

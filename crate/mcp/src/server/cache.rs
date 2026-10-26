@@ -46,6 +46,17 @@ pub(crate) fn cache_dir(kind: CacheKind, nonce: &datum::NoncePair) -> PathBuf {
     cache_kind_dir(kind).join(nonce.as_str())
 }
 
+/// The log dir of the call `nonce` names, in whichever cache kind holds it.
+pub(crate) fn call_log_dir(nonce: &str) -> Option<PathBuf> {
+    if nonce.is_empty() || !nonce.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return None;
+    }
+    [CacheKind::Runs, CacheKind::Interacts, CacheKind::Calls]
+        .into_iter()
+        .map(|kind| cache_kind_dir(kind).join(nonce))
+        .find(|dir| dir.is_dir())
+}
+
 pub(crate) const BODY_FILE: &str = "body.nuon";
 
 /// The cached run body, co-located at `runs/<nonce>/body.nuon`.

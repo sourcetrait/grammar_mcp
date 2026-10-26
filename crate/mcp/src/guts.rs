@@ -49,6 +49,7 @@ fn ensure_test_config() {
         config.namespace = "default".to_string();
         config.work_dir = root.join("work");
         let _ = CONFIG.set(config);
+        init_config_dirs().expect("nushell's config dirs resolve for the tests");
     });
 }
 
@@ -477,6 +478,7 @@ fn to_obj(v: json::Value) -> mcp::JsonObject {
 
 /// Lint an agent body, returning each Diagnostic as its wire JSON.
 pub fn lint_body(args_type: &str, body: &str) -> Vec<json::Value> {
+    ensure_test_config();
     let engine = ParseEngine::new_full();
     crate::lint_body(&engine, args_type, body)
         .iter()
@@ -486,6 +488,7 @@ pub fn lint_body(args_type: &str, body: &str) -> Vec<json::Value> {
 
 /// Are two `current()` handles off ONE `LintEngine` the same instance?
 pub fn lint_engine_reuses_until_the_registry_moves() -> bool {
+    ensure_test_config();
     let engine = LintEngine::new();
     let first = engine.current();
     let second = engine.current();
@@ -494,6 +497,7 @@ pub fn lint_engine_reuses_until_the_registry_moves() -> bool {
 
 /// True if `src` parses clean on a full-shell ParseEngine.
 pub fn parses_clean(src: &str) -> bool {
+    ensure_test_config();
     let engine = ParseEngine::new_full();
     let mut ws = nu::StateWorkingSet::new(engine.engine_state());
     let _ = nu::parse(&mut ws, Some("golden.nu"), src.as_bytes(), false);

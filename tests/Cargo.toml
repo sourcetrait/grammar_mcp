@@ -20,6 +20,7 @@ test-hooks = []
 [dependencies]
 futures-util.workspace = true
 nix.workspace = true
+nu-config.workspace = true
 serde_json.workspace = true
 sourcetrait_cert_lib.workspace = true
 tokio.workspace = true

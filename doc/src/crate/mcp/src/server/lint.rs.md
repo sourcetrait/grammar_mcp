@@ -35,6 +35,11 @@ Wraps the body in a def taking the CONVERTED positional type, so the wrapper see
 exactly the positional the eval will. That is why run and interact convert schemas
 BEFORE linting rather than after.
 
+A diagnostic's position is measured from the body's start in the span space, the file's
+start (`file_start`) plus the wrapper's prefix: the engine holds the standard library's
+files ahead of this one, so a raw span lands past the body. The rules themselves read
+the AST's values and never the text.
+
 Returns EMPTY if the wrapper parse fails so badly the def Block never materializes.
 The lint reports RULES, not parse errors - the eval surfaces those - so silence here is
 correct rather than a swallowed failure.

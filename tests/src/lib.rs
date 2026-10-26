@@ -108,13 +108,23 @@ impl Host {
 
     /// Spawn with extra CLI args AND extra env vars (e.g. `USER`, `HOME`).
     pub fn spawn_full(scratch: &Path, args: &[&str], envs: &[(&str, &str)]) -> Self {
-        Self::spawn_core(scratch, args, envs, None)
+        Self::spawn_core(scratch, args, envs, None, None)
+    }
+
+    /// `spawn_full` with the host's own stderr written to `stderr_log`.
+    pub fn spawn_logged(
+        scratch: &Path,
+        args: &[&str],
+        envs: &[(&str, &str)],
+        stderr_log: &Path,
+    ) -> Self {
+        Self::spawn_core(scratch, args, envs, None, Some(stderr_log))
     }
 
     /// Spawn with extra CLI args AND a working directory - for a host whose
     /// `<cwd>/.grammar/mcp/remotes.toml` (the RemoteChannel config) must resolve.
     pub fn spawn_in(scratch: &Path, args: &[&str], cwd: &Path) -> Self {
-        Self::spawn_core(scratch, args, &[], Some(cwd))
+        Self::spawn_core(scratch, args, &[], Some(cwd), None)
     }
 
     fn spawn_core(
@@ -122,18 +132,25 @@ impl Host {
         args: &[&str],
         envs: &[(&str, &str)],
         cwd: Option<&Path>,
+        stderr_log: Option<&Path>,
     ) -> Self {
         let data_home = scratch.join("data");
         let cache_home = scratch.join("cache");
         std::fs::create_dir_all(&data_home).expect("mkdir data");
         std::fs::create_dir_all(&cache_home).expect("mkdir cache");
+        let stderr = match stderr_log {
+            Some(path) => Stdio::from(
+                std::fs::File::create(path).expect("create the host's stderr log"),
+            ),
+            None => Stdio::inherit(),
+        };
         let mut cmd = Command::new(grammar_mcp_bin());
         cmd.args(args)
             .env("XDG_DATA_HOME", &data_home)
             .env("XDG_CACHE_HOME", &cache_home)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit());
+            .stderr(stderr);
         for (k, v) in envs {
             cmd.env(k, v);
         }

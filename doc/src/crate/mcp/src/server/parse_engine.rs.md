@@ -1,19 +1,20 @@
 # parse_engine.rs
 
-## fn set_lib_dirs_const
-A parse-time CONST, not `$env`, and that is the whole point. nu-parser's
-`find_in_dirs` reads the const var FIRST, falling back to the deprecated
-`$env.NU_LIB_DIRS` - so a body cannot override it, and the MCP's own namespace
-dir, whose `equip/` holds every installed lib and rig, stays the sole controlled
-lib path. The box's own `NU_LIB_DIRS` is excluded from the seeded env for the same
-reason.
+## fn set_dirs_const
+A parse-time CONST, not `$env`, and for the lib dirs that is the whole point.
+nu-parser's `find_in_dirs` reads the const var FIRST, falling back to the
+deprecated `$env.NU_LIB_DIRS` - so a body cannot override it, and the MCP's own
+namespace dir, whose `equip/` holds every installed lib and rig, stays the sole
+controlled lib path. The box's own `NU_LIB_DIRS` is excluded from the seeded env
+for the same reason.
 
 ## struct ParseEngine
 
 ### fn new_full
-Calls `generate_nu_constant()` after the plugin load, exactly as the eval base
-does, so rig source using `$nu.*` parses at commit as it does at serve. Order
-matters: before the plugin path is set, `$nu.plugin-path` would be empty.
+Built through `startup`, exactly as the eval engines are, so rig source using
+`$nu.*`, std, or `print` parses at commit as it does at serve. A const reading
+`$nu.home-dir` is evaluated here at parse time, which is how an engine without
+its config dirs failed a commit.
 
 ### fn engine_state
 Borrows the base rather than cloning, because the lint's synthetic sources carry no
@@ -41,6 +42,17 @@ only on an actual mtime change rather than per call.
 ONE method rather than a separate refresh plus getter, so a caller cannot take the
 engine and forget the refresh - which is precisely the bug this type exists to
 remove. Poison-tolerant, like every other long-lived lock here.
+
+## fn file_start
+A span is an offset into the span space every file of a working set shares, each file's
+text placed after the last; nushell's `parse` places a new file at `next_span_start()`.
+Every position or slice the validator or the lint takes from a parse is measured from
+here, which is what stays right when the engine holds files of its own, the standard
+library's first.
+
+## fn span_text
+`None` for a span outside the file, so a span placed elsewhere reads as nothing rather
+than as some other file's text.
 
 ## fn wrap_as_module
 Both wrappers return their prefix length because every span the parse reports is

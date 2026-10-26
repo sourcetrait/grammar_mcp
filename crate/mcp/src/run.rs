@@ -49,6 +49,10 @@ async fn serve_or_oneshot(cli: Cli) -> process::ExitCode {
         }
     };
     CONFIG.set(config).expect("CONFIG set once at startup");
+    if let Err(reason) = init_config_dirs() {
+        eprintln!("{reason}");
+        return process::ExitCode::from(2);
+    }
     match command {
         None => {
             run_server().await;

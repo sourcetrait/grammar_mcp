@@ -1391,8 +1391,9 @@ fn validate_lib_file(
         ));
         return Ok(());
     }
+    let source_start = file_start(&ws, &fname) + prefix_len;
     for err in &ws.parse_errors {
-        let span_start = err.span().start.saturating_sub(prefix_len);
+        let span_start = err.span().start.saturating_sub(source_start);
         let (line, _col) = span_to_line_col(&source, span_start);
         result.diagnostics.push(Diagnostic::error(
             "lib::parse_error",
@@ -1807,8 +1808,9 @@ fn validate_flat_file(
         ));
         return Ok(());
     }
+    let source_start = file_start(&ws, &fname) + prefix_len;
     for err in &ws.parse_errors {
-        let span_start = err.span().start.saturating_sub(prefix_len);
+        let span_start = err.span().start.saturating_sub(source_start);
         let (line, _col) = span_to_line_col(&source, span_start);
         result.diagnostics.push(Diagnostic::error(
             "rig::parse_error",
@@ -1870,10 +1872,12 @@ fn scan_reserved_terms(
     if !working_set.parse_errors.is_empty() {
         return;
     }
+    let wrapped_start = file_start(&working_set, fname);
+    let source_start = wrapped_start + prefix_len;
 
     let mut prev_export_def = false;
     for (span, shape) in nu::flatten_block(&working_set, &block) {
-        let content = wrapped.get(span.start..span.end).unwrap_or("");
+        let content = span_text(&wrapped, wrapped_start, span).unwrap_or("");
         let flag = is_reserved_term(content)
             && match &shape {
                 nu::FlatShape::VarDecl(_) => true,
@@ -1881,7 +1885,7 @@ fn scan_reserved_terms(
                 _ => false,
             };
         if flag {
-            let src_off = span.start.saturating_sub(prefix_len);
+            let src_off = span.start.saturating_sub(source_start);
             let (line, _col) = span_to_line_col(source, src_off);
             diagnostics.push(Diagnostic::error(
                 "rig::reserved",
@@ -1897,7 +1901,7 @@ fn scan_reserved_terms(
         if matches!(&shape, nu::FlatShape::Signature) {
             for pname in signature_param_names(content) {
                 if is_reserved_term(&pname) {
-                    let src_off = span.start.saturating_sub(prefix_len);
+                    let src_off = span.start.saturating_sub(source_start);
                     let (line, _col) = span_to_line_col(source, src_off);
                     diagnostics.push(Diagnostic::error(
                         "rig::reserved",
@@ -1998,6 +2002,7 @@ fn validate_mod_nu_ast(
     let _ = working_set.files.push(PathBuf::from(fname), nu::Span::unknown());
     let files_before = working_set.num_files();
     let outer_block = nu::parse(&mut working_set, Some(fname), wrapped.as_bytes(), false);
+    let source_start = file_start(&working_set, fname) + prefix_len;
 
     if !working_set.parse_errors.is_empty()
         && let Some(cycle) = detect_import_cycle(&working_set, files_before)
@@ -2014,7 +2019,7 @@ fn validate_mod_nu_ast(
     }
 
     for err in &working_set.parse_errors {
-        let span_start = err.span().start.saturating_sub(prefix_len);
+        let span_start = err.span().start.saturating_sub(source_start);
         let (line, _col) = span_to_line_col(source, span_start);
         diagnostics.push(Diagnostic::error(
             "rig::parse_error",
@@ -2060,7 +2065,7 @@ fn validate_mod_nu_ast(
                 &elem.expr,
                 &working_set,
                 source,
-                prefix_len,
+                source_start,
                 diagnostics,
             );
         }
@@ -2072,10 +2077,10 @@ fn check_mod_nu_pipeline_element(
     expr: &nu::Expression,
     working_set: &nu::StateWorkingSet,
     source: &str,
-    prefix_len: usize,
+    source_start: usize,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let span_start = expr.span.start.saturating_sub(prefix_len);
+    let span_start = expr.span.start.saturating_sub(source_start);
     let (line, _col) = span_to_line_col(source, span_start);
     match &expr.expr {
         nu::Expr::Call(call) => {
@@ -2159,6 +2164,8 @@ fn validate_function_file_ast(
     let _ = working_set.files.push(PathBuf::from(fname), nu::Span::unknown());
     let files_before = working_set.num_files();
     let _ = nu::parse(&mut working_set, Some(fname), wrapped.as_bytes(), false);
+    let wrapped_start = file_start(&working_set, fname);
+    let source_start = wrapped_start + prefix_len;
 
     if !working_set.parse_errors.is_empty()
         && let Some(cycle) = detect_import_cycle(&working_set, files_before)
@@ -2175,7 +2182,7 @@ fn validate_function_file_ast(
     }
 
     for err in &working_set.parse_errors {
-        let span_start = err.span().start.saturating_sub(prefix_len);
+        let span_start = err.span().start.saturating_sub(source_start);
         let (line, _col) = span_to_line_col(source, span_start);
         diagnostics.push(Diagnostic::error(
             "rig::parse_error",
@@ -2213,14 +2220,22 @@ fn validate_function_file_ast(
     };
 
 
-    check_args_record_positional(rel, &working_set, main_id, "main", source, prefix_len, diagnostics);
-    let out_type =
-        check_main_output_type(rel, &working_set, main_id, source, prefix_len, &wrapped, diagnostics);
+    check_args_record_positional(rel, &working_set, main_id, "main", source, source_start, diagnostics);
+    let main_line = decl_line(&working_set, main_id, source, source_start);
+    let out_type = check_main_output_type(
+        rel,
+        &working_set,
+        main_id,
+        main_line,
+        &wrapped,
+        wrapped_start,
+        diagnostics,
+    );
 
     let main_sig = working_set.get_decl(main_id).signature();
     let summary = main_sig.description.clone();
     let details = main_sig.extra_description.clone();
-    let args_str = extract_main_args_text(&working_set, main_id, &wrapped)?;
+    let args_str = extract_main_args_text(&working_set, main_id, &wrapped, wrapped_start)?;
     let result_str = out_type?;
     let args_schema = nu_to_args_schema(&args_str).ok()?;
     let result_schema = nu_to_result_schema(&result_str).ok()?;
@@ -2241,7 +2256,7 @@ fn check_args_record_positional(
     decl_id: nu::DeclId,
     fn_name: &str,
     source: &str,
-    prefix_len: usize,
+    source_start: usize,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<nu::VarId> {
     let decl = working_set.get_decl(decl_id);
@@ -2259,7 +2274,7 @@ fn check_args_record_positional(
         }
     };
     if bad {
-        let line = decl_line(working_set, decl_id, source, prefix_len);
+        let line = decl_line(working_set, decl_id, source, source_start);
         diagnostics.push(Diagnostic::error(
             "rig::args",
             Some(Source {
@@ -2278,13 +2293,12 @@ fn check_main_output_type(
     rel: &str,
     working_set: &nu::StateWorkingSet,
     decl_id: nu::DeclId,
-    source: &str,
-    prefix_len: usize,
+    line: usize,
     wrapped: &str,
+    wrapped_start: usize,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<String> {
     let sig = working_set.get_decl(decl_id).signature();
-    let line = decl_line(working_set, decl_id, source, prefix_len);
     let output = sig
         .input_output_types
         .iter()
@@ -2305,7 +2319,7 @@ fn check_main_output_type(
         nu::Type::Nothing => Some("nothing".to_string()),
         nu::Type::Record(fields) if !fields.is_empty() => {
             Some(
-                extract_main_output_text(working_set, decl_id, wrapped)
+                extract_main_output_text(working_set, decl_id, wrapped, wrapped_start)
                     .unwrap_or_else(|| output.to_string()),
             )
         }
@@ -2340,9 +2354,14 @@ fn extract_main_output_text(
     working_set: &nu::StateWorkingSet,
     decl_id: nu::DeclId,
     wrapped: &str,
+    wrapped_start: usize,
 ) -> Option<String> {
     let block_id = working_set.get_decl(decl_id).block_id()?;
-    let body_start = working_set.get_block(block_id).span?.start;
+    let body_start = working_set
+        .get_block(block_id)
+        .span?
+        .start
+        .checked_sub(wrapped_start)?;
     let before = wrapped.get(..body_start)?;
     let arrow = before.rfind("->")?;
     let after = &before[arrow + 2..];
@@ -2358,9 +2377,14 @@ fn extract_main_args_text(
     working_set: &nu::StateWorkingSet,
     decl_id: nu::DeclId,
     wrapped: &str,
+    wrapped_start: usize,
 ) -> Option<String> {
     let block_id = working_set.get_decl(decl_id).block_id()?;
-    let body_start = working_set.get_block(block_id).span?.start;
+    let body_start = working_set
+        .get_block(block_id)
+        .span?
+        .start
+        .checked_sub(wrapped_start)?;
     let before = wrapped.get(..body_start)?;
     let arrow = before.rfind("->")?;
     let head = &before[..arrow];
@@ -2380,7 +2404,7 @@ fn decl_line(
     working_set: &nu::StateWorkingSet,
     decl_id: nu::DeclId,
     source: &str,
-    prefix_len: usize,
+    source_start: usize,
 ) -> usize {
     let decl = working_set.get_decl(decl_id);
     let span = decl.signature().name.is_empty();
@@ -2388,7 +2412,7 @@ fn decl_line(
     if let Some(block_id) = decl.block_id() {
         let block = working_set.get_block(block_id);
         if let Some(span) = block.span {
-            let src_offset = span.start.saturating_sub(prefix_len);
+            let src_offset = span.start.saturating_sub(source_start);
             let (line, _col) = span_to_line_col(source, src_offset);
             return line;
         }

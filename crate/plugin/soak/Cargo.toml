@@ -32,4 +32,4 @@ sourcetrait_common = { workspace = true, features = ["tooling"] }
 tempfile.workspace = true
 
 [package.metadata]
-reign = "ai"
+rein = "ai"
