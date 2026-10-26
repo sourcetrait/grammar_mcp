@@ -160,10 +160,28 @@ impl NuSh {
     }
 }
 
+/// A tool's structured result: its success envelope, or the error envelope
+/// any tool returns on a failure.
+#[derive(ser::Serialize, schema::JsonSchema)]
+#[serde(untagged)]
+pub(crate) enum ToolOutput<T> {
+    Success(T),
+    Failure(ErrorEnvelope),
+}
+
+/// The output schema a tool declares: `ToolOutput<T>`'s, its root an object
+/// as MCP requires.
+pub(crate) fn tool_output_schema<T: schema::JsonSchema + std::any::Any>() -> Arc<mcp::JsonObject> {
+    let mut schema = mcp::schema_for_type::<ToolOutput<T>>().as_ref().clone();
+    schema.remove("title");
+    schema.insert("type".to_string(), json::Value::String("object".to_string()));
+    Arc::new(schema)
+}
+
 pub(crate) fn envelope_to_structured<T: ser::Serialize>(
     envelope: &T,
 ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-    let value = json::to_value(envelope)
+    let value = json::to_value(ToolOutput::Success(envelope))
         .map_err(|e| mcp::ErrorData::internal_error(format!("envelope serialize: {e}"), None))?;
     let mut result = mcp::CallToolResult::default();
     result.structured_content = Some(value);

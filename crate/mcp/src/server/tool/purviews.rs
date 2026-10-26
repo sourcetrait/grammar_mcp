@@ -17,7 +17,7 @@ pub(crate) struct PurviewsEnvelope {
 impl NuSh {
     #[mcp::tool(
         description = "List every configured purview, and what is currently in view.",
-        output_schema = mcp::schema_for_type::<PurviewsEnvelope>()
+        output_schema = tool_output_schema::<PurviewsEnvelope>()
     )]
     pub(crate) async fn purviews(
         &self,

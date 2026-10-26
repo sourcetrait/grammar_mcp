@@ -18,7 +18,7 @@ pub struct PurviewParams {
 impl NuSh {
     #[mcp::tool(
         description = "Set the current view to these purviews.",
-        output_schema = mcp::schema_for_type::<PurviewSetEnvelope>()
+        output_schema = tool_output_schema::<PurviewSetEnvelope>()
     )]
     pub(crate) async fn purview(
         &self,

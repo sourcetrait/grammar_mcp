@@ -23,7 +23,7 @@ pub(crate) struct RerunEnvelope {
 impl NuSh {
     #[mcp::tool(
         description = "Re-evaluate a cached `run()` body with fresh args.",
-        output_schema = mcp::schema_for_type::<RerunEnvelope>()
+        output_schema = tool_output_schema::<RerunEnvelope>()
     )]
     pub(crate) async fn rerun(
         &self,

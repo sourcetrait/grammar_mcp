@@ -136,7 +136,7 @@ pub(crate) use crate::{
         ensure_plugin_registry, list_registered_plugins, load_plugin_decls, registry_mtime,
         registry_path,
     },
-    error::{Diagnostic, Severity, Source, error_to_call_result},
+    error::{Diagnostic, ErrorEnvelope, Severity, Source, error_to_call_result},
     server::{
         blocked::shadow_host_fatal_decls,
         cache::{
@@ -228,8 +228,9 @@ pub(crate) use crate::{
             equip::EquipParams,
             common::{
                 CachedRunBody, InFlightEntry, InFlightKind, NuSh, RemoteLinkEntry, RunParams,
-                convert_schemas, dispatch_interact, dispatch_pooled, envelope_to_structured,
-                lint_run_params, now_millis, teardown_all_in_flight,
+                ToolOutput, convert_schemas, dispatch_interact, dispatch_pooled,
+                envelope_to_structured, lint_run_params, now_millis, teardown_all_in_flight,
+                tool_output_schema,
             },
             info::InfoParams,
             inspect::InspectParams,

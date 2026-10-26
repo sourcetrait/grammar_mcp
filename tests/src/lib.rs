@@ -443,14 +443,17 @@ impl Host {
         self.call("commit", json!({"namepath": name}))
     }
 
-    /// The tool names advertised by `tools/list`.
-    pub fn tool_names(&mut self) -> Vec<String> {
+    /// The tools advertised by `tools/list`, each as the client receives it.
+    pub fn tools(&mut self) -> Vec<Value> {
         let id = self.next_id();
         self.send(&json!({"jsonrpc": "2.0", "id": id, "method": "tools/list"}));
         let resp = self.read_id(id);
-        resp["result"]["tools"]
-            .as_array()
-            .expect("tools array")
+        resp["result"]["tools"].as_array().expect("tools array").clone()
+    }
+
+    /// The tool names advertised by `tools/list`.
+    pub fn tool_names(&mut self) -> Vec<String> {
+        self.tools()
             .iter()
             .map(|t| t["name"].as_str().expect("tool name").to_string())
             .collect()

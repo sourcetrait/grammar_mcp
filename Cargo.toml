@@ -25,6 +25,7 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 humantime = { version = "2" }
 ignore = { version = "0.4" }
 indoc = { version = "2" }
+jsonschema = { version = "0.60", default-features = false }
 liquid = { version = "0.26" }
 nix = { version = "0.31", features = ["fs", "process", "signal", "user"] }
 rmcp = { version = "3.7", features = ["server", "transport-io", "schemars", "macros"] }

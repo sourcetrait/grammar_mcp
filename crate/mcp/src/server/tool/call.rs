@@ -24,7 +24,7 @@ impl NuSh {
     #[doc = include_str!("../../../../../include/mcp/tool/call.md")]
     #[mcp::tool(
         description = "Invoke a committed rig function with typed args.",
-        output_schema = mcp::schema_for_type::<CallEnvelope>()
+        output_schema = tool_output_schema::<CallEnvelope>()
     )]
     pub(crate) async fn call(
         &self,

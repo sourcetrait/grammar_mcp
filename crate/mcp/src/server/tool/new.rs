@@ -18,7 +18,7 @@ impl NuSh {
     #[mcp::tool(
         name = "new",
         description = "Scaffold modules / functions (by namepath) into an equip's rig.",
-        output_schema = mcp::schema_for_type::<NewEnvelope>()
+        output_schema = tool_output_schema::<NewEnvelope>()
     )]
     pub(crate) async fn scaffold(
         &self,

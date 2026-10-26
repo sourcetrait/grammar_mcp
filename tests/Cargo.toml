@@ -28,3 +28,6 @@ tokio-rustls.workspace = true
 tokio-tungstenite.workspace = true
 
 sourcetrait_common.workspace = true
+
+[dev-dependencies]
+jsonschema.workspace = true

@@ -54,7 +54,7 @@ const ACTIONS: [&str; 4] = ["new", "install", "check", "uninstall"];
 impl NuSh {
     #[mcp::tool(
         description = "Equip administration on an equip/<author>/<name> source dir: new, install, check, uninstall.",
-        output_schema = mcp::schema_for_type::<EquipEnvelope>()
+        output_schema = tool_output_schema::<EquipEnvelope>()
     )]
     pub(crate) async fn equip(
         &self,

@@ -23,6 +23,20 @@ the template with no re-conversion and no re-lint.
 Per-call args are deliberately NOT cached; they are supplied fresh at rerun time, which is
 the whole point of the handle.
 
+## enum ToolOutput
+The two shapes every tool's structured result takes, its success envelope or the error
+envelope, as ONE type. `envelope_to_structured` and `error_to_call_result` both
+serialize through it and `tool_output_schema` derives each tool's declared schema from
+it, so the schema a client validates against and the result it receives come from the
+same type. Untagged, so the wire carries the envelope itself, as the skills document it.
+
+## fn tool_output_schema
+A client of the 2026-07-28 era validates a structured result against the tool's
+declared output schema, and a schema of the success envelope alone refused every error
+envelope, which the client then reported as a schema mismatch in place of the error.
+The root carries `type: object` over the union's `anyOf` because MCP requires a tool's
+output schema to be an object; the generic wrapper's title is dropped as noise.
+
 ## fn write_run_body
 PRE-DISPATCH and for EVERY run-family eval - success, error, or timeout alike. That is what
 leaves a timed-out run rerunnable: its error envelope carries the nonce, and

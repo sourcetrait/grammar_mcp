@@ -27,7 +27,7 @@ pub(crate) struct ProcessesEnvelope {
 impl NuSh {
     #[mcp::tool(
         description = "List in-flight MCP tool usage.",
-        output_schema = mcp::schema_for_type::<ProcessesEnvelope>()
+        output_schema = tool_output_schema::<ProcessesEnvelope>()
     )]
     pub(crate) async fn processes(
         &self,

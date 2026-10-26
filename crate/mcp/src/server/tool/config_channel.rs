@@ -41,7 +41,7 @@ impl From<SpamThresholds> for ConfigChannelEnvelope {
 impl NuSh {
     #[mcp::tool(
         description = "Read or adjust the channel's send-rate thresholds at runtime.",
-        output_schema = mcp::schema_for_type::<ConfigChannelEnvelope>()
+        output_schema = tool_output_schema::<ConfigChannelEnvelope>()
     )]
     pub(crate) async fn config_channel(
         &self,

@@ -20,7 +20,7 @@ pub(crate) struct PurviewConfigureEnvelope {
 impl NuSh {
     #[mcp::tool(
         description = "Set a purview's namepath patterns; an empty list deletes it.",
-        output_schema = mcp::schema_for_type::<PurviewConfigureEnvelope>()
+        output_schema = tool_output_schema::<PurviewConfigureEnvelope>()
     )]
     pub(crate) async fn purview_configure(
         &self,

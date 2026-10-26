@@ -13,7 +13,7 @@ pub(crate) struct RunEnvelope {
 impl NuSh {
     #[mcp::tool(
         description = "Evaluate a typed nushell source-code body on a stateless thread.",
-        output_schema = mcp::schema_for_type::<RunEnvelope>()
+        output_schema = tool_output_schema::<RunEnvelope>()
     )]
     pub(crate) async fn run(
         &self,

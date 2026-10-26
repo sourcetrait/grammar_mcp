@@ -30,7 +30,7 @@ pub(crate) struct RemoteChannelsEnvelope {
 impl NuSh {
     #[mcp::tool(
         description = "List remote grammar-host links: established `channels` plus bound-but-unpaired `listening` listeners.",
-        output_schema = mcp::schema_for_type::<RemoteChannelsEnvelope>()
+        output_schema = tool_output_schema::<RemoteChannelsEnvelope>()
     )]
     pub(crate) async fn remote_channels(
         &self,

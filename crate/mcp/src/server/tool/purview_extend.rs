@@ -45,7 +45,7 @@ impl NuSh {
 impl NuSh {
     #[mcp::tool(
         description = "Bring more purviews into the current view.",
-        output_schema = mcp::schema_for_type::<PurviewDeltaEnvelope>()
+        output_schema = tool_output_schema::<PurviewDeltaEnvelope>()
     )]
     pub(crate) async fn purview_extend(
         &self,

@@ -61,6 +61,11 @@ every `is_error = true` variant and every JSON-RPC error renders a red bullet wi
 body. Success-shape is the ONLY path where the agent can actually read the typed error,
 which is the entire reason the wire looks like this.
 
+A success-shape error must still satisfy the tool's declared output schema: a client of
+the 2026-07-28 era validates every structured result against it and reports a mismatch
+in place of the result. The envelope serializes as `ToolOutput`'s `Failure`, the type
+each tool's schema is derived from (`server/tool/common.rs`).
+
 `Err(mcp::ErrorData)` stays reserved for genuine rmcp-boundary failures. The nonce
 attaches when dispatch had already allocated a per-call log dir, so the agent can fetch
 that call's stdout and stderr for a failure that produced output before dying.

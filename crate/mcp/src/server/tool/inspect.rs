@@ -18,7 +18,7 @@ pub(crate) struct InspectEnvelope {
 impl NuSh {
     #[mcp::tool(
         description = "Detailed documentation for rigs, modules, and calls.",
-        output_schema = mcp::schema_for_type::<InspectEnvelope>()
+        output_schema = tool_output_schema::<InspectEnvelope>()
     )]
     pub(crate) async fn inspect(
         &self,

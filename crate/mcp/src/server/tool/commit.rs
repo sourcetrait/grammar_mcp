@@ -19,7 +19,7 @@ pub(crate) struct CommitEnvelope {
 impl NuSh {
     #[mcp::tool(
         description = "Commit an equip's lib and rig from its source to the MCP's repository for live use.",
-        output_schema = mcp::schema_for_type::<CommitEnvelope>()
+        output_schema = tool_output_schema::<CommitEnvelope>()
     )]
     pub(crate) async fn commit(
         &self,

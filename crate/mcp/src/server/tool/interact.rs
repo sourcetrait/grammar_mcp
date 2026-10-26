@@ -11,7 +11,7 @@ pub(crate) struct InteractEnvelope {
 impl NuSh {
     #[mcp::tool(
         description = "Evaluate a typed nushell source-code body on a persistent stateful thread.",
-        output_schema = mcp::schema_for_type::<InteractEnvelope>()
+        output_schema = tool_output_schema::<InteractEnvelope>()
     )]
     pub(crate) async fn interact(
         &self,

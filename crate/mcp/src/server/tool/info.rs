@@ -32,7 +32,7 @@ pub(crate) struct InfoEnvelope {
 impl NuSh {
     #[mcp::tool(
         description = "Versions, plugins, and every rig's callable signatures.",
-        output_schema = mcp::schema_for_type::<InfoEnvelope>()
+        output_schema = tool_output_schema::<InfoEnvelope>()
     )]
     pub(crate) async fn info(
         &self,

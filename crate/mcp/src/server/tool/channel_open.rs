@@ -70,7 +70,7 @@ fn arm_verify_timer(channel: Arc<ChannelHandle>) {
 impl NuSh {
     #[mcp::tool(
         description = "Open the host's packet channel and return the endpoint to watch.",
-        output_schema = mcp::schema_for_type::<ChannelOpenEnvelope>()
+        output_schema = tool_output_schema::<ChannelOpenEnvelope>()
     )]
     pub(crate) async fn channel_open(
         &self,

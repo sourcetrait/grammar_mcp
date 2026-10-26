@@ -356,6 +356,6 @@ pub(crate) fn error_to_call_result(
         },
     };
     let mut r = mcp::CallToolResult::default();
-    r.structured_content = json::to_value(&envelope).ok();
+    r.structured_content = json::to_value(ToolOutput::<()>::Failure(envelope)).ok();
     r
 }
