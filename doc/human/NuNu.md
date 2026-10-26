@@ -48,29 +48,34 @@ Executes the provided Nu language definition against the NUON `$data` provided.
 This contract is aggressively enforced and will error if broken.
 ### General
 - One top-level definition named `execute` that uses a Nu infix type signature
-- Single parameter named `data` that must be typed as:
+- Only allowed parameters: `data` and `timeout`
+  - `data` parameter is mandatory
+- The infix `input` type must always be `nothing`
+- Values must be passed as data (see Lint)
+### `timeout` Type
+- Must be either optional (`timeout?`) or omitted from signature
+- Value is inspected internally for tool timeouts; Default: `120sec`
+### `data` Type
+- Typed as:
   - `nothing`
   - `record<TYPEDEF>` with a strict type definition
   - `table<TYPEDEF>` with a strict type definition
-- The infix input type must always be `nothing`
-- The infix return type must be typed as:
-- `record<TYPEDEF> with a strict type definition
-- `table<TYPEDEF> with a strict type definition
-- Values must be passed as data (see Lint)
-- `timeout` must be either optional (`timeout?`) or omitted from signature
-#### `data` Type
 - Denies untyped `record<>` or `table<>` at its top level
   - Nested fields allow this
 - Denies undeclared fields
   - Nested untyped `record<>` and `table<>` allow this
 - Denies lists of tables
-#### `result` Type
-- Denies untyped `record<>` or `table<>` at its top level
+### `return` Type
+- Infix return type typed as:
+  - `record<TYPEDEF>` with a strict type definition
+  - `table<TYPEDEF>` with a strict type definition
+- Denies untyped `record<>` or `table<>`
 - Denies undeclared fields
 - Denies lists of tables
-#### Lint
+### Lint
 - Denies hard-coded paths starting with: `/ ~/ ./ ../`
-  - Allows URLs and well-known system paths: `/dev /etc /proc /sys`
+  - Allows URLs
+	- Allows well-known system paths starting with: `/dev/ /etc/ /proc/ /sys/`
 - Denies externals (`^<cmd>`) handled better with Nushell:
     awk bash cp date echo find grep jq ls nu rg rm sed sh sort which
 
