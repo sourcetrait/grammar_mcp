@@ -93,6 +93,11 @@ fn all_kinds() -> Vec<Emergency> {
             total_mib: 24000,
         }),
         Emergency::BackgroundJobsWarning(BackgroundJobsWarningEmergency { job_count: 40 }),
+        Emergency::DiskWarning(DiskWarningEmergency {
+            mount: "/var".into(),
+            used_pct: 85,
+            threshold_pct: 80,
+        }),
         Emergency::ChannelSpamWarning(ChannelSpamWarningEmergency {
             origin: "thread/abc".into(),
             hits: 10,
