@@ -20,6 +20,12 @@ The permit rides IN the eval thread and releases when the thread finishes, which
 deliberate: a hung thread keeps its slot OCCUPIED - bounded and visible - rather than
 leaking a thread while freeing the slot for another hang.
 
+### fn base / fn ready
+Every lock goes through these, never `expect`: a panic under either lock would
+otherwise poison it and panic every later dispatch. A poisoned base is rebuilt with its
+generation bumped, so every ready clone of the old one drops at the next take; a
+poisoned buffer is emptied. Either costs one rebuild, and the poison is cleared.
+
 ### fn refill_ready
 The clone, which is the cost, happens OUTSIDE the ready lock.
 
