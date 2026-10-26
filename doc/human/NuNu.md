@@ -75,7 +75,8 @@ This contract is aggressively enforced and will error if broken.
 ### Lint
 - Denies hard-coded paths starting with: `/ ~/ ./ ../`
   - Allows URLs
-	- Allows well-known system paths starting with: `/dev/ /etc/ /proc/ /sys/`
+  - Allows well-known system paths starting with: `/dev/ /etc/ /proc/ /sys/`
+	- Allows use with: `use` `overlay use` `source` `source-env`
 - Denies externals (`^<cmd>`) handled better with Nushell:
     awk bash cp date echo find grep jq ls nu rg rm sed sh sort which
 
