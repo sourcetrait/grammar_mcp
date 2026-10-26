@@ -122,6 +122,14 @@ pub(crate) fn eval_in_process(
     json::to_value(&json_value).map_err(|e| format!("json value: {e}").into())
 }
 
+/// Empty a jobs table a caught panic poisoned, and clear its poison.
+fn heal_jobs(jobs: &std::sync::Mutex<nu::Jobs>) {
+    if jobs.is_poisoned() {
+        *jobs.lock().unwrap_or_else(|e| e.into_inner()) = nu::Jobs::default();
+        jobs.clear_poison();
+    }
+}
+
 /// Generous per-eval stack; the parser is what needs it.
 pub(crate) const EVAL_STACK_SIZE: usize = 64 * 1024 * 1024;
 
@@ -146,7 +154,10 @@ pub(crate) async fn eval_stateless(
             }));
             let result = match outcome {
                 Ok(r) => r,
-                Err(_) => Err("panic during eval (caught)".to_string().into()),
+                Err(_) => {
+                    heal_jobs(&engine.jobs);
+                    Err("panic during eval (caught)".to_string().into())
+                }
             };
             let _ = tx.send(result);
         });
@@ -193,11 +204,7 @@ impl InteractEngine {
                     let result = match outcome {
                         Ok(r) => r,
                         Err(_) => {
-                            if env_jobs.is_poisoned() {
-                                *env_jobs.lock().unwrap_or_else(|e| e.into_inner()) =
-                                    nu::Jobs::default();
-                                env_jobs.clear_poison();
-                            }
+                            heal_jobs(&env_jobs);
                             engine = startup(Mode::Stateful);
                             engine.jobs = env_jobs.clone();
                             Err("panic during interact eval (caught); interact session reset"

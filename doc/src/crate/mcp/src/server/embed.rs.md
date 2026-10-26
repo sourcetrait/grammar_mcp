@@ -101,6 +101,16 @@ end. External children are reaped separately.
 
 The engine clone drops when the thread returns, which is what reclaims its memory.
 
+A caught panic heals the shared jobs table as the interact thread's does
+(`heal_jobs`): the clone's `jobs` is the host's one `env_jobs`, so a panic holding its
+lock would leave every later `job` command panicking on the poison. The table is
+emptied and its poison cleared.
+
+## fn heal_jobs
+Emptying is the only safe heal: a table a panic interrupted mid-update holds nothing
+trustworthy. A job thread still running loses its entry and with it its kill handle;
+that is the accepted cost, the same the interact lane's reset pays.
+
 ## struct InteractEngine
 The serial thread IS the lane, so a hung interact eval deadlocks it entirely. That is
 the case reset-on-panic does NOT cover - it handles panics, not a pure-Rust hang - and
