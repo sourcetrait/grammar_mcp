@@ -102,7 +102,7 @@ acme
 ```
 `area` is `call("acme/geo:shape:area", {width: 3.0, height: 4.0})`.
 A builtin, `gram` or `grammar`, sits at an author's depth and is called by its
-bare name: `gram:log:latest`.
+bare name: `gram:get:log`.
 `inspect()` takes an exact namepath or a pattern: `author/`, `author/rig:`,
 `.../mod/` its subtree, `.../mod:` its calls, `*` everything, `.` the purview.
 
