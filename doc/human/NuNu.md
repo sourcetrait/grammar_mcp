@@ -30,9 +30,9 @@ This contract is enforced and will error if broken.
 Aggressive type-checking will error on language contract violations.
 Aggressive linting will error if values are hard-coded in the body.
 
-Execution can be either stateless (default) or stateful (`--with-env`).
+Execution can be either stateless (default) or stateful (`--env`).
 
-Stateless operation is ran across a pool of isolated stateless workers.
+Stateless operation runs across a pool of isolated stateless workers.
 
 Stateful execution is queued against a single stateful worker and persists
 across the worker's long-term Nu environment.
@@ -42,30 +42,30 @@ across the worker's long-term Nu environment.
 Tool parameter `definition`:
 ```nu
 def execute [data: table<num: int>]: nothing -> table<id: int, name: string> {
-	let total = $data | select num | math sum
+	let total = $data | get num | math sum
 	[
 		[id name];
 		[0 zero]
-		[1 $total]
+		[1 ($total | into string)]
 	]
 }
 ```
 Tool parameter `data`:
 ```nuon
-[ [num]; [5] [3] [2] ]
+[[num]; [5], [3], [2]]
 ```
 Tool result:
 ```nuon
-[ [id name]; [0 zero] [1 10] ]
+[[id, name]; [0, zero], [1, "10"]]
 ```
 ### Stateful execution
 Tool parameter `definition`:
 ```nu
-def --with-env execute [data: record<dir: directory, file: path>]: nothing -> record<id: int, name: string> {
+def --env execute [data: record<dir: directory, file: path>]: nothing -> record<id: int, name: string> {
 	cd $data.dir
-	let kind = open --raw $data.file | into yaml | get kind  # hypothetical: value retrieved is 'foobar'
+	let kind = open --raw $data.file | from yaml | get kind  # hypothetical: value retrieved is 'foobar'
 	let count = ls ($data.dir | path join '*.md' | into glob) | length
-	$count | save --append ($file + '.count')
+	$count | save -f ($data.file + '.count')
 	{
 		id: 3
 		name: $kind
@@ -74,11 +74,11 @@ def --with-env execute [data: record<dir: directory, file: path>]: nothing -> re
 ```
 Tool parameter `data`:
 ```nuon
-{ dir: /tmp, file: barn.dat }
+{dir: /tmp, file: barn.dat}
 ```
 Tool result:
 ```nuon
-{ id: 3, name: 'foobar' }
+{id: 3, name: foobar}
 ```
 
 ## mcp tool call: grammar/interface
