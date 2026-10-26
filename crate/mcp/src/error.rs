@@ -161,6 +161,7 @@ pub enum GrammarMcpError {
         alias: String,
         reason: String,
     },
+    RemoteChannelUnverified,
     ThreadDispatch {
         reason: String,
     },
@@ -209,6 +210,7 @@ impl GrammarMcpError {
             Self::RemoteAlreadyOpen { .. } => "remote::already_open",
             Self::RemoteNotOpen { .. } => "remote::not_open",
             Self::RemoteOpenFailed { .. } => "remote::open_failed",
+            Self::RemoteChannelUnverified => "remote::channel_unverified",
             Self::ThreadDispatch { .. } => "thread::dispatch",
             Self::ThreadTimeout { .. } => "thread::timeout",
             Self::ThreadReturnedError { .. } => "thread::returned_error",
@@ -299,6 +301,9 @@ impl GrammarMcpError {
             Self::RemoteOpenFailed { alias, reason } => {
                 format!("remote link `{alias}` failed to open: {reason}")
             }
+            Self::RemoteChannelUnverified => "the channel is not verified; a remote link's \
+                 notices ride it, so open and verify the channel before the link"
+                .to_string(),
             Self::ThreadDispatch { reason } => format!("eval dispatch failed: {reason}"),
             Self::ThreadTimeout { timeout_ms } => format!("eval timed out after {timeout_ms} ms"),
             Self::ThreadReturnedError { reason } => reason.clone(),

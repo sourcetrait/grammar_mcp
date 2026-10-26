@@ -16,6 +16,9 @@ impl NuSh {
         &self,
         mcp::Parameters(p): mcp::Parameters<RemoteChannelOpenParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        if !matches!(self.channel.status().phase, ChannelPhase::Verified) {
+            return Ok(error_to_call_result(GrammarMcpError::RemoteChannelUnverified, None));
+        }
         let Some(entry) = config().remotes.by_alias.get(&p.alias).cloned() else {
             return Ok(error_to_call_result(
                 GrammarMcpError::RemoteInvalidParams {

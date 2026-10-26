@@ -54,6 +54,10 @@ remote_channel_open (ConnectionWoes): distinct from the async `mcp/remote/Discon
 {error}` Channel model, which now fires only for a listener's post-bind accept failure
 or an established link's later teardown.
 
+`remote::channel_unverified` refuses a remote_channel_open while the Channel isn't
+verified, before any bind or connect: the link's notices and relays ride the Channel's
+gate and would drop.
+
 ## fn error_to_call_result
 WHY SUCCESS-SHAPE ERRORS: in the Claude Code CLI a success-shape result carrying
 `structured_content` renders a green bullet whose body is visible on expand, while
