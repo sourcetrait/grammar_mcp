@@ -11,8 +11,8 @@ impl NuSh {
             Err(ChannelVerifyError::NotOpen) => {
                 error_to_call_result(GrammarMcpError::ChannelNotOpen, nonce)
             }
-            Err(ChannelVerifyError::NotClaimed) => {
-                error_to_call_result(GrammarMcpError::ChannelNotClaimed, nonce)
+            Err(ChannelVerifyError::NotClaimed(mode)) => {
+                error_to_call_result(GrammarMcpError::ChannelNotClaimed { mode }, nonce)
             }
         }
     }

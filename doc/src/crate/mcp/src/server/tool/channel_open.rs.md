@@ -21,9 +21,18 @@ state.
 Expiry tears the hub down; verification or a close DROPS the sender, which stands this task
 down instead. That is why cancellation is a drop rather than a message - it cannot be missed.
 
+## struct ChannelOpenResult
+`wss` is null for a sync channel rather than absent, so the result keeps one shape in
+both modes and `mode` says which it is.
+
 ## fn channel_open
 The decide-then-start sequence spans an await, so it runs under ONE guard: two concurrent
 calls would otherwise both read Closed and both bind a hub.
+
+## fn open_or_report
+A MODE IS NEVER SWITCHED UNDER A LIVE CHANNEL: an open in the other mode is refused
+`channel::wrong_mode`, naming the open one, since switching would strand the packets
+queued for the first. The agent closes and opens again.
 
 `existing` IS THE NORMAL CASE, not a fault, and reading it as one is expensive. The host
 OUTLIVES an agent's context - it keeps running across a `/clear`, and so does a persistent
@@ -34,7 +43,8 @@ for close-then-reopen; tearing down on `existing` destroys a working channel and
 draining it. The handshake exists because the agent loses its MEMORY, not its CONNECTION.
 
 The re-send is guarded on `claimed` because an UNCLAIMED hub has no connection to test and
-greets the next Monitor itself - an extra packet there would only queue a duplicate.
+greets the next Monitor itself - an extra packet there would only queue a duplicate. A
+sync channel unclaimed still holds its first greeting, untaken, for the same reason.
 
 The timer is armed on BOTH paths: an existing channel has to re-prove its peer too, and a
 fresh arm stands the previous timer down.

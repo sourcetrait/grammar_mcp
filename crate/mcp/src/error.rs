@@ -23,7 +23,13 @@ pub enum GrammarMcpError {
         reason: String,
     },
     ChannelNotOpen,
-    ChannelNotClaimed,
+    ChannelNotClaimed {
+        mode: ChannelMode,
+    },
+    ChannelWrongMode {
+        open: ChannelMode,
+        asked: ChannelMode,
+    },
     ChannelPeerGone,
     RemoteInvalidParams {
         reason: String,
@@ -54,7 +60,8 @@ impl GrammarMcpError {
             Self::PurviewInvalidId { .. } => "purview::invalid_id",
             Self::ChannelStart { .. } => "channel::start",
             Self::ChannelNotOpen => "channel::not_open",
-            Self::ChannelNotClaimed => "channel::not_claimed",
+            Self::ChannelNotClaimed { .. } => "channel::not_claimed",
+            Self::ChannelWrongMode { .. } => "channel::wrong_mode",
             Self::ChannelPeerGone => "channel::peer_gone",
             Self::RemoteInvalidParams { .. } => "remote::invalid_params",
             Self::RemoteAlreadyOpen { .. } => "remote::already_open",
@@ -83,10 +90,24 @@ impl GrammarMcpError {
             Self::ChannelNotOpen => {
                 "the channel is not open; run `interface channel open` first".to_string()
             }
-            Self::ChannelNotClaimed => "nothing has connected to the channel yet; start \
+            Self::ChannelNotClaimed {
+                mode: ChannelMode::Async,
+            } => "nothing has connected to the channel yet; start \
                  a Monitor at the wss endpoint `interface channel open` returned, see the \
                  channel/Open packet, then run `interface channel ready`"
                 .to_string(),
+            Self::ChannelNotClaimed {
+                mode: ChannelMode::Sync,
+            } => "nothing has taken the channel's packets yet; run `interface channel \
+                 sync`, see the channel/Open packet, then run `interface channel ready`"
+                .to_string(),
+            Self::ChannelWrongMode { open, asked } => format!(
+                "the channel is open in `{}` mode, not `{}`; close it with \
+                 `interface channel close` to open it in `{}`",
+                open.name(),
+                asked.name(),
+                asked.name(),
+            ),
             Self::ChannelPeerGone => "the channel's peer connection is gone; run \
                  `interface channel close` then `interface channel open` for a fresh channel"
                 .to_string(),

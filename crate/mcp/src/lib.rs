@@ -26,6 +26,7 @@ pub(crate) mod server {
         pub(crate) mod call;
         pub(crate) mod channel_close;
         pub(crate) mod channel_open;
+        pub(crate) mod channel_sync;
         pub(crate) mod channel_verified;
         pub(crate) mod commit;
         pub(crate) mod config_channel;
@@ -82,11 +83,11 @@ pub(crate) use crate::{
         channel::{
             hub::{FROM_MCP, open_packet, start as start_channel_hub},
             state::{
-                ChannelHandle, ChannelPhase, ChannelSendError, ChannelVerifyError,
-                CloseSignal as ChannelCloseSignal, EVENT_SPILL_DEST, EVENT_SPILL_KEY,
-                MAX_FRAME_BYTES, MCP_RESERVED_PREFIX, SpamVerdict, channel_handle,
-                escape_line, event_overflows, event_spill_pointer, inbox_dir, mint_msg_id,
-                render_nuon, render_packet,
+                ChannelHandle, ChannelPhase, ChannelSendError, ChannelSyncError,
+                ChannelVerifyError, CloseSignal as ChannelCloseSignal, EVENT_SPILL_DEST,
+                EVENT_SPILL_KEY, MAX_FRAME_BYTES, MCP_RESERVED_PREFIX, SpamVerdict,
+                channel_handle, escape_line, event_overflows, event_spill_pointer, inbox_dir,
+                mint_msg_id, render_nuon, render_packet,
             },
         },
         emergency::{EmergencyTx, spawn_emergency_responder},
@@ -122,6 +123,7 @@ pub(crate) use crate::{
         system::{McpHandle, Notice, notice_status, start_system},
         tool::{
             call::CallParams,
+            channel_open::ChannelOpenParams,
             commit::CommitParams,
             config_channel::ConfigChannelParams,
             equip::EquipParams,
@@ -292,4 +294,5 @@ pub use crate::{
     run::{
         run_main, run_with
     },
+    server::channel::state::ChannelMode,
 };

@@ -51,6 +51,7 @@ pub(crate) enum CommandKind {
     PurviewExtend,
     PurviewConfigure,
     ChannelOpen,
+    ChannelSync,
     ChannelReady,
     ChannelClose,
     ChannelConfig,
@@ -166,6 +167,13 @@ const CONFIGURE_ARGS: &[ArgSpec] = &[
         summary: "Its namepath patterns; an empty list deletes the purview.",
     },
 ];
+
+const CHANNEL_MODE_ARGS: &[ArgSpec] = &[ArgSpec {
+    name: "mode",
+    shape: ArgShape::String,
+    optional: false,
+    summary: "`async` for a Monitor's wss stream, or `sync` for `interface channel sync`.",
+}];
 
 const CONFIG_FLAGS: &[ArgSpec] = &[
     ArgSpec {
@@ -307,10 +315,19 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         kind: CommandKind::ChannelOpen,
         name: "interface channel open",
         topic: "Channel",
-        positionals: NO_ARGS,
+        positionals: CHANNEL_MODE_ARGS,
         flags: NO_ARGS,
         result: "record",
         summary: "Opens the Channel",
+    },
+    CommandSpec {
+        kind: CommandKind::ChannelSync,
+        name: "interface channel sync",
+        topic: "Channel",
+        positionals: NO_ARGS,
+        flags: NO_ARGS,
+        result: "record",
+        summary: "Takes the packets a sync Channel queued since the last sync.",
     },
     CommandSpec {
         kind: CommandKind::ChannelReady,

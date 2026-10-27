@@ -42,3 +42,8 @@ here, a refusal naming the flag.
 ## fn text / fn texts
 A required argument's absence is the parse's to refuse, so these default rather
 than fail.
+
+## fn mode
+The parse can hold a string only as a string, so the two modes are held here, an
+unknown one refused at its position as any argument's refusal is, naming the
+two; nothing reaches the channel but a mode it knows.

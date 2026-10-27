@@ -18,7 +18,8 @@ pub(crate) enum InterfaceCommand {
     PurviewSet(PurviewParams),
     PurviewExtend(PurviewExtendParams),
     PurviewConfigure(PurviewConfigureParams),
-    ChannelOpen,
+    ChannelOpen(ChannelOpenParams),
+    ChannelSync,
     ChannelReady,
     ChannelClose,
     ChannelConfig(ConfigChannelParams),
@@ -273,6 +274,16 @@ fn count<T: TryFrom<i64>>(
     }
 }
 
+/// The Channel's mode, `sync` or `async`; any other value refused at its position.
+fn mode(literals: &mut Literals) -> Result<ChannelMode, Refusal> {
+    match literals.remove("mode") {
+        Some((Literal::Text(text), span)) => ChannelMode::from_name(&text)
+            .ok_or_else(|| (Some(span), format!("`mode` is `sync` or `async`, not `{text}`"))),
+        Some((_, span)) => Err((Some(span), "`mode` takes a string".to_string())),
+        None => Err((None, "`mode` is required: `sync` or `async`".to_string())),
+    }
+}
+
 /// The command a spec names, its parameters from the literals.
 fn command(
     kind: CommandKind,
@@ -303,7 +314,10 @@ fn command(
                 namepaths: texts(literals, "namepaths"),
             })
         }
-        CommandKind::ChannelOpen => InterfaceCommand::ChannelOpen,
+        CommandKind::ChannelOpen => InterfaceCommand::ChannelOpen(ChannelOpenParams {
+            mode: mode(literals)?,
+        }),
+        CommandKind::ChannelSync => InterfaceCommand::ChannelSync,
         CommandKind::ChannelReady => InterfaceCommand::ChannelReady,
         CommandKind::ChannelClose => InterfaceCommand::ChannelClose,
         CommandKind::ChannelConfig => InterfaceCommand::ChannelConfig(ConfigChannelParams {

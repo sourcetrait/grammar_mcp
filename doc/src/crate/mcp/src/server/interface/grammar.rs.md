@@ -34,6 +34,9 @@ but the description.
 ## const COMMANDS
 Ordered as the description lists them, grouped by topic. A topic's commands sit
 together because `render_signatures` opens a heading when the topic changes.
+`channel sync`, and `channel open`'s `mode`, are User's additions beyond the
+tools converted; `sync` sits after `open`, in the order of the handshake it
+serves.
 
 ## struct InterfaceDecl
 A signature for the parser and nothing more. The command is parsed, never

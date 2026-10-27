@@ -28,14 +28,16 @@ fn refusal(text: &str) -> String {
     rows.first().map(|(_, message)| message.clone()).unwrap_or_default()
 }
 
-/// The smallest command a spec takes: each required positional a sample.
+/// The smallest command a spec takes: each required positional a sample, a mode
+/// one of its two values.
 fn sample(spec: &CommandSpec) -> String {
     let mut text = spec.name.to_string();
     for arg in spec.positionals.iter().filter(|arg| !arg.optional) {
-        text.push_str(match arg.shape {
-            ArgShape::String => " 'x'",
-            ArgShape::Strings => " ['x']",
-            ArgShape::Int => " 1",
+        text.push_str(match (arg.name, arg.shape) {
+            ("mode", _) => " 'sync'",
+            (_, ArgShape::String) => " 'x'",
+            (_, ArgShape::Strings) => " ['x']",
+            (_, ArgShape::Int) => " 1",
         });
     }
     text
@@ -51,7 +53,8 @@ fn kind_of(command: &InterfaceCommand) -> CommandKind {
         InterfaceCommand::PurviewSet(_) => CommandKind::PurviewSet,
         InterfaceCommand::PurviewExtend(_) => CommandKind::PurviewExtend,
         InterfaceCommand::PurviewConfigure(_) => CommandKind::PurviewConfigure,
-        InterfaceCommand::ChannelOpen => CommandKind::ChannelOpen,
+        InterfaceCommand::ChannelOpen(_) => CommandKind::ChannelOpen,
+        InterfaceCommand::ChannelSync => CommandKind::ChannelSync,
         InterfaceCommand::ChannelReady => CommandKind::ChannelReady,
         InterfaceCommand::ChannelClose => CommandKind::ChannelClose,
         InterfaceCommand::ChannelConfig(_) => CommandKind::ChannelConfig,
@@ -177,6 +180,27 @@ fn a_missing_or_mistyped_argument_is_refused_at_its_position() {
         Ok(InterfaceCommand::ProcessKill(p)) => assert_eq!(p.nonce, "['a']", "a string takes the token"),
         other => panic!("got {other:?}"),
     }
+}
+
+#[test]
+fn the_channel_opens_in_a_mode_it_names() {
+    for (text, mode) in [
+        ("interface channel open sync", ChannelMode::Sync),
+        ("interface channel open 'async'", ChannelMode::Async),
+    ] {
+        match parse(text) {
+            Ok(InterfaceCommand::ChannelOpen(p)) => assert_eq!(p.mode, mode, "`{text}`"),
+            other => panic!("`{text}`: got {other:?}"),
+        }
+    }
+    let rows = parse("interface channel open both").expect_err("a mode is sync or async");
+    assert_eq!(rows[0].kind, KIND_INTERFACE);
+    assert_eq!(rows[0].message, "`mode` is `sync` or `async`, not `both`");
+    assert_eq!(rows[0].source.as_ref().expect("a source").position, [1, 24]);
+    assert!(
+        refusal("interface channel open").contains("missing mode"),
+        "the mode is required, with no default",
+    );
 }
 
 #[test]

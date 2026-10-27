@@ -34,6 +34,24 @@ Deliver frame inline, so the remote spill transfers it through the file connecti
 EVENT_SPILL_DEST, inside the delivery's own inbox directory, which is why the spill is a
 send-path act, not a render choice.
 
+## enum ChannelMode
+User's two modes, both required to be named at the open with no default: `async` for a
+harness whose agent holds a Monitor on a websocket, `sync` for one with no such
+mechanism, its agent taking the packets by calling `interface channel sync`. The phases,
+the handshake, the gate, and the refusals are the same in both; only where a packet
+waits differs.
+
+## const SYNC_QUEUE_CAP
+A sync channel's queue waits on the agent, so it is bounded where the hub's, drained as
+fast as the socket takes it, is not: the oldest packet goes past the cap and the drop is
+counted for the next sync, so an agent learns what it missed rather than nothing. A
+packet is a notification, never a payload, and the spam thresholds already bound a
+body's rate, so a thousand covers a long silence.
+
+## enum PacketSink
+ONE SEND PATH FOR BOTH MODES: `emit` and `send_control` push to whichever sink the open
+installed, so the gate, the spam counter, the spill, and the render never ask the mode.
+
 ## enum ChannelPhase
 READ AT SEND TIME, NEVER CAPTURED. A job outliving its eval keeps its decl and everything it
 closed over, so a spawn-time snapshot would let work started before verification emit to an
@@ -101,11 +119,22 @@ unit-tested at all.
 CLEARING is what makes it safe twice over: a second close cannot prune a directory a later
 open recreated.
 
+### fn install_sync
+A sync channel binds nothing: its greeting is the first line queued, and its claim flag
+starts unset, as a fresh hub's does, so the same verification gate holds it.
+
+### fn take_sync
+TAKING IS THE CLAIM. A sync channel has no connection to claim it, so the first sync,
+which hands the agent the greeting through the stdio session it drives, sets the flag a
+hub's accept would; `interface channel ready` then verifies as it does for a Monitor. A
+refused sync claims nothing.
+
 ### fn mark_verified
 VERIFICATION REQUIRES A CLAIM. The handshake asserts the agent owns THE CLAIMING connection,
 so with no claim there is nothing to own. It also closes a real hole - a
 verified-but-unclaimed channel would accept emits into a queue nothing drains, because the
-receiver is still parked in the accept loop waiting for a peer.
+receiver is still parked in the accept loop waiting for a peer. The refusal names the
+mode, since what the agent does next differs: start a Monitor, or sync.
 
 ### fn close_if_unverified
 The phase is re-read HERE, under the lock, because verification can land between the timer's
@@ -133,7 +162,7 @@ The teardown itself, with the lock already held, so the two entry points that de
 to close cannot drift about WHAT closing does.
 
 Dropping the shutdown sender signals the hub task even though nothing is ever received on
-it.
+it. A sync channel has neither signal; dropping its sink drops its queue.
 
 ## struct MsgId
 Distinct from `Nonce` in NAME rather than in shape: nonces name EVALS throughout this crate,

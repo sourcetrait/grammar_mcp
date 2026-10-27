@@ -26,5 +26,6 @@ that, chosen to signal both its internal-only status and the bravery of anyone
 outside the workspace reaching for it.
 
 ## pub use
-The whole public surface: the CLI's parse, the deniable tools, the error, and the
-two entries, `run_main` and `run_with`. Everything else is crate-internal.
+The whole public surface: the CLI's parse, the deniable tools, the error, the
+Channel's mode, which the error's Channel refusals carry, and the two entries,
+`run_main` and `run_with`. Everything else is crate-internal.

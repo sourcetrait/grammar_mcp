@@ -245,10 +245,10 @@ impl Consumer {
     /// Open the host's Channel, connect a real WSS client trusting `ca_pem`, see
     /// the `mcp/channel/Open` packet, then verify - the claude-code handshake.
     pub fn attach(mut host: Host, ca_pem: &Path) -> Self {
-        let open = host.interface("interface channel open");
+        let open = host.interface("interface channel open async");
         let wss = envelope(&open)["result"]["wss"]
             .as_str()
-            .expect("`interface channel open` returns a wss url")
+            .expect("`interface channel open async` returns a wss url")
             .to_string();
         let (tx, rx) = mpsc::channel();
         let reader = spawn_ws_reader(wss, ca_pem.to_path_buf(), tx);

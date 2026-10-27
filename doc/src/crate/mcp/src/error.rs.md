@@ -35,6 +35,11 @@ refuses with its own kinds, as its tool did.
 verified, before any bind or connect: the link's notices and relays ride the Channel's
 gate and would drop.
 
+`channel::wrong_mode` names the mode the Channel is open in and the one asked for:
+an open in the other mode, or a sync on an async Channel, each told to close
+first. `channel::not_claimed`'s message follows the mode, a Monitor to start or a
+sync to call.
+
 `host::unknown` is a tool's `host` alias naming no host this MCP knows, its message
 naming `local`. The engine's own `host::unserved` stays apart: that is a request naming
 a host its engine doesn't serve, which no tool sends.

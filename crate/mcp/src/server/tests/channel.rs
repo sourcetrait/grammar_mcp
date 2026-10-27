@@ -1,5 +1,5 @@
 use crate::*;
-use crate::server::channel::state::{MsgId, escape_line};
+use crate::server::channel::state::{MsgId, SYNC_QUEUE_CAP, escape_line};
 use sourcetrait_common::cereal;
 
 /// A permissive starting policy, so a test that is not ABOUT the thresholds never trips
@@ -81,7 +81,7 @@ fn verification_requires_a_claim() {
     let (handle, _packets, _close, claimed) = open_handle();
     assert_eq!(
         handle.mark_verified(),
-        Err(ChannelVerifyError::NotClaimed),
+        Err(ChannelVerifyError::NotClaimed(ChannelMode::Async)),
         "verifying with nothing connected has no claim to prove ownership of, and \
          would leave a verified channel whose queue nothing drains",
     );
@@ -121,6 +121,71 @@ fn a_control_packet_bypasses_the_verification_gate() {
         Err(ChannelSendError::NotOpen),
         "a closed channel still refuses control packets",
     );
+}
+
+/// A sync channel's handshake is async's: its greeting comes first, taking it is
+/// the claim, and only then does `ready` verify, the sends queuing after it.
+#[test]
+fn a_sync_channel_queues_its_greeting_and_a_sync_claims_it() {
+    let handle = ChannelHandle::new(test_policy());
+    handle.install_sync("greeting".to_string());
+    let status = handle.status();
+    assert_eq!(status.phase, ChannelPhase::Open);
+    assert_eq!(status.mode, Some(ChannelMode::Sync));
+    assert!(status.url.is_none(), "no endpoint is bound");
+    assert!(!status.claimed);
+    assert_eq!(
+        handle.mark_verified(),
+        Err(ChannelVerifyError::NotClaimed(ChannelMode::Sync)),
+    );
+    assert_eq!(handle.emit("early".to_string()), Err(ChannelSendError::NotVerified));
+    assert_eq!(handle.take_sync(), Ok((vec!["greeting".to_string()], 0)));
+    assert!(handle.status().claimed, "taking the greeting claims the channel");
+    assert_eq!(handle.mark_verified(), Ok(()));
+    assert!(handle.emit("a".to_string()).is_ok());
+    assert!(handle.send_control("b".to_string()).is_ok());
+    assert_eq!(handle.take_sync(), Ok((vec!["a".to_string(), "b".to_string()], 0)));
+    assert_eq!(handle.take_sync(), Ok((Vec::new(), 0)), "a sync empties the queue");
+}
+
+#[test]
+fn a_sync_queue_drops_its_oldest_past_the_cap() {
+    let handle = ChannelHandle::new(test_policy());
+    handle.install_sync("greeting".to_string());
+    assert!(handle.take_sync().is_ok());
+    assert_eq!(handle.mark_verified(), Ok(()));
+    for n in 0..SYNC_QUEUE_CAP + 2 {
+        assert!(handle.emit(n.to_string()).is_ok());
+    }
+    let (lines, dropped) = handle.take_sync().expect("a sync channel");
+    assert_eq!(lines.len(), SYNC_QUEUE_CAP);
+    assert_eq!(lines.first().map(String::as_str), Some("2"), "the oldest two are gone");
+    assert_eq!(lines.last().map(String::as_str), Some("1001"));
+    assert_eq!(dropped, 2);
+    assert_eq!(handle.take_sync(), Ok((Vec::new(), 0)), "the count is since the last sync");
+}
+
+#[test]
+fn a_sync_is_refused_on_a_closed_or_an_async_channel() {
+    assert_eq!(
+        ChannelHandle::new(test_policy()).take_sync(),
+        Err(ChannelSyncError::NotOpen),
+    );
+    let (handle, _packets, _close, _claimed) = open_handle();
+    assert_eq!(handle.status().mode, Some(ChannelMode::Async));
+    assert_eq!(handle.take_sync(), Err(ChannelSyncError::WrongMode(ChannelMode::Async)));
+    assert!(!handle.status().claimed, "a refused sync claims nothing");
+}
+
+#[test]
+fn a_close_drops_a_sync_channel_and_its_queue() {
+    let handle = ChannelHandle::new(test_policy());
+    handle.install_sync("greeting".to_string());
+    assert!(handle.close(1000, "channel closed"));
+    let status = handle.status();
+    assert_eq!(status.phase, ChannelPhase::Closed);
+    assert_eq!(status.mode, None);
+    assert_eq!(handle.take_sync(), Err(ChannelSyncError::NotOpen));
 }
 
 #[test]

@@ -28,6 +28,38 @@ pub(crate) enum ChannelPhase {
     Verified,
 }
 
+/// How an open Channel's packets reach its peer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ser::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ChannelMode {
+    /// A Monitor reads them from the hub's loopback WSS stream as they come.
+    Async,
+    /// They queue until the agent takes them by `interface channel sync`.
+    Sync,
+}
+
+impl ChannelMode {
+    /// The mode's name, as `interface channel open` takes it.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Async => "async",
+            Self::Sync => "sync",
+        }
+    }
+
+    /// The mode a name names, if any.
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "async" => Some(Self::Async),
+            "sync" => Some(Self::Sync),
+            _ => None,
+        }
+    }
+}
+
+/// The most packets a sync Channel queues; past it, the oldest is dropped.
+pub(crate) const SYNC_QUEUE_CAP: usize = 1000;
+
 /// What a planned close carries: the code, the reason, and an optional ack.
 pub(crate) type CloseSignal = (u16, String, Option<tk::oneshot::Sender<()>>);
 
@@ -35,8 +67,20 @@ pub(crate) type CloseSignal = (u16, String, Option<tk::oneshot::Sender<()>>);
 #[derive(Clone, Debug)]
 pub(crate) struct ChannelStatus {
     pub phase: ChannelPhase,
+    pub mode: Option<ChannelMode>,
     pub url: Option<String>,
     pub claimed: bool,
+}
+
+/// Where an emitted line goes: the hub's queue, or the queue a sync takes.
+enum PacketSink {
+    /// The hub's queue, which its peer task writes to the socket.
+    Hub(tk::UnboundedSender<String>),
+    /// The lines a sync takes, and how many the cap dropped since the last.
+    Sync {
+        lines: std::collections::VecDeque<String>,
+        dropped: u64,
+    },
 }
 
 /// What the spam counter decided about one send.
@@ -64,6 +108,8 @@ struct OriginCounter {
 
 struct ChannelInner {
     phase: ChannelPhase,
+    /// Set at an open, cleared at a close.
+    mode: Option<ChannelMode>,
     url: Option<String>,
     /// The live spam policy, seeded from CONFIG at construction.
     spam: SpamThresholds,
@@ -71,8 +117,8 @@ struct ChannelInner {
     counters: HashMap<String, OriginCounter>,
     /// Installed by `run_server`; absent on the one-shot CLI path.
     emergency: Option<EmergencyTx>,
-    /// Rendered, newline-escaped NUON lines, one per packet.
-    packets: Option<tk::UnboundedSender<String>>,
+    /// Where rendered, newline-escaped NUON lines go, one per packet.
+    packets: Option<PacketSink>,
     /// The planned-close signal, deliberately NOT sharing the packet queue.
     close: Option<tk::oneshot::Sender<CloseSignal>>,
     shutdown: Option<tk::oneshot::Sender<()>>,
@@ -112,8 +158,17 @@ impl ChannelSendError {
 pub(crate) enum ChannelVerifyError {
     /// Nothing to verify - `interface channel open` has not run.
     NotOpen,
-    /// The hub is up but nothing has connected, so there is no claim to prove.
-    NotClaimed,
+    /// Open, but nothing has claimed it in its mode, so there is no claim to prove.
+    NotClaimed(ChannelMode),
+}
+
+/// Why a sync was refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChannelSyncError {
+    /// No channel exists.
+    NotOpen,
+    /// The channel is open in the other mode, named here.
+    WrongMode(ChannelMode),
 }
 
 /// The host's single channel, guarded by a std Mutex.
@@ -129,6 +184,7 @@ impl ChannelHandle {
         Self {
             inner: std::sync::Mutex::new(ChannelInner {
                 phase: ChannelPhase::Closed,
+                mode: None,
                 url: None,
                 spam,
                 counters: HashMap::new(),
@@ -173,12 +229,13 @@ impl ChannelHandle {
         let inner = self.lock();
         ChannelStatus {
             phase: inner.phase,
+            mode: inner.mode,
             url: inner.url.clone(),
             claimed: claimed_of(&inner),
         }
     }
 
-    /// Record a freshly bound hub; the phase moves to Open.
+    /// Record a freshly bound hub; the phase moves to Open, the mode async.
     pub(crate) fn install(
         &self,
         url: String,
@@ -189,11 +246,53 @@ impl ChannelHandle {
     ) {
         let mut inner = self.lock();
         inner.phase = ChannelPhase::Open;
+        inner.mode = Some(ChannelMode::Async);
         inner.url = Some(url);
-        inner.packets = Some(packets);
+        inner.packets = Some(PacketSink::Hub(packets));
         inner.close = Some(close);
         inner.shutdown = Some(shutdown);
         inner.claimed = Some(claimed);
+    }
+
+    /// Open a sync Channel, its greeting the first line queued, its claim unset.
+    pub(crate) fn install_sync(
+        &self,
+        open_line: String,
+    ) {
+        let mut inner = self.lock();
+        inner.phase = ChannelPhase::Open;
+        inner.mode = Some(ChannelMode::Sync);
+        inner.url = None;
+        inner.packets = Some(PacketSink::Sync {
+            lines: std::collections::VecDeque::from([open_line]),
+            dropped: 0,
+        });
+        inner.close = None;
+        inner.shutdown = None;
+        inner.claimed = Some(Arc::new(AtomicBool::new(false)));
+    }
+
+    /// Take a sync Channel's queued lines and its drop count, claiming it.
+    pub(crate) fn take_sync(&self) -> Result<(Vec<String>, u64), ChannelSyncError> {
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        if matches!(inner.phase, ChannelPhase::Closed) {
+            return Err(ChannelSyncError::NotOpen);
+        }
+        let taken = match &mut inner.packets {
+            Some(PacketSink::Sync { lines, dropped }) => {
+                (lines.drain(..).collect(), std::mem::take(dropped))
+            }
+            _ => {
+                return Err(ChannelSyncError::WrongMode(
+                    inner.mode.unwrap_or(ChannelMode::Async),
+                ));
+            }
+        };
+        if let Some(claimed) = &inner.claimed {
+            claimed.store(true, Ordering::SeqCst);
+        }
+        Ok(taken)
     }
 
     /// Arm the verify timer, standing any previous one down.
@@ -211,7 +310,9 @@ impl ChannelHandle {
             return Err(ChannelVerifyError::NotOpen);
         }
         if !claimed_of(&inner) {
-            return Err(ChannelVerifyError::NotClaimed);
+            return Err(ChannelVerifyError::NotClaimed(
+                inner.mode.unwrap_or(ChannelMode::Async),
+            ));
         }
         inner.phase = ChannelPhase::Verified;
         inner.verify_cancel = None;
@@ -266,11 +367,11 @@ impl ChannelHandle {
         &self,
         line: String,
     ) -> Result<(), ChannelSendError> {
-        let inner = self.lock();
+        let mut inner = self.lock();
         if matches!(inner.phase, ChannelPhase::Closed) {
             return Err(ChannelSendError::NotOpen);
         }
-        push_locked(&inner, line)
+        push_locked(&mut inner, line)
     }
 
     /// The emit path; the phase is re-read here, at the moment of sending.
@@ -278,11 +379,11 @@ impl ChannelHandle {
         &self,
         line: String,
     ) -> Result<(), ChannelSendError> {
-        let inner = self.lock();
+        let mut inner = self.lock();
         match inner.phase {
             ChannelPhase::Closed => Err(ChannelSendError::NotOpen),
             ChannelPhase::Open => Err(ChannelSendError::NotVerified),
-            ChannelPhase::Verified => push_locked(&inner, line),
+            ChannelPhase::Verified => push_locked(&mut inner, line),
         }
     }
 }
@@ -430,11 +531,19 @@ fn claimed_of(inner: &ChannelInner) -> bool {
 }
 
 fn push_locked(
-    inner: &ChannelInner,
+    inner: &mut ChannelInner,
     line: String,
 ) -> Result<(), ChannelSendError> {
-    match &inner.packets {
-        Some(tx) => tx.send(line).map_err(|_| ChannelSendError::HubGone),
+    match &mut inner.packets {
+        Some(PacketSink::Hub(tx)) => tx.send(line).map_err(|_| ChannelSendError::HubGone),
+        Some(PacketSink::Sync { lines, dropped }) => {
+            if lines.len() >= SYNC_QUEUE_CAP {
+                lines.pop_front();
+                *dropped += 1;
+            }
+            lines.push_back(line);
+            Ok(())
+        }
         None => Err(ChannelSendError::HubGone),
     }
 }
@@ -450,6 +559,7 @@ fn close_locked(
         let _ = tx.send((code, reason.to_string(), done));
     }
     inner.phase = ChannelPhase::Closed;
+    inner.mode = None;
     inner.url = None;
     inner.packets = None;
     inner.claimed = None;
