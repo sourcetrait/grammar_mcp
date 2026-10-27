@@ -36,7 +36,7 @@ fn each_grammar_call_runs_by_its_bare_name() {
     let installed = host.equip("install", grammar_equip().to_str().expect("utf-8 path"));
     assert!(!has_error_path(&installed), "the grammar equip installs; got {installed}");
 
-    let info = envelope(&host.call("info", json!({})));
+    let info = envelope(&host.info());
     let signatures = info["result"]["signatures"].as_str().expect("info carries signatures");
     assert!(
         signatures.starts_with("grammar # "),

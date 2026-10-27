@@ -1,26 +1,25 @@
-//! Cooperative cancellation: kill(nonce) actually stops an in-flight `nu` call. A
-//! SYSTEM test - it needs a real client sending kill WHILE a call is in flight
-//! (pipelined requests over the stdio transport). No test-hooks: nu `sleep` polls
-//! Signals, so it bails on the cancel.
+//! Cooperative cancellation: `interface process kill` actually stops an in-flight
+//! `nu` call. A SYSTEM test - it needs a real client sending the kill WHILE a call
+//! is in flight (pipelined requests over the stdio transport). No test-hooks: nu
+//! `sleep` polls Signals, so it bails on the cancel.
 
 use std::time::{Duration, Instant};
 
-use serde_json::json;
 use sourcetrait_grammar_tests::*;
 use sourcetrait_common::testing::prelude::*;
 
 static TESTING: testing::Module = testing::module!(Integration, { .using_temp_dir() });
 
-/// The in-flight entries `processes()` lists.
+/// The in-flight entries `interface process list` lists.
 fn in_flight(host: &mut Host) -> Vec<serde_json::Value> {
-    let resp = host.call("processes", json!({}));
+    let resp = host.interface("interface process list");
     envelope(&resp)["result"]["processes"]
         .as_array()
         .cloned()
         .unwrap_or_default()
 }
 
-/// Poll processes() until an in-flight `nu` call appears; return its nonce.
+/// Poll the process list until an in-flight `nu` call appears; return its nonce.
 fn poll_inflight_nu_nonce(host: &mut Host, secs: u64) -> Option<String> {
     let deadline = Instant::now() + Duration::from_secs(secs);
     loop {
@@ -38,7 +37,7 @@ fn poll_inflight_nu_nonce(host: &mut Host, secs: u64) -> Option<String> {
     }
 }
 
-/// Poll processes() until the in-flight set drains (or `secs` elapse).
+/// Poll the process list until the in-flight set drains (or `secs` elapse).
 fn poll_until_drained(host: &mut Host, secs: u64) -> bool {
     let deadline = Instant::now() + Duration::from_secs(secs);
     loop {
@@ -67,7 +66,7 @@ fn kill_stops_an_in_flight_call() {
     // It should register as in-flight; grab its nonce.
     let nonce = poll_inflight_nu_nonce(&mut host, 5).expect("the call should register as in-flight");
     // Kill it; its own void response is ignored.
-    let _ = host.request("kill", json!({"nonce": nonce}));
+    let _ = host.request_interface(&format!("interface process kill {}", nu_literal(&nonce)));
     // Read the call's own response: a killed call bails on the cancel and returns
     // an error, not a completed result.
     let resp = host.read_id(call_id);
@@ -78,6 +77,6 @@ fn kill_stops_an_in_flight_call() {
     // And the in-flight set drains.
     assert!(
         poll_until_drained(&mut host, 5),
-        "processes() should drain after the kill",
+        "the process list should drain after the kill",
     );
 }

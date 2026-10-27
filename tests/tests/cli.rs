@@ -6,8 +6,8 @@ static TESTING: testing::Module = testing::module!(Integration, { .using_temp_di
 #[tested]
 fn cli_info_prints_its_envelope() {
     let t = testing::test!({ .using_temp_dir() });
-    let out = run_output(t.temp_dir(), &["--id", "cid", "cli", "info"]);
-    assert!(out.status.success(), "cli info should exit 0; got {out:?}");
+    let out = run_output(t.temp_dir(), &["--id", "cid", "cli", "interface", "interface info"]);
+    assert!(out.status.success(), "cli interface info should exit 0; got {out:?}");
     let v = stdout_envelope(&out);
     let info = &v["result"];
     assert_eq!(info["name"].as_str(), Some("grammar"), "got {v}");
@@ -27,7 +27,7 @@ fn cli_info_starts_without_the_sourcetrait_environment() {
     let t = testing::test!({ .using_temp_dir() });
     let out = run_output_without(
         t.temp_dir(),
-        &["--id", "cid", "cli", "info"],
+        &["--id", "cid", "cli", "interface", "interface info"],
         &[
             "XDGX_ASSET_HOME",
             "XDGX_BASE_SPEC",
@@ -53,13 +53,11 @@ fn cli_equip_lifecycle_and_call() {
     let equip = equip_source(&t.temp_dir().join("src"), "sourcetrait/clilib");
     let src = equip.join("rig");
 
-    let established = run_output(
-        t.temp_dir(),
-        &["--id", "cid", "cli", "equip", "new", equip.to_str().unwrap()],
-    );
+    let new = format!("interface equip new {}", nu_literal(equip.to_str().unwrap()));
+    let established = run_output(t.temp_dir(), &["--id", "cid", "cli", "interface", &new]);
     assert!(
         established.status.success(),
-        "cli equip new should exit 0; got {established:?}",
+        "cli interface equip new should exit 0; got {established:?}",
     );
 
     write_source(&src, "mod.nu", "export module m\n");
@@ -70,10 +68,13 @@ fn cli_equip_lifecycle_and_call() {
         &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
     );
 
-    let committed = run_output(t.temp_dir(), &["--id", "cid", "cli", "commit", "sourcetrait/clilib"]);
+    let committed = run_output(
+        t.temp_dir(),
+        &["--id", "cid", "cli", "interface", "interface equip commit 'sourcetrait/clilib'"],
+    );
     assert!(
         committed.status.success(),
-        "cli commit should exit 0; got stdout={:?} stderr={:?}",
+        "cli interface equip commit should exit 0; got stdout={:?} stderr={:?}",
         stdout_str(&committed),
         String::from_utf8_lossy(&committed.stderr),
     );
@@ -133,8 +134,8 @@ fn cli_error_envelope_exits_one() {
 #[tested]
 fn cli_output_is_one_nuon_record() {
     let t = testing::test!({ .using_temp_dir() });
-    let out = run_output(t.temp_dir(), &["--id", "cid", "cli", "info"]);
-    assert!(out.status.success(), "cli info should exit 0; got {out:?}");
+    let out = run_output(t.temp_dir(), &["--id", "cid", "cli", "interface", "interface info"]);
+    assert!(out.status.success(), "cli interface info should exit 0; got {out:?}");
     let text = stdout_str(&out);
     assert!(!text.contains('\u{1b}'), "stdout must carry no ANSI escapes; got {text:?}");
     let trimmed = text.trim();
@@ -146,13 +147,56 @@ fn cli_output_is_one_nuon_record() {
 }
 
 #[tested]
-fn cli_kill_prints_a_null_result_and_exits_zero() {
+fn cli_process_kill_prints_a_null_result_and_exits_zero() {
     let t = testing::test!({ .using_temp_dir() });
-    let out = run_output(t.temp_dir(), &["--id", "cid", "cli", "kill", "doesnotexist"]);
-    assert!(out.status.success(), "cli kill should exit 0; got {out:?}");
+    let out = run_output(
+        t.temp_dir(),
+        &["--id", "cid", "cli", "interface", "interface process kill 'doesnotexist'"],
+    );
+    assert!(out.status.success(), "cli interface process kill should exit 0; got {out:?}");
     let v = stdout_envelope(&out);
     assert!(
         v.get("result").is_some_and(|result| result.is_null()),
-        "a void tool answers a null result; got {v}",
+        "a void command answers a null result; got {v}",
     );
+}
+
+#[tested]
+fn cli_interface_refusal_exits_one() {
+    let t = testing::test!({ .using_temp_dir() });
+    let out = run_output(
+        t.temp_dir(),
+        &["--id", "cid", "cli", "interface", "interface info | interface purview list"],
+    );
+    assert_eq!(out.status.code(), Some(1), "a refused command should exit 1; got {out:?}");
+    let v = stdout_envelope(&out);
+    assert_eq!(v["error"][0]["kind"].as_str(), Some("interface::invalid"), "got {v}");
+    assert!(v["nonce"].as_str().is_some(), "the refusal carries its nonce; got {v}");
+}
+
+/// Deny gates an agent's host: the operator's one-shot path keeps the whole
+/// interface, a denied command and a denied tool alike.
+#[tested]
+fn cli_deny_does_not_reach_the_one_shot_path() {
+    let t = testing::test!({ .using_temp_dir() });
+    let out = run_output(
+        t.temp_dir(),
+        &[
+            "--id",
+            "cid",
+            "--deny",
+            "interface,purview configure",
+            "cli",
+            "interface",
+            "interface purview configure 'cli/probe' ['*']",
+        ],
+    );
+    assert!(
+        out.status.success(),
+        "a denied command still runs on the one-shot path; got stdout={:?} stderr={:?}",
+        stdout_str(&out),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    let v = stdout_envelope(&out);
+    assert!(v["result"]["signatures"].is_string(), "got {v}");
 }

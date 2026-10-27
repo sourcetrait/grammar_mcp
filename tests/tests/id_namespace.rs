@@ -13,7 +13,7 @@ fn default_id_is_user_env() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn_full(t.temp_dir(), &[], &[("USER", "udefault")]);
     let (resp, _) = host.equip_new("sourcetrait/mylib", &t.temp_dir().join("src"));
-    assert!(!has_error_path(&resp), "equip(new) should succeed; got {resp}");
+    assert!(!has_error_path(&resp), "equip new should succeed; got {resp}");
     let lib_dir = namespace_dir(&t.temp_dir().join("data"), "udefault", "default")
         .join("equip")
         .join("sourcetrait")
@@ -31,7 +31,7 @@ fn explicit_id_and_namespace_select_their_own_dirs() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn_args(t.temp_dir(), &["--id", "aid", "--namespace", "ns1"]);
     let (resp, _) = host.equip_new("sourcetrait/mylib", &t.temp_dir().join("src"));
-    assert!(!has_error_path(&resp), "equip(new) should succeed; got {resp}");
+    assert!(!has_error_path(&resp), "equip new should succeed; got {resp}");
     let lib_dir = namespace_dir(&t.temp_dir().join("data"), "aid", "ns1")
         .join("equip")
         .join("sourcetrait")
@@ -39,7 +39,7 @@ fn explicit_id_and_namespace_select_their_own_dirs() {
         .join("rig");
     assert!(lib_dir.exists(), "explicit --id/--namespace should select the namespace; expected {}", lib_dir.display());
 
-    let info = host.call("info", json!({}));
+    let info = host.info();
     let env = &envelope(&info)["result"];
     assert_eq!(env["id"].as_str(), Some("aid"), "got {env}");
     assert_eq!(env["namespace"].as_str(), Some("ns1"), "got {env}");
@@ -49,7 +49,7 @@ fn explicit_id_and_namespace_select_their_own_dirs() {
 fn the_test_flag_defaults_the_namespace() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn_args(t.temp_dir(), &["--id", "tflag", "--test"]);
-    let info = host.call("info", json!({}));
+    let info = host.info();
     assert_eq!(
         envelope(&info)["result"]["namespace"].as_str(),
         Some("test"),
@@ -71,7 +71,7 @@ fn an_explicit_namespace_beats_the_test_default() {
         t.temp_dir(),
         &["--id", "tflag2", "--test", "--namespace", "elsewhere"],
     );
-    let info = host.call("info", json!({}));
+    let info = host.info();
     assert_eq!(
         envelope(&info)["result"]["namespace"].as_str(),
         Some("elsewhere"),
@@ -83,7 +83,7 @@ fn an_explicit_namespace_beats_the_test_default() {
 fn without_the_flag_the_namespace_is_still_default() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn_args(t.temp_dir(), &["--id", "noflag"]);
-    let info = host.call("info", json!({}));
+    let info = host.info();
     assert_eq!(
         envelope(&info)["result"]["namespace"].as_str(),
         Some("default"),
@@ -111,7 +111,7 @@ fn namespaces_are_disjoint() {
     }
 
     let mut ns2 = Host::spawn_args(t.temp_dir(), &["--id", "aid", "--namespace", "ns2"]);
-    let info = envelope(&ns2.call("info", json!({})));
+    let info = envelope(&ns2.info());
     let block = info["result"]["signatures"]
         .as_str()
         .expect("info carries a signatures block");
@@ -145,7 +145,7 @@ fn env_carries_id_namespace_and_work_dir() {
     assert_eq!(env["result"]["id"].as_str(), Some("envid"), "EQUIP_ID; got {resp}");
     assert_eq!(env["result"]["ns"].as_str(), Some("envns"), "EQUIP_NAMESPACE; got {resp}");
     assert_eq!(env["result"]["wd"].as_str(), Some(wd_str), "EQUIP_WORK_DIR; got {resp}");
-    let info = host.call("info", json!({}));
+    let info = host.info();
     assert_eq!(envelope(&info)["result"]["work_dir"].as_str(), Some(wd_str), "info work_dir; got {info}");
 }
 

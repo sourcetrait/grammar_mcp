@@ -19,7 +19,6 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
-use serde_json::json;
 use sourcetrait_cert_lib as lib_cert;
 use tokio_rustls::rustls::pki_types::CertificateDer;
 use tokio_rustls::rustls::pki_types::pem::PemObject;
@@ -246,10 +245,10 @@ impl Consumer {
     /// Open the host's Channel, connect a real WSS client trusting `ca_pem`, see
     /// the `mcp/channel/Open` packet, then verify - the claude-code handshake.
     pub fn attach(mut host: Host, ca_pem: &Path) -> Self {
-        let open = host.call("channel_open", json!({}));
+        let open = host.interface("interface channel open");
         let wss = envelope(&open)["result"]["wss"]
             .as_str()
-            .expect("channel_open returns a wss url")
+            .expect("`interface channel open` returns a wss url")
             .to_string();
         let (tx, rx) = mpsc::channel();
         let reader = spawn_ws_reader(wss, ca_pem.to_path_buf(), tx);
@@ -261,10 +260,10 @@ impl Consumer {
             first.model, "mcp/channel/Open",
             "the first packet must be the handshake; got {first:?}",
         );
-        let verified = host.call("channel_verified", json!({}));
+        let verified = host.interface("interface channel ready");
         assert!(
             !has_error_path(&verified),
-            "channel_verified should succeed once claimed; got {verified}",
+            "`interface channel ready` should succeed once claimed; got {verified}",
         );
         Self { host, rx, _reader: reader }
     }

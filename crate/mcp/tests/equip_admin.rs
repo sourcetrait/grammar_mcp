@@ -392,8 +392,8 @@ fn invalid_action_errors() {
     let env = s.equip("frobnicate", "/p/equip/sourcetrait/x");
     assert_eq!(
         error_kind(&env),
-        Some("equip::invalid_action"),
-        "an unknown action should error; got {env}"
+        Some("interface::invalid"),
+        "an unknown action is no interface command; got {env}"
     );
 }
 

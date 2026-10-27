@@ -138,10 +138,10 @@ fn ping(host: &mut Host, name: &str) -> Option<i64> {
 
 /// The namespace's purviews as `(id, patterns)` pairs.
 fn purview_rows(host: &mut Host) -> Vec<(String, Vec<String>)> {
-    let resp = host.call("purviews", json!({}));
+    let resp = host.interface("interface purview list");
     envelope(&resp)["result"]["purviews"]
         .as_array()
-        .expect("purviews lists the table")
+        .expect("the purview list holds the table")
         .iter()
         .map(|row| {
             let id = row[0].as_str().expect("a purview id").to_string();

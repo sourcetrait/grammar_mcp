@@ -8,7 +8,6 @@ use std::time::Duration;
 
 use nix::fcntl::{Flock, FlockArg};
 use nix::sys::signal::Signal;
-use serde_json::json;
 use sourcetrait_grammar_tests::{Host, envelope, namespace_dir};
 use sourcetrait_common::testing::prelude::*;
 
@@ -36,7 +35,7 @@ fn the_host_lock_is_held_while_alive_and_dropped_on_sigkill() {
     let namespace = namespace_dir(host.data_home(), "locktest", "default");
 
     // Identity is in the CONTENTS, for a reader that wants to know which host holds it.
-    let info = host.call("info", json!({}));
+    let info = host.info();
     let mcp_nom = envelope(&info)["result"]["mcp_nom"]
         .as_str()
         .expect("info carries mcp_nom")
@@ -68,7 +67,7 @@ fn sigterm_runs_the_sweep_and_exits_on_its_own_terms() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn_args(t.temp_dir(), &["--id", "sigtest", "--namespace", "default"]);
     // A completed call proves the host is up and serving before it is signalled.
-    let _ = host.call("info", json!({}));
+    let _ = host.info();
 
     let status = host
         .signal_and_wait(Signal::SIGTERM, Duration::from_secs(15))
@@ -90,7 +89,7 @@ fn sigterm_runs_the_sweep_and_exits_on_its_own_terms() {
 fn sighup_is_handled_too() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn_args(t.temp_dir(), &["--id", "huptest", "--namespace", "default"]);
-    let _ = host.call("info", json!({}));
+    let _ = host.info();
 
     let status = host
         .signal_and_wait(Signal::SIGHUP, Duration::from_secs(15))

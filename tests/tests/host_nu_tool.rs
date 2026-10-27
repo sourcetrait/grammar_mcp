@@ -4,7 +4,7 @@ use sourcetrait_common::testing::prelude::*;
 
 static TESTING: testing::Module = testing::module!(Integration, { .using_temp_dir() });
 
-/// initialize -> tools/list (exactly 21) -> a nu() round-trip. The rmcp stdio
+/// initialize -> tools/list (exactly 4) -> a nu() round-trip. The rmcp stdio
 /// transport + handshake are the system surface here.
 #[tested]
 fn tools_list_and_nu_round_trip() {
@@ -12,30 +12,8 @@ fn tools_list_and_nu_round_trip() {
     let mut host = Host::spawn(t.temp_dir());
 
     let names = host.tool_names();
-    assert_eq!(names.len(), 21, "expected 21 tools; got {names:?}");
-    for expected in [
-        "nu",
-        "rerun",
-        "call",
-        "processes",
-        "kill",
-        "info",
-        "new",
-        "commit",
-        "equip",
-        "inspect",
-        "channel_open",
-        "channel_verified",
-        "channel_close",
-        "config_channel",
-        "purviews",
-        "purview_configure",
-        "purview_extend",
-        "purview",
-        "remote_channel_open",
-        "remote_channel_close",
-        "remote_channels",
-    ] {
+    assert_eq!(names.len(), 4, "expected 4 tools; got {names:?}");
+    for expected in ["nu", "rerun", "call", "interface"] {
         assert!(
             names.contains(&expected.to_string()),
             "missing `{expected}` in {names:?}",

@@ -13,7 +13,7 @@ static TESTING: testing::Module = testing::module!(Integration, { .using_temp_di
 const PLUGIN_DIR_ENV: &str = "GRAMMAR_MCP_PLUGIN_DIR";
 
 /// A host whose plugin directory holds `grammar/nu_plugin_soak` registers it at
-/// startup, lists it in `info()`, and runs `soak str` in a body.
+/// startup, lists it in `interface info`, and runs `soak str` in a body.
 #[tested]
 fn a_bundled_plugin_is_registered_listed_and_run() {
     let t = testing::test!({ .using_temp_dir() });
@@ -110,8 +110,8 @@ fn a_plugin_outside_the_kinds_is_not_read() {
 }
 
 /// The release's own plugins, soak and eye, register at startup, list in
-/// `info()`, and run in a body: a template rendered both ways and a tree
-/// listed both ways.
+/// `interface info`, and run in a body: a template rendered both ways and a
+/// tree listed both ways.
 #[tested]
 fn the_soak_and_eye_plugins_register_list_and_run() {
     let t = testing::test!({ .using_temp_dir() });
@@ -203,9 +203,9 @@ fn bundle_soak(root: &Path) -> PathBuf {
     bundle_plugins(root, &[("grammar", "nu_plugin_soak")])
 }
 
-/// The plugin names `info()` lists.
+/// The plugin names `interface info` lists.
 fn plugin_names(host: &mut Host) -> Vec<String> {
-    let info = envelope(&host.call("info", json!({})));
+    let info = envelope(&host.info());
     info["result"]["plugins"]
         .as_array()
         .expect("info carries plugins")

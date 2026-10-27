@@ -9,7 +9,6 @@
 use std::path::Path;
 use std::time::Duration;
 
-use serde_json::json;
 use sourcetrait_grammar_tests::*;
 use sourcetrait_common::testing::prelude::*;
 
@@ -76,7 +75,7 @@ fn a_definition_importing_a_cycle_gets_a_diagnostic_and_the_host_lives() {
     );
 
     // The point of the test: the host is still serving afterwards.
-    let alive = host.call("info", json!({}));
+    let alive = host.info();
     assert!(
         !has_error_path(&alive),
         "the host must still answer after a circular import; got {alive}",
@@ -110,7 +109,7 @@ fn the_deepest_reachable_cycle_still_leaves_the_host_alive() {
         has_error_path(&resp),
         "the deep cycle must come back as an error envelope; got {resp}",
     );
-    let alive = host.call("info", json!({}));
+    let alive = host.info();
     assert!(
         !has_error_path(&alive),
         "the host must still answer after the deepest cycle; got {alive}",
@@ -167,13 +166,10 @@ fn a_rig_carrying_a_cycle_fails_validation_and_the_host_lives() {
         "use ../mod.nu\n\nexport def main [args: record<x: int>]: nothing -> record<out: int> {\n    { out: $args.x }\n}\n",
     );
 
-    let id = host.request(
-        "equip",
-        json!({
-            "action": "check",
-            "source_dir": src.parent().unwrap().to_str().unwrap(),
-        }),
-    );
+    let id = host.request_interface(&format!(
+        "interface equip check {}",
+        nu_literal(src.parent().unwrap().to_str().unwrap()),
+    ));
     let resp = expect_alive(&mut host, id, "a rig validated with a circular `use`");
 
     // `equip check` reports through its SUCCESS summary rather than an error envelope, so
@@ -192,7 +188,7 @@ fn a_rig_carrying_a_cycle_fails_validation_and_the_host_lives() {
     );
 
     // And the host must outlive deciding it.
-    let alive = host.call("info", json!({}));
+    let alive = host.info();
     assert!(
         !has_error_path(&alive),
         "the host must still answer after validating a cyclic rig; got {alive}",

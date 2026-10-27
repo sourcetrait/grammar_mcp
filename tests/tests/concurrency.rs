@@ -1,13 +1,13 @@
 //! The stateless executor's concurrency bound. Fire N concurrent nu()s (N above
 //! the semaphore cap) over the stdio transport: every one completes (the buffered
-//! multi-read on `Host` collects them all back by id), and processes() never shows
-//! more than the cap (= available_parallelism / 2) in flight - the pool saturates
-//! to exactly the cap and never past it. A SYSTEM test: it needs real pipelined
-//! concurrency against the spawned binary plus the process-global concurrency cap.
+//! multi-read on `Host` collects them all back by id), and `interface process list`
+//! never shows more than the cap (= available_parallelism / 2) in flight - the pool
+//! saturates to exactly the cap and never past it. A SYSTEM test: it needs real
+//! pipelined concurrency against the spawned binary plus the process-global
+//! concurrency cap.
 
 use std::time::{Duration, Instant};
 
-use serde_json::json;
 use sourcetrait_grammar_tests::*;
 use sourcetrait_common::testing::prelude::*;
 
@@ -45,14 +45,14 @@ fn concurrent_calls_complete_and_hold_the_semaphore_bound() {
         })
         .collect();
 
-    // While the first wave runs, poll processes() and record the max concurrent
+    // While the first wave runs, poll the process list and record the max concurrent
     // `nu` count. 1s definitions + a sub-1s window means the whole first wave is in
     // flight throughout, so the pool sits saturated at the cap (the extra
     // n - cap calls wait on the semaphore and only start as permits free).
     let mut max_in_flight = 0usize;
     let deadline = Instant::now() + Duration::from_millis(900);
     while Instant::now() < deadline {
-        let resp = host.call("processes", json!({}));
+        let resp = host.interface("interface process list");
         let in_flight = envelope(&resp)["result"]["processes"]
             .as_array()
             .map(|a| {

@@ -63,11 +63,21 @@ binary's startup cost MINUS the process spawn. That is what makes the in-process
 tier fast and cleanly isolated - each test gets its own stateful engine on its own
 runtime, with no subprocess.
 
+### fn interface
+The whole tool, parse and dispatch, for a test of the contract or of a command as an
+agent sends it. The typed helpers beside it call each command's method straight, so a
+test of a command's logic passes typed values and never quotes a literal; the parse has
+its own tests.
+
+### fn equip
+An action no command has goes to the parse, so a test of an unknown action meets the
+refusal an agent would.
+
 ### fn channel_verified
-There is deliberately NO `channel_open` on this harness. That one binds a real
-socket and presents a CA-issued leaf, so an in-process test would be asserting
-the box's certificate installation rather than anything in this crate. It is
-exercised live on the test channel instead.
+There is deliberately NO channel-open helper on this harness. `interface channel open`
+binds a real socket and presents a CA-issued leaf, so an in-process test would be
+asserting the machine's certificate installation rather than anything in this crate.
+It is exercised live on the test channel instead.
 
 ### fn tools
 The router's own listing, each tool serialized as `tools/list` carries it, so a

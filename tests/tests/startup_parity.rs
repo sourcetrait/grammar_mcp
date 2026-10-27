@@ -129,9 +129,9 @@ impl Parity {
         std::fs::read_to_string(&self.host_stderr).unwrap_or_default()
     }
 
-    /// The engine version the host was built against, from `info()`.
+    /// The engine version the host was built against, from `interface info`.
     fn engine_version(&mut self) -> String {
-        let info = self.host.call("info", json!({}));
+        let info = self.host.info();
         envelope(&info)["result"]["nu_version"]
             .as_str()
             .expect("info's nu_version")

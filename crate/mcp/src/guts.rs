@@ -78,6 +78,7 @@ impl TestServer {
             Arc::new(datum::NonceGenerator::new()),
             locks,
             Arc::new(LintEngine::new()),
+            &config().deny,
         );
         Self { rt, nush }
     }
@@ -156,22 +157,44 @@ impl TestServer {
         Self::envelope(self.rt.block_on(self.nush.call(mcp::Parameters(p))))
     }
 
+    /// A nonce minted as the interface call would mint one.
+    fn interface_nonce<P: ser::Serialize>(&self, p: &P) -> datum::Nonce {
+        self.nush.mint(INTERFACE_TOOL, p).to_nonce()
+    }
+
+    /// One `interface` command, through the tool's parse and dispatch.
+    pub fn interface(&self, command: &str) -> json::Value {
+        let p = InterfaceParams {
+            command: command.to_string(),
+        };
+        Self::envelope(self.rt.block_on(self.nush.interface(mcp::Parameters(p))))
+    }
+
     pub fn commit(&self, namepath: &str) -> json::Value {
         let p = CommitParams {
             namepath: namepath.to_string(),
         };
-        Self::envelope(self.rt.block_on(self.nush.commit(mcp::Parameters(p))))
+        let nonce = self.interface_nonce(&p);
+        Self::envelope(self.rt.block_on(self.nush.equip_commit(nonce, p)))
     }
 
+    /// An `interface equip` action on a source; an unknown one goes to the parse.
     pub fn equip(&self, action: &str, source_dir: &str) -> json::Value {
         let p = EquipParams {
-            action: action.to_string(),
-            source_dir: source_dir.to_string(),
+            source: source_dir.to_string(),
         };
-        Self::envelope(self.rt.block_on(self.nush.equip(mcp::Parameters(p))))
+        let nonce = self.interface_nonce(&p);
+        let result = match action {
+            "new" => self.rt.block_on(self.nush.equip_new(nonce, p)),
+            "install" => self.rt.block_on(self.nush.equip_install(nonce, p)),
+            "check" => self.rt.block_on(self.nush.equip_check(nonce, p)),
+            "uninstall" => self.rt.block_on(self.nush.equip_uninstall(nonce, p)),
+            other => return self.interface(&format!("{INTERFACE} equip {other} '{source_dir}'")),
+        };
+        Self::envelope(result)
     }
 
-    /// `equip(new)` at `root`'s source for `name`, returning its rig source.
+    /// `interface equip new` at `root`'s source for `name`; its rig source.
     pub fn new_rig(
         &self,
         root: &std::path::Path,
@@ -179,7 +202,7 @@ impl TestServer {
     ) -> std::path::PathBuf {
         let source = equip_source(root, name);
         let env = self.equip("new", &source.to_string_lossy());
-        assert!(!has_error(&env), "equip(new) for {name} failed: {env}");
+        assert!(!has_error(&env), "equip new for {name} failed: {env}");
         source.join("rig")
     }
 
@@ -187,21 +210,24 @@ impl TestServer {
         let p = NewParams {
             namepaths: namepaths.iter().map(|s| s.to_string()).collect(),
         };
-        Self::envelope(self.rt.block_on(self.nush.scaffold(mcp::Parameters(p))))
+        let nonce = self.interface_nonce(&p);
+        Self::envelope(self.rt.block_on(self.nush.equip_scaffold(nonce, p)))
     }
 
+    /// `interface help` on a namepath or a pattern.
     pub fn inspect(&self, namepath: &str) -> json::Value {
         let p = InspectParams {
             namepath: namepath.to_string(),
         };
-        Self::envelope(self.rt.block_on(self.nush.inspect(mcp::Parameters(p))))
+        let nonce = self.interface_nonce(&p);
+        Self::envelope(self.rt.block_on(self.nush.help(nonce, p)))
     }
 
     pub fn info(&self) -> json::Value {
         self.info_as(&[])
     }
 
-    /// `info()` rendered as if the given purviews were in view.
+    /// `interface info` rendered as if the given purviews were in view.
     pub fn info_as(
         &self,
         purviews: &[&str],
@@ -209,14 +235,14 @@ impl TestServer {
         let p = InfoParams {
             purviews: purviews.iter().map(|s| s.to_string()).collect(),
         };
-        Self::envelope(self.rt.block_on(self.nush.info(mcp::Parameters(p))))
+        let nonce = self.interface_nonce(&p);
+        Self::envelope(self.rt.block_on(self.nush.info(nonce, p)))
     }
 
+    /// `interface purview list`.
     pub fn purviews(&self) -> json::Value {
-        Self::envelope(
-            self.rt
-                .block_on(self.nush.purviews(mcp::Parameters(PurviewsParams {}))),
-        )
+        let nonce = self.interface_nonce(&"purview list");
+        Self::envelope(self.rt.block_on(self.nush.purview_list(nonce)))
     }
 
     /// Set a purview's namepath patterns; an EMPTY `namepaths` deletes it.
@@ -229,10 +255,8 @@ impl TestServer {
             purview: purview.to_string(),
             namepaths: namepaths.iter().map(|s| s.to_string()).collect(),
         };
-        Self::envelope(
-            self.rt
-                .block_on(self.nush.purview_configure(mcp::Parameters(p))),
-        )
+        let nonce = self.interface_nonce(&p);
+        Self::envelope(self.rt.block_on(self.nush.purview_configure(nonce, p)))
     }
 
     pub fn purview_extend(
@@ -242,9 +266,11 @@ impl TestServer {
         let p = PurviewExtendParams {
             purviews: purviews.iter().map(|s| s.to_string()).collect(),
         };
-        Self::envelope(self.rt.block_on(self.nush.purview_extend(mcp::Parameters(p))))
+        let nonce = self.interface_nonce(&p);
+        Self::envelope(self.rt.block_on(self.nush.purview_extend(nonce, p)))
     }
 
+    /// `interface purview set`.
     pub fn purview(
         &self,
         purviews: &[&str],
@@ -252,7 +278,8 @@ impl TestServer {
         let p = PurviewParams {
             purviews: purviews.iter().map(|s| (*s).to_string()).collect(),
         };
-        Self::envelope(self.rt.block_on(self.nush.purview(mcp::Parameters(p))))
+        let nonce = self.interface_nonce(&p);
+        Self::envelope(self.rt.block_on(self.nush.purview_set(nonce, p)))
     }
 
     /// Where this namespace's purview table lands.
@@ -260,27 +287,25 @@ impl TestServer {
         crate::purviews_path()
     }
 
+    /// `interface process list`.
     pub fn processes(&self) -> json::Value {
-        Self::envelope(
-            self.rt
-                .block_on(self.nush.processes(mcp::Parameters(ProcessesParams {}))),
-        )
+        let nonce = self.interface_nonce(&"process list");
+        Self::envelope(self.rt.block_on(self.nush.process_list(nonce)))
     }
 
-    /// `kill` is a void tool: its result is null on success.
+    /// `interface process kill`; its result is null on success.
     pub fn kill(&self, nonce: &str) -> json::Value {
         let p = KillParams {
             nonce: nonce.to_string(),
         };
-        Self::envelope(self.rt.block_on(self.nush.kill(mcp::Parameters(p))))
+        let call_nonce = self.interface_nonce(&p);
+        Self::envelope(self.rt.block_on(self.nush.process_kill(call_nonce, p)))
     }
 
-    /// `channel_verified` is a void tool; its result is null.
+    /// `interface channel ready`; its result is null.
     pub fn channel_verified(&self) -> json::Value {
-        Self::envelope(
-            self.rt
-                .block_on(self.nush.channel_verified(mcp::Parameters(ChannelVerifiedParams {}))),
-        )
+        let nonce = self.interface_nonce(&"channel ready");
+        Self::envelope(self.rt.block_on(self.nush.channel_ready(nonce)))
     }
 
     /// A PARTIAL update; pass `None` for anything that should not move.
@@ -297,15 +322,14 @@ impl TestServer {
             spam_error_window_secs: error_window_secs,
             spam_error_rate: error_rate,
         };
-        Self::envelope(self.rt.block_on(self.nush.config_channel(mcp::Parameters(p))))
+        let nonce = self.interface_nonce(&p);
+        Self::envelope(self.rt.block_on(self.nush.channel_config(nonce, p)))
     }
 
-    /// `channel_close` is a void tool; closing a closed channel succeeds.
+    /// `interface channel closed`; closing a closed channel succeeds.
     pub fn channel_close(&self) -> json::Value {
-        Self::envelope(
-            self.rt
-                .block_on(self.nush.channel_close(mcp::Parameters(ChannelCloseParams {}))),
-        )
+        let nonce = self.interface_nonce(&"channel closed");
+        Self::envelope(self.rt.block_on(self.nush.channel_closed(nonce)))
     }
 
     /// Each routed tool as `tools/list` carries it.
@@ -417,7 +441,7 @@ pub fn error_text(env: &json::Value) -> String {
     env.get("error").map(|e| e.to_string()).unwrap_or_default()
 }
 
-/// One rig's slice of an `info()` signature block.
+/// One rig's slice of an `interface info` signature block.
 pub fn rig_block(
     signatures: &str,
     leaf: &str,

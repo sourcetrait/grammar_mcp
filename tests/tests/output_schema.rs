@@ -56,7 +56,11 @@ fn every_result_is_one_nuon_text_led_by_its_nonce() {
         "got {text}",
     );
 
-    let listed = host.call("purviews", json!({}));
+    let listed = host.interface("interface purview list");
     let text = the_text(&listed);
-    assert!(text.starts_with("{nonce: "), "a non-eval tool's too; got {text}");
+    assert!(text.starts_with("{nonce: "), "an interface command's too; got {text}");
+
+    let refused = host.interface("interface nosuch");
+    let text = the_text(&refused);
+    assert!(text.starts_with("{nonce: "), "and an interface refusal's; got {text}");
 }

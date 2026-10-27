@@ -3,44 +3,22 @@ use sourcetrait_common::testing::prelude::*;
 
 static TESTING: testing::Module = testing::module!(Integration, { .using_temp_dir() });
 
+/// The tool names `tools/list` advertises, sorted.
+fn sorted_names(host: &mut Host) -> Vec<String> {
+    let mut names = host.tool_names();
+    names.sort();
+    names
+}
+
 #[tested]
 fn deny_removes_tools_from_list() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn_args(t.temp_dir(), &["--deny", "nu,rerun"]);
-    let names = host.tool_names();
-    assert_eq!(names.len(), 19, "21 - 2 denied = 19; got {names:?}");
-    for absent in ["nu", "rerun"] {
-        assert!(
-            !names.contains(&absent.to_string()),
-            "denied `{absent}` must be absent; got {names:?}",
-        );
-    }
-    for present in [
-        "call",
-        "new",
-        "commit",
-        "equip",
-        "channel_open",
-        "channel_verified",
-        "channel_close",
-        "config_channel",
-        "purviews",
-        "purview_configure",
-        "purview_extend",
-        "purview",
-        "info",
-        "inspect",
-        "processes",
-        "kill",
-        "remote_channel_open",
-        "remote_channel_close",
-        "remote_channels",
-    ] {
-        assert!(
-            names.contains(&present.to_string()),
-            "`{present}` should remain; got {names:?}",
-        );
-    }
+    assert_eq!(
+        sorted_names(&mut host),
+        vec!["call", "interface"],
+        "the two denied are absent and the rest remain",
+    );
 }
 
 #[tested]
@@ -58,28 +36,62 @@ fn denied_tool_call_fails_at_protocol_layer() {
 }
 
 #[tested]
-fn deny_full_set_leaves_core_four() {
+fn deny_interface_removes_the_tool_whole() {
     let t = testing::test!({ .using_temp_dir() });
-    let mut host = Host::spawn_args(
-        t.temp_dir(),
-        &[
-            "--deny",
-            "nu,rerun,call,new,commit,equip,channel_open,channel_verified,channel_close,config_channel,purviews,purview_configure,purview_extend,purview,remote_channel_open,remote_channel_close,remote_channels",
-        ],
+    let mut host = Host::spawn_args(t.temp_dir(), &["--deny", "interface"]);
+    assert_eq!(sorted_names(&mut host), vec!["call", "nu", "rerun"]);
+    let resp = host.info();
+    assert!(
+        envelope(&resp).is_null(),
+        "a denied interface answers no envelope at all; got {resp}",
     );
-    let mut names = host.tool_names();
-    names.sort();
+}
+
+#[tested]
+fn deny_every_other_tool_leaves_the_interface() {
+    let t = testing::test!({ .using_temp_dir() });
+    let mut host = Host::spawn_args(t.temp_dir(), &["--deny", "nu,rerun,call"]);
+    assert_eq!(sorted_names(&mut host), vec!["interface"]);
+    let info = host.info();
+    assert!(!has_error_path(&info), "the interface still answers; got {info}");
+}
+
+/// A denied command leaves the parse and the description; the tool and every
+/// other command stand.
+#[tested]
+fn a_denied_command_leaves_the_parse_and_the_description() {
+    let t = testing::test!({ .using_temp_dir() });
+    let mut host =
+        Host::spawn_args(t.temp_dir(), &["--deny", "purview configure,equip commit"]);
+    let tools = host.tools();
+    let interface = tools
+        .iter()
+        .find(|tool| tool["name"] == "interface")
+        .unwrap_or_else(|| panic!("the interface stands; got {tools:?}"));
+    let description = interface["description"].as_str().expect("its description");
+    for denied in ["'interface purview configure'", "'interface equip commit'"] {
+        assert!(!description.contains(denied), "{denied} is undocumented; got {description}");
+    }
+    assert!(description.contains("'interface purview list'"), "got {description}");
+
+    let refused = host.interface("interface purview configure 'x' ['*']");
     assert_eq!(
-        names,
-        vec!["info", "inspect", "kill", "processes"],
-        "the full deny set leaves exactly the core four",
+        envelope_error_kind(&refused).as_deref(),
+        Some("interface::invalid"),
+        "a denied command is refused at the parse; got {refused}",
     );
+    assert!(
+        error_message(&refused).contains("no `interface` command"),
+        "as a command the interface lacks; got {refused}",
+    );
+    let listed = host.interface("interface purview list");
+    assert!(!has_error_path(&listed), "an undenied command runs; got {listed}");
 }
 
 #[tested]
 fn unknown_deny_token_fails_startup() {
     let t = testing::test!({ .using_temp_dir() });
-    for token in ["bogus", "run", "interact"] {
+    for token in ["bogus", "run", "interact", "purview_configure", "equip", "interface nosuch"] {
         let out = run_output(t.temp_dir(), &["--deny", token]);
         assert!(
             !out.status.success(),

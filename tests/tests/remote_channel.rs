@@ -112,8 +112,8 @@ fn remote_loopback_echo() {
 
     // Teardown: closing the link on A drops the established link; Disconnected is
     // retained for an established-link teardown on BOTH roles.
-    let close = a.host.call("remote_channel_close", json!({"alias": "peer"}));
-    assert!(!has_error_path(&close), "remote_channel_close succeeds on an open link; got {close}");
+    let close = a.host.interface("interface remote close 'peer'");
+    assert!(!has_error_path(&close), "`interface remote close` succeeds on an open link; got {close}");
     a.await_packet(|p| p.model == "mcp/remote/Disconnected", Duration::from_secs(15))
         .expect("the connector sees Disconnected on teardown");
     b.await_packet(|p| p.model == "mcp/remote/Disconnected", Duration::from_secs(15))
@@ -145,7 +145,7 @@ fn remote_connector_open_refused_is_synchronous() {
     );
     let mut c = Consumer::attach(host, &ch.ca);
 
-    let open = c.host.call("remote_channel_open", json!({"alias": "peer"}));
+    let open = c.host.interface("interface remote open 'peer'");
     assert!(has_error_path(&open), "a refused connect fails the open synchronously; got {open}");
     assert_eq!(err_kind(&open), "remote::open_failed", "the sync failure kind; got {open}");
     assert!(
@@ -177,9 +177,9 @@ fn remote_listener_double_open_fails_synchronously() {
     );
     let mut c = Consumer::attach(host, &ch.ca);
 
-    let first = c.host.call("remote_channel_open", json!({"alias": "peer"}));
+    let first = c.host.interface("interface remote open 'peer'");
     assert!(!has_error_path(&first), "the first listener open binds synchronously; got {first}");
-    let second = c.host.call("remote_channel_open", json!({"alias": "peer"}));
+    let second = c.host.interface("interface remote open 'peer'");
     assert!(has_error_path(&second), "a redundant listener open fails synchronously; got {second}");
     assert_eq!(err_kind(&second), "remote::open_failed", "the sync bind-clash kind; got {second}");
 }
@@ -193,7 +193,7 @@ fn remote_channels_lists_bound_listener() {
     let (mut a, mut b, nom_a, _nom_b) = spawn_two_hosts(root);
 
     // B's listener binds (synchronous) but has no peer yet.
-    let open_b = b.host.call("remote_channel_open", json!({"alias": "peer"}));
+    let open_b = b.host.interface("interface remote open 'peer'");
     assert!(!has_error_path(&open_b), "listener open is synchronous on bind; got {open_b}");
     let rc = remote_channels_result(&mut b);
     assert!(
@@ -206,7 +206,7 @@ fn remote_channels_lists_bound_listener() {
     );
 
     // Pair: A connects, B sees Connected, the listener moves to `channels`.
-    let open_a = a.host.call("remote_channel_open", json!({"alias": "peer"}));
+    let open_a = a.host.interface("interface remote open 'peer'");
     assert!(!has_error_path(&open_a), "connector open is synchronous on connect; got {open_a}");
     b.await_packet(
         |p| p.model == "mcp/remote/Connected" && p.event.contains(&nom_a),
@@ -354,7 +354,7 @@ fn remote_send_with_returns_its_event_id() {
 // ---- helpers ----
 
 fn mcp_nom(c: &mut Consumer) -> String {
-    envelope(&c.host.call("info", json!({})))["result"]["mcp_nom"]
+    envelope(&c.host.info())["result"]["mcp_nom"]
         .as_str()
         .expect("info carries mcp_nom")
         .to_string()
@@ -375,12 +375,12 @@ fn err_kind(resp: &Value) -> String {
     envelope_error_kind(resp).unwrap_or_default()
 }
 
-/// remote_channels()'s result, owned.
+/// `interface remote list`'s result, owned.
 fn remote_channels_result(c: &mut Consumer) -> Value {
-    envelope(&c.host.call("remote_channels", json!({})))["result"].clone()
+    envelope(&c.host.interface("interface remote list"))["result"].clone()
 }
 
-/// The values under `key` across a remote_channels listing array.
+/// The values under `key` across an `interface remote list` listing array.
 fn listing_names(arr: &Value, key: &str) -> Vec<String> {
     arr.as_array()
         .map(|a| a.iter().filter_map(|e| e[key].as_str().map(String::from)).collect())
@@ -437,9 +437,9 @@ fn spawn_two_hosts(root: &Path) -> (Consumer, Consumer, String, String) {
 /// Open the listener (B) then the connector (A) - both synchronous - and wait for
 /// B's Connected, so the link is established when this returns.
 fn pair(a: &mut Consumer, b: &mut Consumer, nom_a: &str) {
-    let open_b = b.host.call("remote_channel_open", json!({"alias": "peer"}));
+    let open_b = b.host.interface("interface remote open 'peer'");
     assert!(!has_error_path(&open_b), "listener open is synchronous on bind; got {open_b}");
-    let open_a = a.host.call("remote_channel_open", json!({"alias": "peer"}));
+    let open_a = a.host.interface("interface remote open 'peer'");
     assert!(!has_error_path(&open_a), "connector open is synchronous on connect; got {open_a}");
     b.await_packet(
         |p| p.model == "mcp/remote/Connected" && p.event.contains(nom_a),

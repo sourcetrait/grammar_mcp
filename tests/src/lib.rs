@@ -419,15 +419,29 @@ impl Host {
         self.call("call", json!({"namepath": namepath, "args": args}))
     }
 
-    pub fn equip(&mut self, action: &str, source_dir: &str) -> Value {
-        self.call(
-            "equip",
-            json!({"action": action, "source_dir": source_dir}),
-        )
+    /// One `interface` command, its arguments Nu literals.
+    pub fn interface(&mut self, command: &str) -> Value {
+        let id = self.request_interface(command);
+        self.read_id(id)
     }
 
-    /// `equip(new)` for `name` under `root`, author-prefixing a bare name; the
-    /// response and the equip's rig source.
+    /// Send an `interface` command WITHOUT reading its response; the request id.
+    pub fn request_interface(&mut self, command: &str) -> u64 {
+        self.request("interface", json!({"command": command}))
+    }
+
+    /// `interface info`.
+    pub fn info(&mut self) -> Value {
+        self.interface("interface info")
+    }
+
+    /// `interface equip <action>` on a source directory.
+    pub fn equip(&mut self, action: &str, source_dir: &str) -> Value {
+        self.interface(&format!("interface equip {action} {}", nu_literal(source_dir)))
+    }
+
+    /// `interface equip new` for `name` under `root`, author-prefixing a bare name;
+    /// the response and the equip's rig source.
     pub fn equip_new(&mut self, name: &str, root: &Path) -> (Value, PathBuf) {
         let name = if name.contains('/') {
             name.to_string()
@@ -439,8 +453,9 @@ impl Host {
         (resp, source.join("rig"))
     }
 
+    /// `interface equip commit`, author-prefixing a bare name.
     pub fn commit(&mut self, name: &str) -> Value {
-        self.call("commit", json!({"namepath": name}))
+        self.interface(&format!("interface equip commit {}", nu_literal(&prefixed_equip(name))))
     }
 
     /// The tools advertised by `tools/list`, each as the client receives it.
@@ -482,48 +497,46 @@ pub fn bundle_plugins(root: &Path, plugins: &[(&str, &str)]) -> PathBuf {
 /// The builtins' bare names, which the host resolves itself.
 const BUILTINS: [&str; 2] = ["gram", "grammar"];
 
-/// Prepend `sourcetrait/` to a bare equip name in the args of the
-/// namepath-addressing tools. Idempotent: a value already carrying `/` (an
-/// `author/name`) passes through unchanged, as does a builtin's bare name.
+/// Prepend `sourcetrait/` to a bare equip name in a `call`'s namepath.
+/// Idempotent: a value already carrying `/` (an `author/name`) passes through
+/// unchanged, as does a builtin's bare name.
 pub fn author_prefixed(tool: &str, mut args: Value) -> Value {
-    fn pfx_lib(s: &str) -> String {
-        if s.is_empty() || s.contains('/') || BUILTINS.contains(&s) {
-            s.to_string()
-        } else {
-            format!("sourcetrait/{s}")
-        }
-    }
-    fn pfx_np(s: &str) -> String {
-        let lib = s.split(':').next().unwrap_or(s);
-        if lib.is_empty() || lib.contains('/') || BUILTINS.contains(&lib) {
-            s.to_string()
-        } else {
-            format!("sourcetrait/{s}")
-        }
-    }
-    match tool {
-        "call" | "inspect" => {
-            if let Some(np) = args.get("namepath").and_then(|v| v.as_str()) {
-                args["namepath"] = Value::String(pfx_np(np));
-            }
-        }
-        "new" => {
-            if let Some(arr) = args.get_mut("namepaths").and_then(|v| v.as_array_mut()) {
-                for e in arr.iter_mut() {
-                    if let Some(s) = e.as_str() {
-                        *e = Value::String(pfx_np(s));
-                    }
-                }
-            }
-        }
-        "commit" => {
-            if let Some(l) = args.get("namepath").and_then(|v| v.as_str()) {
-                args["namepath"] = Value::String(pfx_lib(l));
-            }
-        }
-        _ => {}
+    if tool == "call"
+        && let Some(namepath) = args.get("namepath").and_then(|v| v.as_str())
+    {
+        args["namepath"] = Value::String(prefixed_namepath(namepath));
     }
     args
+}
+
+/// An equip name, `sourcetrait/` prepended when it is bare and not a builtin's.
+pub fn prefixed_equip(name: &str) -> String {
+    if name.is_empty() || name.contains('/') || BUILTINS.contains(&name) {
+        name.to_string()
+    } else {
+        format!("sourcetrait/{name}")
+    }
+}
+
+/// A namepath, `sourcetrait/` prepended when its equip is bare and not a builtin's.
+pub fn prefixed_namepath(namepath: &str) -> String {
+    let equip = namepath.split(':').next().unwrap_or(namepath);
+    if equip.is_empty() || equip.contains('/') || BUILTINS.contains(&equip) {
+        namepath.to_string()
+    } else {
+        format!("sourcetrait/{namepath}")
+    }
+}
+
+/// A string as a Nu literal in an interface command: single-quoted, or raw
+/// when it holds a quote.
+pub fn nu_literal(text: &str) -> String {
+    if text.contains('\'') {
+        assert!(!text.contains("'#"), "no raw string holds {text:?}");
+        format!("r#'{text}'#")
+    } else {
+        format!("'{text}'")
+    }
 }
 
 /// How a child ended, in a form a failure message can carry.
