@@ -200,12 +200,12 @@ fn scan_prunes_finished_entries() {
 }
 
 #[test]
-fn scan_interact_hang_is_not_a_stateless_permit() {
-    let reg = registry(vec![watch_entry("i1", Lane::Interact, 0, false)]);
+fn scan_stateful_hang_is_not_a_stateless_permit() {
+    let reg = registry(vec![watch_entry("i1", Lane::Stateful, 0, false)]);
     let (ems, confirmed) = scan_hung(&reg, 10000, 5000, 0, 8);
-    assert_eq!(confirmed, 0, "an interact-lane hang holds no pooled permit");
+    assert_eq!(confirmed, 0, "a stateful-lane hang holds no pooled permit");
     assert_eq!(ems.len(), 1);
-    assert_eq!(ems[0].0, "hung:interact:i1");
+    assert_eq!(ems[0].0, "hung:stateful:i1");
     assert!(matches!(ems[0].1, Emergency::HungEngineThread(_)));
 }
 

@@ -50,6 +50,18 @@ pub(crate) fn lint_body(parse_engine: &ParseEngine, args_type: &str, body: &str)
 }
 
 
+/// Lint a parsed block whose text begins at `text_start` in its working set.
+pub(crate) fn lint_block(
+    block: &nu::Block,
+    ws: &nu::StateWorkingSet,
+    text: &str,
+    text_start: usize,
+) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    let _ = walk_block(block, ws, text, text_start, &mut diagnostics);
+    diagnostics
+}
+
 fn find_def_body_id(outer: &nu::Block, ws: &nu::StateWorkingSet) -> Option<nu::BlockId> {
     for p in &outer.pipelines {
         for elem in &p.elements {

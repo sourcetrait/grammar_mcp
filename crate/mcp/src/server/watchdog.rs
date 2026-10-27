@@ -5,14 +5,14 @@ use crate::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Lane {
     Stateless,
-    Interact,
+    Stateful,
 }
 
 impl Lane {
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Stateless => "stateless",
-            Self::Interact => "interact",
+            Self::Stateful => "stateful",
         }
     }
 }

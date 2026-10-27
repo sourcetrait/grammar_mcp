@@ -486,6 +486,24 @@ pub fn lint_body(args_type: &str, body: &str) -> Vec<json::Value> {
         .collect()
 }
 
+/// The execute contract's verdict on a definition: its summary, or its rows.
+pub fn analyze_definition(definition: &str) -> Result<json::Value, Vec<json::Value>> {
+    ensure_test_config();
+    let engine = ParseEngine::new_full();
+    match crate::analyze_definition(&engine, definition, true) {
+        Ok(def) => Ok(serde_json::json!({
+            "lane": def.lane.as_str(),
+            "data_type": typedef_text(&def.data_type),
+            "result_type": typedef_text(&def.result_type),
+            "takes_timeout": def.takes_timeout,
+        })),
+        Err(rows) => Err(rows
+            .iter()
+            .map(|d| json::to_value(d).expect("diagnostic serializes"))
+            .collect()),
+    }
+}
+
 /// Are two `current()` handles off ONE `LintEngine` the same instance?
 pub fn lint_engine_reuses_until_the_registry_moves() -> bool {
     ensure_test_config();

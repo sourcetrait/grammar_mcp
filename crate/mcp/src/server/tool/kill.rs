@@ -22,7 +22,7 @@ impl NuSh {
                 Some(entry) => {
                     entry.cancel.store(true, Ordering::SeqCst);
                     let lane = if matches!(entry.kind, InFlightKind::Interact) {
-                        Lane::Interact
+                        Lane::Stateful
                     } else {
                         Lane::Stateless
                     };

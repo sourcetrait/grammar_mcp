@@ -11,6 +11,7 @@ pub(crate) mod server {
     pub(crate) mod cycle;
     pub(crate) mod embed;
     pub(crate) mod emergency;
+    pub(crate) mod execute;
     pub(crate) mod executor;
     pub(crate) mod rig;
     pub(crate) mod lint;
@@ -167,6 +168,7 @@ pub(crate) use crate::{
             RamWarningEmergency, VramWarningEmergency, append_line,
             spawn_emergency_responder,
         },
+        execute::analyze_definition,
         executor::Executor,
         rig::{
             RigLocks, ValidationResult, check_equip,
@@ -177,7 +179,7 @@ pub(crate) use crate::{
             is_valid_module_path, lib_dir, load_index, registered_rig_names, require_rig, rig_dir,
             scaffold_leaf, scaffold_leaf_exists, uninstall_equip,
         },
-        lint::{LINT_VIOLATION_CAP, lint_body},
+        lint::{LINT_VIOLATION_CAP, lint_block, lint_body},
         liveness::acquire as acquire_host_lock,
         namepath::{
             BUILTINS, Namepath, NamepathPattern, NamepathRef, NamepathStr, builtin_equip,
@@ -209,8 +211,9 @@ pub(crate) use crate::{
         },
         run::{eval_concurrency_cap, run_server},
         schema::{
-            args_schema_to_nu, args_schema_to_signature, nu_to_args_schema, nu_to_result_schema,
-            result_schema_to_nu, result_schema_to_signature,
+            NuTypedef, args_schema_to_nu, args_schema_to_signature, data_typedef,
+            nu_to_args_schema, nu_to_result_schema, result_schema_to_nu,
+            result_schema_to_signature, result_typedef, typedef_text,
         },
         teardown::{
             OrphanReaper, install_child_subreaper, kill_plugin_subprocesses, make_tracker,

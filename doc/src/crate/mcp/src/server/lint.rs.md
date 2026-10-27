@@ -48,6 +48,11 @@ THE FULL-SHELL ENGINE IS REQUIRED, not the lang-only one: lang-only collapses
 `str replace --regex` into an ExternalCall where the flag is indistinguishable from a
 positional, and the regex skip then cannot fire.
 
+## fn lint_block
+The walker over a block another parse produced, positions measured from that text's
+start: execute.rs lints a `nu` definition on the parse its contract check already made,
+the def call's body reached through its positional block like any closure's.
+
 ## fn push_diagnostic
 `LINT_VIOLATION_CAP` bounds the list at three and the fourth candidate is dropped
 SILENTLY. The `ControlFlow::Break` is threaded with `?` through every walker arm, which

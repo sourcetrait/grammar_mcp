@@ -386,7 +386,7 @@ pub(crate) async fn dispatch_interact(
                 HungWatch {
                     nonce: nonce.as_str().to_string(),
                     tool: "interact",
-                    lane: Lane::Interact,
+                    lane: Lane::Stateful,
                     started_at,
                     cancelled_at: now_millis(),
                     finished: finished.clone(),

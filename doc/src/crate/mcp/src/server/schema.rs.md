@@ -69,6 +69,29 @@ THE `<>`-FOR-VOID RULE IS LOAD-BEARING, not cosmetic. It is what makes a call li
 self-identifying in the signature block - always two groups, void included - which is what
 lets the block state no separator characters at all.
 
+## fn data_typedef / fn shape_typedef
+A `nu` definition's `data` type, read from its parsed `SyntaxShape` into the same
+`NuTypedef` the JSON side builds. At the top only `nothing`, or a record or table with
+fields; below it the whole grammar, an OPEN record or table among it, empty fields being
+nushell's own spelling of open. `any`, closures, blocks, and the parser's other shapes
+are no data types and are refused by name.
+
+## fn result_typedef / fn type_typedef
+The return type, read from the signature's output `Type`. The same top rule, and an open
+record or table refused at EVERY depth: a return declares what the body produces, and an
+open type there would assert nothing, as `parse_json_result` already holds for run's
+schemas.
+
+## fn list_typedef
+A list of tables is refused in both directions. nushell treats `table<C>` and
+`list<record<C>>` as one type, so `list<list<record<...>>>` is a list of tables too and is
+caught by its inner list of records. The refusal names the fix, a record holding each
+table.
+
+## fn typedef_text
+`render_nu_typedef` by another name, for messages and the test harness: an open record
+renders `record<>`, where nushell's own Display would print a bare `record`.
+
 ## fn args_schema_to_nu
 Note what the emit direction does NOT use: `SyntaxShape::to_string()`. nushell's Display
 for an empty-field record renders the bare word `record`, which is a lossy view and not

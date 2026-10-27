@@ -75,8 +75,8 @@ fn all_kinds() -> Vec<Emergency> {
     vec![
         Emergency::HungEngineThread(HungEngineThreadEmergency {
             nonce: "n".into(),
-            lane: "interact".into(),
-            tool: "interact".into(),
+            lane: "stateful".into(),
+            tool: "nu".into(),
             started_at: 1,
             cancelled_at: 2,
             hung_ms: 3,
