@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+  "crate/nuval",
   "crate/plugin/eye",
   "crate/plugin/soak",
   "crate/mcp",
@@ -27,6 +28,7 @@ ignore = { version = "0.4" }
 indoc = { version = "2" }
 liquid = { version = "0.26" }
 nix = { version = "0.31", features = ["fs", "process", "signal", "user"] }
+rkyv = { version = "0.8" }
 rmcp = { version = "3.8", features = ["server", "transport-io", "schemars", "macros"] }
 rustls = { version = "0.23", default-features = false, features = ["logging", "ring", "std", "tls12"] }
 schemars = { version = "1" }

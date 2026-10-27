@@ -1,0 +1,22 @@
+[package]
+name = "nuval"
+description = "Serializable nushell values and errors"
+version.workspace    = true
+authors.workspace    = true
+license.workspace    = true
+edition.workspace    = true
+repository.workspace = true
+homepage.workspace   = true
+categories.workspace = true
+keywords.workspace   = true
+
+[dependencies]
+bitcode.workspace = true
+nu-protocol.workspace = true
+rkyv.workspace = true
+serde.workspace = true
+
+sourcetrait_common.workspace = true
+
+[package.metadata]
+rein = "ai"
