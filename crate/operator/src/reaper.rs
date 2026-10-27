@@ -102,11 +102,11 @@ fn zombie_children_of(parent: u32) -> Vec<u32> {
 
 /// Make the host the subreaper so an eval's orphans stay reachable.
 #[cfg(target_os = "linux")]
-pub(crate) fn install_child_subreaper() {
+pub fn install_child_subreaper() {
     if let Err(e) = nix::sys::prctl::set_child_subreaper(true) {
         eprintln!("grammar: PR_SET_CHILD_SUBREAPER failed: {e}");
     }
 }
 
 #[cfg(not(target_os = "linux"))]
-pub(crate) fn install_child_subreaper() {}
+pub fn install_child_subreaper() {}

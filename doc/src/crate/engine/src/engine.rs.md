@@ -22,7 +22,7 @@ external leads its own session and process group with no controlling terminal.
 `is_interactive = false` keeps nushell's foreground handling out: no external
 takes a terminal's foreground group. The teardown still walks /proc rather than
 signalling a group, since a descendant that starts its own session or group
-leaves the external's (mcp's `server/teardown.rs`).
+leaves the external's (`teardown.rs`).
 
 ## fn startup
 THE HOST'S ONE STARTUP, following nushell's own `main` (nu 0.116.1,

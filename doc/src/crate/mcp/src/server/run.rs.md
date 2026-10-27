@@ -10,23 +10,23 @@ The ENGINE starts after the substrate: its system hydrates the equips' locks fro
 store the substrate makes, builtins included, so an engine started first would answer a
 call to a builtin `equip::not_registered`.
 
-The EMERGENCY LANE is built before the watchdog, because the watchdog is its producer
-and there is nothing to push onto until it exists. The channel's spam classifier is
-installed onto the same lane here rather than at `NuSh` construction for the same
-reason - the lane does not exist that early, which is also why the one-shot CLI's
-channel simply has no responder.
+The EMERGENCY LANE is built before the operator, because the operator's emergencies
+are routed onto it and there is nothing to push onto until it exists. The channel's
+spam classifier is installed onto the same lane here rather than at `NuSh`
+construction for the same reason - the lane does not exist that early, which is also
+why the one-shot CLI's channel simply has no responder.
 
-The HOST LOCK is non-fatal on failure: two hosts may legitimately share one namespace,
-and "locked" still answers the only question a watcher asks. A failure is logged and
-the host carries on.
+The OPERATOR takes the namespace's host lock as it starts, and the observer then feeds
+it the engine's health and the Channel's state each interval (`server/operator.rs`).
 
 The SIGNAL SWEEP is installed before serving. Without it a signalled host drops its
 eval children and its background jobs onto the box unreaped, because the stdio path
 only ever learns about a CLEAN client disconnect. None of it reaches SIGKILL - that is
 what the host lock is for.
 
-NOTHING FROM OUTSIDE PANICS IT. The substrate, the stdio handshake, and the service's
-join each come back as an `Err` naming what failed, which `serve_or_oneshot` prints and
+NOTHING FROM OUTSIDE PANICS IT. The substrate, the engine's and the operator's
+systems, the stdio handshake, and the service's join each come back as an `Err` naming
+what failed, which `serve_or_oneshot` prints and
 exits 1 on. rmcp's `serve` refuses a first message it cannot take, a notification
 before any request, and that is the client's error to report, never a host panic.
 Claude Code's `server/discover` probe is no such message: rmcp answers it and stays

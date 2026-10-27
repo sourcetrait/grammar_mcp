@@ -1,7 +1,7 @@
 use crate::*;
-use crate::server::watchdog::{
-    DiskWatch, LevelGate, parse_cpu_ticks, parse_df, parse_mem_total_kb, parse_rss_kb, parse_vram,
-    rising_edges, scan_hung,
+use crate::watchdog::{
+    DiskWatch, DueProbes, LevelGate, parse_cpu_ticks, parse_df, parse_mem_total_kb, parse_rss_kb,
+    parse_vram, rising_edges, scan_hung,
 };
 
 /// Real `df -P` output from the box, including the two cases that matter: the 4 KiB
@@ -43,7 +43,7 @@ fn the_baseline_never_warns_and_excludes_what_is_already_over() {
     // never ours to report - so it stays silent no matter how long it sits there.
     let rows = vec![("/run/nvidia-ctk-hook4682c966".to_string(), 100)];
     for secs in [0, 120, 4000] {
-        let at = now + tk::TkDuration::from_secs(secs);
+        let at = now + Duration::from_secs(secs);
         assert!(
             watch.sample(&rows, 80, at).is_empty(),
             "a mount excluded at baseline must never warn (t={secs})",
@@ -62,7 +62,7 @@ fn a_watched_filesystem_warns_once_it_crosses() {
         watch.sample(&crossed, 80, base).is_empty(),
         "one sample over the line is not yet sustained",
     );
-    let emergencies = watch.sample(&crossed, 80, base + tk::TkDuration::from_secs(300));
+    let emergencies = watch.sample(&crossed, 80, base + Duration::from_secs(300));
     assert_eq!(emergencies.len(), 1, "sustained across two samples; got {emergencies:?}");
     assert!(matches!(
         &emergencies[0],
@@ -70,8 +70,8 @@ fn a_watched_filesystem_warns_once_it_crosses() {
     ));
 }
 
-const SUSTAIN: tk::TkDuration = tk::TkDuration::from_secs(60);
-const REWARN: tk::TkDuration = tk::TkDuration::from_secs(30 * 60);
+const SUSTAIN: Duration = Duration::from_secs(60);
+const REWARN: Duration = Duration::from_secs(30 * 60);
 
 /// Sample a gate at `t` seconds from `base`, firing at 150.
 fn at(
@@ -83,7 +83,7 @@ fn at(
     gate.sample(
         value,
         150.0,
-        base + tk::TkDuration::from_secs(secs),
+        base + Duration::from_secs(secs),
         SUSTAIN,
         REWARN,
     )
@@ -148,8 +148,8 @@ fn a_long_sustained_level_warns_only_twice_in_an_hour() {
     );
 }
 
-fn watch_entry(nonce: &str, lane: Lane, cancelled_at: u64) -> HungEval {
-    HungEval {
+fn watch_entry(nonce: &str, lane: ThreadLane, cancelled_at: u64) -> HungThread {
+    HungThread {
         nonce: nonce.to_string(),
         tool: "execute".to_string(),
         lane,
@@ -160,7 +160,7 @@ fn watch_entry(nonce: &str, lane: Lane, cancelled_at: u64) -> HungEval {
 
 #[test]
 fn scan_confirms_stateless_hang_past_grace() {
-    let hung = vec![watch_entry("w1", Lane::Stateless, 1000)];
+    let hung = vec![watch_entry("w1", ThreadLane::Stateless, 1000)];
     // now 7000 - cancelled 1000 = hung 6000 > grace 5000 -> confirmed
     let (ems, confirmed) = scan_hung(&hung, 7000, 5000, 2, 8);
     assert_eq!(confirmed, 1);
@@ -171,7 +171,7 @@ fn scan_confirms_stateless_hang_past_grace() {
 
 #[test]
 fn scan_ignores_within_grace() {
-    let hung = vec![watch_entry("w1", Lane::Stateless, 1000)];
+    let hung = vec![watch_entry("w1", ThreadLane::Stateless, 1000)];
     // hung 2000 <= grace 5000 -> not yet confirmed
     let (ems, confirmed) = scan_hung(&hung, 3000, 5000, 0, 8);
     assert_eq!(confirmed, 0);
@@ -180,7 +180,7 @@ fn scan_ignores_within_grace() {
 
 #[test]
 fn scan_stateful_hang_is_not_a_stateless_permit() {
-    let hung = vec![watch_entry("i1", Lane::Stateful, 0)];
+    let hung = vec![watch_entry("i1", ThreadLane::Stateful, 0)];
     let (ems, confirmed) = scan_hung(&hung, 10000, 5000, 0, 8);
     assert_eq!(confirmed, 0, "a stateful-lane hang holds no pooled permit");
     assert_eq!(ems.len(), 1);
@@ -192,7 +192,7 @@ fn scan_stateful_hang_is_not_a_stateless_permit() {
 /// active, so its answer on the next sample raises nothing twice.
 #[test]
 fn an_absent_reading_keeps_the_active_set() {
-    let hung = scan_hung(&[watch_entry("w1", Lane::Stateless, 0)], 10_000, 5_000, 1, 8).0;
+    let hung = scan_hung(&[watch_entry("w1", ThreadLane::Stateless, 0)], 10_000, 5_000, 1, 8).0;
     let (active, risen) = rising_edges(&HashSet::new(), Some(hung.clone()));
     assert_eq!(risen.len(), 1, "a new condition rises once");
     let (kept, quiet) = rising_edges(&active, None);
@@ -203,6 +203,94 @@ fn an_absent_reading_keeps_the_active_set() {
     let (cleared, none) = rising_edges(&kept, Some(Vec::new()));
     assert!(none.is_empty());
     assert!(cleared.is_empty(), "a reading without the condition clears it");
+}
+
+/// Lines no level of the test process reaches, so a tick of its own never warns.
+const BASE: SupervisorConfig = SupervisorConfig {
+    cpu_warn_fraction: 1.0,
+    ram_warn_fraction: 1.0,
+    vram_warn_headroom_mib: 0,
+    disk_warn_fraction: 1.0,
+};
+
+/// An engine reading holding one watched thread, cancelled at the epoch.
+fn holding(
+    nonce: &str,
+    lane: ThreadLane,
+) -> EngineReading {
+    EngineReading {
+        hung: vec![watch_entry(nonce, lane, 0)],
+        permits_held: 1,
+        permits_cap: 8,
+        jobs: 0,
+    }
+}
+
+/// A probe that hasn't answered is never started again, so a wedged mount or
+/// card costs one blocked thread rather than one a tick; its answer frees it.
+#[test]
+fn a_probe_in_flight_is_not_started_twice() {
+    let mut watchdog = Watchdog::new(BASE, false);
+    let now = Instant::now();
+    let (_, first) = watchdog.tick(now);
+    assert_eq!(first, DueProbes { vram: false, disk: true }, "the first tick takes the disk baseline");
+    for _ in 2..8 {
+        watchdog.tick(now);
+    }
+    assert!(watchdog.tick(now).1.vram, "every eighth tick probes the cards");
+    for _ in 9..16 {
+        watchdog.tick(now);
+    }
+    assert!(!watchdog.tick(now).1.vram, "the unanswered probe is not started again");
+    watchdog.vram_sampled(None, now);
+    for _ in 17..24 {
+        watchdog.tick(now);
+    }
+    assert!(watchdog.tick(now).1.vram, "its answer frees the slot");
+}
+
+/// A test host samples only while its Channel is open: a closed one raises and
+/// probes nothing, and opening it brings the hang in.
+#[test]
+fn a_test_host_samples_only_while_its_channel_is_open() {
+    let mut watchdog = Watchdog::new(BASE, true);
+    let closed = Observation {
+        engine: Some(holding("w1", ThreadLane::Stateless)),
+        listening: false,
+    };
+    assert!(watchdog.observe(closed, 10_000, Instant::now()).is_empty());
+    assert_eq!(watchdog.tick(Instant::now()).1, DueProbes::default(), "nor does it probe");
+    let open = Observation {
+        engine: Some(holding("w1", ThreadLane::Stateless)),
+        listening: true,
+    };
+    assert_eq!(watchdog.observe(open, 10_000, Instant::now()).len(), 1);
+}
+
+/// Through the observations a hang is raised once, kept across an absent
+/// reading, and raised again only after a reading cleared it.
+#[test]
+fn an_observed_hang_is_raised_once_until_it_clears() {
+    let mut watchdog = Watchdog::new(BASE, false);
+    let now = Instant::now();
+    let seen = |engine: Option<EngineReading>| Observation {
+        engine,
+        listening: false,
+    };
+    let held = || Some(holding("w1", ThreadLane::Stateful));
+    let clear = || {
+        Some(EngineReading {
+            hung: Vec::new(),
+            permits_held: 0,
+            permits_cap: 8,
+            jobs: 0,
+        })
+    };
+    assert_eq!(watchdog.observe(seen(held()), 10_000, now).len(), 1);
+    assert!(watchdog.observe(seen(None), 10_000, now).is_empty(), "an absent reading raises nothing");
+    assert!(watchdog.observe(seen(held()), 12_000, now).is_empty(), "still active");
+    assert!(watchdog.observe(seen(clear()), 14_000, now).is_empty());
+    assert_eq!(watchdog.observe(seen(held()), 16_000, now).len(), 1, "raised again once cleared");
 }
 
 #[test]

@@ -29,6 +29,9 @@ Stored rather than discarded because dropping it releases the lock. That is the
 only reason it exists, and it is otherwise unread - hence the underscore.
 
 ## fn acquire
+The path is the caller's, the operator's system passing its data home's: the operator
+reads no home of the host's.
+
 NOT A SINGLETON GUARD. Two hosts may legitimately share one namespace - their
 per-process artifacts already namespace by `mcp_nom` - so the caller logs a failure
 and carries on. The signal stays correct in aggregate, because "locked" answers the

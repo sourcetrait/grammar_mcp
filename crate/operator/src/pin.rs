@@ -81,12 +81,12 @@ fn validate(
             }
             Ok(PinValue::Mib(value as u64))
         }
-        _ => fraction_field(key.field(), Some(value)).map(PinValue::Fraction),
+        _ => check_fraction(key.field(), value).map(PinValue::Fraction),
     }
 }
 
 /// Pin a setting to the lifetime of a process.
-pub(crate) fn pin(
+pub fn pin(
     key: &str,
     pid: u32,
     value: f64,
@@ -121,10 +121,10 @@ pub(crate) fn reap_pins() {
     pins().retain(|_, pin| process_start_time(pin.pid) == Some(pin.start_time));
 }
 
-/// The supervisor settings as they currently apply.
-pub(crate) fn effective_supervisor() -> SupervisorConfig {
+/// The supervisor settings as they currently apply, `base` under the pins.
+pub fn effective_supervisor(base: SupervisorConfig) -> SupervisorConfig {
     reap_pins();
-    let mut supervisor = config().supervisor;
+    let mut supervisor = base;
     for (key, pin) in pins().iter() {
         match (key, pin.value) {
             (PinnableKey::CpuWarnFraction, PinValue::Fraction(v)) => {
@@ -146,7 +146,7 @@ pub(crate) fn effective_supervisor() -> SupervisorConfig {
 }
 
 /// Drop every pin, live or not.
-pub(crate) fn clear_pins() {
+pub fn clear_pins() {
     pins().clear();
 }
 

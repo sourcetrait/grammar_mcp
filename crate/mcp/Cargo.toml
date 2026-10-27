@@ -46,6 +46,7 @@ zstd.workspace = true
 
 sourcetrait_common.workspace = true
 sourcetrait_grammar_engine.workspace = true
+sourcetrait_grammar_operator.workspace = true
 
 sourcetrait_cert_lib.workspace    = true
 

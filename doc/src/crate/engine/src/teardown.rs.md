@@ -8,7 +8,7 @@ plain SIGKILL of the child orphans its grandchild.
 
 The reap that works: a /proc descendant walk from each tracked child BEFORE the kill, which
 makes it deterministic, plus SIGKILL on each, with the host the eval's subreaper so an
-orphan reparents to it and stays on the /proc ppid chain (mcp's `server/teardown.rs`).
+orphan reparents to it and stays on the /proc ppid chain (the operator's `reaper.rs`).
 `Jobs::kill_and_remove` alone reaches only the tracked direct child.
 
 All of it is Linux-gated. A non-target build degrades to a direct-child kill with no

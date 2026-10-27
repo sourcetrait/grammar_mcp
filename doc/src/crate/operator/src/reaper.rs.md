@@ -1,9 +1,9 @@
-# teardown.rs
+# reaper.rs
 
-The host's half of an eval's teardown. The engine kills an eval's external tree by a /proc
-descendant walk (the engine's `teardown.rs`); the walk reaches a grandchild only while
-that grandchild stays on the host's ppid chain, which is what the subreaper here keeps it
-on, and adoption leaves zombies the host must then reap.
+The operator's half of an eval's teardown. The engine kills an eval's external tree by a
+/proc descendant walk (the engine's `teardown.rs`); the walk reaches a grandchild only
+while that grandchild stays on the host's ppid chain, which is what the subreaper here
+keeps it on, and adoption leaves zombies the host must then reap.
 
 ## const REAP_GRACE_SECS
 THE GRACE IS THE SAFETY MECHANISM, not a tuning knob.
@@ -60,5 +60,7 @@ nothing to reap. `WNOHANG` so a surprise never blocks the watchdog, and a pid so
 already reaped returns ECHILD, which is exactly the no-op wanted.
 
 ## fn install_child_subreaper
-Best-effort and called once at host startup. The subreaper only buys RACE-SAFETY on
-kill-time orphans; the engine's /proc descendant walk is the actual mechanism.
+Best-effort and called once at host startup, by the host itself rather than the
+operator's system, since the one-shot CLI starts no operator and still kills trees.
+The subreaper only buys RACE-SAFETY on kill-time orphans; the engine's /proc descendant
+walk is the actual mechanism.

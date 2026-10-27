@@ -3,6 +3,7 @@ resolver = "3"
 members = [
   "crate/nuval",
   "crate/engine",
+  "crate/operator",
   "crate/plugin/eye",
   "crate/plugin/soak",
   "crate/mcp",
@@ -66,6 +67,7 @@ nu-std = { version = "0.116.1" }
 nuon = { version = "0.116.1" }
 nuval = { path = "crate/nuval" }
 sourcetrait_grammar_engine = { path = "crate/engine" }
+sourcetrait_grammar_operator = { path = "crate/operator" }
 
 sourcetrait_common = {
     path = "../common/crates/sourcetrait_common",

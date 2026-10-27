@@ -56,7 +56,7 @@ ends in an error prints its reason after `grammar: ` and exits 1.
 The namespace half of `--test` ENDS HERE, and that is what keeps the flag from
 becoming a mode. From this function onward `test` is an ordinary namespace
 string, so nothing downstream re-derives it, which leaves `Config.test` meaning
-only the watchdog half.
+only the operator's sampling half.
 
 ## fn resolve_work_dir
 Every path out of an argument expands through the same `expand_path` the config

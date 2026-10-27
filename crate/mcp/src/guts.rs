@@ -375,7 +375,7 @@ impl TestServer {
 
 /// Drop every config pin.
 pub fn clear_config_pins() {
-    crate::clear_pins();
+    clear_pins();
 }
 
 /// A NUON text as JSON, through the converter `to json` uses.

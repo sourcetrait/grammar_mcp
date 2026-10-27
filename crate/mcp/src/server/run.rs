@@ -13,17 +13,8 @@ pub(crate) async fn run_server() -> Result<(), String> {
     let (emergency_tx, emergency_rx) = tk::unbounded_channel::<Emergency>();
     spawn_emergency_responder(emergency_rx, server.mcp_nom.as_str().to_string());
     server.channel.install_emergency(emergency_tx.clone());
-    spawn_watchdog(WatchdogDeps {
-        engine: engine.clone(),
-        tx: emergency_tx,
-    });
-    let _host_lock = match acquire_host_lock(server.mcp_nom.as_str()) {
-        Ok(lock) => Some(lock),
-        Err(e) => {
-            eprintln!("grammar: host lock not held: {e}");
-            None
-        }
-    };
+    let operator = Arc::new(start_operator(server.mcp_nom.as_str(), emergency_tx).await?);
+    spawn_observer(engine.clone(), operator);
     spawn_signal_sweep(engine.clone());
     let service = server
         .serve(mcp::stdio())

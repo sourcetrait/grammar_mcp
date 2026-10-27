@@ -1,10 +1,14 @@
 # pin.rs
 
-`CONFIG` is a `OnceLock` set at startup and never written again, so anything
-adjustable at runtime needs its own live copy. The channel's spam thresholds are the
-existing precedent for that shape; this is the same idea applied to the
-`[supervisor]` warning lines, with one addition - a pin is bound to the LIFETIME OF A
-PROCESS rather than left to be unset by hand.
+The supervisor lines the host starts with never change, so anything adjustable at
+runtime needs its own live copy. The channel's spam thresholds are the existing
+precedent for that shape; this is the same idea applied to the `[supervisor]` warning
+lines, with one addition - a pin is bound to the LIFETIME OF A PROCESS rather than left
+to be unset by hand.
+
+The table is PROCESS-WIDE because two sides use it: the operator's watchdog reads it on
+its tick, and the host's evals write it through `grimm pin_config`, which the host
+answers by calling `pin` on the eval's thread.
 
 THE MOTIVATING CASE is a training run: pin `vram_warn_headroom_mib` to 0 for the
 run's own pid. The gate fires at `total - headroom`, so zero headroom puts the line at
@@ -50,7 +54,8 @@ competing pins to arbitrate between.
 
 ## fn validate
 SHARED with the file layer rather than restated, so a pin cannot reach a state a
-config load would have refused. `fraction_field` went `pub(crate)` for exactly this.
+config load would have refused: `check_fraction` is the one range check
+(`supervisor.rs`).
 
 Note the asymmetry in what each key accepts: zero HEADROOM is legal and is the
 motivating case, while a zero FRACTION is refused. The bound differs because the
@@ -67,16 +72,18 @@ the effective config - so a caller can never observe a pin held by a process tha
 already exited, whatever the tick happens to be doing.
 
 ## fn effective_supervisor
-EVERY reader goes through this rather than `config().supervisor`, which is what keeps a
-pin from being something the watchdog honors while `get_config` reports the old value.
+EVERY reader goes through this rather than its base lines alone, the watchdog with its
+parameters' and the host's config record with the config's, which is what keeps a pin
+from being something the watchdog honors while `get_config` reports the old value. The
+base is an argument, so the pins hold no copy of the lines.
 
 The unreachable arm is ignored rather than panicking: `validate` is the only
 constructor and it pairs the shape to the key, so a future mispairing stays a wrong
 reading instead of a dead host.
 
 ## fn clear_pins
-Test-only in PURPOSE but not `cfg(test)`, because the integration tests are separate
-crates that see only `pub` items and reach it through `guts`.
+Test-only in PURPOSE but not `cfg(test)`, because the host's integration tests are
+separate crates that reach it through the host's `guts`.
 
 ## fn corrupt_start_time_for_test
 This is what a pid reuse looks like from the reaper's side - the pid still resolves,

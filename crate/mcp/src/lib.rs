@@ -12,9 +12,8 @@ pub(crate) mod server {
         pub(crate) mod contract;
         pub(crate) mod grammar;
     }
-    pub(crate) mod liveness;
     pub(crate) mod oneshot;
-    pub(crate) mod pin;
+    pub(crate) mod operator;
     pub(crate) mod purview;
     pub(crate) mod remote {
         pub(crate) mod codec;
@@ -22,8 +21,6 @@ pub(crate) mod server {
         pub(crate) mod verify;
     }
     pub(crate) mod run;
-    pub(crate) mod teardown;
-    pub(crate) mod watchdog;
     pub(crate) mod tool {
         pub(crate) mod call;
         pub(crate) mod channel_close;
@@ -56,10 +53,7 @@ pub(crate) mod server {
         mod emergency;
         mod interface;
         mod remote;
-        mod pin;
         mod purview;
-        mod teardown;
-        mod watchdog;
     }
 }
 #[cfg(test)]
@@ -75,8 +69,8 @@ pub mod guts;
 pub(crate) use crate::{
     config::{
         CONFIG, Config, ConfigToml, DEFAULT_NAMESPACE, DenySet, RemoteConfig,
-        RemoteRole, SpamThresholds, SupervisorConfig, TEST_NAMESPACE, config, default_id,
-        default_work_dir, expand_path, fraction_field,
+        RemoteRole, SpamThresholds, TEST_NAMESPACE, config, default_id,
+        default_work_dir, expand_path,
     },
     home::{base_dirs, cache_base_dir, check_base_dirs, data_base_dir},
     mcp::ServiceExt,
@@ -94,12 +88,7 @@ pub(crate) use crate::{
                 render_nuon, render_packet,
             },
         },
-        emergency::{
-            BackgroundJobsWarningEmergency, ChannelSpamErrorEmergency,
-            ChannelSpamWarningEmergency, CpuWarningEmergency, CriticalEmergency,
-            DiskWarningEmergency, Emergency, EmergencyTx, HungEngineThreadEmergency,
-            RamWarningEmergency, VramWarningEmergency, spawn_emergency_responder,
-        },
+        emergency::{EmergencyTx, spawn_emergency_responder},
         host::{ensure_substrate, init_engine},
         interface::{
             contract::{InterfaceCommand, parse_command},
@@ -108,9 +97,8 @@ pub(crate) use crate::{
                 command_spec, interface_engine, render_signatures,
             },
         },
-        liveness::acquire as acquire_host_lock,
         oneshot::run_oneshot,
-        pin::{clear_pins, effective_supervisor, pin, reap_pins},
+        operator::{spawn_observer, start_operator},
         purview::{
             CurrentPurview, PURVIEW_ALL, PURVIEW_CORE, PURVIEW_DEFAULT, PURVIEW_REF, PurviewRow,
             PurviewView, is_derived_purview, is_rig_pattern, is_valid_purview_id, load_purviews,
@@ -130,8 +118,6 @@ pub(crate) use crate::{
             verify::PublicKeyVerifier,
         },
         run::run_server,
-        teardown::{OrphanReaper, install_child_subreaper, process_start_time},
-        watchdog::{WatchdogDeps, spawn_watchdog},
         tool::{
             call::CallParams,
             commit::CommitParams,
@@ -162,14 +148,20 @@ pub(crate) use crate::{
 pub(crate) use sourcetrait_grammar_engine::{
     self as engine, CallRequest, ChannelSend, CheckSummary, CommitResult, ControlAnswer,
     Diagnostic, EVAL_STACK_SIZE, EngineCommand, EngineError, EngineHandle,
-    EngineHealth, EngineHost, EngineParams, EngineResult, ExecuteRequest, Host, HungEval,
-    InspectDoc, LINT_VIOLATION_CAP, Lane, LintEngine, NU_VERSION, NamepathPattern,
+    EngineHealth, EngineHost, EngineParams, EngineResult, ExecuteRequest, Host, InspectDoc, LINT_VIOLATION_CAP, Lane, LintEngine, NU_VERSION, NamepathPattern,
     NamepathStr, ParseEngine, PluginInfo, RemoteSend, RerunRequest, SignaturesDoc, Source,
     ValueAnswer, analyze_definition, build_call_source, build_execute_source, builtin_equip,
     builtin_name, definition_file, ensure_equip_store, ensure_plugin_registry, equip_repo_lock,
     equip_root, file_start, index_from_nuon, install_builtins, json_value_to_nu_value, lib_dir,
     lint_block, list_registered_plugins, registered_rig_names, rig_dir, rig_meta_path,
     span_to_line_col, typedef_text,
+};
+
+pub(crate) use sourcetrait_grammar_operator::{
+    ChannelSpamErrorEmergency, ChannelSpamWarningEmergency, EngineReading, Emergency,
+    EmergencyKind, FromOperatorSys, HungThread, Observation, OperatorHandle, OperatorSysParams,
+    OperatorSysPaths, OperatorSystem, SAMPLE_INTERVAL, SupervisorConfig, ThreadLane,
+    check_fraction, clear_pins, effective_supervisor, install_child_subreaper, pin,
 };
 
 pub(crate) use nuval::{NuVal, TryFromNu, TryIntoNu};
@@ -181,7 +173,6 @@ pub(crate) use std::{
     io::{self, Write},
     hash::{Hash},
     marker::PhantomData,
-    os::unix::fs::OpenOptionsExt,
     path::{PathBuf,Path},
     process,
     sync::{
@@ -213,7 +204,7 @@ pub(crate) mod nu {
     pub(crate) use nuon::{ToNuonConfig, from_nuon, to_nuon};
 }
 
-pub(crate) use sourcetrait_common::datum;
+pub(crate) use sourcetrait_common::{datum, subsys};
 
 pub(crate) mod ser {
     pub(crate) use ::serde::{Deserialize, Serialize};
@@ -268,7 +259,7 @@ pub(crate) mod tk {
         io::{ReadHalf, WriteHalf, split},
         net::{TcpListener, TcpStream},
         signal::unix::{SignalKind, signal},
-        task::{JoinHandle, spawn_blocking},
+        task::JoinHandle,
         sync::{
             Mutex as AsyncMutex, oneshot,
             mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},

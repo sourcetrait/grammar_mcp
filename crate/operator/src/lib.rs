@@ -1,0 +1,63 @@
+pub(crate) mod emergency;
+pub(crate) mod liveness;
+pub(crate) mod msg;
+pub(crate) mod pin;
+pub(crate) mod reaper;
+pub(crate) mod supervisor;
+pub(crate) mod system;
+pub(crate) mod watchdog;
+#[cfg(test)]
+mod tests {
+    mod pin;
+    mod reaper;
+    mod watchdog;
+}
+
+pub(crate) use crate::{
+    liveness::{HOST_LOCK_FILE, HostLock, acquire as acquire_host_lock},
+    pin::reap_pins,
+    reaper::{OrphanReaper, process_start_time},
+    watchdog::{Probe, Watchdog, now_millis, probe_disk, probe_vram},
+};
+
+pub(crate) use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    io::{self, Write},
+    os::unix::fs::OpenOptionsExt,
+    path::PathBuf,
+    process,
+    sync::{LazyLock, OnceLock},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
+
+pub(crate) use sourcetrait_common::{agnostic, cereal, subsys};
+
+pub(crate) mod ser {
+    pub(crate) use ::serde::{Deserialize, Serialize};
+}
+
+pub(crate) mod tk {
+    pub(crate) use tokio::{
+        select,
+        sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
+        task::spawn_blocking,
+        time::{MissedTickBehavior, interval},
+    };
+}
+
+pub use crate::{
+    emergency::{
+        BackgroundJobsWarningEmergency, ChannelSpamErrorEmergency, ChannelSpamWarningEmergency,
+        CpuWarningEmergency, CriticalEmergency, DiskWarningEmergency, Emergency, EmergencyKind,
+        HungEngineThreadEmergency, RamWarningEmergency, VramWarningEmergency,
+    },
+    msg::{EngineReading, FromOperatorSys, HungThread, Observation, ThreadLane, ToOperatorSys},
+    pin::{clear_pins, effective_supervisor, pin},
+    reaper::install_child_subreaper,
+    supervisor::{SupervisorConfig, check_fraction},
+    system::{
+        OperatorHandle, OperatorSysConfig, OperatorSysParams, OperatorSysPaths, OperatorSystem,
+    },
+    watchdog::SAMPLE_INTERVAL,
+};

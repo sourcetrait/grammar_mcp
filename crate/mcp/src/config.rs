@@ -66,14 +66,6 @@ pub(crate) struct SupervisorConfigToml {
     pub disk_warn_fraction: Option<f64>,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct SupervisorConfig {
-    pub cpu_warn_fraction: f64,
-    pub ram_warn_fraction: f64,
-    pub vram_warn_headroom_mib: u64,
-    pub disk_warn_fraction: f64,
-}
-
 /// The `[channel]` table: the wss port, the cert dir, and the spam policy.
 #[derive(Debug, Clone, Default, ser::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -328,17 +320,14 @@ impl TryFrom<RemotesConfigToml> for RemotesConfig {
     }
 }
 
-/// A fraction of total capacity; outside (0, 1] it would warn always or never.
-pub(crate) fn fraction_field(
+/// A supervisor fraction the merged layers carry, held to the operator's range.
+fn fraction_field(
     name: &str,
     value: Option<f64>,
 ) -> Result<f64, String> {
     match value {
         None => Err(format!("the embedded defaults carry no supervisor.{name}")),
-        Some(f) if f <= 0.0 || f > 1.0 => {
-            Err(format!("supervisor.{name} must be greater than 0 and at most 1"))
-        }
-        Some(f) => Ok(f),
+        Some(f) => check_fraction(name, f),
     }
 }
 

@@ -47,8 +47,8 @@ the model and the docs, never in a command or a file.
 ### field test
 A binary flag with exactly two meanings, and deliberately NOT a mode: it defaults
 the namespace to `test` - resolved at the argument boundary, so nothing
-downstream re-reads it for that - and it ties the watchdog to the channel's
-phase. Everything else behaves identically.
+downstream re-reads it for that - and it ties the operator's sampling to the
+channel's phase. Everything else behaves identically.
 
 ### field startup_cwd
 Captured once at load, since nothing an eval does moves the host's own cwd
@@ -59,8 +59,8 @@ after the remotes file loads.
 
 ### field spam
 Runtime changes go through `interface channel config`, which mutates the
-CHANNEL's live copy rather than this. `CONFIG` is set once, so anything adjustable at runtime
-needs its own live layer; the pin registry is the same shape applied to
+CHANNEL's live copy rather than this. `CONFIG` is set once, so anything adjustable at
+runtime needs its own live layer; the operator's pins are the same shape applied to
 `[supervisor]`.
 
 ## struct SpamThresholds
@@ -103,16 +103,15 @@ named constructor (NOT TryFrom) precisely because it carries fields the format l
 lacks (id, namespace); this sub-config, which does not, uses TryFrom.
 
 ## fn fraction_field
-`pub(crate)` for one reason, and it is worth stating because the visibility looks
-arbitrary otherwise: a runtime PIN is held to the same bound the file layer
-enforces. A pin must not be able to reach a state a config load would have
-refused, and the only way to guarantee that is to SHARE the check rather than
-restate it.
+The range is the operator's `check_fraction`, the one check a runtime PIN is held to
+as well: a pin must not be able to reach a state a config load would have refused,
+and the only way to guarantee that is to SHARE the check rather than restate it. This
+adds the file layer's own refusal, a line the merged layers don't carry.
 
-Note the callers pass the BARE field name, not the dotted key - this function
-composes the `supervisor.` prefix itself, so handing it an already-dotted key would
-double it to `supervisor.supervisor.cpu_warn_fraction` in the error message. A test
-that asserts refusal alone would miss that; the text has to be read back.
+Note the callers pass the BARE field name, not the dotted key - the check composes the
+`supervisor.` prefix itself, so handing it an already-dotted key would double it to
+`supervisor.supervisor.cpu_warn_fraction` in the error message. A test that asserts
+refusal alone would miss that; the text has to be read back.
 
 ## fn secs_field
 Zero would mean "no window", which is not a rate at all.

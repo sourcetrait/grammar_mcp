@@ -1,4 +1,9 @@
 use crate::*;
+use crate::server::emergency::{emergency_line, emergency_model};
+use sourcetrait_grammar_operator::{
+    BackgroundJobsWarningEmergency, CpuWarningEmergency, CriticalEmergency, DiskWarningEmergency,
+    HungEngineThreadEmergency, RamWarningEmergency, VramWarningEmergency,
+};
 
 fn a_hang() -> Emergency {
     Emergency::HungEngineThread(HungEngineThreadEmergency {
@@ -15,7 +20,7 @@ fn a_hang() -> Emergency {
 
 #[test]
 fn to_nuon_line_is_single_line_and_parses() {
-    let line = a_hang().to_nuon_line(9999, "nomAAA").unwrap();
+    let line = emergency_line(&a_hang(), 9999, "nomAAA").unwrap();
     assert!(!line.contains('\n'), "an emergency line must not span lines: {line:?}");
     let v = nu::from_nuon(&line, None).expect("valid NUON record");
     let rec = v.as_record().expect("record");
@@ -34,7 +39,7 @@ fn no_event_field_collides_with_the_packet_envelope() {
     // that reason. Locked here because the collision is invisible in the log, where
     // there is no envelope, and only shows up on the wire.
     for em in all_kinds() {
-        let line = em.to_nuon_line(1, "nom").unwrap();
+        let line = emergency_line(&em, 1, "nom").unwrap();
         let v = nu::from_nuon(&line, None).expect("valid NUON record");
         let rec = v.as_record().expect("record");
         assert!(
@@ -57,7 +62,7 @@ fn every_model_lives_under_the_mcp_reservation_and_is_distinct() {
     // The reservation is only worth anything if it holds for EVERY host-originated
     // model - one variant escaping it turns a mechanical provenance check back into a
     // judgement call. Distinctness matters because the model is what the agent routes on.
-    let models: Vec<&str> = all_kinds().iter().map(|em| em.model()).collect();
+    let models: Vec<&str> = all_kinds().iter().map(emergency_model).collect();
     for model in &models {
         assert!(
             model.starts_with(MCP_RESERVED_PREFIX),
@@ -123,7 +128,7 @@ fn all_kinds() -> Vec<Emergency> {
 fn every_kind_serializes_single_line() {
     for em in all_kinds() {
         let want = em.kind().name().to_string();
-        let line = em.to_nuon_line(1, "nom").unwrap();
+        let line = emergency_line(&em, 1, "nom").unwrap();
         assert!(!line.contains('\n'), "line spans multiple lines: {line:?}");
         let v = nu::from_nuon(&line, None).expect("valid NUON record");
         let rec = v.as_record().expect("record");

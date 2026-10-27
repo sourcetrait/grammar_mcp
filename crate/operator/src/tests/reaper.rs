@@ -1,5 +1,5 @@
 use crate::*;
-use crate::server::teardown::parse_state_ppid;
+use crate::reaper::parse_state_ppid;
 
 #[test]
 fn parses_state_and_ppid() {

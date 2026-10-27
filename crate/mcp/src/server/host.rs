@@ -248,7 +248,7 @@ fn config_record() -> nu::Value {
     let span = nu::Span::unknown();
     let cfg = config();
     let spam = channel_handle().thresholds();
-    let supervisor = effective_supervisor();
+    let supervisor = effective_supervisor(cfg.supervisor);
 
     let mut channel = nu::Record::new();
     channel.insert(

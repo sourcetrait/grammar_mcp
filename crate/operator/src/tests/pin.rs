@@ -1,20 +1,22 @@
 use crate::*;
-use crate::server::pin::{PinnableKey, PinValue, clear_pins};
-use crate::server::teardown::parse_start_time;
+use crate::pin::{PinnableKey, PinValue};
+use crate::reaper::parse_start_time;
 use sourcetrait_common::testing::prelude::*;
 
-/// Static module setup: seed `CONFIG` once with the embedded defaults.
-///
-/// The pin layer lays over the startup config, so a test of the effective value
-/// needs one to lay over, and the unit-test binary runs no server, so nothing
-/// else sets it. `Config::default()` is the right base precisely because it is
-/// the embedded defaults: the values a pin overrides in production. Tolerant
-/// (`let _ =`) because `CONFIG` is a process-global OnceLock and first-set wins.
-static TESTING: testing::Module = testing::module!(Unit, {
-    .setup(|_module| {
-        let _ = CONFIG.set(Config::default());
-    })
-});
+static TESTING: testing::Module = testing::module!(Unit);
+
+/// The lines a pin lays over: values no test pins, so a pin is visible over them.
+const BASE: SupervisorConfig = SupervisorConfig {
+    cpu_warn_fraction: 0.9,
+    ram_warn_fraction: 0.8,
+    vram_warn_headroom_mib: 2048,
+    disk_warn_fraction: 0.85,
+};
+
+/// The settings in force over `BASE`.
+fn effective() -> SupervisorConfig {
+    effective_supervisor(BASE)
+}
 
 /// This process, which is trivially alive - the only pid a test can pin to and
 /// still be sure of the answer.
@@ -138,17 +140,17 @@ fn step_pin_holds(
     _p: (),
 ) -> testing::StepState<(), ()> {
     clear_pins();
-    let before = effective_supervisor().cpu_warn_fraction;
+    let before = effective().cpu_warn_fraction;
     pin("supervisor.cpu_warn_fraction", me(), 0.25).expect("a live pid is pinnable");
     assert_eq!(
-        effective_supervisor().cpu_warn_fraction,
+        effective().cpu_warn_fraction,
         0.25,
         "the pin layer is what every reader goes through, so a pin is the setting",
     );
     assert_ne!(before, 0.25, "the fixture would prove nothing if it matched the default");
     clear_pins();
     assert_eq!(
-        effective_supervisor().cpu_warn_fraction, before,
+        effective().cpu_warn_fraction, before,
         "and clearing restores the startup config",
     );
     testing::StepState((), ())
@@ -163,7 +165,7 @@ fn step_last_write_wins(
     pin("supervisor.disk_warn_fraction", me(), 0.5).expect("first pin");
     pin("supervisor.disk_warn_fraction", me(), 0.9).expect("second pin");
     assert_eq!(
-        effective_supervisor().disk_warn_fraction,
+        effective().disk_warn_fraction,
         0.9,
         "keying the map by setting is what makes last-write-wins fall out - there \
          is never a set of competing pins to arbitrate",
@@ -179,11 +181,11 @@ fn step_coexist(
     clear_pins();
     pin("supervisor.cpu_warn_fraction", me(), 0.11).expect("cpu");
     pin("supervisor.vram_warn_headroom_mib", me(), 0.0).expect("vram");
-    let supervisor = effective_supervisor();
+    let supervisor = effective();
     assert_eq!(supervisor.cpu_warn_fraction, 0.11);
     assert_eq!(supervisor.vram_warn_headroom_mib, 0);
     assert_eq!(
-        supervisor.ram_warn_fraction, config().supervisor.ram_warn_fraction,
+        supervisor.ram_warn_fraction, BASE.ram_warn_fraction,
         "an unpinned setting keeps its configured value",
     );
     testing::StepState((), ())
@@ -199,7 +201,7 @@ fn step_vram_headroom_zero(
     // card's full capacity and usage never reaches it. This is the training-run
     // case the whole feature exists for, so it must not be refused as a boundary.
     pin("supervisor.vram_warn_headroom_mib", me(), 0.0).expect("zero headroom is legal");
-    assert_eq!(effective_supervisor().vram_warn_headroom_mib, 0);
+    assert_eq!(effective().vram_warn_headroom_mib, 0);
     testing::StepState((), ())
 }
 
@@ -211,8 +213,9 @@ fn step_validator_bounds(
     clear_pins();
     // A fraction outside (0, 1] would either warn always or never - the same bound
     // the file layer enforces, shared rather than restated so a pin cannot reach a
-    // state a config load would have refused.
-    for bad in [0.0, -0.1, 1.5] {
+    // state a config load would have refused. NaN compares false against both
+    // bounds, so it is refused only because the check accepts what lies INSIDE them.
+    for bad in [0.0, -0.1, 1.5, f64::NAN] {
         let err = pin("supervisor.ram_warn_fraction", me(), bad)
             .expect_err("fraction {bad} must be refused");
         // Read the message, not merely the Err. Asserting only is_err() let a
@@ -251,8 +254,8 @@ fn step_dead_pid_refused(
         .expect_err("a dead pid must be refused");
     assert!(err.contains("not running"), "got {err}");
     assert_eq!(
-        effective_supervisor().cpu_warn_fraction,
-        config().supervisor.cpu_warn_fraction,
+        effective().cpu_warn_fraction,
+        BASE.cpu_warn_fraction,
         "a refused pin must leave nothing behind",
     );
     testing::StepState((), ())
@@ -268,11 +271,11 @@ fn step_identity_mismatch_reaped(
     // Rewrite the pin's identity to a start time this process cannot have. That is
     // exactly what a pid reuse looks like from the reaper's side: the pid resolves,
     // but the process wearing it is not the one that took the pin.
-    crate::server::pin::corrupt_start_time_for_test(PinnableKey::CpuWarnFraction);
+    crate::pin::corrupt_start_time_for_test(PinnableKey::CpuWarnFraction);
     reap_pins();
     assert_eq!(
-        effective_supervisor().cpu_warn_fraction,
-        config().supervisor.cpu_warn_fraction,
+        effective().cpu_warn_fraction,
+        BASE.cpu_warn_fraction,
         "a pin whose process identity no longer matches must lapse",
     );
     clear_pins();

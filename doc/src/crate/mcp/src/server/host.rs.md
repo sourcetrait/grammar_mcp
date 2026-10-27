@@ -103,6 +103,6 @@ lines come through the pin layer - so what a body reads is what is actually in f
 rather than the startup seed. A startup seed nobody is using would be a lie with a
 timestamp.
 
-It reads through `effective_supervisor()` rather than `config().supervisor`, which
-is what keeps a pin from being something the watchdog honors while a read reports
-the old value.
+It reads through the operator's `effective_supervisor`, the config's lines its base,
+rather than `config().supervisor` alone, which is what keeps a pin from being
+something the watchdog honors while a read reports the old value.

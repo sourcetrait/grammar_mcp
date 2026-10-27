@@ -1,15 +1,15 @@
-//! The watchdog: sample the host, classify trouble, emit it edge-triggered.
+//! The watchdog: sample the host, classify trouble, raise it edge-triggered.
 use crate::*;
 
 /// How often the watchdog samples.
-const SAMPLE_INTERVAL: tk::TkDuration = tk::TkDuration::from_secs(2);
+pub const SAMPLE_INTERVAL: Duration = Duration::from_secs(2);
 /// A cancelled thread still alive this long past its cancel is hung.
 const HUNG_GRACE_MS: u64 = 5_000;
 
 /// How long a level must HOLD before it is worth telling the agent about.
-const LEVEL_SUSTAIN: tk::TkDuration = tk::TkDuration::from_secs(60);
+const LEVEL_SUSTAIN: Duration = Duration::from_secs(60);
 /// The floor between two warnings about the SAME condition.
-const LEVEL_REWARN: tk::TkDuration = tk::TkDuration::from_secs(30 * 60);
+const LEVEL_REWARN: Duration = Duration::from_secs(30 * 60);
 
 /// Environment-wide background job count.
 const JOBS_THRESHOLD: f64 = 32.0;
@@ -106,18 +106,13 @@ impl DiskWatch {
     }
 }
 
-/// Run `df -P` on a blocking pool thread.
-async fn sample_disk() -> Option<Vec<(String, u32)>> {
-    tk::spawn_blocking(|| {
-        let out = std::process::Command::new("df").arg("-P").output().ok()?;
-        if !out.status.success() {
-            return None;
-        }
-        Some(parse_df(&String::from_utf8_lossy(&out.stdout)))
-    })
-    .await
-    .ok()
-    .flatten()
+/// `df -P`'s rows, run on the calling thread; none when it fails.
+pub(crate) fn probe_disk() -> Option<Vec<(String, u32)>> {
+    let out = process::Command::new("df").arg("-P").output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(parse_df(&String::from_utf8_lossy(&out.stdout)))
 }
 
 /// The CPU line, as a percentage: all cores busy is `cores * 100`.
@@ -140,8 +135,8 @@ impl LevelGate {
         value: f64,
         fire_at: f64,
         now: Instant,
-        sustain: tk::TkDuration,
-        rewarn: tk::TkDuration,
+        sustain: Duration,
+        rewarn: Duration,
     ) -> bool {
         if value < fire_at {
             self.over_since = None;
@@ -164,20 +159,9 @@ impl LevelGate {
 /// Linux `_SC_CLK_TCK`; the CPU conversion assumes the standard 100.
 const CLK_TCK: f64 = 100.0;
 
-/// May the watchdog SAMPLE on this tick?
-fn sampling_online() -> bool {
-    !config().test || !matches!(channel_handle().status().phase, ChannelPhase::Closed)
-}
-
-/// What the watchdog samples beyond the process: the engine, and its lane out.
-pub(crate) struct WatchdogDeps {
-    pub engine: Arc<EngineHandle>,
-    pub tx: EmergencyTx,
-}
-
 /// Confirm the engine's watched threads as hung past `grace_ms`.
 pub(crate) fn scan_hung(
-    hung: &[HungEval],
+    hung: &[HungThread],
     now: u64,
     grace_ms: u64,
     pool_held: usize,
@@ -190,7 +174,7 @@ pub(crate) fn scan_hung(
         if hung_ms <= grace_ms {
             continue;
         }
-        if matches!(w.lane, Lane::Stateless) {
+        if matches!(w.lane, ThreadLane::Stateless) {
             confirmed_stateless += 1;
         }
         out.push((
@@ -198,7 +182,7 @@ pub(crate) fn scan_hung(
             Emergency::HungEngineThread(HungEngineThreadEmergency {
                 nonce: w.nonce.clone(),
                 lane: w.lane.as_str().to_string(),
-                tool: w.tool.to_string(),
+                tool: w.tool.clone(),
                 started_at: w.started_at,
                 cancelled_at: w.cancelled_at,
                 hung_ms,
@@ -211,14 +195,14 @@ pub(crate) fn scan_hung(
 }
 
 /// The engine's confirmed hangs, and the Critical when they hold every permit.
-fn engine_conditions(
-    health: &EngineHealth,
+pub(crate) fn engine_conditions(
+    reading: &EngineReading,
     now: u64,
 ) -> Vec<(String, Emergency)> {
-    let held = health.permits_held as usize;
-    let cap = health.permits_cap as usize;
+    let held = reading.permits_held as usize;
+    let cap = reading.permits_cap as usize;
     let (mut conditions, confirmed_stateless) =
-        scan_hung(&health.hung, now, HUNG_GRACE_MS, held, cap);
+        scan_hung(&reading.hung, now, HUNG_GRACE_MS, held, cap);
     if cap > 0 && confirmed_stateless >= cap {
         conditions.push((
             "critical:stateless_saturation".to_string(),
@@ -311,153 +295,242 @@ fn read_cpu_ticks() -> Option<u64> {
     None
 }
 
-/// Runtime-probe nvidia-smi for summed GPU memory.
-async fn sample_vram() -> Option<(u64, u64)> {
-    tk::spawn_blocking(|| {
-        let out = std::process::Command::new("nvidia-smi")
-            .args([
-                "--query-gpu=memory.used,memory.total",
-                "--format=csv,noheader,nounits",
-            ])
-            .output()
-            .ok()?;
-        if !out.status.success() {
-            return None;
-        }
-        parse_vram(&String::from_utf8_lossy(&out.stdout))
-    })
-    .await
-    .ok()
-    .flatten()
-}
-
-/// The engine's health, or none when it doesn't answer within a sample's interval.
-async fn engine_health(engine: &EngineHandle) -> Option<EngineHealth> {
-    match tk::timeout(SAMPLE_INTERVAL, engine.control(EngineCommand::Health)).await {
-        Ok(Ok(ControlAnswer::Health(health))) => Some(health),
-        _ => None,
+/// Summed GPU memory from nvidia-smi, run on the calling thread; none without it.
+pub(crate) fn probe_vram() -> Option<(u64, u64)> {
+    let out = process::Command::new("nvidia-smi")
+        .args([
+            "--query-gpu=memory.used,memory.total",
+            "--format=csv,noheader,nounits",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
     }
+    parse_vram(&String::from_utf8_lossy(&out.stdout))
 }
 
-/// Spawn the watchdog task.
-pub(crate) fn spawn_watchdog(deps: WatchdogDeps) {
-    tk::spawn(async move {
-        let mut prev_active: HashSet<String> = HashSet::new();
-        let mut prev_cpu: Option<(u64, Instant)> = None;
-        let mut tick: u64 = 0;
-        let mut reaper = OrphanReaper::new();
-        let mut cpu_gate = LevelGate::default();
-        let mut ram_gate = LevelGate::default();
-        let mut vram_gate = LevelGate::default();
-        let mut jobs_gate = LevelGate::default();
-        let mut disk = DiskWatch::default();
-        loop {
-            tk::sleep(SAMPLE_INTERVAL).await;
-            tick += 1;
-            reaper.reap();
-            reap_pins();
-            if !sampling_online() {
-                prev_cpu = None;
-                prev_active.clear();
-                cpu_gate = LevelGate::default();
-                ram_gate = LevelGate::default();
-                vram_gate = LevelGate::default();
-                jobs_gate = LevelGate::default();
-                disk = DiskWatch::default();
-                continue;
-            }
-            let supervisor = effective_supervisor();
-            let now = now_millis();
+/// A probe's result, back from its blocking thread.
+pub(crate) enum Probe {
+    Vram(Option<(u64, u64)>),
+    Disk(Option<Vec<(String, u32)>>),
+}
 
-            let health = engine_health(&deps.engine).await;
-            let current = health.as_ref().map(|health| engine_conditions(health, now));
+/// The probes a tick found due, none of them already in flight.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct DueProbes {
+    pub vram: bool,
+    pub disk: bool,
+}
 
-            let sample_at = Instant::now();
-            if let Some(health) = &health {
-                let jobs = health.jobs as usize;
-                if jobs_gate.sample(
-                    jobs as f64,
-                    JOBS_THRESHOLD,
-                    sample_at,
+/// The milliseconds since the epoch.
+pub(crate) fn now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// The watchdog's state between its ticks, its observations, and its probes.
+pub(crate) struct Watchdog {
+    base: SupervisorConfig,
+    test: bool,
+    listening: bool,
+    tick: u64,
+    reaper: OrphanReaper,
+    prev_cpu: Option<(u64, Instant)>,
+    prev_active: HashSet<String>,
+    cpu_gate: LevelGate,
+    ram_gate: LevelGate,
+    vram_gate: LevelGate,
+    jobs_gate: LevelGate,
+    disk: DiskWatch,
+    vram_probing: bool,
+    disk_probing: bool,
+}
+
+impl Watchdog {
+    pub(crate) fn new(
+        base: SupervisorConfig,
+        test: bool,
+    ) -> Self {
+        Self {
+            base,
+            test,
+            listening: false,
+            tick: 0,
+            reaper: OrphanReaper::new(),
+            prev_cpu: None,
+            prev_active: HashSet::new(),
+            cpu_gate: LevelGate::default(),
+            ram_gate: LevelGate::default(),
+            vram_gate: LevelGate::default(),
+            jobs_gate: LevelGate::default(),
+            disk: DiskWatch::default(),
+            vram_probing: false,
+            disk_probing: false,
+        }
+    }
+
+    /// May the watchdog SAMPLE now?
+    fn online(&self) -> bool {
+        !self.test || self.listening
+    }
+
+    /// Forget every reading, so sampling resumes fresh.
+    fn reset(&mut self) {
+        self.prev_cpu = None;
+        self.prev_active.clear();
+        self.cpu_gate = LevelGate::default();
+        self.ram_gate = LevelGate::default();
+        self.vram_gate = LevelGate::default();
+        self.jobs_gate = LevelGate::default();
+        self.disk = DiskWatch::default();
+    }
+
+    /// One tick: the housekeeping, then, while online, the process's levels.
+    pub(crate) fn tick(
+        &mut self,
+        now: Instant,
+    ) -> (Vec<Emergency>, DueProbes) {
+        self.tick += 1;
+        self.reaper.reap();
+        reap_pins();
+        if !self.online() {
+            self.reset();
+            return (Vec::new(), DueProbes::default());
+        }
+        let supervisor = effective_supervisor(self.base);
+        let mut raised = Vec::new();
+
+        if let Some(rss) = read_rss_kb()
+            && let Some(total_kb) = total_ram_kb()
+            && self.ram_gate.sample(
+                rss as f64,
+                total_kb * supervisor.ram_warn_fraction,
+                now,
+                LEVEL_SUSTAIN,
+                LEVEL_REWARN,
+            )
+        {
+            raised.push(Emergency::RamWarning(RamWarningEmergency { rss_kb: rss }));
+        }
+
+        let cur_ticks = read_cpu_ticks();
+        if let (Some(ct), Some((pt, pinst))) = (cur_ticks, self.prev_cpu) {
+            let elapsed = now.saturating_duration_since(pinst).as_secs_f64();
+            if elapsed > 0.0 {
+                let cpu_pct = (ct.saturating_sub(pt) as f64 / CLK_TCK) / elapsed * 100.0;
+                if self.cpu_gate.sample(
+                    cpu_pct,
+                    cpu_capacity_pct() * supervisor.cpu_warn_fraction,
+                    now,
                     LEVEL_SUSTAIN,
                     LEVEL_REWARN,
                 ) {
-                    let _ = deps.tx.send(Emergency::BackgroundJobsWarning(
-                        BackgroundJobsWarningEmergency { job_count: jobs },
-                    ));
-                }
-            }
-
-            if let Some(rss) = read_rss_kb()
-                && let Some(total_kb) = total_ram_kb()
-                && ram_gate.sample(
-                    rss as f64,
-                    total_kb * supervisor.ram_warn_fraction,
-                    sample_at,
-                    LEVEL_SUSTAIN,
-                    LEVEL_REWARN,
-                )
-            {
-                let _ = deps
-                    .tx
-                    .send(Emergency::RamWarning(RamWarningEmergency { rss_kb: rss }));
-            }
-
-            let sample_now = Instant::now();
-            let cur_ticks = read_cpu_ticks();
-            if let (Some(ct), Some((pt, pinst))) = (cur_ticks, prev_cpu) {
-                let elapsed = sample_now.duration_since(pinst).as_secs_f64();
-                if elapsed > 0.0 {
-                    let cpu_pct = (ct.saturating_sub(pt) as f64 / CLK_TCK) / elapsed * 100.0;
-                    if cpu_gate.sample(
+                    raised.push(Emergency::CpuWarning(CpuWarningEmergency {
                         cpu_pct,
-                        cpu_capacity_pct() * supervisor.cpu_warn_fraction,
-                        sample_at,
-                        LEVEL_SUSTAIN,
-                        LEVEL_REWARN,
-                    ) {
-                        let _ = deps.tx.send(Emergency::CpuWarning(CpuWarningEmergency {
-                            cpu_pct,
-                            sample_ms: (elapsed * 1000.0) as u64,
-                        }));
-                    }
+                        sample_ms: (elapsed * 1000.0) as u64,
+                    }));
                 }
             }
-            if let Some(ct) = cur_ticks {
-                prev_cpu = Some((ct, sample_now));
-            }
-
-            if tick % VRAM_SAMPLE_EVERY == 0
-                && let Some((used, total)) = sample_vram().await
-                && total > 0
-                && vram_gate.sample(
-                    used as f64,
-                    (total as f64 - supervisor.vram_warn_headroom_mib as f64).max(0.0),
-                    Instant::now(),
-                    LEVEL_SUSTAIN,
-                    LEVEL_REWARN,
-                )
-            {
-                let _ = deps.tx.send(Emergency::VramWarning(VramWarningEmergency {
-                    used_mib: used,
-                    total_mib: total,
-                }));
-            }
-
-            if (tick == 1 || tick % DISK_SAMPLE_EVERY == 0)
-                && let Some(rows) = sample_disk().await
-            {
-                let threshold_pct = (supervisor.disk_warn_fraction * 100.0) as u32;
-                for emergency in disk.sample(&rows, threshold_pct, Instant::now()) {
-                    let _ = deps.tx.send(emergency);
-                }
-            }
-
-            let (active, risen) = rising_edges(&prev_active, current);
-            for emergency in risen {
-                let _ = deps.tx.send(emergency);
-            }
-            prev_active = active;
         }
-    });
+        if let Some(ct) = cur_ticks {
+            self.prev_cpu = Some((ct, now));
+        }
+
+        let due = DueProbes {
+            vram: self.tick.is_multiple_of(VRAM_SAMPLE_EVERY) && !self.vram_probing,
+            disk: (self.tick == 1 || self.tick.is_multiple_of(DISK_SAMPLE_EVERY))
+                && !self.disk_probing,
+        };
+        self.vram_probing |= due.vram;
+        self.disk_probing |= due.disk;
+        (raised, due)
+    }
+
+    /// The engine and the Channel as observed: the hangs and the jobs, while online.
+    pub(crate) fn observe(
+        &mut self,
+        observation: Observation,
+        now_ms: u64,
+        now: Instant,
+    ) -> Vec<Emergency> {
+        self.listening = observation.listening;
+        if !self.online() {
+            return Vec::new();
+        }
+        let mut raised = Vec::new();
+        if let Some(reading) = &observation.engine {
+            let jobs = reading.jobs as usize;
+            if self.jobs_gate.sample(
+                jobs as f64,
+                JOBS_THRESHOLD,
+                now,
+                LEVEL_SUSTAIN,
+                LEVEL_REWARN,
+            ) {
+                raised.push(Emergency::BackgroundJobsWarning(
+                    BackgroundJobsWarningEmergency { job_count: jobs },
+                ));
+            }
+        }
+        let current = observation
+            .engine
+            .as_ref()
+            .map(|reading| engine_conditions(reading, now_ms));
+        let (active, risen) = rising_edges(&self.prev_active, current);
+        self.prev_active = active;
+        raised.extend(risen);
+        raised
+    }
+
+    /// A VRAM probe's result, its gate sampled while online.
+    pub(crate) fn vram_sampled(
+        &mut self,
+        sample: Option<(u64, u64)>,
+        now: Instant,
+    ) -> Vec<Emergency> {
+        self.vram_probing = false;
+        if !self.online() {
+            return Vec::new();
+        }
+        let Some((used, total)) = sample else {
+            return Vec::new();
+        };
+        let headroom = effective_supervisor(self.base).vram_warn_headroom_mib;
+        if total > 0
+            && self.vram_gate.sample(
+                used as f64,
+                (total as f64 - headroom as f64).max(0.0),
+                now,
+                LEVEL_SUSTAIN,
+                LEVEL_REWARN,
+            )
+        {
+            vec![Emergency::VramWarning(VramWarningEmergency {
+                used_mib: used,
+                total_mib: total,
+            })]
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// A disk probe's result, the first a baseline, while online.
+    pub(crate) fn disk_sampled(
+        &mut self,
+        rows: Option<Vec<(String, u32)>>,
+        now: Instant,
+    ) -> Vec<Emergency> {
+        self.disk_probing = false;
+        if !self.online() {
+            return Vec::new();
+        }
+        let Some(rows) = rows else {
+            return Vec::new();
+        };
+        let threshold_pct = (effective_supervisor(self.base).disk_warn_fraction * 100.0) as u32;
+        self.disk.sample(&rows, threshold_pct, now)
+    }
 }
