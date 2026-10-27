@@ -35,10 +35,15 @@ pub(crate) fn dirs_value(dirs: &[PathBuf]) -> nu::Value {
 }
 
 impl ParseEngine {
-    /// A parse engine started as the eval engines are, full command set included.
+    /// A parse engine started as the eval engines are, with each eval's `grimm` decls.
     pub(crate) fn new_full() -> Self {
+        let mut engine_state = startup(Mode::Stateless);
+        let mut working_set = nu::StateWorkingSet::new(&engine_state);
+        register_nuapi(&mut working_set);
+        let delta = working_set.render();
+        let _ = engine_state.merge_delta(delta);
         Self {
-            engine_state: startup(Mode::Stateless),
+            engine_state,
             extra_lib_dir: None,
         }
     }
@@ -146,12 +151,5 @@ pub(crate) fn wrap_as_module(source: &str, wrapper_name: &str) -> (String, usize
     let prefix = format!("module {wrapper_name} {{\n");
     let prefix_len = prefix.len();
     let wrapped = format!("{prefix}{source}\n}}\n");
-    (wrapped, prefix_len)
-}
-
-pub(crate) fn wrap_as_def_body(body: &str, args_type: &str) -> (String, usize) {
-    let prefix = format!("def __lint_body [args: {args_type}] {{\n");
-    let prefix_len = prefix.len();
-    let wrapped = format!("{prefix}{body}\n}}\n");
     (wrapped, prefix_len)
 }

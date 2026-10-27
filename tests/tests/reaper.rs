@@ -120,15 +120,13 @@ fn reaping_does_not_steal_exit_statuses() {
 
         // An eval whose external exit status must survive: nushell reports a non-zero
         // exit as an error, so a stolen status would surface here.
-        let ran = host.run(serde_json::json!({
-            "args_schema": {},
-            "result_schema": {"out": "string"},
-            "args": {},
-            "body": "{ out: (^printf ok | str trim) }"
-        }));
+        let ran = host.nu(
+            "def execute [data: nothing]: nothing -> record<out: string> { { out: (^printf ok | str trim) } }",
+            "null",
+        );
         assert!(!has_error_path(&ran), "external eval {i} should succeed; got {ran}");
         assert_eq!(
-            structured(&ran)["result"]["out"].as_str(),
+            envelope(&ran)["result"]["out"].as_str(),
             Some("ok"),
             "external output should survive the reaper; got {ran}",
         );

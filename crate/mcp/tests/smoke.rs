@@ -1,10 +1,10 @@
 //! Domain smoke tests, driven in-process via `guts::TestServer`. The raw-stdio
 //! transport (the JSON-RPC handshake + tools/list framing) is a SYSTEM concern
 //! covered by `sourcetrait_grammar_tests` (host_run_tool); these exercise what
-//! run / processes / kill actually DO.
+//! nu / processes / kill actually DO.
 
 use serde_json::json;
-use sourcetrait_grammar_mcp::guts::{TestServer, error_kind, error_text, has_error};
+use sourcetrait_grammar_mcp::guts::{TestServer, error_kind, error_messages, error_text, has_error};
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
@@ -14,50 +14,42 @@ static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integrat
     .setup(|_| TestServer::new())
 });
 
+const PLUS_ONE: &str =
+    "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x + 1) } }";
+
 #[test]
-fn arg_typecheck_error_surfaces() {
+fn a_data_type_mismatch_surfaces() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"x": "int"}),
-        json!({"out": "int"}),
-        json!({"x": "five"}),
-        "{ out: ($args.x + 1) }",
-    );
-    assert!(has_error(&env), "a parse-time arg mismatch should surface as error; got {env}");
+    let env = s.nu(PLUS_ONE, "{x: five}");
+    assert_eq!(error_kind(&env), Some("data::invalid"), "got {env}");
 }
 
 #[test]
-fn result_typecheck_error_surfaces() {
+fn a_result_type_mismatch_surfaces() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"x": "int"}),
-        json!({"out": "int"}),
-        json!({"x": 5}),
-        "{ out: \"five\" }",
+    let env = s.nu(
+        "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x | into string) } }",
+        "{x: 5}",
     );
-    assert!(has_error(&env), "a runtime result mismatch should surface as error; got {env}");
+    assert!(has_error(&env), "a result of the wrong type should surface as an error; got {env}");
 }
 
 #[test]
 fn external_command_runs() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"noop": "int"}),
-        json!({"out": "string"}),
-        json!({"noop": 0}),
-        "{ out: (^printf hello | str trim) }",
+    let env = s.nu(
+        "def execute [data: nothing]: nothing -> record<out: string> { { out: (^printf hello | str trim) } }",
+        "null",
     );
-    assert_eq!(env["result"]["out"].as_str(), Some("hello"), "got {env}");
+    assert_eq!(env["result"], json!({"out": "hello"}), "got {env}");
 }
 
 #[test]
 fn exit_decl_is_unreachable() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"noop": "int"}),
-        json!({"out": "int"}),
-        json!({"noop": 0}),
-        "{ out: (exit 1; 0) }",
+    let env = s.nu(
+        "def execute [data: nothing]: nothing -> record<out: int> {\n    exit 1\n    { out: 0 }\n}",
+        "null",
     );
     assert!(
         has_error(&env),
@@ -72,30 +64,20 @@ fn exit_decl_is_unreachable() {
 #[test]
 fn timeout_fires_then_recovers() {
     let s = TESTING.harness();
-    let timed = s.run_timeout(
-        json!({"noop": "int"}),
-        json!({"out": "int"}),
-        json!({"noop": 0}),
-        "sleep 5sec\n{ out: 0 }",
-        Some(200),
+    let timed = s.nu_timeout(
+        "def execute [data: nothing]: nothing -> record<out: int> {\n    sleep 5sec\n    { out: 0 }\n}",
+        "null",
+        Some("200ms"),
     );
     assert_eq!(error_kind(&timed), Some("thread::timeout"), "got {timed}");
     assert!(
-        timed["error"]["errors"][0]["message"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("200"),
-        "timeout message should carry the ms; got {timed}",
+        error_messages(&timed).iter().any(|m| m.contains("200")),
+        "the timeout message should carry the ms; got {timed}",
     );
-    assert!(timed["error"]["nonce"].as_str().is_some(), "expected nonce; got {timed}");
+    assert!(timed["nonce"].as_str().is_some(), "expected a nonce; got {timed}");
 
-    let env = s.run(
-        json!({"x": "int"}),
-        json!({"out": "int"}),
-        json!({"x": 7}),
-        "{ out: ($args.x + 1) }",
-    );
-    assert_eq!(env["result"]["out"].as_i64(), Some(8), "a fresh run after a timeout should work; got {env}");
+    let env = s.nu(PLUS_ONE, "{x: 7}");
+    assert_eq!(env["result"], json!({"out": 8}), "a fresh call after a timeout should work; got {env}");
 }
 
 #[test]
@@ -107,7 +89,7 @@ fn processes_empty_when_idle() {
     let s = TestServer::new();
     let env = s.processes();
     assert!(
-        env["processes"].as_array().expect("processes array").is_empty(),
+        env["result"]["processes"].as_array().expect("processes array").is_empty(),
         "expected empty in-flight; got {env}",
     );
 }
@@ -116,20 +98,19 @@ fn processes_empty_when_idle() {
 fn kill_unknown_nonce_is_silent_ok() {
     let s = TESTING.harness();
     let env = s.kill("doesnotexist");
+    assert!(!has_error(&env), "got {env}");
     assert!(
-        env.is_null(),
-        "a no-return kill of an unknown nonce yields no structured payload; got {env}",
+        env.get("result").is_some_and(|result| result.is_null()),
+        "a void kill of an unknown nonce answers a null result; got {env}",
     );
 }
 
 #[test]
 fn plugin_path_resolves() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"noop": "int"}),
-        json!({"path": "string"}),
-        json!({"noop": 0}),
-        "{ path: $nu.plugin-path }",
+    let env = s.nu(
+        "def execute [data: nothing]: nothing -> record<path: string> { { path: $nu.plugin-path } }",
+        "null",
     );
     let path = env["result"]["path"]
         .as_str()
@@ -143,11 +124,9 @@ fn plugin_path_resolves() {
 #[test]
 fn tls_crypto_provider_installed() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"noop": "int"}),
-        json!({"out": "string"}),
-        json!({"noop": 0}),
-        "{ out: (try { http get 'https://127.0.0.1:9' | to text } catch {|e| $e.msg }) }",
+    let env = s.nu(
+        "def execute [data: nothing]: nothing -> record<out: string> {\n    { out: (try { http get 'https://127.0.0.1:9' | to text } catch {|e| $e.msg }) }\n}",
+        "null",
     );
     let out = env["result"]["out"].as_str().unwrap_or_default();
     assert!(!out.is_empty(), "expected a connection error message; got {env}");
@@ -161,35 +140,25 @@ fn tls_crypto_provider_installed() {
 fn multi_call_stability_and_scoping() {
     let s = TESTING.harness();
     for i in 0..10i64 {
-        let env = s.run(
-            json!({"x": "int"}),
-            json!({"out": "int"}),
-            json!({"x": i}),
-            "{ out: ($args.x + 100) }",
-        );
-        assert_eq!(env["result"]["out"].as_i64(), Some(i + 100), "call {i}: got {env}");
+        let env = s.nu(PLUS_ONE, &format!("{{x: {i}}}"));
+        assert_eq!(env["result"]["out"].as_i64(), Some(i + 1), "call {i}: got {env}");
     }
     // `scope commands` reports LOCAL scope as of nushell 0.115 (PR #18684), so an
-    // eval always sees its own template `__run` and that name cannot witness
-    // leakage. Probe with a name only THIS eval defines instead: visible to its
-    // own eval, and absent from a later eval unless the shared base was polluted.
-    let env = s.run(
-        json!({"noop": "int"}),
-        json!({"defined": "int"}),
-        json!({"noop": 0}),
-        "def __leak_probe [] { 0 }\n\
-         { defined: (scope commands | where name == \"__leak_probe\" | length) }",
+    // eval always sees its own `execute` and that name cannot witness leakage.
+    // Probe with a name only THIS eval defines instead: visible to its own eval,
+    // and absent from a later eval unless the shared base was polluted.
+    let env = s.nu(
+        "def execute [data: nothing]: nothing -> record<defined: int> {\n    def __leak_probe [] { 0 }\n    { defined: (scope commands | where name == '__leak_probe' | length) }\n}",
+        "null",
     );
     assert_eq!(
         env["result"]["defined"].as_i64(),
         Some(1),
         "a block-local def is visible to its own eval under 0.115 local scope; got {env}",
     );
-    let env = s.run(
-        json!({"noop": "int"}),
-        json!({"leaked": "int"}),
-        json!({"noop": 0}),
-        "{ leaked: (scope commands | where name == \"__leak_probe\" | length) }",
+    let env = s.nu(
+        "def execute [data: nothing]: nothing -> record<leaked: int> { { leaked: (scope commands | where name == '__leak_probe' | length) } }",
+        "null",
     );
     assert_eq!(
         env["result"]["leaked"].as_i64(),

@@ -39,8 +39,12 @@ fn install_brings_shipped_source_into_mcp() {
     let env = s.equip("install", eq.to_str().unwrap());
     assert!(!has_error(&env), "install should succeed; got {env}");
     assert!(
-        !env["summary"]["added"].as_array().expect("added").is_empty(),
+        !env["result"]["summary"]["added"].as_array().expect("added").is_empty(),
         "install summary should report added paths; got {env}",
+    );
+    assert!(
+        env["result"]["summary"]["warnings"].as_array().expect("warnings").is_empty(),
+        "a clean source raises no warnings; got {env}",
     );
     assert!(
         s.rig_dir("sourcetrait/shiplib").exists(),
@@ -121,16 +125,14 @@ fn lib_only_equip_installs_and_imports_without_calls() {
     let env = s.equip("install", eq.to_str().unwrap());
     assert!(!has_error(&env), "a lib alone is an equip; got {env}");
 
-    let used = s.run(
-        json!({}),
-        json!({"out": "string"}),
-        json!({}),
-        "use equip/sourcetrait/onlylib/lib/text\n{ out: (text shout 'ok') }",
+    let used = s.nu(
+        "def execute [data: nothing]: nothing -> record<out: string> {\n    use equip/sourcetrait/onlylib/lib/text\n    { out: (text shout 'ok') }\n}",
+        "null",
     );
     assert_eq!(
         used["result"]["out"].as_str(),
         Some("OK"),
-        "a body imports an installed lib by its namespace path; got {used}",
+        "a definition imports an installed lib by its namespace path; got {used}",
     );
 
     let called = s.call("sourcetrait/onlylib:text:shout", json!({"s": "x"}));
@@ -139,7 +141,7 @@ fn lib_only_equip_installs_and_imports_without_calls() {
         Some("equip::no_rig"),
         "an equip without a rig has no calls; got {called}",
     );
-    let signatures = s.info()["signatures"].as_str().expect("signatures").to_string();
+    let signatures = s.info()["result"]["signatures"].as_str().expect("signatures").to_string();
     assert!(
         !signatures.contains("onlylib"),
         "a lib-only equip lists no calls; got:\n{signatures}",
@@ -299,7 +301,7 @@ fn check_reports_ok_for_clean_source() {
     author_double_tree(&src);
     let env = s.equip("check", src.parent().unwrap().to_str().unwrap());
     assert!(!has_error(&env), "check should not error; got {env}");
-    let summary = &env["summary"];
+    let summary = &env["result"]["summary"];
     assert_eq!(summary["ok"].as_bool(), Some(true), "got {summary}");
     assert!(
         summary["errors"].as_array().expect("errors").is_empty(),
@@ -324,7 +326,7 @@ fn check_reports_structural_errors() {
     );
     let env = s.equip("check", src.parent().unwrap().to_str().unwrap());
     assert!(!has_error(&env), "check itself should not error; got {env}");
-    let summary = &env["summary"];
+    let summary = &env["result"]["summary"];
     assert_eq!(summary["ok"].as_bool(), Some(false), "got {summary}");
     let err_kinds: Vec<&str> = summary["errors"]
         .as_array()
@@ -396,7 +398,7 @@ fn invalid_action_errors() {
 }
 
 #[tested]
-fn run_body_can_use_a_committed_rig() {
+fn a_definition_can_use_a_committed_rig() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
     let src = s.new_rig(t.temp_dir(), "sourcetrait/uselib");
@@ -410,19 +412,48 @@ fn run_body_can_use_a_committed_rig() {
     let committed = s.commit("sourcetrait/uselib");
     assert!(!has_error(&committed), "commit should succeed; got {committed}");
 
-    let env = s.run(
-        json!({}),
-        json!({"out": "int"}),
-        json!({}),
-        "use equip/sourcetrait/uselib/rig/calc\nlet r = (calc double {x: 5})\n{ out: $r.out }",
+    let env = s.nu(
+        "def execute [data: nothing]: nothing -> record<out: int> {\n    use equip/sourcetrait/uselib/rig/calc\n    let r = (calc double {x: 5})\n    { out: $r.out }\n}",
+        "null",
     );
     assert!(
         !has_error(&env),
-        "a run() body should be able to `use` a committed rig; got {env}"
+        "a nu definition should be able to `use` a committed rig; got {env}"
     );
     assert_eq!(
         env["result"]["out"].as_i64(),
         Some(10),
-        "use-from-run should resolve + call the committed function; got {env}",
+        "the use should resolve + call the committed function; got {env}",
     );
+}
+
+#[tested]
+fn install_and_commit_carry_the_validators_warnings() {
+    let t = testing::test!({ .using_temp_dir() });
+    let s = TESTING.harness();
+    let eq = equip_source(t.temp_dir(), "sourcetrait/warnlib");
+    let rig = eq.join("rig");
+    author_double_tree(&rig);
+    let long = "x".repeat(81);
+    write_source(&rig, "mod.nu", &format!("# {long}\nexport module m\n"));
+    let installed = s.equip("install", eq.to_str().unwrap());
+    assert!(!has_error(&installed), "a warning never refuses an install; got {installed}");
+    let warned = |env: &serde_json::Value, at: &str| {
+        let kinds: Vec<&str> = env
+            .pointer(at)
+            .and_then(|warnings| warnings.as_array())
+            .unwrap_or_else(|| panic!("no warnings at {at}; got {env}"))
+            .iter()
+            .filter_map(|warning| warning["kind"].as_str())
+            .collect();
+        assert!(
+            kinds.contains(&"lint::summary_length"),
+            "the over-long summary rides in the result; got {env}",
+        );
+    };
+    warned(&installed, "/result/summary/warnings");
+
+    let committed = s.commit("sourcetrait/warnlib");
+    assert!(!has_error(&committed), "got {committed}");
+    warned(&committed, "/result/warnings");
 }

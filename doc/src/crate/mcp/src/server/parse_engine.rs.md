@@ -16,6 +16,11 @@ Built through `startup`, exactly as the eval engines are, so rig source using
 `$nu.home-dir` is evaluated here at parse time, which is how an engine without
 its config dirs failed a commit.
 
+The `grimm` decls go in too, which each eval registers into its own working set: a
+name the parser cannot resolve reads as an external, so without them a `grimm dbg`
+handed a table literal failed a `nu` definition's contract parse and a rig's
+validation alike, though the same text runs.
+
 ### fn engine_state
 Borrows the base rather than cloning, because the lint's synthetic sources carry no
 file references and therefore need no per-file PWD.
@@ -55,6 +60,6 @@ library's first.
 than as some other file's text.
 
 ## fn wrap_as_module
-Both wrappers return their prefix length because every span the parse reports is
-against the WRAPPED source, and a diagnostic has to point into the author's own
-file. Subtracting the prefix is what translates one to the other.
+Returns its prefix length because every span the parse reports is against the
+WRAPPED source, and a diagnostic has to point into the author's own file.
+Subtracting the prefix is what translates one to the other.

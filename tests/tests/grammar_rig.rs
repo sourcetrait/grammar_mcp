@@ -36,8 +36,8 @@ fn each_grammar_call_runs_by_its_bare_name() {
     let installed = host.equip("install", grammar_equip().to_str().expect("utf-8 path"));
     assert!(!has_error_path(&installed), "the grammar equip installs; got {installed}");
 
-    let info = structured(&host.call("info", json!({}))).clone();
-    let signatures = info["signatures"].as_str().expect("info carries signatures");
+    let info = envelope(&host.call("info", json!({})));
+    let signatures = info["result"]["signatures"].as_str().expect("info carries signatures");
     assert!(
         signatures.starts_with("grammar # "),
         "the builtin leads the block by its bare name; got:\n{signatures}",
@@ -62,13 +62,13 @@ fn each_grammar_call_runs_by_its_bare_name() {
         "Hello, World!",
     );
 
-    let dir = host.call_np("grammar:eye:dir", json!({"dir": &work, "ignore": ["tmpl"], "regard": []}));
-    let tree = structured(&dir)["result"]["tree"].as_str().expect("eye dir answers a tree");
+    let dir = envelope(&host.call_np("grammar:eye:dir", json!({"dir": &work, "ignore": ["tmpl"], "regard": []})));
+    let tree = dir["result"]["tree"].as_str().expect("eye dir answers a tree");
     assert!(tree.contains(" a.log 3b"), "eye dir lists the ignored file; got {tree}");
     assert!(!tree.contains("hello.txt.liquid"), "eye dir skips an ignore glob; got {tree}");
 
-    let git = host.call_np("grammar:eye:git", json!({"dir": &work}));
-    let tree = structured(&git)["result"]["tree"].as_str().expect("eye git answers a tree");
+    let git = envelope(&host.call_np("grammar:eye:git", json!({"dir": &work})));
+    let tree = git["result"]["tree"].as_str().expect("eye git answers a tree");
     assert!(!tree.contains("a.log"), "eye git skips the ignored file; got {tree}");
     assert!(tree.contains("hello.txt.liquid"), "eye git lists the template; got {tree}");
 }

@@ -32,16 +32,14 @@ fn consumer_connects_verifies_and_receives_a_packet() {
     );
     let mut c = Consumer::attach(host, &ch.ca);
 
-    // A body-driven grimm channel send must arrive on the real WSS client, and the
+    // A definition's grimm channel send must arrive on the real WSS client, and the
     // record it returns, bound by a `let`, must name the packet that arrived.
-    let resp = c.host.run(json!({
-        "args_schema": {},
-        "result_schema": {"event_id": "string"},
-        "args": {},
-        "body": "let sent = (grimm channel send \"test/Ping\" {msg: \"hello-wss\"}); {event_id: $sent.event_id}",
-    }));
-    assert!(!has_error_path(&resp), "channel_send body failed: {resp}");
-    let event_id = structured(&resp)["result"]["event_id"]
+    let resp = c.host.nu(
+        "def execute [data: nothing]: nothing -> record<event_id: string> {\n    let sent = (grimm channel send 'test/Ping' {msg: 'hello-wss'})\n    {event_id: $sent.event_id}\n}",
+        "null",
+    );
+    assert!(!has_error_path(&resp), "the channel send failed: {resp}");
+    let event_id = envelope(&resp)["result"]["event_id"]
         .as_str()
         .expect("the send returns {event_id}")
         .to_string();
@@ -72,7 +70,7 @@ fn consumer_connects_verifies_and_receives_a_packet() {
 fn remote_loopback_echo() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
-    let (mut a, mut b, nom_a, nom_b) = spawn_two_hosts(&root);
+    let (mut a, mut b, nom_a, nom_b) = spawn_two_hosts(root);
 
     // The listener (B) opens - blocks on bind, returns synchronously once bound.
     // The connector (A) then opens - blocks on connect (B is already bound),
@@ -192,7 +190,7 @@ fn remote_listener_double_open_fails_synchronously() {
 fn remote_channels_lists_bound_listener() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
-    let (mut a, mut b, nom_a, _nom_b) = spawn_two_hosts(&root);
+    let (mut a, mut b, nom_a, _nom_b) = spawn_two_hosts(root);
 
     // B's listener binds (synchronous) but has no peer yet.
     let open_b = b.host.call("remote_channel_open", json!({"alias": "peer"}));
@@ -245,13 +243,11 @@ fn channel_send_spills_oversized_event() {
     let mut c = Consumer::attach(host, &ch.ca);
     let nom = mcp_nom(&mut c);
 
-    let resp = c.host.run(json!({
-        "args_schema": {},
-        "result_schema": {"ok": "bool"},
-        "args": {},
-        "body": "grimm channel send \"test/Big\" {marker: \"SPILL_MARKER_42\", blob: (1..3000 | each { \"x\" } | str join)}; {ok: true}",
-    }));
-    assert!(!has_error_path(&resp), "channel_send body failed: {resp}");
+    let resp = c.host.nu(
+        "def execute [data: nothing]: nothing -> record<ok: bool> {\n    grimm channel send 'test/Big' {marker: 'SPILL_MARKER_42', blob: (1..3000 | each { 'x' } | str join)}\n    {ok: true}\n}",
+        "null",
+    );
+    assert!(!has_error_path(&resp), "the channel send failed: {resp}");
 
     let pkt = c
         .await_packet(|p| p.model == "test/Big", Duration::from_secs(10))
@@ -284,7 +280,7 @@ fn channel_send_spills_oversized_event() {
 fn remote_send_spills_oversized_event() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
-    let (mut a, mut b, nom_a, nom_b) = spawn_two_hosts(&root);
+    let (mut a, mut b, nom_a, nom_b) = spawn_two_hosts(root);
     pair(&mut a, &mut b, &nom_a);
 
     let big = "marker: \"REMOTE_SPILL_99\", blob: (1..3000 | each { \"x\" } | str join)";
@@ -325,19 +321,17 @@ fn remote_send_spills_oversized_event() {
 fn remote_send_with_returns_its_event_id() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
-    let (mut a, mut b, nom_a, nom_b) = spawn_two_hosts(&root);
+    let (mut a, mut b, nom_a, nom_b) = spawn_two_hosts(root);
     pair(&mut a, &mut b, &nom_a);
 
     let src = root.join("note.txt");
     std::fs::write(&src, "files-1").expect("write the attachment");
-    let resp = a.host.run(json!({
-        "args_schema": {"nom": "string", "src": "string"},
-        "result_schema": {"id": "string"},
-        "args": {"nom": nom_b, "src": src.to_str().expect("utf-8 path")},
-        "body": "let sent = (grimm remote_channel_send_with $args.nom \"test/Files\" {note: \"files-1\"} [[src dest]; [$args.src \"note.txt\"]]); {id: $sent.event_id}",
-    }));
-    assert!(!has_error_path(&resp), "remote_channel_send_with body failed: {resp}");
-    let send_id = structured(&resp)["result"]["id"]
+    let resp = a.host.nu(
+        "def execute [data: record<nom: string, src: string>]: nothing -> record<id: string> {\n    let sent = (grimm remote_channel_send_with $data.nom 'test/Files' {note: 'files-1'} [[src dest]; [$data.src 'note.txt']])\n    {id: $sent.event_id}\n}",
+        &json!({"nom": nom_b, "src": src.to_str().expect("utf-8 path")}).to_string(),
+    );
+    assert!(!has_error_path(&resp), "remote_channel_send_with failed: {resp}");
+    let send_id = envelope(&resp)["result"]["id"]
         .as_str()
         .expect("the send returns {event_id}")
         .to_string();
@@ -360,33 +354,30 @@ fn remote_send_with_returns_its_event_id() {
 // ---- helpers ----
 
 fn mcp_nom(c: &mut Consumer) -> String {
-    structured(&c.host.call("info", json!({})))["mcp_nom"]
+    envelope(&c.host.call("info", json!({})))["result"]["mcp_nom"]
         .as_str()
         .expect("info carries mcp_nom")
         .to_string()
 }
 
-/// Drive `grimm remote channel send` from a body and return the message id.
+/// Drive `grimm remote channel send` from a definition and return the message id.
 fn remote_send(c: &mut Consumer, peer_nom: &str, model: &str, event_body: &str) -> String {
-    let body = format!("let sent = (grimm remote channel send $args.nom \"{model}\" {{{event_body}}}); {{id: $sent.event_id}}");
-    let resp = c.host.run(json!({
-        "args_schema": {"nom": "string"},
-        "result_schema": {"id": "string"},
-        "args": {"nom": peer_nom},
-        "body": body,
-    }));
-    assert!(!has_error_path(&resp), "remote_channel_send body failed: {resp}");
-    structured(&resp)["result"]["id"].as_str().expect("send returns a message id").to_string()
+    let definition = format!(
+        "def execute [data: record<nom: string>]: nothing -> record<id: string> {{\n    let sent = (grimm remote channel send $data.nom '{model}' {{{event_body}}})\n    {{id: $sent.event_id}}\n}}",
+    );
+    let resp = c.host.nu(&definition, &json!({"nom": peer_nom}).to_string());
+    assert!(!has_error_path(&resp), "the remote channel send failed: {resp}");
+    envelope(&resp)["result"]["id"].as_str().expect("send returns a message id").to_string()
 }
 
-/// The first error diagnostic's `kind` from an error envelope.
+/// The first error row's `kind` from an error envelope.
 fn err_kind(resp: &Value) -> String {
-    structured(resp)["error"]["errors"][0]["kind"].as_str().unwrap_or("").to_string()
+    envelope_error_kind(resp).unwrap_or_default()
 }
 
-/// remote_channels()'s structured result, owned.
+/// remote_channels()'s result, owned.
 fn remote_channels_result(c: &mut Consumer) -> Value {
-    structured(&c.host.call("remote_channels", json!({}))).clone()
+    envelope(&c.host.call("remote_channels", json!({})))["result"].clone()
 }
 
 /// The values under `key` across a remote_channels listing array.

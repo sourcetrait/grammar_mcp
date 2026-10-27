@@ -343,7 +343,7 @@ fn commit_caps_structural_violations() {
     );
     write_source(&src, "a/mod.nu", "");
     let env = s.commit("sourcetrait/caplib");
-    let errors = env["error"]["errors"].as_array().expect("errors array");
+    let errors = env["error"].as_array().expect("an error table");
     assert_eq!(errors.len(), 3, "errors should cap at 3; got {errors:?}");
 }
 
@@ -389,9 +389,17 @@ fn commit_succeeds_then_check_warns_long_summary() {
         !has_error(&committed),
         "an over-long summary is advisory; commit should succeed; got {committed}"
     );
+    assert!(
+        committed["result"]["warnings"]
+            .as_array()
+            .expect("the commit's warnings")
+            .iter()
+            .any(|warning| warning["kind"] == "lint::summary_length"),
+        "the commit's own result carries the warning; got {committed}",
+    );
 
     let check = s.equip("check", src.parent().unwrap().to_str().unwrap());
-    let summary = &check["summary"];
+    let summary = &check["result"]["summary"];
     assert_eq!(
         summary["ok"].as_bool(),
         Some(true),
@@ -404,7 +412,7 @@ fn commit_succeeds_then_check_warns_long_summary() {
         .filter_map(|w| w["kind"].as_str())
         .collect();
     assert!(
-        warn_kinds.iter().any(|k| *k == "lint::summary_length"),
+        warn_kinds.contains(&"lint::summary_length"),
         "expected lint::summary_length warning; got {warn_kinds:?}"
     );
 }
@@ -856,10 +864,11 @@ fn commit_validates_and_upserts_source() {
     );
     let env2 = s.commit("sourcetrait/clib");
     assert!(!has_error(&env2), "no-change commit should succeed; got {env2}");
+    let changed = &env2["result"];
     assert!(
-        env2["added"].as_array().expect("added").is_empty()
-            && env2["modified"].as_array().expect("modified").is_empty()
-            && env2["removed"].as_array().expect("removed").is_empty(),
+        changed["added"].as_array().expect("added").is_empty()
+            && changed["modified"].as_array().expect("modified").is_empty()
+            && changed["removed"].as_array().expect("removed").is_empty(),
         "no-change commit should report nothing changed; got {env2}",
     );
 }

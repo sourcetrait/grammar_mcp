@@ -1,66 +1,67 @@
 //! The embedded API (`grimm *`) - decls registered per-eval into the working set
-//! `eval_in_process` parses with, so they exist ONLY inside a run/call/interact
-//! body and carry that call's own log dir.
+//! `eval_in_process` parses with, so they exist ONLY inside a `nu` definition or a
+//! call's body and carry that call's own log dir.
 
 use serde_json::json;
-use sourcetrait_grammar_mcp::guts::{TestServer, error_text, has_error};
+use sourcetrait_grammar_mcp::guts::{TestServer, error_text, has_error, write_tree};
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
 /// the namespace substrate (keypair, equip repo git config), which must not race
 /// itself across parallel tests.
 static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integration, {
+    .using_temp_dir()
     .setup(|_| TestServer::new())
 });
 
+/// A definition taking nothing and answering `{ok: true}` after `body`.
+fn ok_after(body: &str) -> String {
+    format!("def execute [data: nothing]: nothing -> record<ok: bool> {{\n{body}\n{{ ok: true }}\n}}")
+}
+
 /// Read `debug.nuonl` back THROUGH nushell, so the assertion covers the round-trip
 /// (the file parses as NUON) and not merely the bytes we wrote.
-fn read_back(s: &TestServer, nonce: &str, result_schema: serde_json::Value, body: &str) -> serde_json::Value {
-    let path = s.run_log_dir(nonce).join("debug.nuonl");
-    s.run(
-        json!({"path": "string"}),
-        result_schema,
-        json!({"path": path.to_str().expect("utf-8 path")}),
-        body,
+fn read_back(
+    s: &TestServer,
+    nonce: &str,
+    result_type: &str,
+    body: &str,
+) -> serde_json::Value {
+    let path = s.nu_log_dir(nonce).join("debug.nuonl");
+    s.nu(
+        &format!("def execute [data: record<path: string>]: nothing -> {result_type} {{\n{body}\n}}"),
+        &format!("{{path: '{}'}}", path.to_str().expect("utf-8 path")),
     )
 }
 
 #[test]
 fn dbg_appends_one_line_per_call() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({}),
-        json!({"ok": "bool"}),
-        json!({}),
-        "grimm dbg {a: 1, b: \"two\"}\ngrimm dbg [[x, y]; [1, 2]]\n{ ok: true }",
-    );
-    assert!(!has_error(&env), "body should run; got {env}");
+    let env = s.nu(&ok_after("grimm dbg {a: 1, b: 'two'}\ngrimm dbg [[x, y]; [1, 2]]"), "null");
+    assert!(!has_error(&env), "the definition should run; got {env}");
     let nonce = env["nonce"].as_str().expect("nonce");
 
     let back = read_back(
         s,
         nonce,
-        json!({"count": "int", "first_a": "int", "second_x": "int"}),
-        "let recs = (open --raw $args.path | decode | lines | each {|l| $l | from nuon })\n\
+        "record<count: int, first_a: int, second_x: int>",
+        "let recs = (open --raw $data.path | decode | lines | each {|l| $l | from nuon })\n\
          { count: ($recs | length), first_a: ($recs | get 0 | get a), second_x: ($recs | get 1 | get 0.x) }",
     );
-    assert_eq!(back["result"]["count"].as_i64(), Some(2), "one line per call; got {back}");
-    assert_eq!(back["result"]["first_a"].as_i64(), Some(1), "got {back}");
-    assert_eq!(back["result"]["second_x"].as_i64(), Some(1), "got {back}");
+    assert_eq!(
+        back["result"],
+        json!({"count": 2, "first_a": 1, "second_x": 1}),
+        "one line per call; got {back}",
+    );
 }
 
-/// `channel send` is no longer stubbed to `dbg`: it is the real notification lane, so
-/// with no channel open it REFUSES rather than quietly writing a file. A written record
-/// nobody was told about is worse than no record.
+/// `channel send` is the real notification lane, so with no channel open it REFUSES
+/// rather than quietly writing a file. A written record nobody was told about is worse
+/// than no record.
 #[test]
 fn channel_send_without_a_channel_refuses() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({}),
-        json!({"ok": "bool"}),
-        json!({}),
-        "grimm channel send \"foo/bar/Car\" {state: \"done\"}\n{ ok: true }",
-    );
+    let env = s.nu(&ok_after("grimm channel send 'foo/bar/Car' {state: 'done'}"), "null");
     assert!(has_error(&env), "an unopened channel must refuse; got {env}");
     let text = error_text(&env).to_lowercase();
     assert!(
@@ -76,11 +77,9 @@ fn channel_send_without_a_channel_refuses() {
 #[test]
 fn a_record_with_an_embedded_newline_stays_one_line() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({}),
-        json!({"ok": "bool"}),
-        json!({}),
-        "grimm dbg {msg: (\"line one\" + (char nl) + \"line two\"), tail: 9}\n{ ok: true }",
+    let env = s.nu(
+        &ok_after("grimm dbg {msg: ('line one' + (char nl) + 'line two'), tail: 9}"),
+        "null",
     );
     assert!(!has_error(&env), "got {env}");
     let nonce = env["nonce"].as_str().expect("nonce");
@@ -88,8 +87,8 @@ fn a_record_with_an_embedded_newline_stays_one_line() {
     let back = read_back(
         s,
         nonce,
-        json!({"lines": "int", "msg": "string", "tail": "int"}),
-        "let ls = (open --raw $args.path | decode | lines)\n\
+        "record<lines: int, msg: string, tail: int>",
+        "let ls = (open --raw $data.path | decode | lines)\n\
          let rec = ($ls | first | from nuon)\n\
          { lines: ($ls | length), msg: $rec.msg, tail: $rec.tail }",
     );
@@ -106,22 +105,17 @@ fn a_record_with_an_embedded_newline_stays_one_line() {
     );
 }
 
-/// The `mcp/` RESERVATION. A body is not the host, so it must not be able to stamp a
-/// model the host reserves - otherwise it could forge a control packet, and provenance
-/// would stop being checkable from the model path alone.
+/// The `mcp/` RESERVATION. A definition is not the host, so it must not be able to
+/// stamp a model the host reserves - otherwise it could forge a control packet, and
+/// provenance would stop being checkable from the model path alone.
 ///
 /// Refused BEFORE the channel state is consulted, so the answer does not depend on
 /// whether a channel happens to be open.
 #[test]
-fn a_body_cannot_claim_the_mcp_reservation() {
+fn a_definition_cannot_claim_the_mcp_reservation() {
     let s = TESTING.harness();
     for model in ["mcp/channel/Open", "mcp/supervisor/CpuWarning", "mcp/anything"] {
-        let env = s.run(
-            json!({}),
-            json!({"ok": "bool"}),
-            json!({}),
-            &format!("grimm channel send \"{model}\" {{x: 1}}\n{{ ok: true }}"),
-        );
+        let env = s.nu(&ok_after(&format!("grimm channel send '{model}' {{x: 1}}")), "null");
         assert!(has_error(&env), "`{model}` should be refused; got {env}");
         assert!(
             error_text(&env).contains("reserved"),
@@ -137,8 +131,8 @@ fn a_body_cannot_claim_the_mcp_reservation() {
 #[test]
 fn a_non_record_is_rejected() {
     let s = TESTING.harness();
-    for body in ["grimm dbg 5\n{ ok: true }", "let x = 5\ngrimm dbg $x\n{ ok: true }"] {
-        let env = s.run(json!({}), json!({"ok": "bool"}), json!({}), body);
+    for body in ["grimm dbg 5", "let x = 5\ngrimm dbg $x"] {
+        let env = s.nu(&ok_after(body), "null");
         assert!(has_error(&env), "`{body}` should be rejected; got {env}");
         let text = error_text(&env).to_lowercase();
         assert!(
@@ -149,14 +143,37 @@ fn a_non_record_is_rejected() {
     }
 }
 
-#[test]
-fn the_api_is_available_to_interact_too() {
+/// The contract's parse and the rig validator's know the `grimm` decls as an eval
+/// does, so a table passed to one is a table there too, never an external's
+/// argument that fails to parse.
+#[tested]
+fn a_rig_passing_a_table_to_grimm_commits_and_runs() {
+    let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let env = s.interact(
-        json!({}),
-        json!({"ok": "bool"}),
-        json!({}),
-        "grimm dbg {lane: \"interact\"}\n{ ok: true }",
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/grimmrig");
+    write_tree(
+        &src,
+        &[
+            ("mod.nu", "export module m\n"),
+            ("m/mod.nu", "export use trace\n"),
+            (
+                "m/trace/mod.nu",
+                "export def main [args: nothing]: nothing -> record<ok: bool> {\n    grimm dbg [[x, y]; [1, 2]]\n    { ok: true }\n}\n",
+            ),
+        ],
     );
-    assert!(!has_error(&env), "interact should carry the embedded API; got {env}");
+    let committed = s.commit("sourcetrait/grimmrig");
+    assert!(!has_error(&committed), "got {committed}");
+    let called = s.call("sourcetrait/grimmrig:m:trace", json!({}));
+    assert_eq!(called["result"], json!({"ok": true}), "got {called}");
+}
+
+#[test]
+fn the_api_is_available_to_the_stateful_lane_too() {
+    let s = TESTING.harness();
+    let env = s.nu(
+        "def --env execute [data: nothing]: nothing -> record<ok: bool> {\n    grimm dbg {lane: 'stateful'}\n    { ok: true }\n}",
+        "null",
+    );
+    assert!(!has_error(&env), "the stateful lane should carry the embedded API; got {env}");
 }

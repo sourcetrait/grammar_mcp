@@ -133,7 +133,7 @@ fn commit_rig(
 /// test checks what a write did to configuration.
 fn table(s: &TestServer) -> Vec<(String, Vec<String>)> {
     let listed = s.purviews();
-    listed["purviews"]
+    listed["result"]["purviews"]
         .as_array()
         .expect("purviews")
         .iter()
@@ -168,7 +168,7 @@ fn reset_purviews(s: &TestServer) {
 }
 
 fn signatures(env: &serde_json::Value) -> &str {
-    env["signatures"].as_str().expect("signatures block")
+    env["result"]["signatures"].as_str().expect("signatures block")
 }
 
 fn a_fresh_namespace_starts_at_default_seeing_everything(t: &testing::Testable<'_, '_, '_>) {
@@ -177,9 +177,9 @@ fn a_fresh_namespace_starts_at_default_seeing_everything(t: &testing::Testable<'
     commit_rig(s, &t.temp_dir().join("pvone"), "sourcetrait/pvone");
 
     let info = s.info();
-    assert_eq!(info["purview"][0][0].as_str(), Some("default"));
+    assert_eq!(info["result"]["purview"][0][0].as_str(), Some("default"));
     assert_eq!(
-        info["purview"][0][1][0].as_str(),
+        info["result"]["purview"][0][1][0].as_str(),
         Some("*"),
         "startup MATERIALIZES `default` as `*` - there is no such thing as an \
          unconfigured default, so this is a row rather than a fallback; got {info}",
@@ -237,12 +237,12 @@ fn configure_returns_everything_the_purview_reveals(t: &testing::Testable<'_, '_
     // NOT in view - the session is on `default` - and it still reports, because
     // the point is to CHECK the configuration you just wrote.
     let env = s.purview_configure("shown", &["sourcetrait/pvshow:"]);
-    let block = env["signatures"]
+    let block = env["result"]["signatures"]
         .as_str()
         .unwrap_or_else(|| panic!("configure reports the whole set: {env}"));
     assert!(block.contains("pvshow"), "got {env}");
     assert!(
-        env.get("added").is_none() && env.get("removed").is_none(),
+        env["result"].get("added").is_none() && env["result"].get("removed").is_none(),
         "a FULL set, never a delta - a delta answers nothing about a purview \
          the session is not looking through; got {env}",
     );
@@ -257,7 +257,7 @@ fn an_empty_pattern_list_deletes_the_purview(t: &testing::Testable<'_, '_, '_>) 
     let after = s.purview_configure("gone/soon", &[]);
     assert!(!has_error(&after), "delete failed: {after}");
     assert_eq!(
-        after["signatures"].as_str(),
+        after["result"]["signatures"].as_str(),
         None,
         "a deleted purview reveals nothing, so `signatures` is null; got {after}",
     );
@@ -316,7 +316,7 @@ fn blinders_render_another_purview_without_changing_the_current_one(t: &testing:
     // hand a subagent a narrower surface without giving up its own.
     let mine = s.info();
     assert!(signatures(&mine).contains("pvmine"), "got {mine}");
-    assert_eq!(mine["purview"][0][0].as_str(), Some("default"));
+    assert_eq!(mine["result"]["purview"][0][0].as_str(), Some("default"));
 }
 
 fn an_alias_names_the_same_purview_as_a_bare_id(t: &testing::Testable<'_, '_, '_>) {
@@ -345,7 +345,7 @@ fn setting_the_view_replaces_it_and_an_empty_list_means_default(t: &testing::Tes
     assert!(!has_error(&env), "purview failed: {env}");
     let info = s.info();
     assert_eq!(
-        info["purview"][0][0].as_str(),
+        info["result"]["purview"][0][0].as_str(),
         Some("only/set"),
         "setting REPLACES the view rather than adding to it; got {info}",
     );
@@ -354,7 +354,7 @@ fn setting_the_view_replaces_it_and_an_empty_list_means_default(t: &testing::Tes
     assert!(!has_error(&back), "got {back}");
     let info = s.info();
     assert_eq!(
-        info["purview"][0][0].as_str(),
+        info["result"]["purview"][0][0].as_str(),
         Some("default"),
         "an EMPTY list means `default` - which is what makes a separate reset \
          tool unnecessary; got {info}",
@@ -373,20 +373,20 @@ fn extending_is_additive_and_reveals_only_what_was_not_visible(t: &testing::Test
     let _ = s.purview(&["base"]);
 
     let env = s.purview_extend(&["extra"]);
-    let revealed = env["revealed"].as_str().unwrap_or_default();
+    let revealed = env["result"]["revealed"].as_str().unwrap_or_default();
     assert!(
         revealed.contains("pvextra") && !revealed.contains("pvbase"),
         "`revealed` is what came INTO view, not the whole new view; got {env}",
     );
     assert_eq!(
-        env["current"].as_array().map(|a| a.len()),
+        env["result"]["current"].as_array().map(|a| a.len()),
         Some(2),
         "additive: nothing already in view is disturbed; got {env}",
     );
 
     let dup = s.purview_extend(&["dup"]);
     assert_eq!(
-        dup["revealed"].as_str(),
+        dup["result"]["revealed"].as_str(),
         None,
         "`dup` names a rig ALREADY in view under another purview id, so it \
          reveals nothing - the delta is over what is VISIBLE, not over the \
@@ -430,7 +430,7 @@ fn the_dot_pattern_inspects_the_current_purview(t: &testing::Testable<'_, '_, '_
     let _ = s.purview_configure("default", &["sourcetrait/pvdot:"]);
 
     let dot = s.inspect(".");
-    let block = dot["doc"]["signatures"]
+    let block = dot["result"]["doc"]["signatures"]
         .as_str()
         .unwrap_or_else(|| panic!("`.` should render a signatures block: {dot}"));
     assert!(

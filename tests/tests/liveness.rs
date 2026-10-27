@@ -9,7 +9,7 @@ use std::time::Duration;
 use nix::fcntl::{Flock, FlockArg};
 use nix::sys::signal::Signal;
 use serde_json::json;
-use sourcetrait_grammar_tests::{Host, namespace_dir, structured};
+use sourcetrait_grammar_tests::{Host, envelope, namespace_dir};
 use sourcetrait_common::testing::prelude::*;
 
 static TESTING: testing::Module = testing::module!(Integration, { .using_temp_dir() });
@@ -37,7 +37,7 @@ fn the_host_lock_is_held_while_alive_and_dropped_on_sigkill() {
 
     // Identity is in the CONTENTS, for a reader that wants to know which host holds it.
     let info = host.call("info", json!({}));
-    let mcp_nom = structured(&info)["mcp_nom"]
+    let mcp_nom = envelope(&info)["result"]["mcp_nom"]
         .as_str()
         .expect("info carries mcp_nom")
         .to_string();

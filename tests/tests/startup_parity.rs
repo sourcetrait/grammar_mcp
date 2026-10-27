@@ -1,5 +1,5 @@
 //! The host's startup held to nushell's own on a pinned env: `$nu`'s paths, the
-//! startup env and constants, std, and `print`, through run, interact, and call.
+//! startup env and constants, std, and `print`, through both of `nu`'s lanes and call.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -17,7 +17,7 @@ const NAMESPACE: &str = "default";
 /// The parent shell's `NU_VERSION`, which the host must not inherit.
 const PARENT_NU_VERSION: &str = "0.0.0-parent";
 
-/// Every `$nu` path field, read by a body.
+/// Every `$nu` path field, read by a definition.
 const NU_PATHS: &str = "{
     home_dir: $nu.home-dir,
     default_config_dir: $nu.default-config-dir,
@@ -32,7 +32,7 @@ const NU_PATHS: &str = "{
     user_autoload_dirs: $nu.user-autoload-dirs,
 }";
 
-/// The startup env and constants nushell sets, read by a body.
+/// The startup env and constants nushell sets, read by a definition.
 const STARTUP_ENV: &str = "{
     config: ($env.config | describe | str starts-with 'record<'),
     env_conversions: ($env.ENV_CONVERSIONS | describe),
@@ -108,13 +108,13 @@ impl Parity {
         }
     }
 
-    /// The clean envelope of `tool` running `body`, panicking on an error.
-    fn eval(&mut self, tool: &str, result_schema: Value, body: &str) -> Value {
-        let resp = self.host.call(
-            tool,
-            json!({"args_schema": {}, "result_schema": result_schema, "args": {}, "body": body}),
-        );
-        extract_envelope(&resp).unwrap_or_else(|| panic!("{tool} should succeed; got {resp}"))
+    /// The clean envelope of a `def` (or `def --env`) answering `result_type` from
+    /// `body`, panicking on an error.
+    fn eval(&mut self, def: &str, result_type: &str, body: &str) -> Value {
+        let definition =
+            format!("{def} execute [data: nothing]: nothing -> {result_type} {{\n{body}\n}}");
+        let resp = self.host.nu(&definition, "null");
+        extract_envelope(&resp).unwrap_or_else(|| panic!("`{def}` should succeed; got {resp}"))
     }
 
     /// The stderr log of the call whose envelope is `env`, under `kind`.
@@ -132,7 +132,7 @@ impl Parity {
     /// The engine version the host was built against, from `info()`.
     fn engine_version(&mut self) -> String {
         let info = self.host.call("info", json!({}));
-        structured(&info)["nu_version"]
+        envelope(&info)["result"]["nu_version"]
             .as_str()
             .expect("info's nu_version")
             .to_string()
@@ -163,22 +163,16 @@ fn expected_nu(dirs: &NushellConfigDirs) -> Value {
     })
 }
 
-/// The schema of `NU_PATHS`'s record.
-fn nu_paths_schema() -> Value {
-    json!({
-        "home_dir": "string",
-        "default_config_dir": "string",
-        "config_path": "string",
-        "env_path": "string",
-        "history_path": "string",
-        "loginshell_path": "string",
-        "plugin_path": "string",
-        "data_dir": "string",
-        "cache_dir": "string",
-        "vendor_autoload_dirs": ["string"],
-        "user_autoload_dirs": ["string"],
-    })
-}
+/// The type of `NU_PATHS`'s record.
+const NU_PATHS_TYPE: &str = "record<home_dir: string, default_config_dir: string, \
+    config_path: string, env_path: string, history_path: string, loginshell_path: string, \
+    plugin_path: string, data_dir: string, cache_dir: string, \
+    vendor_autoload_dirs: list<string>, user_autoload_dirs: list<string>>";
+
+/// The type of `STARTUP_ENV`'s record.
+const STARTUP_ENV_TYPE: &str = "record<config: bool, env_conversions: string, path: string, \
+    nu_lib_dirs_env: list<string>, nu_lib_dirs_const: list<string>, \
+    nu_plugin_dirs_env: list<string>, nu_plugin_dirs_const: list<string>, nu_version: string>";
 
 /// A path as `$nu` shows it: canonical where it exists, as given otherwise.
 fn shown(path: &Path) -> String {
@@ -198,32 +192,22 @@ fn path_str(path: &Path) -> String {
     path.to_str().expect("a UTF-8 path").to_string()
 }
 
-/// A body's `$nu` paths are nushell's for the same env.
+/// A definition's `$nu` paths are nushell's for the same env.
 #[tested]
-fn run_sees_nushells_paths() {
+fn the_pool_sees_nushells_paths() {
     let t = testing::test!({ .using_temp_dir() });
     let mut p = Parity::spawn(t.temp_dir());
-    let env = p.eval("run", nu_paths_schema(), NU_PATHS);
-    assert_eq!(env["result"], expected_nu(&p.dirs), "the body's $nu paths; got {env}");
+    let env = p.eval("def", NU_PATHS_TYPE, NU_PATHS);
+    assert_eq!(env["result"], expected_nu(&p.dirs), "the definition's $nu paths; got {env}");
 }
 
-/// A body sees the env and constants nushell's startup sets, the host's lib
+/// A definition sees the env and constants nushell's startup sets, the host's lib
 /// dirs in both `NU_LIB_DIRS`, and the engine's `NU_VERSION`, not the parent's.
 #[tested]
-fn run_sees_nushells_startup_env() {
+fn the_pool_sees_nushells_startup_env() {
     let t = testing::test!({ .using_temp_dir() });
     let mut p = Parity::spawn(t.temp_dir());
-    let schema = json!({
-        "config": "bool",
-        "env_conversions": "string",
-        "path": "string",
-        "nu_lib_dirs_env": ["string"],
-        "nu_lib_dirs_const": ["string"],
-        "nu_plugin_dirs_env": ["string"],
-        "nu_plugin_dirs_const": ["string"],
-        "nu_version": "string",
-    });
-    let env = p.eval("run", schema, STARTUP_ENV);
+    let env = p.eval("def", STARTUP_ENV_TYPE, STARTUP_ENV);
     let lib_dirs = json!([path_str(&p.namespace)]);
     let expected = json!({
         "config": true,
@@ -235,28 +219,28 @@ fn run_sees_nushells_startup_env() {
         "nu_plugin_dirs_const": p.plugin_dirs(),
         "nu_version": p.engine_version(),
     });
-    assert_eq!(env["result"], expected, "the body's startup env; got {env}");
+    assert_eq!(env["result"], expected, "the definition's startup env; got {env}");
     assert_ne!(env["result"]["nu_version"], PARENT_NU_VERSION, "NU_VERSION is the engine's");
 }
 
-/// A body imports and runs nushell's standard library.
+/// A definition imports and runs nushell's standard library.
 #[tested]
-fn run_loads_the_standard_library() {
+fn the_pool_loads_the_standard_library() {
     let t = testing::test!({ .using_temp_dir() });
     let mut p = Parity::spawn(t.temp_dir());
     let body = "use std/assert\nuse std/iter\n\
                 let found = ([1 2 3] | iter find {|x| $x > 1 })\n\
                 assert equal $found 2\n{ found: $found }";
-    let env = p.eval("run", json!({"found": "int"}), body);
+    let env = p.eval("def", "record<found: int>", body);
     assert_eq!(env["result"]["found"], 2, "std ran; got {env}");
 }
 
-/// A parse-time constant reads `$nu.home-dir` through the lint and the eval.
+/// A parse-time constant reads `$nu.home-dir` through the contract's parse and the eval.
 #[tested]
 fn a_const_reads_the_home_at_parse_time() {
     let t = testing::test!({ .using_temp_dir() });
     let mut p = Parity::spawn(t.temp_dir());
-    let env = p.eval("run", json!({"home": "string"}), "const home = $nu.home-dir\n{ home: $home }");
+    let env = p.eval("def", "record<home: string>", "const home = $nu.home-dir\n{ home: $home }");
     assert_eq!(env["result"]["home"], shown(&p.dirs.home_dir), "the const's home; got {env}");
 }
 
@@ -266,25 +250,24 @@ fn a_const_reads_the_home_at_parse_time() {
 fn print_lands_in_the_calls_stderr_log() {
     let t = testing::test!({ .using_temp_dir() });
     let mut p = Parity::spawn(t.temp_dir());
-    let body = "print 'PRINTMARK run'\n42 | print\nprint --no-newline 'PRINTMARK tail'\n{ ok: true }";
-    let env = p.eval("run", json!({"ok": "bool"}), body);
-    assert_eq!(p.call_stderr("runs", &env), "PRINTMARK run\n42\nPRINTMARK tail", "the call's log");
+    let body = "print 'PRINTMARK pool'\n42 | print\nprint --no-newline 'PRINTMARK tail'\n{ ok: true }";
+    let env = p.eval("def", "record<ok: bool>", body);
+    assert_eq!(p.call_stderr("nu", &env), "PRINTMARK pool\n42\nPRINTMARK tail", "the call's log");
     assert!(!p.host_stderr().contains("PRINTMARK"), "the host's stderr: {}", p.host_stderr());
 }
 
-/// An interact body sees the same startup and its `print` lands in its log.
+/// A stateful definition sees the same startup and its `print` lands in its log.
 #[tested]
-fn interact_sees_the_same_startup() {
+fn the_stateful_lane_sees_the_same_startup() {
     let t = testing::test!({ .using_temp_dir() });
     let mut p = Parity::spawn(t.temp_dir());
-    let body = "print 'PRINTMARK interact'\n\
+    let body = "print 'PRINTMARK stateful'\n\
                 { home: $nu.home-dir, path: ($env.PATH | describe), \
                 config: ($env.config | describe | str starts-with 'record<') }";
-    let schema = json!({"home": "string", "path": "string", "config": "bool"});
-    let env = p.eval("interact", schema, body);
+    let env = p.eval("def --env", "record<home: string, path: string, config: bool>", body);
     let expected = json!({"home": shown(&p.dirs.home_dir), "path": "list<string>", "config": true});
-    assert_eq!(env["result"], expected, "the interact body's startup; got {env}");
-    assert_eq!(p.call_stderr("interacts", &env), "PRINTMARK interact\n", "the call's log");
+    assert_eq!(env["result"], expected, "the stateful definition's startup; got {env}");
+    assert_eq!(p.call_stderr("nu", &env), "PRINTMARK stateful\n", "the call's log");
 }
 
 /// With the standard library's files ahead of a rig's in the span space, the
@@ -305,9 +288,9 @@ fn a_reserved_main_is_still_refused() {
          }\n",
     );
     let committed = p.host.commit("sourcetrait/reserved");
-    let reserved: Vec<&Value> = envelope_error(&committed)
-        .and_then(|e| e["errors"].as_array())
-        .map(|errors| errors.iter().filter(|e| e["kind"] == "rig::reserved").collect())
+    let reserved: Vec<Value> = envelope_error(&committed)
+        .and_then(|error| error.as_array().cloned())
+        .map(|rows| rows.into_iter().filter(|row| row["kind"] == "rig::reserved").collect())
         .unwrap_or_default();
     assert_eq!(reserved.len(), 1, "one reserved `main`; got {committed}");
     assert_eq!(reserved[0]["source"]["position"], json!([2, 0]), "at its line; got {committed}");

@@ -177,7 +177,7 @@ pub(crate) use crate::{
             is_valid_module_path, lib_dir, load_index, registered_rig_names, require_rig, rig_dir,
             scaffold_leaf, scaffold_leaf_exists, uninstall_equip,
         },
-        lint::{LINT_VIOLATION_CAP, lint_block, lint_body},
+        lint::{LINT_VIOLATION_CAP, lint_block},
         liveness::acquire as acquire_host_lock,
         namepath::{
             BUILTINS, Namepath, NamepathPattern, NamepathRef, NamepathStr, builtin_equip,
@@ -186,7 +186,7 @@ pub(crate) use crate::{
         oneshot::run_oneshot,
         parse_engine::{
             LIB_DIRS_CONST, LintEngine, PLUGIN_DIRS_CONST, ParseEngine, dirs_value, file_start,
-            set_dirs_const, span_text, span_to_line_col, wrap_as_def_body, wrap_as_module,
+            set_dirs_const, span_text, span_to_line_col, wrap_as_module,
         },
         pin::{clear_pins, effective_supervisor, pin, reap_pins},
         purview::{

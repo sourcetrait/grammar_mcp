@@ -26,8 +26,46 @@ fn call_after_commit_returns_result() {
     let _ = s.commit("sourcetrait/calc");
     let env = s.call("sourcetrait/calc:math:double", json!({"x": 7}));
     assert_eq!(env["result"]["out"].as_i64(), Some(14), "got {env}");
-    assert!(env.get("rerun_id").is_none(), "call envelope shouldn't echo rerun_id");
-    assert!(env.get("version_id").is_none(), "call envelope shouldn't echo version_id");
+    let fields: Vec<&String> = env.as_object().expect("an envelope record").keys().collect();
+    assert_eq!(fields, vec!["nonce", "result"], "a call's envelope is its nonce and result; got {env}");
+}
+
+#[tested]
+fn a_call_result_is_lenient() {
+    let t = testing::test!({ .using_temp_dir() });
+    let s = TESTING.harness();
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/lenientlib");
+    write_source(&src, "mod.nu", "export module m\n");
+    write_source(&src, "m/mod.nu", "export use rows\nexport use scalar\nexport use quiet\n");
+    // `from nuon` answers `any`, so each declared type holds at parse and only the
+    // value at runtime says what came back.
+    write_source(
+        &src,
+        "m/rows/mod.nu",
+        "export def main [args: nothing]: nothing -> record<i: int> { '[[i]; [1] [2]]' | from nuon }\n",
+    );
+    write_source(
+        &src,
+        "m/scalar/mod.nu",
+        "export def main [args: nothing]: nothing -> record<i: int> { '5' | from nuon }\n",
+    );
+    write_source(
+        &src,
+        "m/quiet/mod.nu",
+        "export def main [args: nothing]: nothing -> nothing { }\n",
+    );
+    let committed = s.commit("sourcetrait/lenientlib");
+    assert!(!has_error(&committed), "got {committed}");
+
+    let rows = s.call("sourcetrait/lenientlib:m:rows", json!({}));
+    assert_eq!(rows["result"], json!([{"i": 1}, {"i": 2}]), "a table rides as it is; got {rows}");
+    let scalar = s.call("sourcetrait/lenientlib:m:scalar", json!({}));
+    assert_eq!(scalar["result"], json!({}), "anything else answers an empty record; got {scalar}");
+    let quiet = s.call("sourcetrait/lenientlib:m:quiet", json!({}));
+    assert!(
+        quiet.get("result").is_some_and(|result| result.is_null()),
+        "nothing rides as null; got {quiet}",
+    );
 }
 
 #[tested]
@@ -107,11 +145,11 @@ fn inspect_returns_function_doc() {
     let _ = s.commit("sourcetrait/inspectlib");
     let env = s.inspect("sourcetrait/inspectlib:math:double");
     assert_eq!(
-        env.as_object().expect("envelope object").len(),
+        env["result"].as_object().expect("a result record").len(),
         1,
-        "the envelope is EXACTLY one field; got {env}",
+        "the result is EXACTLY one field; got {env}",
     );
-    let doc = &env["doc"];
+    let doc = &env["result"]["doc"];
     assert_eq!(
         doc["signature"].as_str(),
         Some("sourcetrait/inspectlib:math:double <x:int> <out:int> # doubles its input"),
@@ -149,17 +187,17 @@ fn inspect_rig_root_and_module() {
     );
     let _ = s.commit("sourcetrait/inspectlib2");
     let lib = s.inspect("sourcetrait/inspectlib2");
-    assert_eq!(lib["doc"]["summary"].as_str(), Some("the inspectlib2 rig"));
+    assert_eq!(lib["result"]["doc"]["summary"].as_str(), Some("the inspectlib2 rig"));
     assert!(
-        lib["doc"]["srcdir"]
+        lib["result"]["doc"]["srcdir"]
             .as_str()
             .is_some_and(|p| p.ends_with("/equip/sourcetrait/inspectlib2/rig")),
         "a rig carries srcdir - the committed directory it lives in; got {lib}",
     );
     let m = s.inspect("sourcetrait/inspectlib2:math");
-    assert_eq!(m["doc"]["summary"].as_str(), Some("math helpers"));
+    assert_eq!(m["result"]["doc"]["summary"].as_str(), Some("math helpers"));
     assert!(
-        m["doc"]["src"]
+        m["result"]["doc"]["src"]
             .as_str()
             .is_some_and(|p| p.ends_with("/equip/sourcetrait/inspectlib2/rig/math/mod.nu")),
         "a module carries src - its committed mod.nu; got {m}",
@@ -180,11 +218,11 @@ fn inspect_undocumented_is_empty() {
     let _ = s.commit("sourcetrait/inspectlib3");
     let env = s.inspect("sourcetrait/inspectlib3:m:f");
     assert_eq!(
-        env["doc"]["signature"].as_str(),
+        env["result"]["doc"]["signature"].as_str(),
         Some("sourcetrait/inspectlib3:m:f <x:int> <out:int>"),
         "an undocumented call's signature carries no trailing ` # ` at all; got {env}",
     );
-    assert_eq!(env["doc"]["details"].as_str(), Some(""));
+    assert_eq!(env["result"]["doc"]["details"].as_str(), Some(""));
 }
 
 #[test]
@@ -209,7 +247,7 @@ fn result_record_field_shapes_preserved() {
     assert!(!has_error(&committed), "commit should succeed; got {committed}");
     let env = s.inspect("sourcetrait/fidelitylib:m:shapes");
     assert_eq!(
-        env["doc"]["signature"].as_str(),
+        env["result"]["doc"]["signature"].as_str(),
         Some(
             "sourcetrait/fidelitylib:m:shapes <n:int> \
              <p:path,d:directory,c:cell-path,g:glob>"
@@ -235,7 +273,7 @@ fn helper_file_pruned_from_info_and_not_callable() {
     assert!(!has_error(&committed), "commit should succeed; got {committed}");
 
     let info = s.info();
-    let signatures = info["signatures"].as_str().expect("signatures block");
+    let signatures = info["result"]["signatures"].as_str().expect("signatures block");
     assert_eq!(
         rig_block(signatures, "helperlib"),
         " helperlib\n  m\n   real <x:int> <out:int>\n",

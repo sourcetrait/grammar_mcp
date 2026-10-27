@@ -1,3 +1,6 @@
+//! The definition cache behind `rerun`: written before dispatch, so every `nu`
+//! call's nonce is a handle, a timed-out one's included.
+
 use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{TestServer, error_kind, has_error};
 use sourcetrait_common::testing::prelude::*;
@@ -9,87 +12,89 @@ static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integrat
     .setup(|_| TestServer::new())
 });
 
+const TRIPLE: &str =
+    "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x * 3) } }";
+
 #[test]
-fn run_envelope_has_nonce_and_no_rerun_id() {
+fn the_envelope_is_the_nonce_and_the_result_alone() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"x": "int"}),
-        json!({"out": "int"}),
-        json!({"x": 1}),
-        "{ out: ($args.x + 100) }",
-    );
+    let env = s.nu(TRIPLE, "{x: 1}");
     assert!(
-        env["nonce"].as_str().map(|s| !s.is_empty()).unwrap_or(false),
-        "run envelope should carry a non-empty nonce; got {env}",
+        env["nonce"].as_str().is_some_and(|n| !n.is_empty()),
+        "the envelope carries a non-empty nonce; got {env}",
     );
-    assert!(env.get("rerun_id").is_none(), "run envelope should not carry rerun_id; got {env}");
+    let fields: Vec<&String> = env.as_object().expect("an envelope record").keys().collect();
+    assert_eq!(fields, vec!["nonce", "result"], "got {env}");
 }
 
 #[test]
 fn timeout_then_rerun_recovers() {
     let s = TESTING.harness();
-    let timed = s.run_timeout(
-        json!({"x": "int"}),
-        json!({"out": "int"}),
-        json!({"x": 5}),
-        "sleep 400ms\n{ out: ($args.x + 1) }",
-        Some(100),
+    let timed = s.nu_timeout(
+        "def execute [data: record<x: int>]: nothing -> record<out: int> {\n    sleep 400ms\n    { out: ($data.x + 1) }\n}",
+        "{x: 5}",
+        Some("100ms"),
     );
-    assert_eq!(error_kind(&timed), Some("thread::timeout"), "first run should time out; got {timed}");
-    let nonce = timed["error"]["nonce"].as_str().expect("timeout nonce").to_string();
+    assert_eq!(error_kind(&timed), Some("thread::timeout"), "the first call should time out; got {timed}");
+    let nonce = timed["nonce"].as_str().expect("a timeout's nonce").to_string();
 
-    // The body was cached PRE-dispatch, so the timed-out nonce is a valid rerun
-    // handle - replay with a larger timeout recovers it.
-    let recovered = s.rerun_timeout(&nonce, json!({"x": 5}), Some(5000));
-    assert_eq!(recovered["result"]["out"].as_i64(), Some(6), "rerun of a timed-out nonce should complete; got {recovered}");
+    // The definition was cached BEFORE dispatch, so the timed-out nonce is a valid
+    // rerun handle, and a larger timeout recovers it.
+    let recovered = s.rerun_timeout(&nonce, "{x: 5}", Some("5sec"));
+    assert_eq!(recovered["result"], json!({"out": 6}), "got {recovered}");
 }
 
 #[test]
-fn rerun_by_nonce_roundtrips_with_new_args() {
+fn rerun_by_nonce_roundtrips_with_new_data() {
     let s = TESTING.harness();
-    let first = s.run(
-        json!({"x": "int"}),
-        json!({"out": "int"}),
-        json!({"x": 5}),
-        "{ out: ($args.x * 3) }",
-    );
-    assert_eq!(first["result"]["out"].as_i64(), Some(15));
-    let nonce = first["nonce"].as_str().expect("run nonce").to_string();
+    let first = s.nu(TRIPLE, "{x: 5}");
+    assert_eq!(first["result"], json!({"out": 15}), "got {first}");
+    let nonce = first["nonce"].as_str().expect("nonce").to_string();
 
-    let second = s.rerun(&nonce, json!({"x": 7}));
-    assert_eq!(second["result"]["out"].as_i64(), Some(21), "rerun with new args -> 7 * 3; got {second}");
-    assert!(second.get("rerun_id").is_none(), "got {second}");
+    let second = s.rerun(&nonce, "{x: 7}");
+    assert_eq!(second["result"], json!({"out": 21}), "rerun with new data; got {second}");
 
-    // The rerun's OWN nonce is itself a handle (rerun caches its body too).
+    // The rerun's OWN nonce is itself a handle: a rerun caches its definition too.
     let rerun_nonce = second["nonce"].as_str().expect("rerun nonce").to_string();
     assert_ne!(rerun_nonce, nonce, "each eval gets a fresh nonce");
-    let third = s.rerun(&rerun_nonce, json!({"x": 2}));
-    assert_eq!(third["result"]["out"].as_i64(), Some(6), "a rerun's nonce must itself be rerunnable; got {third}");
+    let third = s.rerun(&rerun_nonce, "{x: 2}");
+    assert_eq!(third["result"], json!({"out": 6}), "a rerun's nonce must itself be rerunnable; got {third}");
 }
 
 #[test]
 fn rerun_unknown_nonce_errors() {
     let s = TESTING.harness();
-    let env = s.rerun("abcDEF123456", json!({"x": 0}));
-    assert!(has_error(&env), "a base62 nonce with no cached body should error; got {env}");
+    let env = s.rerun("abcDEF123456", "{x: 0}");
+    assert_eq!(error_kind(&env), Some("rerun::body_missing"), "got {env}");
 }
 
 #[test]
 fn rerun_rejects_non_base62_nonce() {
     let s = TESTING.harness();
-    let env = s.rerun("../etc/passwd", json!({"x": 0}));
+    let env = s.rerun("../etc/passwd", "{x: 0}");
     assert!(has_error(&env), "a non-base62 nonce should error; got {env}");
+    assert_eq!(error_kind(&env), Some("rerun::invalid_nonce"), "got {env}");
 }
 
 #[test]
-fn interact_envelope_has_no_rerun_id() {
+fn a_stateful_definition_reruns_on_its_lane() {
     let s = TESTING.harness();
-    let env = s.interact(
-        json!({"x": "int"}),
-        json!({"out": "int"}),
-        json!({"x": 4}),
-        "{ out: ($args.x * 2) }",
+    let first = s.nu(
+        "def --env execute [data: record<v: string>]: nothing -> record<v: string> {\n    $env.CACHE_RERUN_LANE = $data.v\n    { v: $data.v }\n}",
+        "{v: first}",
     );
-    assert_eq!(env["result"]["out"].as_i64(), Some(8));
-    assert!(env.get("rerun_id").is_none(), "interact envelope should not carry rerun_id; got {env}");
+    assert_eq!(first["result"], json!({"v": "first"}), "got {first}");
+    let nonce = first["nonce"].as_str().expect("nonce").to_string();
+    let again = s.rerun(&nonce, "{v: again}");
+    assert_eq!(again["result"], json!({"v": "again"}), "got {again}");
+
+    let read = s.nu(
+        "def --env execute [data: nothing]: nothing -> record<v: string> { { v: $env.CACHE_RERUN_LANE } }",
+        "null",
+    );
+    assert_eq!(
+        read["result"],
+        json!({"v": "again"}),
+        "the rerun ran on the stateful lane, its env write kept; got {read}",
+    );
 }

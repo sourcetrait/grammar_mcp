@@ -16,6 +16,9 @@ AST, and the lint walks the same block, so the two can never disagree about the 
 
 The parse is clean first. A definition that doesn't parse has no signature to judge, and
 its errors are reported at their positions in the definition, `Debug` for their detail.
+A module-resolution cycle is checked before them, as the eval and the rig validator
+check it, and answers `module::circular_import` alone: a cycle's own parse errors are
+unstable and useless, and the definition's parse is now where a cycle is met first.
 
 THE STRUCTURE is one top-level pipeline element, a call to `def` named `execute`.
 Comments make no pipeline, so they stand. `export def`, an attribute block, a second def

@@ -151,7 +151,7 @@ fn a_long_sustained_level_warns_only_twice_in_an_hour() {
 fn watch_entry(nonce: &str, lane: Lane, cancelled_at: u64, finished: bool) -> HungWatch {
     HungWatch {
         nonce: nonce.to_string(),
-        tool: "run",
+        tool: "nu",
         lane,
         started_at: 0,
         cancelled_at,

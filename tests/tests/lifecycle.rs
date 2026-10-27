@@ -1,5 +1,5 @@
-//! Lifecycle SYSTEM tests for the conditions a nu body cannot trigger on its own
-//! (a caught panic; a hung engine thread). They spawn the real host built with the
+//! Lifecycle SYSTEM tests for the conditions a nu definition cannot trigger on its
+//! own (a caught panic; a hung engine thread). They spawn the real host built with the
 //! mcp `test-hooks` feature (__test_panic / __test_hang) and are themselves gated
 //! behind this crate's `test-hooks` feature, so plain `cargo test --workspace`
 //! (which builds a no-hooks binary) skips them. Run:
@@ -40,76 +40,56 @@ fn wait_for_hung_emergency(host: &Host, id: &str, ns: &str, secs: u64) -> String
     }
 }
 
+/// A definition on `lane` (`def` or `def --env`) answering `result_type` from `body`.
+fn definition(lane: &str, result_type: &str, body: &str) -> String {
+    format!("{lane} execute [data: nothing]: nothing -> {result_type} {{\n{body}\n}}")
+}
+
 #[tested]
-fn panic_in_run_is_caught_host_survives() {
+fn a_panic_in_the_pool_is_caught_and_the_host_survives() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn(t.temp_dir());
-    // __test_panic panics the eval thread; catch_unwind catches it -> the run
+    // __test_panic panics the eval thread; catch_unwind catches it -> the call
     // errors, the host is NOT torn down.
-    let env = host.run(json!({
-        "args_schema": {"noop": "int"},
-        "result_schema": {"out": "int"},
-        "args": {"noop": 0},
-        "body": "__test_panic",
-    }));
+    let env = host.nu(&definition("def", "record<out: int>", "__test_panic\n{ out: 0 }"), "null");
     assert!(
         has_error_path(&env),
         "a panicking eval should surface as an error, not crash the host; got {env}",
     );
-    // The host is alive: a normal run still works.
-    let ok = host.run(json!({
-        "args_schema": {"x": "int"},
-        "result_schema": {"out": "int"},
-        "args": {"x": 5},
-        "body": "{ out: ($args.x + 1) }",
-    }));
+    // The host is alive: a normal call still works.
+    let ok = host.nu(
+        "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x + 1) } }",
+        "{x: 5}",
+    );
     assert_eq!(
-        structured(&ok)["result"]["out"].as_i64(),
+        envelope(&ok)["result"]["out"].as_i64(),
         Some(6),
         "the host should survive the caught panic; got {ok}",
     );
 }
 
 #[tested]
-fn interact_reset_on_panic_drops_session_keeps_host() {
+fn a_stateful_panic_resets_the_session_and_keeps_the_host() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn(t.temp_dir());
     // Seed persistent session state.
-    let a = host.call(
-        "interact",
-        json!({
-            "args_schema": {"noop": "int"},
-            "result_schema": {"ok": "bool"},
-            "args": {"noop": 0},
-            "body": "$env.KEEP = \"before\"\n{ ok: true }",
-        }),
+    let a = host.nu(
+        &definition("def --env", "record<ok: bool>", "$env.KEEP = 'before'\n{ ok: true }"),
+        "null",
     );
-    assert!(!has_error_path(&a), "seed interact should succeed; got {a}");
-    // Panic the interact eval -> caught, the lane rebuilds its engine (session
+    assert!(!has_error_path(&a), "the seed call should succeed; got {a}");
+    // Panic the stateful eval -> caught, the lane rebuilds its engine (session
     // lost), the host survives.
-    let p = host.call(
-        "interact",
-        json!({
-            "args_schema": {"noop": "int"},
-            "result_schema": {"ok": "bool"},
-            "args": {"noop": 0},
-            "body": "__test_panic",
-        }),
-    );
-    assert!(has_error_path(&p), "a panicking interact eval should surface as an error; got {p}");
+    let p = host.nu(&definition("def --env", "record<ok: bool>", "__test_panic\n{ ok: true }"), "null");
+    assert!(has_error_path(&p), "a panicking stateful eval should surface as an error; got {p}");
     // Host + lane survive, and the pre-panic session state is GONE (reset).
-    let b = host.call(
-        "interact",
-        json!({
-            "args_schema": {"noop": "int"},
-            "result_schema": {"keep": "string"},
-            "args": {"noop": 0},
-            "body": "{ keep: ($env.KEEP? | default \"gone\") }",
-        }),
+    let b = host.nu(
+        &definition("def --env", "record<keep: string>", "{ keep: ($env.KEEP? | default 'gone') }"),
+        "null",
     );
-    assert!(!has_error_path(&b), "interact should work after the reset; got {b}");
+    assert!(!has_error_path(&b), "the stateful lane should work after the reset; got {b}");
     assert_eq!(
-        structured(&b)["result"]["keep"].as_str(),
+        envelope(&b)["result"]["keep"].as_str(),
         Some("gone"),
         "the reset should have dropped the pre-panic session state; got {b}",
     );
@@ -122,21 +102,13 @@ fn hung_thread_is_confirmed_in_emergency_log() {
     // __test_hang blocks uninterruptibly; a short timeout triggers cancel, but the
     // bare sleep never polls Signals, so the thread outlives its cancel and the
     // watchdog confirms it a hung engine thread (past the 5s grace) and logs it.
-    let timed = host.call(
-        "run",
-        json!({
-            "args_schema": {"noop": "int"},
-            "result_schema": {"out": "int"},
-            "args": {"noop": 0},
-            "body": "__test_hang",
-            "timeout_ms": 500,
-        }),
-    );
-    assert_eq!(envelope_error_kind(&timed), Some("thread::timeout"), "got {timed}");
-    let nonce = envelope_error(&timed)
-        .and_then(|e| e.get("nonce"))
-        .and_then(|n| n.as_str())
-        .expect("timeout envelope carries a nonce")
+    let mut args = nu_args(&definition("def", "record<out: int>", "__test_hang\n{ out: 0 }"), "null");
+    args["timeout"] = json!("500ms");
+    let timed = host.call("nu", args);
+    assert_eq!(envelope_error_kind(&timed).as_deref(), Some("thread::timeout"), "got {timed}");
+    let nonce = envelope(&timed)["nonce"]
+        .as_str()
+        .expect("a timeout's envelope carries its nonce")
         .to_string();
 
     // The watchdog samples every 2s and confirms past a 5s grace; wait it out.

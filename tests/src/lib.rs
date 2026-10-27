@@ -32,7 +32,7 @@ pub fn grammar_mcp_bin() -> PathBuf {
 
 /// Run the binary as a one-shot subprocess (the `cli` surface, or a
 /// startup-failure check), isolating XDG state under `scratch/{data,cache}`.
-/// Returns the captured Output (the `cli` surface prints bare compact JSON).
+/// Returns the captured Output (the `cli` surface prints its envelope's NUON text).
 pub fn run_output(scratch: &Path, args: &[&str]) -> Output {
     let data = scratch.join("data");
     let cache = scratch.join("cache");
@@ -67,10 +67,9 @@ pub fn stdout_str(out: &Output) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
-pub fn stdout_json(out: &Output) -> Value {
-    let text = stdout_str(out);
-    serde_json::from_str(text.trim())
-        .unwrap_or_else(|e| panic!("stdout should be JSON: {e}; got {text:?}"))
+/// The envelope the `cli` surface printed, its NUON text read as JSON.
+pub fn stdout_envelope(out: &Output) -> Value {
+    nuon_to_json(stdout_str(out).trim())
 }
 
 /// A spawned `grammar-mcp` server child, driven over JSON-RPC stdio. Killed on
@@ -391,7 +390,7 @@ impl Host {
     }
 
     /// Send a `tools/call` WITHOUT reading its response, returning the request id -
-    /// for pipelined / concurrent requests (e.g. kill mid-run). Read the response
+    /// for pipelined / concurrent requests (e.g. kill mid-call). Read the response
     /// later with `read_id(id)`. Author-prefixes bare rig names (idempotent).
     pub fn request(&mut self, tool: &str, args: Value) -> u64 {
         let id = self.next_id();
@@ -411,8 +410,9 @@ impl Host {
         self.read_id(id)
     }
 
-    pub fn run(&mut self, args: Value) -> Value {
-        self.call("run", args)
+    /// `nu` on a definition and its data's NUON text; JSON text is NUON too.
+    pub fn nu(&mut self, definition: &str, data: &str) -> Value {
+        self.call("nu", nu_args(definition, data))
     }
 
     pub fn call_np(&mut self, namepath: &str, args: Value) -> Value {
@@ -549,36 +549,56 @@ pub fn describe_exit(status: &std::process::ExitStatus) -> String {
     }
 }
 
-// ---- envelope / error helpers ----
-
-pub fn structured(resp: &Value) -> &Value {
-    &resp["result"]["structuredContent"]
+/// A `nu` call's arguments: its definition and its data's NUON text.
+pub fn nu_args(definition: &str, data: &str) -> Value {
+    json!({"definition": definition, "data": data})
 }
 
-pub fn envelope_error(resp: &Value) -> Option<&Value> {
-    resp.get("result")?.get("structuredContent")?.get("error")
+// ---- envelope / error helpers ----
+
+/// A NUON text as JSON, through the converter `to json` uses; None when it is not
+/// NUON.
+pub fn try_nuon_to_json(text: &str) -> Option<Value> {
+    let value = nuon::from_nuon(text, None).ok()?;
+    let converted = <nu_json::Value as nu_protocol::FromValue>::from_value(value).ok()?;
+    serde_json::to_value(&converted).ok()
+}
+
+/// A NUON text as JSON, panicking on text that is not NUON.
+pub fn nuon_to_json(text: &str) -> Value {
+    try_nuon_to_json(text).unwrap_or_else(|| panic!("not NUON that converts to JSON: {text:?}"))
+}
+
+/// A `tools/call` response's envelope, read from its one NUON text content; null
+/// when it carries none, as a JSON-RPC error does.
+pub fn envelope(resp: &Value) -> Value {
+    resp["result"]["content"][0]["text"]
+        .as_str()
+        .map(nuon_to_json)
+        .unwrap_or(Value::Null)
+}
+
+/// The envelope's error table, when it holds one.
+pub fn envelope_error(resp: &Value) -> Option<Value> {
+    envelope(resp).get("error").cloned()
 }
 
 pub fn has_error_path(resp: &Value) -> bool {
     envelope_error(resp).is_some()
 }
 
-pub fn envelope_error_kind(resp: &Value) -> Option<&str> {
-    envelope_error(resp)?
-        .get("errors")?
-        .as_array()?
-        .first()?
-        .get("kind")?
-        .as_str()
+/// The first error row's `kind`.
+pub fn envelope_error_kind(resp: &Value) -> Option<String> {
+    error_kinds(resp).into_iter().next()
 }
 
+/// Every error row's `kind`.
 pub fn error_kinds(resp: &Value) -> Vec<String> {
     envelope_error(resp)
-        .and_then(|e| e.get("errors"))
-        .and_then(|s| s.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.get("kind").and_then(|k| k.as_str()).map(str::to_string))
+        .and_then(|error| error.as_array().cloned())
+        .map(|rows| {
+            rows.iter()
+                .filter_map(|row| row.get("kind").and_then(|k| k.as_str()).map(str::to_string))
                 .collect()
         })
         .unwrap_or_default()
@@ -594,13 +614,13 @@ pub fn error_message(resp: &Value) -> String {
         .unwrap_or_else(|| resp.to_string())
 }
 
-/// The success envelope, or `None` when the response carries an `error`.
+/// The success envelope, or `None` when the response carries an `error` or none.
 pub fn extract_envelope(resp: &Value) -> Option<Value> {
-    let sc = resp.get("result")?.get("structuredContent")?.clone();
-    if sc.get("error").is_some() {
+    let envelope = envelope(resp);
+    if envelope.is_null() || envelope.get("error").is_some() {
         return None;
     }
-    Some(sc)
+    Some(envelope)
 }
 
 // ---- source-tree fixtures (written into the per-test scratch) ----

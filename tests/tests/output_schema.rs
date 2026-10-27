@@ -1,6 +1,5 @@
-//! Every tool's declared output schema admits what the tool returns, its
-//! success and the error envelope alike, as a client of the 2026-07-28 era
-//! validates a structured result against it.
+//! No tool declares an output schema, and every result is one NUON text content
+//! led by its nonce, a failure's as much as a success's, never structured content.
 
 use serde_json::{Value, json};
 use sourcetrait_grammar_tests::*;
@@ -8,55 +7,56 @@ use sourcetrait_common::testing::prelude::*;
 
 static TESTING: testing::Module = testing::module!(Integration, { .using_temp_dir() });
 
-/// What a client's validator reports for `instance` against `schema`.
-fn violations(schema: &Value, instance: &Value) -> Vec<String> {
-    let validator = jsonschema::validator_for(schema)
-        .unwrap_or_else(|e| panic!("a valid JSON schema: {e}; got {schema}"));
-    validator.iter_errors(instance).map(|e| e.to_string()).collect()
-}
-
-/// `run`'s success and a lint failure's error envelope each satisfy `run`'s
-/// declared schema, and that error envelope satisfies every tool's.
 #[tested]
-fn each_output_schema_admits_its_result_and_the_error_envelope() {
+fn no_tool_declares_an_output_schema() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn(t.temp_dir());
-    let schemas: Vec<(String, Value)> = host
+    let declaring: Vec<String> = host
         .tools()
         .into_iter()
-        .filter_map(|tool| {
-            let schema = tool.get("outputSchema")?.clone();
-            Some((tool["name"].as_str().expect("tool name").to_string(), schema))
-        })
+        .filter(|tool| tool.get("outputSchema").is_some())
+        .map(|tool| tool["name"].as_str().unwrap_or_default().to_string())
         .collect();
-    assert!(!schemas.is_empty(), "the tools declare output schemas");
+    assert!(declaring.is_empty(), "tools declaring an output schema: {declaring:?}");
+}
 
-    let ok = host.run(json!({
-        "args_schema": {"x": "int"},
-        "result_schema": {"out": "int"},
-        "args": {"x": 5},
-        "body": "{ out: ($args.x + 1) }",
-    }));
-    let failed = host.run(json!({
-        "args_schema": {},
-        "result_schema": {"x": "string"},
-        "args": {},
-        "body": "{ x: '/tmp/x' }",
-    }));
-    let ok = structured(&ok).clone();
-    let failed = structured(&failed).clone();
-    assert!(failed.get("error").is_some(), "a lint failure's error envelope; got {failed}");
+/// The one text content of a response, asserted the only content.
+fn the_text(resp: &Value) -> String {
+    let result = &resp["result"];
+    assert!(result.get("structuredContent").is_none(), "no structured content; got {resp}");
+    assert_ne!(result["isError"], json!(true), "a failure rides a plain result; got {resp}");
+    let content = result["content"].as_array().unwrap_or_else(|| panic!("content; got {resp}"));
+    assert_eq!(content.len(), 1, "exactly one content; got {resp}");
+    assert_eq!(content[0]["type"], "text", "a text content; got {resp}");
+    content[0]["text"].as_str().expect("its text").to_string()
+}
 
-    let run_schema = &schemas
-        .iter()
-        .find(|(name, _)| name == "run")
-        .expect("run declares an output schema")
-        .1;
-    assert_eq!(violations(run_schema, &ok), Vec::<String>::new(), "run's success: {ok}");
-    let refused: Vec<(String, Vec<String>)> = schemas
-        .iter()
-        .map(|(name, schema)| (name.clone(), violations(schema, &failed)))
-        .filter(|(_, errors)| !errors.is_empty())
-        .collect();
-    assert!(refused.is_empty(), "schemas refusing the error envelope {failed}: {refused:?}");
+#[tested]
+fn every_result_is_one_nuon_text_led_by_its_nonce() {
+    let t = testing::test!({ .using_temp_dir() });
+    let mut host = Host::spawn(t.temp_dir());
+
+    let ok = host.nu(
+        "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x + 1) } }",
+        "{x: 5}",
+    );
+    let text = the_text(&ok);
+    assert!(text.starts_with("{nonce: "), "the nonce leads; got {text}");
+    assert_eq!(nuon_to_json(&text)["result"], json!({"out": 6}), "got {text}");
+
+    let failed = host.nu(
+        "def execute [data: nothing]: nothing -> record<x: string> { { x: '/tmp/x' } }",
+        "null",
+    );
+    let text = the_text(&failed);
+    assert!(text.starts_with("{nonce: "), "the nonce leads a failure too; got {text}");
+    assert_eq!(
+        envelope_error_kind(&failed).as_deref(),
+        Some("lint::hardcoded_variable"),
+        "got {text}",
+    );
+
+    let listed = host.call("purviews", json!({}));
+    let text = the_text(&listed);
+    assert!(text.starts_with("{nonce: "), "a non-eval tool's too; got {text}");
 }

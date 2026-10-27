@@ -1,4 +1,3 @@
-use serde_json::json;
 use sourcetrait_grammar_tests::*;
 use sourcetrait_common::testing::prelude::*;
 
@@ -7,17 +6,16 @@ static TESTING: testing::Module = testing::module!(Integration, { .using_temp_di
 #[tested]
 fn deny_removes_tools_from_list() {
     let t = testing::test!({ .using_temp_dir() });
-    let mut host = Host::spawn_args(t.temp_dir(), &["--deny", "run,interact"]);
+    let mut host = Host::spawn_args(t.temp_dir(), &["--deny", "nu,rerun"]);
     let names = host.tool_names();
-    assert_eq!(names.len(), 20, "22 - 2 denied = 20; got {names:?}");
-    for absent in ["run", "interact"] {
+    assert_eq!(names.len(), 19, "21 - 2 denied = 19; got {names:?}");
+    for absent in ["nu", "rerun"] {
         assert!(
             !names.contains(&absent.to_string()),
             "denied `{absent}` must be absent; got {names:?}",
         );
     }
     for present in [
-        "rerun",
         "call",
         "new",
         "commit",
@@ -48,22 +46,15 @@ fn deny_removes_tools_from_list() {
 #[tested]
 fn denied_tool_call_fails_at_protocol_layer() {
     let t = testing::test!({ .using_temp_dir() });
-    let mut host = Host::spawn_args(t.temp_dir(), &["--deny", "run"]);
-    let resp = host.call(
-        "run",
-        json!({
-            "args_schema": {},
-            "result_schema": {"out": "int"},
-            "args": {},
-            "body": "{ out: 1 }",
-        }),
+    let mut host = Host::spawn_args(t.temp_dir(), &["--deny", "nu"]);
+    let resp = host.nu(
+        "def execute [data: nothing]: nothing -> record<out: int> { { out: 1 } }",
+        "null",
     );
-    let success = resp
-        .get("result")
-        .and_then(|r| r.get("structuredContent"))
-        .map(|sc| sc.get("error").is_none())
-        .unwrap_or(false);
-    assert!(!success, "a denied tool must not execute; got {resp}");
+    assert!(
+        extract_envelope(&resp).is_none() && envelope(&resp).is_null(),
+        "a denied tool must not execute, and answers no envelope at all; got {resp}",
+    );
 }
 
 #[tested]
@@ -73,7 +64,7 @@ fn deny_full_set_leaves_core_four() {
         t.temp_dir(),
         &[
             "--deny",
-            "run,rerun,interact,call,new,commit,equip,channel_open,channel_verified,channel_close,config_channel,purviews,purview_configure,purview_extend,purview,remote_channel_open,remote_channel_close,remote_channels",
+            "nu,rerun,call,new,commit,equip,channel_open,channel_verified,channel_close,config_channel,purviews,purview_configure,purview_extend,purview,remote_channel_open,remote_channel_close,remote_channels",
         ],
     );
     let mut names = host.tool_names();
@@ -88,15 +79,17 @@ fn deny_full_set_leaves_core_four() {
 #[tested]
 fn unknown_deny_token_fails_startup() {
     let t = testing::test!({ .using_temp_dir() });
-    let out = run_output(t.temp_dir(), &["--deny", "bogus"]);
-    assert!(
-        !out.status.success(),
-        "unknown deny token should fail startup; got {:?}",
-        out.status,
-    );
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(
-        stderr.contains("bogus"),
-        "the clap error should name the bad token; got {stderr:?}",
-    );
+    for token in ["bogus", "run", "interact"] {
+        let out = run_output(t.temp_dir(), &["--deny", token]);
+        assert!(
+            !out.status.success(),
+            "the unknown deny token `{token}` should fail startup; got {:?}",
+            out.status,
+        );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains(token),
+            "the clap error should name the bad token; got {stderr:?}",
+        );
+    }
 }

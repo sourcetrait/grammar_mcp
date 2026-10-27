@@ -33,14 +33,14 @@ fn a_builtin_is_reached_by_its_bare_name() {
 
     let inspected = s.inspect("gram:m:tally");
     assert_eq!(
-        inspected["doc"]["signature"].as_str(),
+        inspected["result"]["doc"]["signature"].as_str(),
         Some("gram:m:tally <x:int> <out:int>"),
         "a standalone signature names a builtin bare; got {inspected}",
     );
 
     let block = "gram # the gram rig\n m\n  tally <x:int> <out:int>\n";
     let info = s.info();
-    let signatures = info["signatures"].as_str().expect("signatures block");
+    let signatures = info["result"]["signatures"].as_str().expect("signatures block");
     assert!(
         signatures.starts_with(block),
         "a builtin leads the block at an author's depth by its bare name; got:\n{signatures}",
@@ -51,12 +51,12 @@ fn a_builtin_is_reached_by_its_bare_name() {
     );
 
     let pattern = s.inspect("gram:");
-    assert_eq!(pattern["doc"]["signatures"].as_str(), Some(block), "got {pattern}");
+    assert_eq!(pattern["result"]["doc"]["signatures"].as_str(), Some(block), "got {pattern}");
 
     let configured = s.purview_configure("gram_calls", &["gram:m:"]);
     assert!(!has_error(&configured), "a purview takes a builtin's bare form; got {configured}");
     let viewed = s.info_as(&["gram_calls"]);
-    assert_eq!(viewed["signatures"].as_str(), Some(block), "got {viewed}");
+    assert_eq!(viewed["result"]["signatures"].as_str(), Some(block), "got {viewed}");
 }
 
 #[tested]
@@ -79,7 +79,7 @@ fn an_uninstalled_builtin_takes_its_bare_patterns_with_it() {
     let removed = s.equip("uninstall", &source.to_string_lossy());
     assert!(!has_error(&removed), "got {removed}");
     let purviews = s.purviews();
-    let ids: Vec<&str> = purviews["purviews"]
+    let ids: Vec<&str> = purviews["result"]["purviews"]
         .as_array()
         .expect("purviews list")
         .iter()

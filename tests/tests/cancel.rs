@@ -1,5 +1,5 @@
-//! Cooperative cancellation: kill(nonce) actually stops an in-flight run. A
-//! SYSTEM test - it needs a real client sending kill WHILE a run is in flight
+//! Cooperative cancellation: kill(nonce) actually stops an in-flight `nu` call. A
+//! SYSTEM test - it needs a real client sending kill WHILE a call is in flight
 //! (pipelined requests over the stdio transport). No test-hooks: nu `sleep` polls
 //! Signals, so it bails on the cancel.
 
@@ -11,18 +11,24 @@ use sourcetrait_common::testing::prelude::*;
 
 static TESTING: testing::Module = testing::module!(Integration, { .using_temp_dir() });
 
-/// Poll processes() until an in-flight `run` appears; return its nonce.
-fn poll_inflight_run_nonce(host: &mut Host, secs: u64) -> Option<String> {
+/// The in-flight entries `processes()` lists.
+fn in_flight(host: &mut Host) -> Vec<serde_json::Value> {
+    let resp = host.call("processes", json!({}));
+    envelope(&resp)["result"]["processes"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// Poll processes() until an in-flight `nu` call appears; return its nonce.
+fn poll_inflight_nu_nonce(host: &mut Host, secs: u64) -> Option<String> {
     let deadline = Instant::now() + Duration::from_secs(secs);
     loop {
-        let resp = host.call("processes", json!({}));
-        if let Some(arr) = structured(&resp).get("processes").and_then(|p| p.as_array()) {
-            for e in arr {
-                if e.get("tool").and_then(|tl| tl.as_str()) == Some("run") {
-                    if let Some(n) = e.get("nonce").and_then(|n| n.as_str()) {
-                        return Some(n.to_string());
-                    }
-                }
+        for e in in_flight(host) {
+            if e.get("tool").and_then(|tl| tl.as_str()) == Some("nu")
+                && let Some(n) = e.get("nonce").and_then(|n| n.as_str())
+            {
+                return Some(n.to_string());
             }
         }
         if Instant::now() >= deadline {
@@ -36,11 +42,8 @@ fn poll_inflight_run_nonce(host: &mut Host, secs: u64) -> Option<String> {
 fn poll_until_drained(host: &mut Host, secs: u64) -> bool {
     let deadline = Instant::now() + Duration::from_secs(secs);
     loop {
-        let resp = host.call("processes", json!({}));
-        if let Some(arr) = structured(&resp).get("processes").and_then(|p| p.as_array()) {
-            if arr.is_empty() {
-                return true;
-            }
+        if in_flight(host).is_empty() {
+            return true;
         }
         if Instant::now() >= deadline {
             return false;
@@ -50,30 +53,27 @@ fn poll_until_drained(host: &mut Host, secs: u64) -> bool {
 }
 
 #[tested]
-fn kill_stops_an_in_flight_run() {
+fn kill_stops_an_in_flight_call() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn(t.temp_dir());
-    // Launch a long run without blocking on its response.
-    let run_id = host.request(
-        "run",
-        json!({
-            "args_schema": {"noop": "int"},
-            "result_schema": {"out": "int"},
-            "args": {"noop": 0},
-            "body": "sleep 30sec\n{ out: 0 }",
-        }),
+    // Launch a long call without blocking on its response.
+    let call_id = host.request(
+        "nu",
+        nu_args(
+            "def execute [data: nothing]: nothing -> record<out: int> {\n    sleep 30sec\n    { out: 0 }\n}",
+            "null",
+        ),
     );
     // It should register as in-flight; grab its nonce.
-    let nonce = poll_inflight_run_nonce(&mut host, 5).expect("the run should register as in-flight");
-    // Kill it (no-return; its response is ignored).
+    let nonce = poll_inflight_nu_nonce(&mut host, 5).expect("the call should register as in-flight");
+    // Kill it; its own void response is ignored.
     let _ = host.request("kill", json!({"nonce": nonce}));
-    // Read the run's own response FIRST (before any more processes() reads, which
-    // would discard it): a killed run bails on the cancel and returns an error,
-    // not a completed result.
-    let resp = host.read_id(run_id);
+    // Read the call's own response: a killed call bails on the cancel and returns
+    // an error, not a completed result.
+    let resp = host.read_id(call_id);
     assert!(
         has_error_path(&resp),
-        "a killed run should return an error, not complete; got {resp}",
+        "a killed call should return an error, not complete; got {resp}",
     );
     // And the in-flight set drains.
     assert!(

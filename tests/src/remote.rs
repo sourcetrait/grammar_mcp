@@ -8,10 +8,8 @@
 //! one-off and trusted directly via a private root store - never the OS trust
 //! store, so the whole thing runs unattended with no OS-level install / sudo.
 //!
-//! Wire packets are NUON, so they are parsed by driving the consumer's own host
-//! (`from nuon`) rather than pulling the nushell crates into this crate - the host
-//! is the format authority, and it keeps the tests crate free of the nushell
-//! eval stack (whose feature unification does not survive here).
+//! Wire packets are NUON, parsed by this crate's own `nuon`, the crate the host
+//! renders them with.
 
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
@@ -26,7 +24,7 @@ use sourcetrait_cert_lib as lib_cert;
 use tokio_rustls::rustls::pki_types::CertificateDer;
 use tokio_rustls::rustls::pki_types::pem::PemObject;
 
-use crate::{Host, has_error_path, structured};
+use crate::{Host, envelope, has_error_path, try_nuon_to_json};
 
 // ---- one-off keys (trusted directly; never the OS trust store) ----
 
@@ -141,8 +139,8 @@ pub fn free_port() -> u16 {
 
 // ---- the packet ----
 
-/// One Channel packet: the scalar envelope fields, plus `event` re-rendered to
-/// JSON for coarse `contains` assertions.
+/// One Channel packet: the scalar envelope fields, plus `event` rendered as JSON
+/// for coarse `contains` assertions.
 #[derive(Debug, Clone)]
 pub struct Packet {
     pub id: String,
@@ -155,21 +153,10 @@ pub struct Packet {
     pub raw: String,
 }
 
-/// Parse one NUON wire line by driving the host's own `from nuon` - the host is
-/// the format authority. Returns None when the line is not a packet.
-fn parse_line(host: &mut Host, line: &str) -> Option<Packet> {
-    let resp = host.run(json!({
-        "args_schema": {"line": "string"},
-        "result_schema": {
-            "id": "string", "from": "string", "model": "string",
-            "attached": "string", "event": "string",
-        },
-        "args": {"line": line},
-        "body": r#"let rec = (try { $args.line | from nuon } catch { {} })
-{ id: ($rec.id? | default ""), from: ($rec.from? | default ""), model: ($rec.model? | default ""), attached: ($rec.attached? | default ""), event: ($rec.event? | default {} | to json) }"#,
-    }));
-    let result = structured(&resp).get("result")?;
-    let field = |k: &str| result.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+/// Parse one NUON wire line. Returns None when the line is not a packet.
+fn parse_line(line: &str) -> Option<Packet> {
+    let packet = try_nuon_to_json(line)?;
+    let field = |k: &str| packet.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
     let model = field("model");
     if model.is_empty() {
         return None;
@@ -180,7 +167,7 @@ fn parse_line(host: &mut Host, line: &str) -> Option<Packet> {
         from: field("from"),
         model,
         attached: (!attached.is_empty()).then_some(attached),
-        event: field("event"),
+        event: packet.get("event").map_or_else(|| "{}".to_string(), |event| event.to_string()),
         raw: line.to_string(),
     })
 }
@@ -260,7 +247,7 @@ impl Consumer {
     /// the `mcp/channel/Open` packet, then verify - the claude-code handshake.
     pub fn attach(mut host: Host, ca_pem: &Path) -> Self {
         let open = host.call("channel_open", json!({}));
-        let wss = structured(&open)["wss"]
+        let wss = envelope(&open)["result"]["wss"]
             .as_str()
             .expect("channel_open returns a wss url")
             .to_string();
@@ -269,7 +256,7 @@ impl Consumer {
         let first_raw = rx
             .recv_timeout(Duration::from_secs(10))
             .expect("the hub sends mcp/channel/Open on connect");
-        let first = parse_line(&mut host, &first_raw).expect("the Open packet should parse");
+        let first = parse_line(&first_raw).expect("the Open packet should parse");
         assert_eq!(
             first.model, "mcp/channel/Open",
             "the first packet must be the handshake; got {first:?}",
@@ -283,7 +270,7 @@ impl Consumer {
     }
 
     /// Block until a packet matching `pred` arrives, or `timeout` elapses. Each
-    /// received line is parsed through the host before the predicate sees it.
+    /// received line is parsed before the predicate sees it.
     pub fn await_packet(
         &mut self,
         pred: impl Fn(&Packet) -> bool,
@@ -293,7 +280,7 @@ impl Consumer {
         loop {
             let remaining = deadline.checked_duration_since(Instant::now())?;
             let raw = self.rx.recv_timeout(remaining).ok()?;
-            if let Some(packet) = parse_line(&mut self.host, &raw)
+            if let Some(packet) = parse_line(&raw)
                 && pred(&packet)
             {
                 return Some(packet);

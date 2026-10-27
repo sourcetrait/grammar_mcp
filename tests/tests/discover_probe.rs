@@ -58,7 +58,7 @@ fn reply(host: &mut Host, id: &Value, log: &Path) -> Value {
 }
 
 /// Claude Code's probe is answered with the modern revision, and the host then
-/// serves `tools/list` and a run in it with no `initialize`.
+/// serves `tools/list` and a `nu` call in it with no `initialize`.
 #[tested]
 fn the_discover_probe_finds_the_modern_era() {
     let t = testing::test!({ .using_temp_dir() });
@@ -75,23 +75,21 @@ fn the_discover_probe_finds_the_modern_era() {
 
     host.send(&modern_request(2, "tools/list", json!({})));
     let tools = reply(&mut host, &json!(2), &log);
-    assert_eq!(tools["result"]["tools"].as_array().map(Vec::len), Some(22), "got {tools}");
+    assert_eq!(tools["result"]["tools"].as_array().map(Vec::len), Some(21), "got {tools}");
 
     host.send(&modern_request(
         3,
         "tools/call",
         json!({
-            "name": "run",
-            "arguments": {
-                "args_schema": {"x": "int"},
-                "result_schema": {"out": "int"},
-                "args": {"x": 5},
-                "body": "{ out: ($args.x + 1) }",
-            },
+            "name": "nu",
+            "arguments": nu_args(
+                "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x + 1) } }",
+                "{x: 5}",
+            ),
         }),
     ));
-    let run = reply(&mut host, &json!(3), &log);
-    assert_eq!(structured(&run)["result"]["out"].as_i64(), Some(6), "got {run}");
+    let called = reply(&mut host, &json!(3), &log);
+    assert_eq!(envelope(&called)["result"]["out"].as_i64(), Some(6), "got {called}");
     let stderr = host_stderr(&log);
     assert!(!stderr.contains("panicked"), "no panic; the host's stderr: {stderr}");
 }
@@ -114,7 +112,7 @@ fn a_bare_probe_is_refused_then_initialize_serves() {
     assert!(answer["error"]["code"].is_i64(), "a JSON-RPC error; got {answer}");
 
     host.initialize();
-    assert_eq!(host.tool_names().len(), 22, "the tools after the handshake");
+    assert_eq!(host.tool_names().len(), 21, "the tools after the handshake");
     let stderr = host_stderr(&log);
     assert!(!stderr.contains("panicked"), "no panic; the host's stderr: {stderr}");
 }

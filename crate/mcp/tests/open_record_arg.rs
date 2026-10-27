@@ -1,5 +1,5 @@
 use serde_json::json;
-use sourcetrait_grammar_mcp::guts::{TestServer, error_text, has_error, write_tree};
+use sourcetrait_grammar_mcp::guts::{TestServer, error_kind, error_text, has_error, write_tree};
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
@@ -10,53 +10,48 @@ static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integrat
     .setup(|_| TestServer::new())
 });
 
+const EXTRA_COLUMNS: &str = "def execute [data: record<extra: record<>>]: nothing -> record<cols: int> { { cols: ($data.extra | columns | length) } }";
+
 #[test]
-fn run_binds_open_record_arg() {
+fn a_nested_open_record_binds_any_record() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"extra": {}}),
-        json!({"cols": "int"}),
-        json!({"extra": {"a": 1, "b": "x"}}),
-        "{ cols: ($args.extra | columns | length) }",
-    );
-    assert_eq!(env["result"]["cols"].as_i64(), Some(2), "open-record arg should bind an arbitrary record; got {env}");
+    let env = s.nu(EXTRA_COLUMNS, "{extra: {a: 1, b: x}}");
+    assert_eq!(env["result"], json!({"cols": 2}), "an open record field takes any record; got {env}");
 }
 
 #[test]
-fn run_binds_empty_open_record_arg() {
+fn a_nested_open_record_binds_an_empty_record() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"extra": {}}),
-        json!({"cols": "int"}),
-        json!({"extra": {}}),
-        "{ cols: ($args.extra | columns | length) }",
-    );
-    assert_eq!(env["result"]["cols"].as_i64(), Some(0), "got {env}");
+    let env = s.nu(EXTRA_COLUMNS, "{extra: {}}");
+    assert_eq!(env["result"], json!({"cols": 0}), "got {env}");
 }
 
 #[test]
-fn run_rejects_non_record_open_arg() {
+fn a_non_record_in_an_open_record_field_is_refused() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"extra": {}}),
-        json!({"cols": "int"}),
-        json!({"extra": 5}),
-        "{ cols: 0 }",
-    );
-    assert!(has_error(&env), "a non-record `extra` should be rejected; got {env}");
+    let env = s.nu(EXTRA_COLUMNS, "{extra: 5}");
+    assert_eq!(error_kind(&env), Some("data::invalid"), "a non-record `extra` should be refused; got {env}");
 }
 
 #[test]
-fn run_result_open_record_still_denied() {
+fn an_open_record_at_the_data_top_is_refused() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"noop": "int"}),
-        json!({"extra": {}}),
-        json!({"noop": 0}),
-        "{ extra: {} }",
+    let env = s.nu("def execute [data: record<>]: nothing -> record<out: int> { { out: 0 } }", "{}");
+    assert_eq!(error_kind(&env), Some("definition::invalid"), "got {env}");
+}
+
+#[test]
+fn an_open_record_in_the_result_is_refused() {
+    let s = TESTING.harness();
+    let env = s.nu(
+        "def execute [data: nothing]: nothing -> record<extra: record<>> { { extra: {} } }",
+        "null",
     );
-    assert!(has_error(&env), "result open record should deny; got {env}");
-    assert!(error_text(&env).contains("nested empty record"), "expected the nested-empty-record denial; got {env}");
+    assert_eq!(error_kind(&env), Some("definition::invalid"), "got {env}");
+    assert!(
+        error_text(&env).contains("refused in a return type"),
+        "expected the open-record refusal; got {env}",
+    );
 }
 
 #[tested]
@@ -80,7 +75,7 @@ fn commit_inspect_and_call_open_record_arg_field() {
 
     let inspected = s.inspect("sourcetrait/openlib:m:tally");
     assert_eq!(
-        inspected["doc"]["signature"].as_str(),
+        inspected["result"]["doc"]["signature"].as_str(),
         Some("sourcetrait/openlib:m:tally <x:int,extra:record<>> <sum:int,extracols:int>"),
         "the OPEN record keeps its `record<>` spelling inside the signature - it is \
          the author's literal arg syntax, not a bare `record`; got {inspected}",

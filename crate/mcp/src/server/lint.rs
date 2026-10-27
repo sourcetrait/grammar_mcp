@@ -24,30 +24,8 @@ const REGEX_RECEIVERS: &[&str] = &[
 const PARSE_PATH_RECEIVERS: &[&str] = &["use", "overlay use", "source", "source-env"];
 
 
-/// The name a linted body is parsed under.
-const LINT_FILE: &str = "body.nu";
-
-const MSG_HARDCODED_VARIABLE: &str = "hardcoded path literal; lift it to args";
+const MSG_HARDCODED_VARIABLE: &str = "hardcoded path literal; pass it in data";
 const MSG_DENIED_COMMAND: &str = "denied external command; use a nushell builtin";
-
-
-pub(crate) fn lint_body(parse_engine: &ParseEngine, args_type: &str, body: &str) -> Vec<Diagnostic> {
-    let (wrapped, prefix_len) = wrap_as_def_body(body, args_type);
-    let engine_state = parse_engine.engine_state();
-    let mut ws = nu::StateWorkingSet::new(engine_state);
-    let outer = nu::parse(&mut ws, Some(LINT_FILE), wrapped.as_bytes(), false);
-    let body_start = file_start(&ws, LINT_FILE) + prefix_len;
-
-    let body_block_id = match find_def_body_id(&outer, &ws) {
-        Some(id) => id,
-        None => return Vec::new(),
-    };
-
-    let mut diagnostics = Vec::new();
-    let body_block = ws.get_block(body_block_id);
-    let _ = walk_block(body_block, &ws, body, body_start, &mut diagnostics);
-    diagnostics
-}
 
 
 /// Lint a parsed block whose text begins at `text_start` in its working set.
@@ -60,31 +38,6 @@ pub(crate) fn lint_block(
     let mut diagnostics = Vec::new();
     let _ = walk_block(block, ws, text, text_start, &mut diagnostics);
     diagnostics
-}
-
-fn find_def_body_id(outer: &nu::Block, ws: &nu::StateWorkingSet) -> Option<nu::BlockId> {
-    for p in &outer.pipelines {
-        for elem in &p.elements {
-            if let nu::Expr::Call(call) = &elem.expr.expr {
-                let decl = ws.get_decl(call.decl_id);
-                if decl.name() == "def" {
-                    for arg in &call.arguments {
-                        let inner = match arg {
-                            nu::Argument::Positional(e) => e,
-                            _ => continue,
-                        };
-                        match &inner.expr {
-                            nu::Expr::Block(id) | nu::Expr::Closure(id) => {
-                                return Some(*id);
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        }
-    }
-    None
 }
 
 fn push_diagnostic(diagnostics: &mut Vec<Diagnostic>, candidate: Diagnostic) -> ControlFlow<()> {

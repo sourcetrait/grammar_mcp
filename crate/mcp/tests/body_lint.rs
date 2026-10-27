@@ -1,3 +1,6 @@
+//! The lint at the `nu` tool's boundary: a definition breaking a rule never runs,
+//! on either lane. `tests/lint_rules.rs` covers the rules themselves.
+
 use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{TestServer, has_kind};
 use sourcetrait_common::testing::prelude::*;
@@ -10,74 +13,67 @@ static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integrat
 });
 
 #[test]
-fn lint_rejects_run_hardcoded_path() {
+fn a_hardcoded_path_is_refused() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"noop": "int"}),
-        json!({"out": "int"}),
-        json!({"noop": 0}),
-        "{ p: \"/srv/proj/x\", out: 0 }",
+    let env = s.nu(
+        "def execute [data: nothing]: nothing -> record<out: int> {\n    let p = \"/srv/proj/x\"\n    { out: 0 }\n}",
+        "null",
     );
     assert!(has_kind(&env, "lint::hardcoded_variable"), "got {env}");
 }
 
 #[test]
-fn lint_rejects_run_denied_external() {
+fn a_denied_external_is_refused() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"noop": "int"}),
-        json!({"out": "int"}),
-        json!({"noop": 0}),
-        "{ x: (^awk '{print $1}' | str trim), out: 0 }",
+    let env = s.nu(
+        "def execute [data: nothing]: nothing -> record<out: int> {\n    let x = (^awk '{print $1}' | str trim)\n    { out: 0 }\n}",
+        "null",
     );
     assert!(has_kind(&env, "lint::denied_command"), "got {env}");
 }
 
 #[test]
-fn lint_passes_clean_run() {
+fn a_clean_definition_runs() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"x": "int"}),
-        json!({"out": "int"}),
-        json!({"x": 5}),
-        "{ out: ($args.x + 1) }",
+    let env = s.nu(
+        "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x + 1) } }",
+        "{x: 5}",
     );
-    assert_eq!(env["result"]["out"].as_i64(), Some(6), "got {env}");
+    assert_eq!(env["result"], json!({"out": 6}), "got {env}");
 }
 
 #[test]
-fn lint_aggregates_multiple_violations() {
+fn violations_aggregate() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"noop": "int"}),
-        json!({"out": "int"}),
-        json!({"noop": 0}),
-        "^awk 'x'\ncd \"/a/b\"\n{ out: 0 }",
+    let env = s.nu(
+        "def execute [data: nothing]: nothing -> record<out: int> {\n    ^awk 'x'\n    cd \"/a/b\"\n    { out: 0 }\n}",
+        "null",
     );
     assert!(has_kind(&env, "lint::denied_command"), "got {env}");
     assert!(has_kind(&env, "lint::hardcoded_variable"), "got {env}");
 }
 
 #[test]
-fn lint_interact_rejects_hardcoded_path() {
+fn the_stateful_lane_is_linted_too() {
     let s = TESTING.harness();
-    let env = s.interact(
-        json!({"noop": "int"}),
-        json!({"out": "int"}),
-        json!({"noop": 0}),
-        "{ p: \"/srv/x\", out: 0 }",
+    let env = s.nu(
+        "def --env execute [data: nothing]: nothing -> record<out: int> {\n    let p = \"/srv/x\"\n    { out: 0 }\n}",
+        "null",
     );
     assert!(has_kind(&env, "lint::hardcoded_variable"), "got {env}");
+    let env = s.nu(
+        "def --env execute [data: nothing]: nothing -> record<out: int> {\n    let x = (^awk 'x' | str trim)\n    { out: 0 }\n}",
+        "null",
+    );
+    assert!(has_kind(&env, "lint::denied_command"), "got {env}");
 }
 
 #[test]
-fn lint_interact_rejects_denied_external() {
+fn a_well_known_system_path_passes() {
     let s = TESTING.harness();
-    let env = s.interact(
-        json!({"noop": "int"}),
-        json!({"out": "int"}),
-        json!({"noop": 0}),
-        "{ x: (^awk 'x' | str trim), out: 0 }",
+    let env = s.nu(
+        "def execute [data: nothing]: nothing -> record<seen: bool> { { seen: ('/proc/self' | path exists) } }",
+        "null",
     );
-    assert!(has_kind(&env, "lint::denied_command"), "got {env}");
+    assert_eq!(env["result"], json!({"seen": true}), "got {env}");
 }

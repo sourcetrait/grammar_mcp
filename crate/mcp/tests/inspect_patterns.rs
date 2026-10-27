@@ -77,11 +77,11 @@ fn signatures(
     let env = s.inspect(namepath);
     assert!(!has_error(&env), "inspect {namepath} errored: {env}");
     assert_eq!(
-        env.as_object().expect("envelope object").len(),
+        env["result"].as_object().expect("a result record").len(),
         1,
-        "the envelope stays EXACTLY one field for a pattern too; got {env}",
+        "the result stays EXACTLY one field for a pattern too; got {env}",
     );
-    env["doc"]["signatures"]
+    env["result"]["doc"]["signatures"]
         .as_str()
         .unwrap_or_else(|| panic!("inspect {namepath} returned no signatures member: {env}"))
         .to_string()
@@ -101,7 +101,7 @@ fn the_namespace_wide_patterns_render_the_whole_block() {
     assert_eq!(signatures(s, "sourcetrait/"), WHOLE);
     assert_eq!(
         signatures(s, "*"),
-        s.info()["signatures"].as_str().expect("info signatures"),
+        s.info()["result"]["signatures"].as_str().expect("info signatures"),
         "a `*` inspect and info() are the SAME renderer and must not drift",
     );
 }
@@ -188,19 +188,19 @@ fn exact_namepaths_are_unchanged_by_the_pattern_arm() {
 
     let call = s.inspect("sourcetrait/patlib:m:here");
     assert_eq!(
-        call["doc"]["signature"].as_str(),
+        call["result"]["doc"]["signature"].as_str(),
         Some("sourcetrait/patlib:m:here <x:int> <out:int>"),
         "an exact call still returns the STANDALONE signature; got {call}",
     );
     assert!(
-        call["doc"].get("signatures").is_none(),
+        call["result"]["doc"].get("signatures").is_none(),
         "an exact namepath must not pick up the pattern member; got {call}",
     );
 
     let module = s.inspect("sourcetrait/patlib:m");
-    assert_eq!(module["doc"]["summary"].as_str(), Some("the m module"));
+    assert_eq!(module["result"]["doc"]["summary"].as_str(), Some("the m module"));
     let rig = s.inspect("sourcetrait/patlib");
-    assert_eq!(rig["doc"]["summary"].as_str(), Some("the patlib rig"));
+    assert_eq!(rig["result"]["doc"]["summary"].as_str(), Some("the patlib rig"));
 
     // Shape classification did not loosen the EXACT parser: a bare author names
     // nothing addressable and still errors.

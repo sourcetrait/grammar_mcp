@@ -1,4 +1,4 @@
-//! The `grimm` config surface, driven from real eval bodies.
+//! The `grimm` config surface, driven from real `nu` definitions.
 //!
 //! In-process is the right tier for these, and not merely the cheap one: the pin
 //! registry and `CONFIG` are process-globals, and `TestServer` shares the very
@@ -66,8 +66,8 @@ fn grimm_config_surface_is_sequenced() {
             a_pin_against_a_dead_process_is_refused(t);
             testing::StepState(s, p)
         })
-        .step("the_config_decls_reach_the_interact_lane_too", |t, s, p| {
-            the_config_decls_reach_the_interact_lane_too(t);
+        .step("the_config_decls_reach_the_stateful_lane_too", |t, s, p| {
+            the_config_decls_reach_the_stateful_lane_too(t);
             testing::StepState(s, p)
         })
         .finalize()
@@ -80,15 +80,31 @@ fn me() -> u32 {
     std::process::id()
 }
 
+/// A stateless definition taking nothing, answering `result_type`.
+fn reading(result_type: &str, body: &str) -> String {
+    format!("def execute [data: nothing]: nothing -> {result_type} {{\n{body}\n}}")
+}
+
+/// A stateless definition taking this process's pid as `$data.pid`.
+fn pinning(result_type: &str, body: &str) -> String {
+    format!("def execute [data: record<pid: int>]: nothing -> {result_type} {{\n{body}\n}}")
+}
+
+/// The data `pinning` takes.
+fn my_pid() -> String {
+    format!("{{pid: {}}}", me())
+}
+
 fn get_config_all_mirrors_the_toml_tables(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({}),
-        json!({"tables": ["string"], "channel_keys": ["string"], "supervisor_keys": ["string"]}),
-        json!({}),
-        "let cfg = (grimm get_config_all)\n\
-         { tables: ($cfg | columns), channel_keys: ($cfg.channel | columns), \
-           supervisor_keys: ($cfg.supervisor | columns) }",
+    let env = s.nu(
+        &reading(
+            "record<tables: list<string>, channel_keys: list<string>, supervisor_keys: list<string>>",
+            "let cfg = (grimm get_config_all)\n\
+             { tables: ($cfg | columns), channel_keys: ($cfg.channel | columns), \
+               supervisor_keys: ($cfg.supervisor | columns) }",
+        ),
+        "null",
     );
     assert!(!has_error(&env), "get_config_all should run; got {env}");
     assert_eq!(
@@ -131,13 +147,14 @@ fn a_dotted_key_is_a_path_into_the_record(_t: &testing::Testable<'_, '_, '_>) {
     // whose single member is the whole string, dots included, so it looks for a
     // column literally named "supervisor.cpu_warn_fraction" and fails. Splitting
     // a string on dots is the source parser's job, not `get`'s.
-    let env = s.run(
-        json!({}),
-        json!({"agree": "bool", "value": "float"}),
-        json!({}),
-        "let direct = (grimm get_config \"supervisor.cpu_warn_fraction\")\n\
-         let walked = (grimm get_config_all | get supervisor.cpu_warn_fraction)\n\
-         { agree: ($direct == $walked), value: $direct }",
+    let env = s.nu(
+        &reading(
+            "record<agree: bool, value: float>",
+            "let direct = (grimm get_config 'supervisor.cpu_warn_fraction')\n\
+             let walked = (grimm get_config_all | get supervisor.cpu_warn_fraction)\n\
+             { agree: ($direct == $walked), value: $direct }",
+        ),
+        "null",
     );
     assert!(!has_error(&env), "got {env}");
     assert_eq!(env["result"]["agree"].as_bool(), Some(true), "got {env}");
@@ -150,11 +167,9 @@ fn a_dotted_key_is_a_path_into_the_record(_t: &testing::Testable<'_, '_, '_>) {
 
 fn an_unknown_key_errors_and_names_the_valid_ones(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({}),
-        json!({"out": "int"}),
-        json!({}),
-        "grimm get_config \"supervisor.nonesuch\"\n{ out: 0 }",
+    let env = s.nu(
+        &reading("record<out: int>", "grimm get_config 'supervisor.nonesuch'\n{ out: 0 }"),
+        "null",
     );
     // An error rather than a null: a typo and a genuinely-null setting are
     // indistinguishable at the call site, and only one is a bug worth hearing about.
@@ -169,11 +184,12 @@ fn an_unknown_key_errors_and_names_the_valid_ones(_t: &testing::Testable<'_, '_,
 
 fn an_unpinned_port_reads_as_null_rather_than_a_sentinel(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({}),
-        json!({"is_null": "bool"}),
-        json!({}),
-        "{ is_null: ((grimm get_config \"channel.port\") == null) }",
+    let env = s.nu(
+        &reading(
+            "record<is_null: bool>",
+            "{ is_null: ((grimm get_config 'channel.port') == null) }",
+        ),
+        "null",
     );
     assert_eq!(
         env["result"]["is_null"].as_bool(),
@@ -185,14 +201,15 @@ fn an_unpinned_port_reads_as_null_rather_than_a_sentinel(_t: &testing::Testable<
 fn a_pin_changes_what_the_config_surface_reports(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
     clear_config_pins();
-    let env = s.run(
-        json!({"pid": "int"}),
-        json!({"before": "float", "after": "float"}),
-        json!({"pid": me()}),
-        "let key = \"supervisor.cpu_warn_fraction\"\n\
-         let before = (grimm get_config $key)\n\
-         grimm pin_config $key $args.pid 0.25\n\
-         { before: $before, after: (grimm get_config $key) }",
+    let env = s.nu(
+        &pinning(
+            "record<before: float, after: float>",
+            "let key = 'supervisor.cpu_warn_fraction'\n\
+             let before = (grimm get_config $key)\n\
+             grimm pin_config $key $data.pid 0.25\n\
+             { before: $before, after: (grimm get_config $key) }",
+        ),
+        &my_pid(),
     );
     assert!(!has_error(&env), "pin_config should run; got {env}");
     assert_eq!(env["result"]["before"].as_f64(), Some(0.80), "got {env}");
@@ -210,12 +227,13 @@ fn the_motivating_case_is_zero_vram_headroom(_t: &testing::Testable<'_, '_, '_>)
     // Pin the headroom to 0 for a training run: the gate fires at
     // `total - headroom`, so zero puts the line at the card's full capacity and
     // usage never reaches it.
-    let env = s.run(
-        json!({"pid": "int"}),
-        json!({"headroom": "int"}),
-        json!({"pid": me()}),
-        "grimm pin_config \"supervisor.vram_warn_headroom_mib\" $args.pid 0\n\
-         { headroom: (grimm get_config \"supervisor.vram_warn_headroom_mib\") }",
+    let env = s.nu(
+        &pinning(
+            "record<headroom: int>",
+            "grimm pin_config 'supervisor.vram_warn_headroom_mib' $data.pid 0\n\
+             { headroom: (grimm get_config 'supervisor.vram_warn_headroom_mib') }",
+        ),
+        &my_pid(),
     );
     assert!(!has_error(&env), "zero headroom must be legal; got {env}");
     assert_eq!(env["result"]["headroom"].as_i64(), Some(0), "got {env}");
@@ -226,22 +244,24 @@ fn last_write_wins_across_calls(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
     clear_config_pins();
     for value in ["0.5", "0.9"] {
-        let env = s.run(
-            json!({"pid": "int"}),
-            json!({"ok": "bool"}),
-            json!({"pid": me()}),
-            &format!(
-                "grimm pin_config \"supervisor.disk_warn_fraction\" $args.pid {value}\n\
-                 {{ ok: true }}",
+        let env = s.nu(
+            &pinning(
+                "record<ok: bool>",
+                &format!(
+                    "grimm pin_config 'supervisor.disk_warn_fraction' $data.pid {value}\n\
+                     {{ ok: true }}",
+                ),
             ),
+            &my_pid(),
         );
         assert!(!has_error(&env), "pin {value} should run; got {env}");
     }
-    let env = s.run(
-        json!({}),
-        json!({"value": "float"}),
-        json!({}),
-        "{ value: (grimm get_config \"supervisor.disk_warn_fraction\") }",
+    let env = s.nu(
+        &reading(
+            "record<value: float>",
+            "{ value: (grimm get_config 'supervisor.disk_warn_fraction') }",
+        ),
+        "null",
     );
     assert_eq!(
         env["result"]["value"].as_f64(),
@@ -257,11 +277,12 @@ fn only_the_supervisor_lines_are_pinnable(_t: &testing::Testable<'_, '_, '_>) {
     // config_channel stays the sole mutator of the channel settings; a value with
     // two mutators is one whose effective setting depends on which you ask.
     for key in ["channel.spam_warn_rate", "channel.port", "channel.cert_dir"] {
-        let env = s.run(
-            json!({"pid": "int"}),
-            json!({"out": "int"}),
-            json!({"pid": me()}),
-            &format!("grimm pin_config \"{key}\" $args.pid 1\n{{ out: 0 }}"),
+        let env = s.nu(
+            &pinning(
+                "record<out: int>",
+                &format!("grimm pin_config '{key}' $data.pid 1\n{{ out: 0 }}"),
+            ),
+            &my_pid(),
         );
         assert!(has_error(&env), "`{key}` must not be pinnable; got {env}");
         assert!(
@@ -280,14 +301,15 @@ fn a_pin_is_held_to_the_config_files_own_bounds(_t: &testing::Testable<'_, '_, '
     // layer's validator is what stops a pin reaching a state a config load would
     // have refused.
     for value in ["0.0", "1.5", "-0.2"] {
-        let env = s.run(
-            json!({"pid": "int"}),
-            json!({"out": "int"}),
-            json!({"pid": me()}),
-            &format!(
-                "grimm pin_config \"supervisor.ram_warn_fraction\" $args.pid {value}\n\
-                 {{ out: 0 }}",
+        let env = s.nu(
+            &pinning(
+                "record<out: int>",
+                &format!(
+                    "grimm pin_config 'supervisor.ram_warn_fraction' $data.pid {value}\n\
+                     {{ out: 0 }}",
+                ),
             ),
+            &my_pid(),
         );
         assert!(has_error(&env), "fraction {value} must be refused; got {env}");
     }
@@ -299,11 +321,12 @@ fn a_pin_against_a_dead_process_is_refused(_t: &testing::Testable<'_, '_, '_>) {
     clear_config_pins();
     // pid 0 is never a real process. Refusing at pin time rather than reaping a
     // tick later matters because the two look identical a second afterwards.
-    let env = s.run(
-        json!({}),
-        json!({"out": "int"}),
-        json!({}),
-        "grimm pin_config \"supervisor.cpu_warn_fraction\" 0 0.5\n{ out: 0 }",
+    let env = s.nu(
+        &reading(
+            "record<out: int>",
+            "grimm pin_config 'supervisor.cpu_warn_fraction' 0 0.5\n{ out: 0 }",
+        ),
+        "null",
     );
     assert!(has_error(&env), "got {env}");
     assert!(
@@ -311,11 +334,12 @@ fn a_pin_against_a_dead_process_is_refused(_t: &testing::Testable<'_, '_, '_>) {
         "the refusal should say why; got {}",
         error_text(&env),
     );
-    let after = s.run(
-        json!({}),
-        json!({"value": "float"}),
-        json!({}),
-        "{ value: (grimm get_config \"supervisor.cpu_warn_fraction\") }",
+    let after = s.nu(
+        &reading(
+            "record<value: float>",
+            "{ value: (grimm get_config 'supervisor.cpu_warn_fraction') }",
+        ),
+        "null",
     );
     assert_eq!(
         after["result"]["value"].as_f64(),
@@ -325,13 +349,11 @@ fn a_pin_against_a_dead_process_is_refused(_t: &testing::Testable<'_, '_, '_>) {
     clear_config_pins();
 }
 
-fn the_config_decls_reach_the_interact_lane_too(_t: &testing::Testable<'_, '_, '_>) {
+fn the_config_decls_reach_the_stateful_lane_too(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
-    let env = s.interact(
-        json!({}),
-        json!({"tables": "int"}),
-        json!({}),
-        "{ tables: (grimm get_config_all | columns | length) }",
+    let env = s.nu(
+        "def --env execute [data: nothing]: nothing -> record<tables: int> { { tables: (grimm get_config_all | columns | length) } }",
+        "null",
     );
     assert_eq!(
         env["result"]["tables"].as_i64(),

@@ -26,15 +26,13 @@ fn a_bundled_plugin_is_registered_listed_and_run() {
     );
 
     assert_eq!(plugin_names(&mut host), vec!["soak".to_string()], "the bundled plugin is listed");
-    let resp = host.run(json!({
-        "args_schema": {},
-        "result_schema": {"rendered": "string"},
-        "args": {},
-        "body": "{ rendered: ({name: World} | soak str 'Hello, {{ name }}!') }",
-    }));
-    assert!(!has_error_path(&resp), "a body runs the bundled plugin; got {resp}");
+    let resp = host.nu(
+        "def execute [data: nothing]: nothing -> record<rendered: string> { { rendered: ({name: World} | soak str 'Hello, {{ name }}!') } }",
+        "null",
+    );
+    assert!(!has_error_path(&resp), "a definition runs the bundled plugin; got {resp}");
     assert_eq!(
-        structured(&resp)["result"]["rendered"].as_str(),
+        envelope(&resp)["result"]["rendered"].as_str(),
         Some("Hello, World!"),
         "soak renders; got {resp}",
     );
@@ -133,24 +131,25 @@ fn the_soak_and_eye_plugins_register_list_and_run() {
     std::fs::create_dir_all(work.join(".git")).expect("mkdir the repository's .git");
     std::fs::write(work.join(".gitignore"), "*.log\n").expect("write the .gitignore");
     std::fs::write(work.join("a.log"), "log").expect("write the ignored file");
-    let resp = host.run(json!({
-        "args_schema": {"root": "string"},
-        "result_schema": {"rendered": "string", "soaked": "string", "dir": "string", "git": "string"},
-        "args": {"root": work.to_str().expect("utf-8 path")},
-        "body": "let src = ($args.root | path join 'tmpl')\n\
-                 mkdir $src\n\
-                 'Hello, {{ name }}!' | save ($src | path join 'hello.txt.liquid')\n\
-                 let out = ($args.root | path join 'out')\n\
-                 {name: World} | soak dir $src $out\n\
-                 {\n\
-                     rendered: ({name: World} | soak str 'Hello, {{ name }}!')\n\
-                     soaked: (open ($out | path join 'hello.txt'))\n\
-                     dir: (eye dir $args.root)\n\
-                     git: (eye git $args.root)\n\
-                 }",
-    }));
-    assert!(!has_error_path(&resp), "a body runs the bundled plugins; got {resp}");
-    let result = &structured(&resp)["result"];
+    let resp = host.nu(
+        "def execute [data: record<root: string>]: nothing -> record<rendered: string, soaked: string, dir: string, git: string> {\n\
+             let src = ($data.root | path join 'tmpl')\n\
+             mkdir $src\n\
+             'Hello, {{ name }}!' | save ($src | path join 'hello.txt.liquid')\n\
+             let out = ($data.root | path join 'out')\n\
+             {name: World} | soak dir $src $out\n\
+             {\n\
+                 rendered: ({name: World} | soak str 'Hello, {{ name }}!')\n\
+                 soaked: (open ($out | path join 'hello.txt'))\n\
+                 dir: (eye dir $data.root)\n\
+                 git: (eye git $data.root)\n\
+             }\n\
+         }",
+        &json!({"root": work.to_str().expect("utf-8 path")}).to_string(),
+    );
+    assert!(!has_error_path(&resp), "a definition runs the bundled plugins; got {resp}");
+    let env = envelope(&resp);
+    let result = &env["result"];
     assert_eq!(result["rendered"].as_str(), Some("Hello, World!"), "soak str renders; got {resp}");
     assert_eq!(result["soaked"].as_str(), Some("Hello, World!"), "soak dir renders; got {resp}");
     let dir = result["dir"].as_str().expect("eye dir renders a string");
@@ -206,8 +205,8 @@ fn bundle_soak(root: &Path) -> PathBuf {
 
 /// The plugin names `info()` lists.
 fn plugin_names(host: &mut Host) -> Vec<String> {
-    let info = structured(&host.call("info", json!({}))).clone();
-    info["plugins"]
+    let info = envelope(&host.call("info", json!({})));
+    info["result"]["plugins"]
         .as_array()
         .expect("info carries plugins")
         .iter()

@@ -1,11 +1,10 @@
-//! External teardown: a timed-out eval's external child is reaped (the Phase 2
-//! timeout -> cancel -> tree-kill path). In-process: `run_timeout` drives the real
-//! dispatch, and the reap is asserted by scanning /proc for the child. Linux-only
-//! (the reap + this scan are /proc-based; the crate targets Linux).
+//! External teardown: a timed-out eval's external child is reaped (the timeout ->
+//! cancel -> tree-kill path). In-process: `nu_timeout` drives the real dispatch, and
+//! the reap is asserted by scanning /proc for the child. Linux-only (the reap + this
+//! scan are /proc-based; the crate targets Linux).
 
 use std::time::{Duration, Instant};
 
-use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{TestServer, error_kind};
 
 /// Any `/proc/<pid>/cmdline` containing `marker` (the child is distinctively
@@ -15,10 +14,10 @@ fn any_cmdline_contains(marker: &str) -> bool {
         return false;
     };
     for e in entries.flatten() {
-        if let Ok(bytes) = std::fs::read(e.path().join("cmdline")) {
-            if String::from_utf8_lossy(&bytes).contains(marker) {
-                return true;
-            }
+        if let Ok(bytes) = std::fs::read(e.path().join("cmdline"))
+            && String::from_utf8_lossy(&bytes).contains(marker)
+        {
+            return true;
         }
     }
     false
@@ -43,12 +42,10 @@ fn timed_out_external_is_reaped() {
     let s = TestServer::new();
     // The eval blocks on `^sleep 31337`; the 500ms timeout triggers cancel + a
     // tree-kill of the tracked external, which also unblocks the waiting thread.
-    let env = s.run_timeout(
-        json!({"noop": "int"}),
-        json!({"out": "int"}),
-        json!({"noop": 0}),
-        "^sleep 31337\n{ out: 0 }",
-        Some(500),
+    let env = s.nu_timeout(
+        "def execute [data: nothing]: nothing -> record<out: int> {\n    ^sleep 31337\n    { out: 0 }\n}",
+        "null",
+        Some("500ms"),
     );
     assert_eq!(error_kind(&env), Some("thread::timeout"), "got {env}");
     assert!(

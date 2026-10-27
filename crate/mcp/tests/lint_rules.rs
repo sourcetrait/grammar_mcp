@@ -1,17 +1,22 @@
-//! The body-lint AST walker's rules, driven directly through `guts::lint_body`.
+//! The lint AST walker's rules, driven directly through `guts::lint_definition`.
 //! Integration (not unit): each call builds a full-shell `ParseEngine` (plugin
 //! registry read off disk), the resource caveat. `tests/body_lint.rs` covers the
-//! same lint at the run()/interact() integration boundary.
+//! same lint at the `nu` tool's boundary.
 
 use serde_json::{Value, json};
-use sourcetrait_grammar_mcp::guts::lint_body;
+use sourcetrait_grammar_mcp::guts::lint_definition;
 
-fn lint(body: &str) -> Vec<Value> {
-    lint_body("record<noop: int>", body)
+/// A definition around `body`, its data a record of `fields`.
+fn definition(fields: &str, body: &str) -> String {
+    format!("def execute [data: record<{fields}>]: nothing -> record<out: int> {{\n{body}\n}}")
 }
 
-fn lint_args(args_schema: &str, body: &str) -> Vec<Value> {
-    lint_body(&format!("record<{args_schema}>"), body)
+fn lint(body: &str) -> Vec<Value> {
+    lint_definition(&definition("noop: int", body))
+}
+
+fn lint_data(fields: &str, body: &str) -> Vec<Value> {
+    lint_definition(&definition(fields, body))
 }
 
 fn kinds(v: &[Value]) -> Vec<String> {
@@ -28,7 +33,7 @@ fn is_denied(d: &Value) -> bool {
 
 #[test]
 fn passes_clean_record_return() {
-    let v = lint("{ out: ($args.noop + 1) }");
+    let v = lint("{ out: ($data.noop + 1) }");
     assert!(v.is_empty(), "expected no violations, got {v:?}");
 }
 
@@ -73,8 +78,15 @@ fn flags_relative_path() {
 }
 
 #[test]
+fn flags_parent_relative_path() {
+    let v = lint("cd ../up/x; { out: 0 }");
+    assert_eq!(v.len(), 1, "got {v:?}");
+    assert_eq!(kinds(&v), vec!["lint::hardcoded_variable"]);
+}
+
+#[test]
 fn passes_var_path() {
-    let v = lint_args("path: string", "cd $args.path; { out: 0 }");
+    let v = lint_data("path: string", "cd $data.path; { out: 0 }");
     assert!(v.is_empty(), "got {v:?}");
 }
 
@@ -99,7 +111,7 @@ fn passes_allowed_external() {
 
 #[test]
 fn passes_var_headed_external() {
-    let v = lint_args("cmd: string", "^$args.cmd status; { out: 0 }");
+    let v = lint_data("cmd: string", "^$data.cmd status; { out: 0 }");
     assert!(v.is_empty(), "got {v:?}");
 }
 
@@ -130,6 +142,12 @@ fn passes_regex_named_flag_parse() {
 #[test]
 fn passes_source_path() {
     let v = lint("source \"/srv/lib/util.nu\"; { out: 0 }");
+    assert!(v.is_empty(), "got {v:?}");
+}
+
+#[test]
+fn passes_source_env_path() {
+    let v = lint("source-env \"/srv/lib/env.nu\"; { out: 0 }");
     assert!(v.is_empty(), "got {v:?}");
 }
 
@@ -226,13 +244,18 @@ fn list_items_walked() {
 }
 
 #[test]
-fn line_col_within_body() {
+fn line_col_within_definition() {
     let v = lint("cd \"/a/b\"; { out: 0 }");
     assert_eq!(v.len(), 1, "got {v:?}");
-    assert_eq!(v[0]["source"]["position"], json!([1, 4]), "got {:?}", v[0]);
+    assert_eq!(
+        v[0]["source"]["position"],
+        json!([2, 4]),
+        "the position is the definition's own line and column; got {:?}",
+        v[0],
+    );
     assert!(
         v[0]["source"]["path"].is_null(),
-        "a body diagnostic has no file; got {:?}",
+        "a definition's diagnostic has no file; got {:?}",
         v[0]["source"]["path"],
     );
     assert_eq!(v[0]["kind"], "lint::hardcoded_variable");
@@ -285,7 +308,7 @@ fn walks_table_cell_paths() {
 
 #[test]
 fn walks_match_arm_body_paths() {
-    let v = lint("match $args.noop { 0 => { cd \"/a/b\" } _ => { 0 } }; { out: 0 }");
+    let v = lint("match $data.noop { 0 => { cd \"/a/b\" } _ => { 0 } }; { out: 0 }");
     assert_eq!(v.len(), 1, "got {v:?}");
     assert_eq!(kinds(&v), vec!["lint::hardcoded_variable"]);
 }

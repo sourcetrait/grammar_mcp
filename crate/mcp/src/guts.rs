@@ -480,15 +480,21 @@ fn to_obj(v: json::Value) -> mcp::JsonObject {
     }
 }
 
-/// Lint an agent body, returning each Diagnostic as its wire JSON.
-pub fn lint_body(args_type: &str, body: &str) -> Vec<json::Value> {
+/// Lint a definition as `nu`'s contract does, parse errors aside, as wire JSON.
+pub fn lint_definition(definition: &str) -> Vec<json::Value> {
     ensure_test_config();
     let engine = ParseEngine::new_full();
-    crate::lint_body(&engine, args_type, body)
+    let mut ws = nu::StateWorkingSet::new(engine.engine_state());
+    let block = nu::parse(&mut ws, Some(LINT_FILE), definition.as_bytes(), false);
+    let start = file_start(&ws, LINT_FILE);
+    crate::lint_block(&block, &ws, definition, start)
         .iter()
         .map(|d| json::to_value(d).expect("diagnostic serializes"))
         .collect()
 }
+
+/// The name `lint_definition` parses a definition under.
+const LINT_FILE: &str = "definition.nu";
 
 /// The execute contract's verdict on a definition: its summary, or its rows.
 pub fn analyze_definition(definition: &str) -> Result<json::Value, Vec<json::Value>> {

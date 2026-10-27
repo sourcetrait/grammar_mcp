@@ -22,6 +22,9 @@ const ENV_FLAG: &str = "env";
 /// The kind every contract violation is reported under.
 const KIND_DEFINITION: &str = "definition::invalid";
 
+/// The kind a module-resolution cycle is reported under, as the eval reports it.
+const KIND_CIRCULAR_IMPORT: &str = "module::circular_import";
+
 /// What a definition holding to the contract declares.
 #[derive(Debug, Clone)]
 pub(crate) struct ExecuteDef {
@@ -38,6 +41,7 @@ pub(crate) fn analyze_definition(
     lint: bool,
 ) -> Result<ExecuteDef, Vec<Diagnostic>> {
     let mut ws = nu::StateWorkingSet::new(parse_engine.engine_state());
+    let files_before = ws.num_files();
     let block = nu::parse(&mut ws, Some(DEFINITION_FILE), definition.as_bytes(), false);
     let start = file_start(&ws, DEFINITION_FILE);
     let violation = |span: Option<nu::Span>, message: String| -> Diagnostic {
@@ -58,6 +62,16 @@ pub(crate) fn analyze_definition(
         )
     };
     if !ws.parse_errors.is_empty() {
+        if let Some(cycle) = detect_import_cycle(&ws, files_before) {
+            return Err(vec![Diagnostic::error(
+                KIND_CIRCULAR_IMPORT,
+                Some(Source {
+                    path: None,
+                    position: [0, 0],
+                }),
+                cycle,
+            )]);
+        }
         let mut rows: Vec<Diagnostic> = Vec::new();
         for error in &ws.parse_errors {
             let row = violation(Some(error.span()), format!("parse error: {error:?}"));

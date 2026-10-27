@@ -36,7 +36,7 @@ fn golden_text(
 }
 
 fn signatures(s: &TestServer) -> String {
-    s.info()["signatures"]
+    s.info()["result"]["signatures"]
         .as_str()
         .expect("info carries a signatures block")
         .to_string()
@@ -45,8 +45,9 @@ fn signatures(s: &TestServer) -> String {
 #[test]
 fn info_returns_static_server_state() {
     let s = TESTING.harness();
-    let env = s.info();
-    assert_eq!(env["name"].as_str(), Some("grammar"), "name should be grammar; got {env}");
+    let envelope = s.info();
+    let env = &envelope["result"];
+    assert_eq!(env["name"].as_str(), Some("grammar"), "name should be grammar; got {envelope}");
 
     let version = env["version"].as_str().expect("version field");
     assert_eq!(

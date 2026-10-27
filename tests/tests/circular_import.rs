@@ -3,9 +3,10 @@
 //! SYSTEM tier by necessity rather than by preference. The condition under test kills
 //! the process, so an in-process harness would take the test binary down with it and
 //! leave nothing to assert on - only a spawned host can be watched from outside while
-//! it dies. Both paths that can reach a cycle are covered: a body's direct `use`, and
-//! the rig validator.
+//! it dies. Both paths that can reach a cycle are covered: a definition's direct `use`,
+//! and the rig validator.
 
+use std::path::Path;
 use std::time::Duration;
 
 use serde_json::json;
@@ -19,6 +20,14 @@ const PARENT: &str = "export module inner\n\nexport def ping []: nothing -> stri
 
 /// The child reaches back into the cascade it lives under - the cycle.
 const CHILD: &str = "use ../mod.nu\n\nexport def pong []: nothing -> string { mod ping }\n";
+
+/// A definition importing the module at `root` and answering `call`'s string.
+fn importing(root: &Path, call: &str) -> String {
+    format!(
+        "def execute [data: nothing]: nothing -> record<out: string> {{\n    use {}\n    {{ out: ({call}) }}\n}}",
+        root.display(),
+    )
+}
 
 /// Read the response, or fail naming HOW the host died rather than only that a read
 /// failed. The death mode is the whole diagnostic value of this test while it is red.
@@ -43,24 +52,15 @@ fn expect_alive(
 }
 
 #[tested]
-fn a_body_importing_a_cycle_gets_a_diagnostic_and_the_host_lives() {
+fn a_definition_importing_a_cycle_gets_a_diagnostic_and_the_host_lives() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn(t.temp_dir());
     let root = t.temp_dir().join("circtest");
     write_source(&root, "mod.nu", PARENT);
     write_source(&root, "inner/mod.nu", CHILD);
 
-    let body = format!("use {}\n{{ out: (circtest inner pong) }}", root.display());
-    let id = host.request(
-        "run",
-        json!({
-            "args_schema": {},
-            "result_schema": {"out": "string"},
-            "args": {},
-            "body": body,
-        }),
-    );
-    let resp = expect_alive(&mut host, id, "a body's circular `use`");
+    let id = host.request("nu", nu_args(&importing(&root, "circtest inner pong"), "null"));
+    let resp = expect_alive(&mut host, id, "a definition's circular `use`");
 
     assert!(
         has_error_path(&resp),
@@ -70,7 +70,7 @@ fn a_body_importing_a_cycle_gets_a_diagnostic_and_the_host_lives() {
     // are unstable in variant and useless in every form, so the recogniser earning its
     // place IS the assertion.
     assert_eq!(
-        envelope_error_kind(&resp),
+        envelope_error_kind(&resp).as_deref(),
         Some("module::circular_import"),
         "the cycle must arrive as its own kind; got {resp}",
     );
@@ -103,16 +103,7 @@ fn the_deepest_reachable_cycle_still_leaves_the_host_alive() {
         "use ../mod.nu\n\nexport def pong []: nothing -> string { \"deep\" }\n",
     );
 
-    let body = format!("use {}\n{{ out: (c i pong) }}", root.display());
-    let id = host.request(
-        "run",
-        json!({
-            "args_schema": {},
-            "result_schema": {"out": "string"},
-            "args": {},
-            "body": body,
-        }),
-    );
+    let id = host.request("nu", nu_args(&importing(&root, "c i pong"), "null"));
     let resp = expect_alive(&mut host, id, "the deepest reachable cycle");
 
     assert!(
@@ -137,22 +128,10 @@ fn the_one_shot_cli_survives_a_cycle_too() {
     write_source(&root, "mod.nu", PARENT);
     write_source(&root, "inner/mod.nu", CHILD);
 
-    let body = format!("use {}\n{{ out: (circtest inner pong) }}", root.display());
+    let definition = importing(&root, "circtest inner pong");
     let out = run_output(
         t.temp_dir(),
-        &[
-            "--id",
-            "clicirc",
-            "cli",
-            "run",
-            &body,
-            "--args-schema",
-            "{}",
-            "--result-schema",
-            "{out: string}",
-            "--args",
-            "{}",
-        ],
+        &["--id", "clicirc", "cli", "nu", &definition, "null"],
     );
 
     // `code()` is None when a process is killed by a signal, so this is what tells a
@@ -163,10 +142,9 @@ fn the_one_shot_cli_survives_a_cycle_too() {
         "the cli must report an error envelope rather than die; got {:?}",
         out.status,
     );
-    let v = stdout_json(&out);
-    assert!(v.get("error").is_some(), "expected an error envelope; got {v}");
+    let v = stdout_envelope(&out);
     assert_eq!(
-        v["error"]["errors"][0]["kind"].as_str(),
+        v["error"][0]["kind"].as_str(),
         Some("module::circular_import"),
         "the cli must report the same kind; got {v}",
     );
@@ -200,7 +178,7 @@ fn a_rig_carrying_a_cycle_fails_validation_and_the_host_lives() {
 
     // `equip check` reports through its SUCCESS summary rather than an error envelope, so
     // the diagnostic lives in summary.errors rather than where the other cases carry it.
-    let kinds: Vec<String> = structured(&resp)["summary"]["errors"]
+    let kinds: Vec<String> = envelope(&resp)["result"]["summary"]["errors"]
         .as_array()
         .map(|rows| {
             rows.iter()

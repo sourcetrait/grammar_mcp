@@ -4,6 +4,10 @@ use sourcetrait_common::testing::prelude::*;
 
 static TESTING: testing::Module = testing::module!(Integration, { .using_temp_dir() });
 
+/// A definition answering the work dir a call sees.
+const WORK_DIR: &str =
+    "def execute [data: nothing]: nothing -> record<wd: string> { { wd: $env.EQUIP_WORK_DIR } }";
+
 #[tested]
 fn default_id_is_user_env() {
     let t = testing::test!({ .using_temp_dir() });
@@ -36,7 +40,7 @@ fn explicit_id_and_namespace_select_their_own_dirs() {
     assert!(lib_dir.exists(), "explicit --id/--namespace should select the namespace; expected {}", lib_dir.display());
 
     let info = host.call("info", json!({}));
-    let env = structured(&info);
+    let env = &envelope(&info)["result"];
     assert_eq!(env["id"].as_str(), Some("aid"), "got {env}");
     assert_eq!(env["namespace"].as_str(), Some("ns1"), "got {env}");
 }
@@ -47,7 +51,7 @@ fn the_test_flag_defaults_the_namespace() {
     let mut host = Host::spawn_args(t.temp_dir(), &["--id", "tflag", "--test"]);
     let info = host.call("info", json!({}));
     assert_eq!(
-        structured(&info)["namespace"].as_str(),
+        envelope(&info)["result"]["namespace"].as_str(),
         Some("test"),
         "--test names the ordinary test channel without spelling its namespace \
          out; got {info}",
@@ -69,7 +73,7 @@ fn an_explicit_namespace_beats_the_test_default() {
     );
     let info = host.call("info", json!({}));
     assert_eq!(
-        structured(&info)["namespace"].as_str(),
+        envelope(&info)["result"]["namespace"].as_str(),
         Some("elsewhere"),
         "an explicit --namespace wins over the --test default; got {info}",
     );
@@ -81,7 +85,7 @@ fn without_the_flag_the_namespace_is_still_default() {
     let mut host = Host::spawn_args(t.temp_dir(), &["--id", "noflag"]);
     let info = host.call("info", json!({}));
     assert_eq!(
-        structured(&info)["namespace"].as_str(),
+        envelope(&info)["result"]["namespace"].as_str(),
         Some("default"),
         "normal operation is unchanged; got {info}",
     );
@@ -103,12 +107,12 @@ fn namespaces_are_disjoint() {
         let committed = ns1.commit("sourcetrait/nslib");
         assert!(!has_error_path(&committed), "ns1 commit failed: {committed}");
         let called = ns1.call_np("sourcetrait/nslib:m:double", json!({"x": 4}));
-        assert_eq!(structured(&called)["result"]["out"].as_i64(), Some(8), "ns1 call: {called}");
+        assert_eq!(envelope(&called)["result"]["out"].as_i64(), Some(8), "ns1 call: {called}");
     }
 
     let mut ns2 = Host::spawn_args(t.temp_dir(), &["--id", "aid", "--namespace", "ns2"]);
-    let info = ns2.call("info", json!({}));
-    let block = structured(&info)["signatures"]
+    let info = envelope(&ns2.call("info", json!({})));
+    let block = info["result"]["signatures"]
         .as_str()
         .expect("info carries a signatures block");
     assert!(
@@ -133,18 +137,16 @@ fn env_carries_id_namespace_and_work_dir() {
         t.temp_dir(),
         &["--id", "envid", "--namespace", "envns", "--workdir", wd_str],
     );
-    let resp = host.run(json!({
-        "args_schema": {},
-        "result_schema": {"id": "string", "ns": "string", "wd": "string"},
-        "args": {},
-        "body": "{ id: $env.EQUIP_ID, ns: $env.EQUIP_NAMESPACE, wd: $env.EQUIP_WORK_DIR }",
-    }));
-    let env = structured(&resp);
+    let resp = host.nu(
+        "def execute [data: nothing]: nothing -> record<id: string, ns: string, wd: string> {\n    { id: $env.EQUIP_ID, ns: $env.EQUIP_NAMESPACE, wd: $env.EQUIP_WORK_DIR }\n}",
+        "null",
+    );
+    let env = envelope(&resp);
     assert_eq!(env["result"]["id"].as_str(), Some("envid"), "EQUIP_ID; got {resp}");
     assert_eq!(env["result"]["ns"].as_str(), Some("envns"), "EQUIP_NAMESPACE; got {resp}");
     assert_eq!(env["result"]["wd"].as_str(), Some(wd_str), "EQUIP_WORK_DIR; got {resp}");
     let info = host.call("info", json!({}));
-    assert_eq!(structured(&info)["work_dir"].as_str(), Some(wd_str), "info work_dir; got {info}");
+    assert_eq!(envelope(&info)["result"]["work_dir"].as_str(), Some(wd_str), "info work_dir; got {info}");
 }
 
 #[tested]
@@ -158,15 +160,10 @@ fn workdir_tilde_expands_against_home() {
         &["--id", "tildeid", "--workdir", "~/wd_x"],
         &[("HOME", home_str)],
     );
-    let resp = host.run(json!({
-        "args_schema": {},
-        "result_schema": {"wd": "string"},
-        "args": {},
-        "body": "{ wd: $env.EQUIP_WORK_DIR }",
-    }));
+    let resp = host.nu(WORK_DIR, "null");
     let expected = home.join("wd_x");
     assert_eq!(
-        structured(&resp)["result"]["wd"].as_str(),
+        envelope(&resp)["result"]["wd"].as_str(),
         expected.to_str(),
         "a ~/ workdir should expand against HOME; got {resp}",
     );
@@ -179,15 +176,10 @@ fn workdir_defaults_under_home_proj_equip_id() {
     std::fs::create_dir_all(&home).unwrap();
     let home_str = home.to_str().unwrap();
     let mut host = Host::spawn_full(t.temp_dir(), &["--id", "wdid"], &[("HOME", home_str)]);
-    let resp = host.run(json!({
-        "args_schema": {},
-        "result_schema": {"wd": "string"},
-        "args": {},
-        "body": "{ wd: $env.EQUIP_WORK_DIR }",
-    }));
+    let resp = host.nu(WORK_DIR, "null");
     let expected = home.join("proj").join("equip").join("wdid");
     assert_eq!(
-        structured(&resp)["result"]["wd"].as_str(),
+        envelope(&resp)["result"]["wd"].as_str(),
         expected.to_str(),
         "an absent --workdir should default to <home>/proj/equip/<id>; got {resp}",
     );

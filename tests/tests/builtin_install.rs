@@ -133,13 +133,13 @@ fn ping(host: &mut Host, name: &str) -> Option<i64> {
     if has_error_path(&resp) {
         return None;
     }
-    structured(&resp)["result"]["out"].as_i64()
+    envelope(&resp)["result"]["out"].as_i64()
 }
 
 /// The namespace's purviews as `(id, patterns)` pairs.
 fn purview_rows(host: &mut Host) -> Vec<(String, Vec<String>)> {
     let resp = host.call("purviews", json!({}));
-    structured(&resp)["purviews"]
+    envelope(&resp)["result"]["purviews"]
         .as_array()
         .expect("purviews lists the table")
         .iter()

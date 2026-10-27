@@ -10,6 +10,18 @@ static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integrat
     .setup(|_| TestServer::new())
 });
 
+/// A record's field names, sorted.
+fn keys(record: &Value) -> Vec<&str> {
+    let mut keys: Vec<&str> = record
+        .as_object()
+        .unwrap_or_else(|| panic!("not a record: {record}"))
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort();
+    keys
+}
+
 fn nonce_of(env: &Value) -> String {
     env["nonce"]
         .as_str()
@@ -88,6 +100,28 @@ fn undeclared_data_is_refused_before_dispatch_with_a_nonce() {
     assert_eq!(error_kind(&env), Some("data::invalid"), "{env}");
     assert_eq!(error_messages(&env), vec!["data.b: an undeclared field".to_string()]);
     assert!(!nonce_of(&env).is_empty());
+}
+
+#[test]
+fn missing_data_is_refused() {
+    let s = TESTING.harness();
+    let env = s.nu(
+        "def execute [data: record<a: int, b: int>]: nothing -> record<a: int> { {a: $data.a} }",
+        "{b: 2}",
+    );
+    assert_eq!(error_kind(&env), Some("data::invalid"), "{env}");
+    assert_eq!(error_messages(&env), vec!["data.a: a declared field is missing".to_string()]);
+}
+
+#[test]
+fn data_of_the_wrong_type_is_refused() {
+    let s = TESTING.harness();
+    let env = s.nu(
+        "def execute [data: record<a: int>]: nothing -> record<a: int> { $data }",
+        "{a: one}",
+    );
+    assert_eq!(error_kind(&env), Some("data::invalid"), "{env}");
+    assert_eq!(error_messages(&env), vec!["data.a: expected int, got string".to_string()]);
 }
 
 #[test]
@@ -191,6 +225,21 @@ fn rerun_evaluates_a_cached_definition_with_fresh_data() {
     assert_eq!(chained["result"], json!({"b": 20}), "a rerun's nonce is a handle too; {chained}");
     let refused = s.rerun(&source, "{a: x}");
     assert_eq!(error_kind(&refused), Some("data::invalid"), "{refused}");
+}
+
+#[test]
+fn a_non_eval_tool_answers_the_same_envelope() {
+    let s = TESTING.harness();
+    let ok = s.purviews();
+    assert_eq!(keys(&ok), vec!["nonce", "result"], "{ok}");
+    assert!(ok["result"]["current"].is_array(), "{ok}");
+
+    let refused = s.inspect("sourcetrait/nosuchrig");
+    assert_eq!(keys(&refused), vec!["error", "nonce"], "{refused}");
+    let rows = refused["error"].as_array().expect("an error table");
+    assert_eq!(rows.len(), 1, "{refused}");
+    assert_eq!(keys(&rows[0]), vec!["kind", "message", "source"], "{refused}");
+    assert_eq!(error_kind(&refused), Some("equip::not_registered"), "{refused}");
 }
 
 #[test]

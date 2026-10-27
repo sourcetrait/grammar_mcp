@@ -67,6 +67,10 @@ socket and presents a CA-issued leaf, so an in-process test would be asserting
 the box's certificate installation rather than anything in this crate. It is
 exercised live on the test channel instead.
 
+### fn tools
+The router's own listing, each tool serialized as `tools/list` carries it, so a
+test holds a description or the absence of an output schema as a client sees it.
+
 ### fn rig_index
 Decodes the NUON index into the JSON shape the assertions are written against, so
 a test checking `source_path` does not have to know the on-disk format.
@@ -83,10 +87,13 @@ satisfied - or falsified - by a rig some other test in the same binary committed
 `rig_call.rs` had exactly that trap waiting, asserting a helper named `util`
 absent while `sourcetrait/importable:util` existed.
 
-## fn lint_body
-Builds a full-shell `ParseEngine` per call. The plugin-registry read plus the
-heavy engine build is precisely why the lint tests are INTEGRATION rather than
-unit, and the same is true of the template drivers below.
+## fn lint_definition
+Parses as `analyze_definition` does and walks the same block, its parse errors
+aside, so a rule test exercises the walker alone: a definition `use`-ing a file
+that does not exist still has its path judged. Builds a full-shell `ParseEngine`
+per call. The plugin-registry read plus the heavy engine build is precisely why
+the lint tests are INTEGRATION rather than unit, and the same is true of the
+template drivers below.
 
 ## fn lint_engine_reuses_until_the_registry_moves
 IDENTITY is the only thing that catches this regression. A `LintEngine` that
