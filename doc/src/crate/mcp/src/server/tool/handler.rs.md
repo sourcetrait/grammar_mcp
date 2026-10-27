@@ -8,9 +8,14 @@ no denied-error loop to fall into. A call anyway fails at the rmcp layer as an u
 rmcp routers compose with `+` at runtime, which is what makes conditional assembly possible
 at all rather than requiring a compile-time feature per tool.
 
-The four core tools are added unconditionally and are not deniable. There is NO implication
-between tokens either - denying `nu` does not deny `rerun` - so an operator's config lists
-exactly what it means.
+Each of the four tools is deniable on its own, and there is NO implication between tokens -
+denying `nu` does not deny `rerun` - so an operator's config lists exactly what it means. A
+denied interface COMMAND leaves the tool standing: the command leaves the interface's parse
+and its description instead (`server/interface/grammar.rs`), and denying `interface` removes
+the tool whole.
+
+The interface's description is written here, after its router is built, because it is
+rendered from the deny set at runtime and the tool attribute takes only a constant.
 
 ## const MCP_DOC
 User's `include/human/mcp/mcp.md`, verbatim: the envelope every tool answers, which he

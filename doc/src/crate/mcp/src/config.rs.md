@@ -22,7 +22,7 @@ out, and says nothing about a run that asks for a different one.
 ## const MIN_CHANNEL_PORT
 Anything below 1024 is privileged and the host is unprivileged by design, so such
 a bind could only ever fail. Rejecting it at LOAD turns a confusing permission
-error at `channel_open` into a legible config error at startup.
+error at `interface channel open` into a legible config error at startup.
 
 ## struct ChannelConfigToml
 The port and the cert dir are the only two structural keys, because everything
@@ -37,10 +37,10 @@ Modelled as an `Option` rather than a 0 sentinel because 0 is not a port. Zero i
 rejected outright rather than treated as "any".
 
 ### field spam_warn_window_secs
-Windows are INTEGER SECONDS on this surface for two independent reasons: MCP args
-cross as JSON, which cannot carry a nu `duration`, and TOML has no duration type
-either. The `10sec` form lives in the model and the docs, never on a wire or in a
-file.
+Windows are INTEGER SECONDS on this surface for two independent reasons: the
+interface's arguments are strings and whole numbers alone, so a nu `duration` has no
+shape in a command, and TOML has no duration type either. The `10sec` form lives in
+the model and the docs, never in a command or a file.
 
 ## struct Config
 
@@ -58,8 +58,8 @@ after the remotes file loads.
 ## struct ChannelConfig
 
 ### field spam
-Runtime changes go through `config_channel`, which mutates the CHANNEL's live
-copy rather than this. `CONFIG` is set once, so anything adjustable at runtime
+Runtime changes go through `interface channel config`, which mutates the
+CHANNEL's live copy rather than this. `CONFIG` is set once, so anything adjustable at runtime
 needs its own live layer; the pin registry is the same shape applied to
 `[supervisor]`.
 
@@ -191,3 +191,10 @@ default), so a system that relocated its data home carries its secret tier
 with it. The dotsys side stays the box layout, `~/.sys/.xdg/secret/data` -
 deliberately not `data/secret` under the relocated `.xdg` tree. `spec_default`
 wraps the core with the env-first base-spec read.
+
+## enum DeniableTool
+The four tools, and an interface command by its words: `--deny 'purview configure'`
+withholds that one command while the tool stands, and `--deny interface` the tool whole.
+`Command` holds the table's own words (`server/interface/grammar.rs`), so a deny names
+exactly a command the parse registers, and a word sequence the table lacks is refused at
+the argument as an unknown tool is.

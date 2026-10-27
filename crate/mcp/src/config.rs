@@ -81,7 +81,7 @@ pub(crate) struct ChannelConfigToml {
     /// Omit for a kernel-assigned port, which is the default.
     pub port: Option<u16>,
     pub cert_dir: Option<String>,
-    /// Windows are whole seconds here and on `config_channel`.
+    /// Windows are whole seconds here and on `interface channel config`.
     pub spam_warn_window_secs: Option<u64>,
     pub spam_warn_rate: Option<u32>,
     pub spam_error_window_secs: Option<u64>,
@@ -505,48 +505,24 @@ fn xdg_data_home(base_spec: &str) -> Option<PathBuf> {
         .or_else(|| spec_default_for("XDG_DATA_HOME", base_spec))
 }
 
+/// A tool `--deny` withholds, or one interface command by its words.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeniableTool {
     Nu,
     Rerun,
     Call,
-    New,
-    Commit,
-    Equip,
-    ChannelOpen,
-    ChannelVerified,
-    ChannelClose,
-    ConfigChannel,
-    Purviews,
-    PurviewConfigure,
-    PurviewExtend,
-    Purview,
-    RemoteChannelOpen,
-    RemoteChannelClose,
-    RemoteChannels,
+    Interface,
+    Command(&'static str),
 }
 
 impl DeniableTool {
     pub(crate) fn from_name(s: &str) -> Option<Self> {
-        Some(match s {
+        Some(match s.trim() {
             "nu" => Self::Nu,
             "rerun" => Self::Rerun,
             "call" => Self::Call,
-            "new" => Self::New,
-            "commit" => Self::Commit,
-            "equip" => Self::Equip,
-            "channel_open" => Self::ChannelOpen,
-            "channel_verified" => Self::ChannelVerified,
-            "channel_close" => Self::ChannelClose,
-            "config_channel" => Self::ConfigChannel,
-            "purviews" => Self::Purviews,
-            "purview_configure" => Self::PurviewConfigure,
-            "purview_extend" => Self::PurviewExtend,
-            "purview" => Self::Purview,
-            "remote_channel_open" => Self::RemoteChannelOpen,
-            "remote_channel_close" => Self::RemoteChannelClose,
-            "remote_channels" => Self::RemoteChannels,
-            _ => return None,
+            "interface" => Self::Interface,
+            words => Self::Command(command_by_words(words)?.words()),
         })
     }
 }
@@ -566,6 +542,16 @@ impl DenySet {
         tool: DeniableTool,
     ) -> bool {
         self.denied.contains(&tool)
+    }
+
+    /// Whether the interface command its words name is withheld.
+    pub(crate) fn denies_command(
+        &self,
+        words: &str,
+    ) -> bool {
+        self.denied
+            .iter()
+            .any(|tool| matches!(tool, DeniableTool::Command(denied) if *denied == words))
     }
 }
 

@@ -6,10 +6,7 @@ const MCP_DOC: &str = include_str!("../../../../../include/human/mcp/mcp.md");
 impl NuSh {
     pub(crate) fn tool_router() -> mcp::ToolRouter<Self> {
         let deny = &config().deny;
-        let mut router = Self::processes_router()
-            + Self::kill_router()
-            + Self::info_router()
-            + Self::inspect_router();
+        let mut router = mcp::ToolRouter::new();
         if !deny.denies(DeniableTool::Nu) {
             router += Self::nu_router();
         }
@@ -19,47 +16,12 @@ impl NuSh {
         if !deny.denies(DeniableTool::Call) {
             router += Self::call_router();
         }
-        if !deny.denies(DeniableTool::New) {
-            router += Self::new_router();
-        }
-        if !deny.denies(DeniableTool::Commit) {
-            router += Self::commit_router();
-        }
-        if !deny.denies(DeniableTool::Equip) {
-            router += Self::equip_router();
-        }
-        if !deny.denies(DeniableTool::ChannelOpen) {
-            router += Self::channel_open_router();
-        }
-        if !deny.denies(DeniableTool::ChannelVerified) {
-            router += Self::channel_verified_router();
-        }
-        if !deny.denies(DeniableTool::ChannelClose) {
-            router += Self::channel_close_router();
-        }
-        if !deny.denies(DeniableTool::ConfigChannel) {
-            router += Self::config_channel_router();
-        }
-        if !deny.denies(DeniableTool::Purviews) {
-            router += Self::purviews_router();
-        }
-        if !deny.denies(DeniableTool::PurviewConfigure) {
-            router += Self::purview_configure_router();
-        }
-        if !deny.denies(DeniableTool::PurviewExtend) {
-            router += Self::purview_extend_router();
-        }
-        if !deny.denies(DeniableTool::Purview) {
-            router += Self::purview_router();
-        }
-        if !deny.denies(DeniableTool::RemoteChannelOpen) {
-            router += Self::remote_channel_open_router();
-        }
-        if !deny.denies(DeniableTool::RemoteChannelClose) {
-            router += Self::remote_channel_close_router();
-        }
-        if !deny.denies(DeniableTool::RemoteChannels) {
-            router += Self::remote_channels_router();
+        if !deny.denies(DeniableTool::Interface) {
+            let mut interface = Self::interface_router();
+            if let Some(route) = interface.map.get_mut(INTERFACE_TOOL) {
+                route.attr.description = Some(interface_description(deny).into());
+            }
+            router += interface;
         }
         router
     }

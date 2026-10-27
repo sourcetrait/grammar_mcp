@@ -115,11 +115,11 @@ fn resolve_work_dir(
 
 pub(crate) fn parse_deniable(s: &str) -> Result<DeniableTool, String> {
     DeniableTool::from_name(s).ok_or_else(|| {
+        let commands: Vec<&str> = COMMANDS.iter().map(|spec| spec.words()).collect();
         format!(
-            "unknown tool `{s}`; deniable tools: nu, rerun, call, new, \
-             commit, equip, channel_open, channel_verified, channel_close, config_channel, \
-             purviews, purview_configure, purview_extend, purview, \
-             remote_channel_open, remote_channel_close, remote_channels",
+            "unknown tool `{s}`; deniable: nu, rerun, call, interface, and the interface \
+             commands by their words: {}",
+            commands.join(", "),
         )
     })
 }

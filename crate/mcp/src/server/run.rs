@@ -9,7 +9,7 @@ pub(crate) async fn run_server() -> Result<(), String> {
         .map_err(|e| format!("the equip substrate: {e}"))?;
     let nonce_gen = Arc::new(datum::NonceGenerator::new());
     let lint_engine = Arc::new(LintEngine::new());
-    let server = NuSh::new(nonce_gen, rig_locks, lint_engine);
+    let server = NuSh::new(nonce_gen, rig_locks, lint_engine, &config().deny);
     let (emergency_tx, emergency_rx) = tk::unbounded_channel::<Emergency>();
     spawn_emergency_responder(emergency_rx, server.mcp_nom.as_str().to_string());
     server.channel.install_emergency(emergency_tx.clone());

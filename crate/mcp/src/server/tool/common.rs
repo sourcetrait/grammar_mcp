@@ -23,6 +23,8 @@ pub struct NuSh {
     pub(crate) rig_locks: Arc<RigLocks>,
     /// The lint and rig-validator engine, taken through `current()`.
     pub(crate) lint_engine: Arc<LintEngine>,
+    /// The engine an interface command parses on: its commands, nothing else.
+    pub(crate) interface_engine: Arc<nu::EngineState>,
     /// The resource registry, keyed by nonce string.
     pub(crate) in_flight: Arc<tk::AsyncMutex<HashMap<String, InFlightEntry>>>,
     /// The hang-detection registry the watchdog scans.
@@ -83,6 +85,7 @@ impl NuSh {
         nonce_gen: Arc<datum::NonceGenerator>,
         rig_locks: Arc<RigLocks>,
         lint_engine: Arc<LintEngine>,
+        deny: &DenySet,
     ) -> Self {
         nu::CRYPTO_PROVIDER.default();
         let env_jobs = Arc::new(std::sync::Mutex::new(nu::Jobs::default()));
@@ -96,6 +99,7 @@ impl NuSh {
             mcp_nom,
             rig_locks,
             lint_engine,
+            interface_engine: Arc::new(interface_engine(deny)),
             in_flight: Arc::new(tk::AsyncMutex::new(HashMap::new())),
             hung_watch: Arc::new(std::sync::Mutex::new(HashMap::new())),
             channel: channel_handle(),

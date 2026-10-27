@@ -9,12 +9,18 @@ Non-fatal by design: a write failure logs and the call proceeds, so the call sti
 its result and nonce and only a later rerun would miss the definition.
 
 ## enum InFlightKind
-Every kind but `call` carries its LANE, the one thing `kill()` and the hang watch need to
-tell a stuck stateful lane from a held stateless permit; `call` always runs stateless.
+Every kind but `call` carries its LANE, the one thing `interface process kill` and the hang
+watch need to tell a stuck stateful lane from a held stateless permit; `call` always runs
+stateless.
 
 ## struct NuSh
 One instance per process. The rmcp `#[tool_handler]` dispatches off `self.tool_router`,
 which is assembled deny-filtered at construction.
+
+### field interface_engine
+Built once, from the deny set `NuSh::new` is handed, so a denied command is unknown to the
+parse for the host's whole life; nothing evaluates on it, so it is shared rather than
+cloned per call.
 
 ### field channel
 The process-wide handle, NOT a fresh one. An eval reaches the channel through the same
@@ -31,14 +37,18 @@ precisely because the emit path must never need a runtime handle. The two locks 
 kind for opposite reasons, which is worth not "simplifying".
 
 ## struct InFlightEntry
-`processes()` snapshots this and `kill(nonce)` reads it. The visibility caveat is
-unchanged and deliberate: `processes()` shows ALL in-flight work on the host, so subagents
-see each other's calls and the primary's.
+`interface process list` snapshots this and `interface process kill` reads it. The
+visibility caveat is unchanged and deliberate: the list shows ALL in-flight work on the
+host, so subagents see each other's calls and the primary's.
 
 ## fn NuSh::new
 `nu::CRYPTO_PROVIDER.default()` installs nushell's TLS provider once so the `http` family
 works. Nushell reads its OWN OnceLock here, never rustls's process-global, which is why
 this call rather than a rustls one.
+
+The deny set is a PARAMETER rather than read from the config, because the one-shot CLI
+builds its interface with none: deny gates an agent's surface, and the operator's path
+keeps every command.
 
 ## fn NuSh::mint
 EVERY TOOL MINTS ITS NONCE FIRST, before any check, from its name and its parameters,
@@ -67,10 +77,10 @@ plugin decls rather than whatever the base held when it was built.
 
 ONE DEADLINE covers the permit's wait and the eval: the call's timeout is what the agent
 is willing to wait for the call, so the eval gets what the wait left. Without the bound,
-a call arriving while every permit is held - hung threads holding them among the causes
-- waited without end, outside `processes()` and past its own timeout. A lapsed wait is
-`thread::dispatch` naming the permits held against the cap, with the nonce, since the
-call's log directory already exists.
+a call arriving while every permit is held - hung threads holding them among the
+causes - waited without end, outside `interface process list` and past its own timeout.
+A lapsed wait is `thread::dispatch` naming the permits held against the cap, with the
+nonce, since the call's log directory already exists.
 
 The tracker is set as the engine's `background_thread_job` BEFORE the eval starts, because
 nushell registers an external's pid at spawn time and a tracker attached later would miss
@@ -91,8 +101,8 @@ duration. Its timeout covers the wait for the lane as well as the eval.
 ## struct InFlightCleanup
 Drop SPAWNS an async removal task because `Drop` cannot await, and the map is behind an
 async mutex. The consequence worth knowing: removal is not synchronous with the dispatch
-returning, so a `processes()` racing a completion can still see the finished entry
-briefly.
+returning, so an `interface process list` racing a completion can still see the finished
+entry briefly.
 
 ## fn teardown_all_in_flight
 Called after the MCP service stops - the client closed stdin - and from the signal
