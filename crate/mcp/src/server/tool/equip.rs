@@ -154,7 +154,9 @@ impl NuSh {
                     Ok(()) => {
                         drop(guard);
                         self.rig_locks.unregister(&equip).await;
-                        purview_remove_rig(&equip);
+                        if let Some(rows) = purview_remove_rig(&equip) {
+                            self.current_purview.retain_known(Some(&rows));
+                        }
                         success(nonce, &EquipResult { summary: None })
                     }
                     Err(e) => error_to_call_result(e, nonce),
@@ -209,14 +211,14 @@ fn purview_add_rig(
     }
 }
 
-/// Drop an uninstalled rig from every purview that named it.
-fn purview_remove_rig(rig: &str) {
+/// Drop an uninstalled rig from every purview that named it; the rows saved.
+fn purview_remove_rig(rig: &str) -> Option<Vec<PurviewRow>> {
     let _repo = equip_repo_lock();
     let mut rows = match load_purviews() {
         Ok(rows) => rows.unwrap_or_default(),
         Err(e) => {
             eprintln!("grammar: purview not updated for {rig}: {e:?}");
-            return;
+            return None;
         }
     };
     for row in rows.iter_mut() {
@@ -225,7 +227,9 @@ fn purview_remove_rig(rig: &str) {
     prune_dangling(&mut rows);
     if let Err(e) = save_purviews(&rows) {
         eprintln!("grammar: purview not updated for {rig}: {e:?}");
+        return None;
     }
+    Some(rows)
 }
 
 fn check_summary_from(result: &ValidationResult) -> CheckSummary {

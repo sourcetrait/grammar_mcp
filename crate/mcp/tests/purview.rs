@@ -105,6 +105,10 @@ fn purview_state_is_sequenced() {
             uninstalling_drops_its_pattern_from_every_purview(t);
             testing::StepState(s, p)
         })
+        .step("a_purview_an_uninstall_empties_leaves_the_view", |t, s, p| {
+            a_purview_an_uninstall_empties_leaves_the_view(t);
+            testing::StepState(s, p)
+        })
         .finalize()
         .run(TESTING.as_testable(), ());
 }
@@ -570,5 +574,35 @@ fn uninstalling_drops_its_pattern_from_every_purview(t: &testing::Testable<'_, '
         Some(vec!["*".to_string()]),
         "the uninstalled rig's pattern is gone and `*` - which needs no \
          particular rig - survives",
+    );
+}
+
+fn a_purview_an_uninstall_empties_leaves_the_view(t: &testing::Testable<'_, '_, '_>) {
+    let s = TESTING.harness();
+    reset_purviews(s);
+    let root = t.temp_dir().join("pvlast");
+    commit_rig(s, &root, "sourcetrait/pvlast");
+    let _ = s.purview_configure("only/pvlast", &["sourcetrait/pvlast:"]);
+    let extended = s.purview_extend(&["only/pvlast"]);
+    assert!(!has_error(&extended), "extend failed: {extended}");
+
+    let eq = equip_source(&root, "sourcetrait/pvlast");
+    let removed = s.equip("uninstall", eq.to_str().unwrap());
+    assert!(!has_error(&removed), "uninstall failed: {removed}");
+    assert!(
+        patterns_of(s, "only/pvlast").is_none(),
+        "the purview held the rig alone, so the prune drops its row",
+    );
+    let info = s.info();
+    let ids: Vec<&str> = info["result"]["purview"]
+        .as_array()
+        .expect("the view")
+        .iter()
+        .filter_map(|pair| pair[0].as_str())
+        .collect();
+    assert_eq!(
+        ids,
+        vec!["default"],
+        "a purview the uninstall dropped leaves the session's view with it; got {info}",
     );
 }

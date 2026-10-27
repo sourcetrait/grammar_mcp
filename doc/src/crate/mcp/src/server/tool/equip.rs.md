@@ -57,3 +57,7 @@ view.
 The rig's own pattern goes explicitly, in either of a builtin's spellings; anything ELSE
 that pointed into the rig - a module pattern beneath it, an exact call inside it - is now
 dangling and goes with the prune, which is the same sweep every other detection runs.
+
+It returns the rows it saved, so the uninstall drops from the session's view any purview
+the prune removed, as a purview deletion does. A failed load or save returns none and
+leaves the view as it was.
