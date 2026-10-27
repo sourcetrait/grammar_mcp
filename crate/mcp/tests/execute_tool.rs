@@ -249,6 +249,39 @@ fn a_non_eval_tool_answers_the_same_envelope() {
 }
 
 #[test]
+fn a_parse_error_reads_in_nushells_words() {
+    let s = TESTING.harness();
+    let env = s.execute(
+        "def execute [data: nothing]: nothing -> record<ok: bool> { error make {msg: 'boom'} }",
+        "null",
+    );
+    assert_eq!(error_kind(&env), Some("definition::invalid"), "{env}");
+    assert_eq!(
+        error_messages(&env),
+        vec![
+            "parse error: Command output doesn't match record<ok: bool>: \
+             expected record<ok: bool>, but command outputs error"
+                .to_string()
+        ]
+    );
+}
+
+#[test]
+fn a_shell_error_keeps_its_label_and_help() {
+    let s = TESTING.harness();
+    let env = s.execute(
+        "def execute [data: nothing]: nothing -> record<n: int> { {n: (plugin list | length)} }",
+        "null",
+    );
+    assert_eq!(error_kind(&env), Some("thread::returned_error"), "{env}");
+    let messages = error_messages(&env);
+    assert!(
+        messages[0].starts_with("eval: External command failed: ") && messages[0].contains("plugin"),
+        "{env}"
+    );
+}
+
+#[test]
 fn rerun_refuses_a_missing_or_malformed_nonce() {
     let s = TESTING.harness();
     let env = s.rerun("NoSuchNonce1", "null");

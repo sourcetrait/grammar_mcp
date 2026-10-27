@@ -18,6 +18,13 @@ span is an offset into the engine's whole source, or into `source` when the
 error carries one; a reader maps it to a position, since only the reader
 knows where its own text sits in the engine.
 
+### fn short
+nushell's own short report style, a message, then its labels, then its help,
+made for a reader on one line: a message's closing period gives way to the
+labels' colon, the cause follows a dash, and each inner error follows a
+semicolon. Whitespace runs collapse, so a help written over lines stays on
+one.
+
 ## enum NuValErrorKind
 One family per nushell error type, the variant's kind inside it, so a kind
 names the type and the variant it was. A shell error wrapping another type

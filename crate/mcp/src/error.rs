@@ -291,7 +291,7 @@ impl GrammarMcpError {
                 format!("invalid nonce `{nonce}`: {reason}")
             }
             Self::RerunBodyMissing { nonce } => {
-                format!("no cached definition for the nonce `{nonce}`; rerun takes an execute call's")
+                format!("no cached definition for the nonce `{nonce}`; rerun takes an execute call's nonce")
             }
             Self::ChannelStart { reason } => format!("cannot start the channel hub: {reason}"),
             Self::ChannelNotOpen => {

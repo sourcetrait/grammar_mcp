@@ -161,7 +161,11 @@ fn a_redirection_is_refused() {
 fn a_missing_or_mistyped_argument_is_refused_at_its_position() {
     let rows = parse("interface help").expect_err("help takes a namepath");
     assert_eq!(rows[0].kind, KIND_INTERFACE);
-    assert!(rows[0].message.contains("MissingPositional"), "{rows:?}");
+    assert!(
+        rows[0].message.contains("Missing required positional argument: missing namepath"),
+        "{rows:?}"
+    );
+    assert!(!rows[0].message.contains("Span["), "no engine offsets: {rows:?}");
     let rows = parse("interface purview set 'x'").expect_err("purviews is a list");
     assert_eq!(rows[0].kind, KIND_INTERFACE);
     let position = rows[0].source.as_ref().expect("a source").position;

@@ -74,7 +74,10 @@ pub(crate) fn parse_command(
     if !ws.parse_errors.is_empty() {
         let mut rows: Vec<Diagnostic> = Vec::new();
         for error in &ws.parse_errors {
-            let refused = row((Some(error.span()), format!("parse error: {error:?}")));
+            let refused = row((
+                Some(error.span()),
+                format!("parse error: {}", nuval::NuValError::from(error).short()),
+            ));
             if !rows.iter().any(|seen| seen.message == refused.message) {
                 rows.push(refused);
             }

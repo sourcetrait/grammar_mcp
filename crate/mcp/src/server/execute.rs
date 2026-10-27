@@ -74,7 +74,10 @@ pub(crate) fn analyze_definition(
         }
         let mut rows: Vec<Diagnostic> = Vec::new();
         for error in &ws.parse_errors {
-            let row = violation(Some(error.span()), format!("parse error: {error:?}"));
+            let row = violation(
+                Some(error.span()),
+                format!("parse error: {}", nuval::NuValError::from(error).short()),
+            );
             if !rows.iter().any(|seen| seen.message == row.message) {
                 rows.push(row);
             }

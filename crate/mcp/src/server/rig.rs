@@ -1401,7 +1401,7 @@ fn validate_lib_file(
                 path: Some(rel.clone()),
                 position: [line, 0],
             }),
-            format!("parse error: {err:?}"),
+            format!("parse error: {}", nuval::NuValError::from(err).short()),
         ));
     }
     Ok(())
@@ -1818,7 +1818,7 @@ fn validate_flat_file(
                 path: Some(rel.clone()),
                 position: [line, 0],
             }),
-            format!("parse error: {err:?}"),
+            format!("parse error: {}", nuval::NuValError::from(err).short()),
         ));
     }
     if ws.parse_errors.is_empty()
@@ -2027,7 +2027,7 @@ fn validate_mod_nu_ast(
                 path: Some(rel.to_string()),
                 position: [line, 0],
             }),
-            format!("parse error: {err:?}"),
+            format!("parse error: {}", nuval::NuValError::from(err).short()),
         ));
     }
 
@@ -2190,7 +2190,7 @@ fn validate_function_file_ast(
                 path: Some(rel.to_string()),
                 position: [line, 0],
             }),
-            format!("parse error: {err:?}"),
+            format!("parse error: {}", nuval::NuValError::from(err).short()),
         ));
     }
     if !working_set.parse_errors.is_empty() {

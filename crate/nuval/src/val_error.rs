@@ -148,6 +148,38 @@ impl NuValError {
         }
     }
 
+    /// The error on one line: its message, labels, cause, help, and inner.
+    pub fn short(&self) -> String {
+        let msg = one_line(&self.msg);
+        let labels: Vec<String> = self
+            .labels
+            .iter()
+            .filter_map(|label| label.text.as_deref())
+            .map(one_line)
+            .filter(|text| !text.is_empty())
+            .collect();
+        let mut out = if labels.is_empty() {
+            msg
+        } else {
+            let head = msg.strip_suffix('.').unwrap_or(&msg);
+            format!("{head}: {}", labels.join(", "))
+        };
+        if let Some(cause) = self.cause.as_deref().map(one_line).filter(|c| !c.is_empty()) {
+            out.push_str(" - ");
+            out.push_str(&cause);
+        }
+        if let Some(help) = self.help.as_deref().map(one_line).filter(|h| !h.is_empty()) {
+            out.push_str(" (");
+            out.push_str(&help);
+            out.push(')');
+        }
+        for inner in &self.inner {
+            out.push_str("; ");
+            out.push_str(&inner.short());
+        }
+        out
+    }
+
     /// An error from a diagnostic outside nushell's own types.
     pub fn from_diagnostic(diag: &dyn miette::Diagnostic) -> Self {
         let inner = diag
@@ -158,6 +190,11 @@ impl NuValError {
             .collect();
         Self::of(NuValErrorKind::Other, diag, None, inner)
     }
+}
+
+/// Text on one line, each run of whitespace one space, trimmed.
+fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Shell errors as data, in order.

@@ -78,6 +78,12 @@ eventually look like a cycle on its own.
 THE CYCLE CHECK COMES FIRST, before reporting parse errors, because a resolution cycle's
 own parse errors are unstable in both variant and payload and useless in every form.
 
+Every nushell error an eval meets, a parse, a compile, a merge, the eval's own, and the
+value's collection, reaches the agent through nuval's `NuValError::short`: its message,
+its labels, its cause, and its help on one line. A parse error's Debug form put a span
+into the engine's whole source in front of an agent, and a shell error's Display alone
+dropped the label and help that say what went wrong; the 0.0.0-7 smoke test met both.
+
 `PipelineData::Empty` as the input pairs with `is_mcp = true`, which routes external
 stdin to null.
 

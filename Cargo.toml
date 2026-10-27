@@ -63,6 +63,7 @@ nu-plugin-test-support = { version = "0.116.1" }
 nu-protocol = { version = "0.116.1" }
 nu-std = { version = "0.116.1" }
 nuon = { version = "0.116.1" }
+nuval = { path = "crate/nuval" }
 
 sourcetrait_common = {
     path = "../common/crates/sourcetrait_common",

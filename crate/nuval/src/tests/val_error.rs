@@ -333,6 +333,39 @@ fn back_in_nushell_an_error_is_a_labeled_error_with_its_parts() {
 }
 
 #[test]
+fn short_puts_an_error_on_one_line() {
+    let parse = NuValError::from(&nu::ParseError::OutputMismatch(
+        nu_protocol::Type::Int,
+        "string".into(),
+        span(10, 20),
+    ));
+    assert_eq!(
+        parse.short(),
+        "Command output doesn't match int: expected int, but command outputs string"
+    );
+    let shell = NuValError::from(&nu::ShellError::ExternalCommand {
+        label: "Command `plugin` not found".into(),
+        help: "`plugin` is neither a Nushell built-in or a known external command".into(),
+        span: span(0, 6),
+    });
+    assert_eq!(
+        shell.short(),
+        "External command failed: Command `plugin` not found \
+         (`plugin` is neither a Nushell built-in or a known external command)"
+    );
+    let bare = NuValError::from(&nu::ShellError::NushellFailed { msg: "x".into() });
+    assert!(!bare.short().contains('\n'));
+    let nested = NuValError::from(&nu::ShellError::Generic(
+        nu_protocol::shell_error::generic::GenericError::new("Outer", "here", span(0, 1))
+            .with_inner([nu::ShellError::DivisionByZero { span: span(2, 3) }]),
+    ));
+    assert_eq!(
+        nested.short(),
+        "Outer: here; Division by zero: division by zero"
+    );
+}
+
+#[test]
 fn a_result_carries_its_error_both_ways() {
     let value = nu::Value::error(nu::ShellError::DivisionByZero { span: span(1, 2) }, SPAN);
     let result = NuValResult::try_from_nu(value).expect("converts");

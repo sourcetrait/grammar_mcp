@@ -97,7 +97,7 @@ pub(crate) fn eval_in_process(
         let msgs: Vec<String> = working_set
             .parse_errors
             .iter()
-            .map(|e| format!("{e:?}"))
+            .map(|e| nuval::NuValError::from(e).short())
             .collect();
         return Err(format!("parse errors: {}", msgs.join("; ")).into());
     }
@@ -105,25 +105,25 @@ pub(crate) fn eval_in_process(
         let msgs: Vec<String> = working_set
             .compile_errors
             .iter()
-            .map(|e| format!("{e:?}"))
+            .map(|e| nuval::NuValError::from(e).short())
             .collect();
         return Err(format!("compile errors: {}", msgs.join("; ")).into());
     }
     let delta = working_set.render();
     engine_state
         .merge_delta(delta)
-        .map_err(|e| format!("merge_delta: {e}"))?;
+        .map_err(|e| format!("merge_delta: {}", nuval::NuValError::from(&e).short()))?;
     let pipeline = nu::eval_block::<nu::WithoutDebug>(
         engine_state,
         &mut stack,
         &block,
         nu::PipelineData::Empty,
     )
-    .map_err(|e| format!("eval: {e}"))?;
+    .map_err(|e| format!("eval: {}", nuval::NuValError::from(&e).short()))?;
     let value = pipeline
         .body
         .into_value(nu::Span::unknown())
-        .map_err(|e| format!("into_value: {e}"))?;
+        .map_err(|e| format!("into_value: {}", nuval::NuValError::from(&e).short()))?;
     if persist {
         let _ = stack.remove_env_var(engine_state, NONCE_VAR);
         merge_env_no_chdir(engine_state, &mut stack);
