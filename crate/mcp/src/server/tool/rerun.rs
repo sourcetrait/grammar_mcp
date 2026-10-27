@@ -3,103 +3,55 @@ use crate::*;
 /// Parameters for `rerun()`.
 #[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
 pub struct RerunParams {
-    /// The nonce a prior `run()` returned; names its cached body to re-evaluate.
+    /// The nonce of an earlier `nu` call, whose definition this evaluates again.
     pub nonce: String,
-    /// JSON object of fresh argument values for this re-evaluation.
-    pub args: mcp::JsonObject,
-    /// Optional per-call timeout in milliseconds; defaults to 120000 (2 minutes).
+    /// Fresh data as NUON text, as `nu` takes it.
+    pub data: String,
+    /// The call's timeout as a Nu duration, such as `30sec`; 120sec by default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub timeout_ms: Option<u64>,
-}
-
-/// Success result of `rerun()`.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct RerunEnvelope {
-    pub result: mcp::JsonObject,
-    pub nonce: String,
+    pub timeout: Option<String>,
 }
 
 #[mcp::tool_router(router = rerun_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "Re-evaluate a cached `run()` body with fresh args.",
-        output_schema = tool_output_schema::<RerunEnvelope>()
-    )]
+    #[mcp::tool(description = "Re-evaluate an earlier `nu` call's definition with fresh data.")]
     pub(crate) async fn rerun(
         &self,
         mcp::Parameters(p): mcp::Parameters<RerunParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self
+            .nonce_gen
+            .generate_with(&(&p.nonce, &p.data, &p.timeout))
+            .into_pair();
         if !cereal::is_base62(&p.nonce) {
             return Ok(error_to_call_result(
                 GrammarMcpError::RerunInvalidNonce {
                     nonce: p.nonce.clone(),
                     reason: "nonce must be base62".to_string(),
                 },
-                None,
+                Some(nonce.to_nonce()),
             ));
         }
-        let path = run_body_file(&p.nonce);
-        let text = match fs::read_to_string(&path) {
-            Ok(t) => t,
-            Err(_) => {
-                return Ok(error_to_call_result(
-                    GrammarMcpError::RerunBodyMissing {
-                        nonce: p.nonce.clone(),
-                    },
-                    None,
-                ));
-            }
+        let Ok(definition) = fs::read_to_string(definition_file(&p.nonce)) else {
+            return Ok(error_to_call_result(
+                GrammarMcpError::RerunBodyMissing {
+                    nonce: p.nonce.clone(),
+                },
+                Some(nonce.to_nonce()),
+            ));
         };
-        let cached = match CachedRunBody::from_nuon(&text) {
-            Ok(c) => c,
-            Err(reason) => {
-                return Ok(error_to_call_result(
-                    GrammarMcpError::RerunBodyDecode {
-                        nonce: p.nonce.clone(),
-                        reason,
-                    },
-                    None,
-                ));
-            }
+        let engine = self.lint_engine.current();
+        let prepared =
+            match prepare_nu(&engine, &definition, &p.data, p.timeout.as_deref(), false) {
+                Ok(prepared) => prepared,
+                Err(error) => return Ok(error_to_call_result(error, Some(nonce.to_nonce()))),
+            };
+        let kind = InFlightKind::Rerun {
+            source_nonce: p.nonce.clone(),
+            lane: prepared.lane(),
         };
-        let nonce = self.nonce_gen.generate_with(&text).into_pair();
-        let source = build_run_source(
-            &cached.args_type,
-            &cached.result_type,
-            &p.args,
-            &cached.body,
-            &nonce,
-        );
-        let args_json = serde_json::Value::Object(p.args.clone());
-        let cache_body = CachedRunBody {
-            args_type: cached.args_type,
-            result_type: cached.result_type,
-            body: cached.body,
-        };
-        let outcome = match dispatch_pooled(
-            &self.executor,
-            &self.in_flight,
-            &self.hung_watch,
-            CacheKind::Runs,
-            nonce,
-            source,
-            "rerun",
-            args_json,
-            InFlightKind::Rerun {
-                source_nonce: p.nonce.clone(),
-            },
-            Some(cache_body),
-            p.timeout_ms,
-        )
-        .await
-        {
-            Ok(o) => o,
-            Err(de) => return Ok(error_to_call_result(de.error, de.nonce)),
-        };
-        let result_obj = outcome.result.as_object().cloned().unwrap_or_default();
-        envelope_to_structured(&RerunEnvelope {
-            result: result_obj,
-            nonce: outcome.nonce.into_pair().as_str().to_string(),
-        })
+        let args_json = serde_json::json!({"data": p.data, "timeout": p.timeout});
+        self.dispatch_nu(nonce, prepared, &definition, "rerun", kind, args_json)
+            .await
     }
 }

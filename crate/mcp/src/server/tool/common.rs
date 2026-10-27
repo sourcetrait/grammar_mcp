@@ -1,79 +1,18 @@
 use crate::*;
 
-/// Parameters for `run()` / `interact()`.
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
-pub struct RunParams {
-    /// The args schema: field name to type; `{}` for no arguments.
-    pub args_schema: mcp::JsonObject,
-    /// The result schema: field name to type; `{}` for no return value.
-    pub result_schema: mcp::JsonObject,
-    /// JSON object of argument values passed to the body as `$args`.
-    pub args: mcp::JsonObject,
-    /// The nushell source-code body; its final value must match result_schema.
-    pub body: String,
-    /// Per-call timeout in milliseconds; defaults to 120000.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub timeout_ms: Option<u64>,
-}
-
-/// The cached run body: the converted types plus the source body.
-pub(crate) struct CachedRunBody {
-    pub(crate) args_type: String,
-    pub(crate) result_type: String,
-    pub(crate) body: String,
-}
-
-impl CachedRunBody {
-    pub(crate) fn to_nuon(&self) -> Result<String, String> {
-        let span = nu::Span::unknown();
-        let mut record = nu::Record::new();
-        record.insert("args_type", nu::Value::string(self.args_type.clone(), span));
-        record.insert("result_type", nu::Value::string(self.result_type.clone(), span));
-        record.insert("body", nu::Value::string(self.body.clone(), span));
-        nu::to_nuon(
-            &nu::EngineState::new(),
-            &nu::Value::record(record, span),
-            nu::ToNuonConfig::default(),
-        )
-        .map_err(|e| e.to_string())
-    }
-
-    pub(crate) fn from_nuon(text: &str) -> Result<Self, String> {
-        let value = nu::from_nuon(text, None).map_err(|e| e.to_string())?;
-        let record = value.as_record().map_err(|e| e.to_string())?;
-        let field = |name: &str| -> Result<String, String> {
-            match record.get(name) {
-                Some(nu::Value::String { val, .. }) => Ok(val.clone()),
-                Some(_) => Err(format!("cached body field `{name}` is not a string")),
-                None => Err(format!("cached body missing `{name}`")),
-            }
-        };
-        Ok(Self {
-            args_type: field("args_type")?,
-            result_type: field("result_type")?,
-            body: field("body")?,
-        })
-    }
-}
-
-/// Persist the run body beside the call's logs.
-fn write_run_body(
+/// Write a `nu` call's definition beside its logs, the handle `rerun` reads.
+fn write_definition(
     log_dir: &std::path::Path,
-    body: &CachedRunBody,
+    definition: &str,
 ) {
-    let path = log_dir.join(BODY_FILE);
-    match body.to_nuon() {
-        Ok(nuon) => {
-            if let Err(e) = fs::write(&path, nuon.as_bytes()) {
-                eprintln!("grammar: run body cache write failed at {}: {e}", path.display());
-            }
-        }
-        Err(e) => eprintln!("grammar: run body cache serialize failed: {e}"),
+    let path = log_dir.join(DEFINITION_FILE);
+    if let Err(e) = fs::write(&path, definition.as_bytes()) {
+        eprintln!("grammar: definition cache write failed at {}: {e}", path.display());
     }
 }
 
 pub struct NuSh {
-    pub(crate) interact_engine: Arc<tk::AsyncMutex<Option<InteractEngine>>>,
+    pub(crate) stateful_engine: Arc<tk::AsyncMutex<Option<StatefulEngine>>>,
     /// The stateless eval executor; hands each eval a ready clone.
     pub(crate) executor: Arc<Executor>,
     /// Host-owned environment-wide jobs table shared into every eval.
@@ -124,10 +63,19 @@ pub(crate) struct InFlightEntry {
 }
 
 pub(crate) enum InFlightKind {
-    Run,
-    Interact,
-    Rerun { source_nonce: String },
+    Nu { lane: Lane },
+    Rerun { source_nonce: String, lane: Lane },
     Call { path: String },
+}
+
+impl InFlightKind {
+    /// The lane the call's eval runs on.
+    pub(crate) fn lane(&self) -> Lane {
+        match self {
+            Self::Nu { lane } | Self::Rerun { lane, .. } => *lane,
+            Self::Call { .. } => Lane::Stateless,
+        }
+    }
 }
 
 impl NuSh {
@@ -141,7 +89,7 @@ impl NuSh {
         let executor = Arc::new(Executor::new(env_jobs.clone(), READY_POOL_TARGET));
         let mcp_nom = datum::Nom::generate(&nonce_gen).into_pair();
         Self {
-            interact_engine: Arc::new(tk::AsyncMutex::new(None)),
+            stateful_engine: Arc::new(tk::AsyncMutex::new(None)),
             executor,
             env_jobs,
             nonce_gen,
@@ -187,26 +135,9 @@ pub(crate) fn envelope_to_structured<T: ser::Serialize>(
     Ok(result)
 }
 
-pub(crate) fn convert_schemas(
-    args_schema: &mcp::JsonObject,
-    result_schema: &mcp::JsonObject,
-) -> Result<(String, String), String> {
-    let args_type = args_schema_to_nu(args_schema)?;
-    let result_type = result_schema_to_nu(result_schema)?;
-    Ok((args_type, result_type))
-}
-
-pub(crate) fn lint_run_params(
-    engine: &ParseEngine,
-    args_type: &str,
-    body: &str,
-) -> Vec<Diagnostic> {
-    lint_body(engine, args_type, body)
-}
-
 pub(crate) struct DispatchOutcome {
     pub(crate) nonce: datum::Nonce,
-    pub(crate) result: json::Value,
+    pub(crate) value: nu::Value,
 }
 
 pub(crate) struct DispatchError {
@@ -224,7 +155,7 @@ pub(crate) async fn dispatch_pooled(
     tool_name: &'static str,
     args_json: serde_json::Value,
     kind: InFlightKind,
-    cache_body: Option<CachedRunBody>,
+    definition: Option<&str>,
     timeout_ms: Option<u64>,
 ) -> Result<DispatchOutcome, DispatchError> {
     let log_dir = cache_dir(log_kind, &nonce);
@@ -235,8 +166,8 @@ pub(crate) async fn dispatch_pooled(
         },
         nonce: None,
     })?;
-    if let Some(body) = &cache_body {
-        write_run_body(&log_dir, body);
+    if let Some(definition) = definition {
+        write_definition(&log_dir, definition);
     }
     executor.refresh_base_if_stale();
     let effective_timeout = timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS);
@@ -288,11 +219,22 @@ pub(crate) async fn dispatch_pooled(
         map: in_flight.clone(),
         key: nonce.as_str().to_string(),
     };
-    let eval_fut = eval_stateless(engine, cancel.clone(), log_dir, source, permit, finished.clone());
+    let eval_fut = eval_stateless(
+        engine,
+        cancel.clone(),
+        log_dir,
+        source,
+        nonce.as_str().to_string(),
+        permit,
+        finished.clone(),
+    );
     let remaining = budget.saturating_sub(dispatched_at.elapsed());
     let timed = tk::timeout(remaining, eval_fut).await;
     match timed {
-        Ok(Ok(result)) => Ok(DispatchOutcome { nonce: nonce.to_nonce(), result }),
+        Ok(Ok(value)) => Ok(DispatchOutcome {
+            nonce: nonce.to_nonce(),
+            value,
+        }),
         Ok(Err(failure)) => Err(DispatchError {
             error: failure.into_error(),
             nonce: Some(nonce.to_nonce()),
@@ -321,32 +263,38 @@ pub(crate) async fn dispatch_pooled(
     }
 }
 
-pub(crate) async fn dispatch_interact(
-    interact: &Arc<tk::AsyncMutex<Option<InteractEngine>>>,
+pub(crate) async fn dispatch_stateful(
+    stateful: &Arc<tk::AsyncMutex<Option<StatefulEngine>>>,
     env_jobs: &Arc<std::sync::Mutex<nu::Jobs>>,
     in_flight: &Arc<tk::AsyncMutex<HashMap<String, InFlightEntry>>>,
     hung_watch: &HungRegistry,
-    nonce: &datum::NoncePair,
+    nonce: datum::NoncePair,
     source: String,
+    tool_name: &'static str,
     args_json: serde_json::Value,
+    kind: InFlightKind,
+    definition: Option<&str>,
     timeout_ms: Option<u64>,
 ) -> Result<DispatchOutcome, DispatchError> {
-    let log_dir = cache_dir(CacheKind::Interacts, nonce);
+    let log_dir = cache_dir(CacheKind::Nu, &nonce);
     fs::create_dir_all(&log_dir).map_err(|e| DispatchError {
         error: GrammarMcpError::Internal {
-            phase: "dispatch_interact::create_log_dir".to_string(),
+            phase: "dispatch_stateful::create_log_dir".to_string(),
             reason: format!("create_dir_all {}: {e}", log_dir.display()),
         },
         nonce: None,
     })?;
+    if let Some(definition) = definition {
+        write_definition(&log_dir, definition);
+    }
     let engine = {
-        let mut guard = interact.lock().await;
+        let mut guard = stateful.lock().await;
         if guard.is_none() {
-            *guard = Some(InteractEngine::spawn(env_jobs.clone()));
+            *guard = Some(StatefulEngine::spawn(env_jobs.clone()));
         }
         guard
             .as_ref()
-            .expect("interact engine present after spawn")
+            .expect("stateful engine present after spawn")
             .clone()
     };
     let cancel = Arc::new(AtomicBool::new(false));
@@ -355,10 +303,10 @@ pub(crate) async fn dispatch_interact(
     let finished = Arc::new(AtomicBool::new(false));
     register_in_flight(
         in_flight,
-        nonce,
-        "interact",
+        &nonce,
+        tool_name,
         args_json,
-        InFlightKind::Interact,
+        kind,
         started_at,
         cancel.clone(),
         tracker.clone(),
@@ -370,10 +318,20 @@ pub(crate) async fn dispatch_interact(
         key: nonce.as_str().to_string(),
     };
     let effective_timeout = timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS);
-    let eval_fut = engine.eval(log_dir, source, cancel.clone(), tracker.clone(), finished.clone());
+    let eval_fut = engine.eval(
+        log_dir,
+        source,
+        nonce.as_str().to_string(),
+        cancel.clone(),
+        tracker.clone(),
+        finished.clone(),
+    );
     let timed = tk::timeout(tk::TkDuration::from_millis(effective_timeout), eval_fut).await;
     match timed {
-        Ok(Ok(result)) => Ok(DispatchOutcome { nonce: nonce.to_nonce(), result }),
+        Ok(Ok(value)) => Ok(DispatchOutcome {
+            nonce: nonce.to_nonce(),
+            value,
+        }),
         Ok(Err(failure)) => Err(DispatchError {
             error: failure.into_error(),
             nonce: Some(nonce.to_nonce()),
@@ -385,7 +343,7 @@ pub(crate) async fn dispatch_interact(
                 hung_watch,
                 HungWatch {
                     nonce: nonce.as_str().to_string(),
-                    tool: "interact",
+                    tool: tool_name,
                     lane: Lane::Stateful,
                     started_at,
                     cancelled_at: now_millis(),

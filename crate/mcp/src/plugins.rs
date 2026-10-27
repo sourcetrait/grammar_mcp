@@ -126,7 +126,7 @@ fn register_plugins(
         .spawn(move || {
             let mut engine = startup(Mode::Stateful);
             let cancel = Arc::new(AtomicBool::new(false));
-            eval_in_process(&mut engine, &log_dir, &source, cancel, false)
+            eval_in_process(&mut engine, &log_dir, &source, cancel, false, None)
                 .map(|_| ())
                 .map_err(|failure| match failure {
                     EvalFailure::Reported(reason) | EvalFailure::CircularImport(reason) => reason,

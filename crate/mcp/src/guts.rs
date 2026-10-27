@@ -90,67 +90,59 @@ impl TestServer {
         }
     }
 
+    /// A tool's envelope as JSON, read from its NUON text or its structured content.
     fn envelope(r: Result<mcp::CallToolResult, mcp::ErrorData>) -> json::Value {
-        match r {
-            Ok(ctr) => ctr.structured_content.unwrap_or(json::Value::Null),
-            Err(e) => panic!("unexpected rmcp-boundary error: {e:?}"),
+        let ctr = r.unwrap_or_else(|e| panic!("unexpected rmcp-boundary error: {e:?}"));
+        if let Some(mcp::ContentBlock::Text(text)) = ctr.content.first() {
+            return nuon_to_json(&text.text);
         }
+        ctr.structured_content.unwrap_or(json::Value::Null)
     }
 
-    pub fn run(
+    /// `nu` on a definition and its data's NUON text.
+    pub fn nu(
         &self,
-        args_schema: json::Value,
-        result_schema: json::Value,
-        args: json::Value,
-        body: &str,
+        definition: &str,
+        data: &str,
     ) -> json::Value {
-        self.run_timeout(args_schema, result_schema, args, body, None)
+        self.nu_timeout(definition, data, None)
     }
 
-    pub fn run_timeout(
+    /// `nu` with a timeout, a Nu duration's text.
+    pub fn nu_timeout(
         &self,
-        args_schema: json::Value,
-        result_schema: json::Value,
-        args: json::Value,
-        body: &str,
-        timeout_ms: Option<u64>,
+        definition: &str,
+        data: &str,
+        timeout: Option<&str>,
     ) -> json::Value {
-        let p = RunParams {
-            args_schema: Self::obj(args_schema),
-            result_schema: Self::obj(result_schema),
-            args: Self::obj(args),
-            body: body.to_string(),
-            timeout_ms,
+        let p = NuParams {
+            definition: definition.to_string(),
+            data: data.to_string(),
+            timeout: timeout.map(str::to_string),
         };
-        Self::envelope(self.rt.block_on(self.nush.run(mcp::Parameters(p))))
+        Self::envelope(self.rt.block_on(self.nush.nu(mcp::Parameters(p))))
     }
 
-    pub fn interact(
+    /// `rerun` of an earlier `nu` call with fresh data.
+    pub fn rerun(
         &self,
-        args_schema: json::Value,
-        result_schema: json::Value,
-        args: json::Value,
-        body: &str,
+        nonce: &str,
+        data: &str,
     ) -> json::Value {
-        let p = RunParams {
-            args_schema: Self::obj(args_schema),
-            result_schema: Self::obj(result_schema),
-            args: Self::obj(args),
-            body: body.to_string(),
-            timeout_ms: None,
-        };
-        Self::envelope(self.rt.block_on(self.nush.interact(mcp::Parameters(p))))
+        self.rerun_timeout(nonce, data, None)
     }
 
-    pub fn rerun(&self, nonce: &str, args: json::Value) -> json::Value {
-        self.rerun_timeout(nonce, args, None)
-    }
-
-    pub fn rerun_timeout(&self, nonce: &str, args: json::Value, timeout_ms: Option<u64>) -> json::Value {
+    /// `rerun` with a timeout, a Nu duration's text.
+    pub fn rerun_timeout(
+        &self,
+        nonce: &str,
+        data: &str,
+        timeout: Option<&str>,
+    ) -> json::Value {
         let p = RerunParams {
             nonce: nonce.to_string(),
-            args: Self::obj(args),
-            timeout_ms,
+            data: data.to_string(),
+            timeout: timeout.map(str::to_string),
         };
         Self::envelope(self.rt.block_on(self.nush.rerun(mcp::Parameters(p))))
     }
@@ -321,11 +313,11 @@ impl TestServer {
         crate::equip_root()
     }
 
-    /// The per-call log dir for a run-family nonce.
-    pub fn run_log_dir(&self, nonce: &str) -> std::path::PathBuf {
-        crate::run_body_file(nonce)
+    /// The per-call log dir of a `nu` call's nonce.
+    pub fn nu_log_dir(&self, nonce: &str) -> std::path::PathBuf {
+        crate::definition_file(nonce)
             .parent()
-            .expect("a run body path always has a parent dir")
+            .expect("a definition path always has a parent dir")
             .to_path_buf()
     }
 
@@ -353,6 +345,14 @@ impl TestServer {
 /// Drop every config pin.
 pub fn clear_config_pins() {
     crate::clear_pins();
+}
+
+/// A NUON text as JSON, through the converter `to json` uses.
+pub fn nuon_to_json(text: &str) -> json::Value {
+    let value = nu::from_nuon(text, None).unwrap_or_else(|e| panic!("NUON `{text}`: {e}"));
+    let converted =
+        nu::JsonValue::from_value(value).unwrap_or_else(|e| panic!("NUON `{text}` as JSON: {e}"));
+    json::to_value(&converted).expect("a JSON value serializes")
 }
 
 /// True when the envelope is the error shape (`{ error: ... }`).
@@ -522,15 +522,13 @@ pub fn parses_clean(src: &str) -> bool {
     ws.parse_errors.is_empty()
 }
 
-/// The synthesized run() source for these positional types and args.
-pub fn build_run_source(
-    args_type: &str,
-    result_type: &str,
-    args: json::Value,
-    body: &str,
-    nonce: &datum::NoncePair,
+/// The synthesized nu() source for a definition and its literals.
+pub fn build_nu_source(
+    definition: &str,
+    data_literal: &str,
+    timeout_literal: Option<&str>,
 ) -> String {
-    crate::build_run_source(args_type, result_type, &to_obj(args), body, nonce)
+    crate::build_nu_source(definition, data_literal, timeout_literal)
 }
 
 /// The synthesized call() source.
@@ -539,18 +537,6 @@ pub fn build_call_source(
     module_path: &str,
     name: &str,
     args: json::Value,
-    nonce: &str,
 ) -> String {
-    crate::build_call_source(rig, module_path, name, &to_obj(args), nonce)
-}
-
-/// The synthesized interact() source.
-pub fn build_interact_source(
-    args_type: &str,
-    result_type: &str,
-    args: json::Value,
-    body: &str,
-    nonce: &str,
-) -> String {
-    crate::build_interact_source(args_type, result_type, &to_obj(args), body, nonce)
+    crate::build_call_source(rig, module_path, name, &to_obj(args))
 }

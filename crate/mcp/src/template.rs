@@ -49,47 +49,11 @@ pub(crate) fn json_value_to_nu_value(v: &serde_json::Value) -> nu::Value {
     }
 }
 
-fn args_literal(args_type: &str, args: &mcp::JsonObject) -> String {
-    if args_type == "nothing" && args.is_empty() {
-        "null".to_string()
-    } else {
-        args_to_nuon(args)
-    }
-}
-
-pub(crate) fn build_run_source(
-    args_type: &str,
-    result_type: &str,
-    args: &mcp::JsonObject,
-    body: &str,
-    nonce: &datum::NoncePair,
-) -> String {
-    let nonce = nonce.as_str();
-    let lit = args_literal(args_type, args);
-    formatdoc!(
-        r#"
-        do {{
-            $env.NONCE = "{nonce}"
-            def __run [args: {at}]: nothing -> {rt} {{
-                {body}
-            }}
-            __run {lit}
-        }}
-    "#,
-        nonce = nonce,
-        at = args_type,
-        rt = result_type,
-        lit = lit,
-        body = body,
-    )
-}
-
 pub(crate) fn build_call_source(
     rig: &str,
     module_path: &str,
     name: &str,
     args: &mcp::JsonObject,
-    nonce: &str,
 ) -> String {
     let lit = if args.is_empty() {
         "null".to_string()
@@ -103,39 +67,23 @@ pub(crate) fn build_call_source(
     };
     formatdoc!(
         r#"
-        $env.NONCE = "{nonce}"
         overlay use --prefix equip/{target} as {alias}
         {alias} {lit}
     "#,
-        nonce = nonce,
         target = target,
         alias = CALL_ALIAS,
         lit = lit,
     )
 }
 
-pub(crate) fn build_interact_source(
-    args_type: &str,
-    result_type: &str,
-    args: &mcp::JsonObject,
-    body: &str,
-    nonce: &str,
+/// A `nu` call's source: its definition, then `execute` on the data's literal.
+pub(crate) fn build_nu_source(
+    definition: &str,
+    data_literal: &str,
+    timeout_literal: Option<&str>,
 ) -> String {
-    let lit = args_literal(args_type, args);
-    formatdoc!(
-        r#"
-        (
-            def --env __interact [args: {at}]: nothing -> {rt} {{
-                $env.NONCE = "{nonce}"
-                {body}
-            }} ;
-            __interact {lit}
-        )
-    "#,
-        nonce = nonce,
-        at = args_type,
-        rt = result_type,
-        lit = lit,
-        body = body,
-    )
+    let timeout = timeout_literal
+        .map(|literal| format!(" {literal}"))
+        .unwrap_or_default();
+    format!("{definition}\n{EXECUTE} {data_literal}{timeout}\n")
 }

@@ -65,49 +65,25 @@ pub enum CliTool {
         #[arg(long)]
         timeout_ms: Option<u64>,
     },
-    /// Evaluate a source-code body on a stateless thread.
-    Run {
-        /// The nushell source-code body.
-        body: String,
-        /// Args schema as a NUON record of field -> type name (default {}).
+    /// Execute a Nu definition against NUON data; single-shot, state dies with it.
+    Nu {
+        /// One `def execute` definition.
+        definition: String,
+        /// The definition's data as NUON text; `null` for `data: nothing`.
+        data: String,
+        /// The call's timeout as a Nu duration (default 120sec).
         #[arg(long)]
-        args_schema: Option<String>,
-        /// Result schema as a NUON record (default {}).
-        #[arg(long)]
-        result_schema: Option<String>,
-        /// Args as a NUON record (default {}).
-        #[arg(long)]
-        args: Option<String>,
-        /// Per-call timeout in milliseconds (default 120000).
-        #[arg(long)]
-        timeout_ms: Option<u64>,
+        timeout: Option<String>,
     },
-    /// Evaluate a body on a stateful thread; single-shot, state dies with it.
-    Interact {
-        /// The nushell source-code body.
-        body: String,
-        /// Args schema as a NUON record of field -> type name (default {}).
-        #[arg(long)]
-        args_schema: Option<String>,
-        /// Result schema as a NUON record (default {}).
-        #[arg(long)]
-        result_schema: Option<String>,
-        /// Args as a NUON record (default {}).
-        #[arg(long)]
-        args: Option<String>,
-        /// Per-call timeout in milliseconds (default 120000).
-        #[arg(long)]
-        timeout_ms: Option<u64>,
-    },
-    /// Re-evaluate a cached run() body with fresh args.
+    /// Re-evaluate an earlier nu call's definition with fresh data.
     Rerun {
-        /// The nonce returned by a prior run().
+        /// The nonce of the earlier nu call.
         nonce: String,
-        /// Args as a NUON record (default {}).
-        args: Option<String>,
-        /// Per-call timeout in milliseconds (default 120000).
+        /// Fresh data as NUON text.
+        data: String,
+        /// The call's timeout as a Nu duration (default 120sec).
         #[arg(long)]
-        timeout_ms: Option<u64>,
+        timeout: Option<String>,
     },
     /// List in-flight usage; a one-shot invocation shows none.
     Processes,

@@ -2,16 +2,14 @@ use crate::*;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum CacheKind {
-    Runs,
-    Interacts,
+    Nu,
     Calls,
 }
 
 impl CacheKind {
     fn dir_name(self) -> &'static str {
         match self {
-            Self::Runs => "runs",
-            Self::Interacts => "interacts",
+            Self::Nu => "nu",
             Self::Calls => "calls",
         }
     }
@@ -64,15 +62,16 @@ pub(crate) fn call_log_dir(nonce: &str) -> Option<PathBuf> {
     if nonce.is_empty() || !nonce.chars().all(|c| c.is_ascii_alphanumeric()) {
         return None;
     }
-    [CacheKind::Runs, CacheKind::Interacts, CacheKind::Calls]
+    [CacheKind::Nu, CacheKind::Calls]
         .into_iter()
         .map(|kind| cache_kind_dir(kind).join(nonce))
         .find(|dir| dir.is_dir())
 }
 
-pub(crate) const BODY_FILE: &str = "body.nuon";
+/// A `nu` call's definition, cached beside its logs for `rerun`.
+pub(crate) const DEFINITION_FILE: &str = "definition.nu";
 
-/// The cached run body, co-located at `runs/<nonce>/body.nuon`.
-pub(crate) fn run_body_file(nonce: &str) -> PathBuf {
-    cache_kind_dir(CacheKind::Runs).join(nonce).join(BODY_FILE)
+/// The definition a `nu` call cached, at `nu/<nonce>/definition.nu`.
+pub(crate) fn definition_file(nonce: &str) -> PathBuf {
+    cache_kind_dir(CacheKind::Nu).join(nonce).join(DEFINITION_FILE)
 }

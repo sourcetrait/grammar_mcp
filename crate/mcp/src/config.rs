@@ -511,9 +511,8 @@ fn xdg_data_home(base_spec: &str) -> Option<PathBuf> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeniableTool {
-    Run,
+    Nu,
     Rerun,
-    Interact,
     Call,
     New,
     Commit,
@@ -534,9 +533,8 @@ pub enum DeniableTool {
 impl DeniableTool {
     pub(crate) fn from_name(s: &str) -> Option<Self> {
         Some(match s {
-            "run" => Self::Run,
+            "nu" => Self::Nu,
             "rerun" => Self::Rerun,
-            "interact" => Self::Interact,
             "call" => Self::Call,
             "new" => Self::New,
             "commit" => Self::Commit,

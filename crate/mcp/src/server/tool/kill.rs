@@ -21,11 +21,7 @@ impl NuSh {
             match map.get(&p.nonce) {
                 Some(entry) => {
                     entry.cancel.store(true, Ordering::SeqCst);
-                    let lane = if matches!(entry.kind, InFlightKind::Interact) {
-                        Lane::Stateful
-                    } else {
-                        Lane::Stateless
-                    };
+                    let lane = entry.kind.lane();
                     register_hung(
                         &self.hung_watch,
                         HungWatch {

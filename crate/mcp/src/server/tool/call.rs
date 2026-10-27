@@ -101,13 +101,7 @@ impl NuSh {
             }
         };
         let nonce = self.nonce_gen.generate_with(&payload_bytes).into_pair();
-        let source = build_call_source(
-            &rig,
-            &module_path,
-            &name,
-            &p.args,
-            nonce.as_str(),
-        );
+        let source = build_call_source(&rig, &module_path, &name, &p.args);
         let path_str = p.namepath.clone();
         let args_json = serde_json::Value::Object(p.args.clone());
         let outcome = match dispatch_pooled(
@@ -128,10 +122,18 @@ impl NuSh {
             Ok(o) => o,
             Err(de) => return Ok(error_to_call_result(de.error, de.nonce)),
         };
-        let result_obj = outcome.result.as_object().cloned().unwrap_or_default();
         envelope_to_structured(&CallEnvelope {
-            result: result_obj,
+            result: result_object(outcome.value),
             nonce: outcome.nonce.into_pair().as_str().to_string(),
         })
     }
+}
+
+/// A call's value as the JSON object its envelope carries, anything else `{}`.
+fn result_object(value: nu::Value) -> mcp::JsonObject {
+    nu::JsonValue::from_value(value)
+        .ok()
+        .and_then(|value| json::to_value(&value).ok())
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default()
 }

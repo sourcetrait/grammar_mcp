@@ -54,6 +54,12 @@ remote_channel_open (ConnectionWoes): distinct from the async `mcp/remote/Discon
 {error}` Channel model, which now fires only for a listener's post-bind accept failure
 or an established link's later teardown.
 
+A `nu` call's refusals each name their part of the contract: `definition::invalid` rows,
+gathered with the lint's under `DefinitionViolations`, for the definition; `data::invalid`
+for data that isn't NUON or doesn't conform; `timeout::invalid` for a timeout that isn't a
+positive duration; and `result::invalid` for a value the definition's return type refuses.
+Each message carries the path or the position, so the agent fixes the one thing named.
+
 `remote::channel_unverified` refuses a remote_channel_open while the Channel isn't
 verified, before any bind or connect: the link's notices and relays ride the Channel's
 gate and would drop.

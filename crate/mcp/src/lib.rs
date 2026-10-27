@@ -43,10 +43,10 @@ pub(crate) mod server {
         pub(crate) mod handler;
         pub(crate) mod info;
         pub(crate) mod inspect;
-        pub(crate) mod interact;
         pub(crate) mod equip;
         pub(crate) mod kill;
         pub(crate) mod new;
+        pub(crate) mod nu;
         pub(crate) mod processes;
         pub(crate) mod purview_configure;
         pub(crate) mod purview_extend;
@@ -56,7 +56,6 @@ pub(crate) mod server {
         pub(crate) mod remote_channel_close;
         pub(crate) mod remote_channels;
         pub(crate) mod rerun;
-        pub(crate) mod run;
     }
     #[cfg(test)]
     mod tests {
@@ -141,9 +140,8 @@ pub(crate) use crate::{
     server::{
         blocked::shadow_host_fatal_decls,
         cache::{
-            BODY_FILE, CacheKind, base_dirs, cache_base_dir, cache_dir, call_log_dir,
-            check_base_dirs,
-            data_base_dir, run_body_file,
+            CacheKind, DEFINITION_FILE, base_dirs, cache_base_dir, cache_dir, call_log_dir,
+            check_base_dirs, data_base_dir, definition_file,
         },
         cert::ensure_cert_profile,
         channel::{
@@ -158,7 +156,7 @@ pub(crate) use crate::{
         },
         cycle::detect_import_cycle,
         embed::{
-            EVAL_STACK_SIZE, EvalFailure, InteractEngine, eval_in_process, eval_stateless,
+            EVAL_STACK_SIZE, EvalFailure, StatefulEngine, eval_in_process, eval_stateless,
             merge_env_no_chdir,
         },
         emergency::{
@@ -168,7 +166,7 @@ pub(crate) use crate::{
             RamWarningEmergency, VramWarningEmergency, append_line,
             spawn_emergency_responder,
         },
-        execute::analyze_definition,
+        execute::{EXECUTE, ExecuteDef, analyze_definition},
         executor::Executor,
         rig::{
             RigLocks, ValidationResult, check_equip,
@@ -211,9 +209,8 @@ pub(crate) use crate::{
         },
         run::{eval_concurrency_cap, run_server},
         schema::{
-            NuTypedef, args_schema_to_nu, args_schema_to_signature, data_typedef,
-            nu_to_args_schema, nu_to_result_schema, result_schema_to_nu,
-            result_schema_to_signature, result_typedef, typedef_text,
+            NuTypedef, args_schema_to_signature, check_value, data_typedef, nu_to_args_schema,
+            nu_to_result_schema, result_schema_to_signature, result_typedef, typedef_text,
         },
         teardown::{
             OrphanReaper, install_child_subreaper, kill_plugin_subprocesses, make_tracker,
@@ -230,15 +227,15 @@ pub(crate) use crate::{
             config_channel::ConfigChannelParams,
             equip::EquipParams,
             common::{
-                CachedRunBody, InFlightEntry, InFlightKind, NuSh, RemoteLinkEntry, RunParams,
-                ToolOutput, convert_schemas, dispatch_interact, dispatch_pooled,
-                envelope_to_structured, lint_run_params, now_millis, teardown_all_in_flight,
-                tool_output_schema,
+                DEFAULT_TIMEOUT_MS, InFlightEntry, InFlightKind, NuSh, RemoteLinkEntry,
+                ToolOutput, dispatch_pooled, dispatch_stateful, envelope_to_structured,
+                now_millis, teardown_all_in_flight, tool_output_schema,
             },
             info::InfoParams,
             inspect::InspectParams,
             kill::KillParams,
             new::NewParams,
+            nu::{NuParams, prepare_nu},
             processes::ProcessesParams,
             purview_configure::PurviewConfigureParams,
             purview_extend::PurviewExtendParams,
@@ -250,9 +247,7 @@ pub(crate) use crate::{
     run::{
         parse_deniable,
     },
-    template::{
-        build_call_source, build_interact_source, build_run_source, json_value_to_nu_value,
-    },
+    template::{build_call_source, build_nu_source, json_value_to_nu_value},
 };
 
 pub(crate) use std::{
@@ -336,7 +331,10 @@ pub(crate) mod mcp {
         handler::server::router::tool::ToolRouter,
         handler::server::tool::schema_for_type,
         handler::server::wrapper::Parameters,
-        model::{CallToolResult, Implementation, JsonObject, ServerCapabilities, ServerConfig},
+        model::{
+            CallToolResult, ContentBlock, Implementation, JsonObject, ServerCapabilities,
+            ServerConfig,
+        },
         tool, tool_handler, tool_router,
         transport::stdio,
     };

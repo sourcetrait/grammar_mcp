@@ -59,6 +59,14 @@ no redirect at all.
 
 `register_nuapi` must precede the parse, because command names resolve at parse time.
 
+`$env.NONCE` goes on the eval's root STACK before the parse, rather than into the source:
+a custom command's callee stack inherits its caller's env, so the definition's body, a
+`def --env` body included, every module it imports, and a `job spawn` it starts all read
+the one value, and no template has to splice a line into source the agent wrote.
+
+The eval ANSWERS ITS NU VALUE, never JSON: `nu` checks it against the declared type and
+renders it as NUON, and `call` renders it leniently, each in its own handler.
+
 ## fn open_log
 Empty, then reopened to APPEND: `print` opens the stderr log itself, by the call's
 nonce, and only append keeps its bytes and an external's - which writes through a dup
@@ -76,10 +84,6 @@ stdin to null.
 
 The persist branch strips `$env.NONCE` before merging: it is a per-call ambient, not
 session state, so the body's own env writes survive and NONCE does not.
-
-`nu::JsonValue::from_value` rather than `serde_json::to_value` is load-bearing - the
-latter serializes nushell's internal tagged representation with spans, not the friendly
-JSON `to json` emits.
 
 ## const EVAL_STACK_SIZE
 nu def-recursion is guarded by `$env.config.recursion_limit`, so the only native
@@ -111,10 +115,11 @@ Emptying is the only safe heal: a table a panic interrupted mid-update holds not
 trustworthy. A job thread still running loses its entry and with it its kill handle;
 that is the accepted cost, the same the interact lane's reset pays.
 
-## struct InteractEngine
-The serial thread IS the lane, so a hung interact eval deadlocks it entirely. That is
-the case reset-on-panic does NOT cover - it handles panics, not a pure-Rust hang - and
-recovery there is still an MCP restart.
+## struct StatefulEngine
+The stateful lane, a `def --env` definition's, on the thread `nu-stateful`. The serial
+thread IS the lane, so a hung stateful eval deadlocks it entirely. That is the case
+reset-on-panic does NOT cover - it handles panics, not a pure-Rust hang - and recovery
+there is still an MCP restart.
 
 ### fn spawn
 RESET-ON-PANIC is broader than it looks. A caught panic may have poisoned the shared

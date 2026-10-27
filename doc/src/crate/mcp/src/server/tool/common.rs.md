@@ -1,27 +1,16 @@
 # common.rs
 
-## struct RunParams
-Shared by run AND interact. The only differences between the two tools are the substrate
-and the template, so a second identical params type would be duplication with a drift
-risk.
+## fn write_definition
+PRE-DISPATCH and for EVERY `nu` and `rerun` eval - success, error, or timeout alike. That
+is what leaves a timed-out call rerunnable: its error envelope carries the nonce, and
+`rerun(nonce, data, timeout: bigger)` recovers it.
 
-Every object-shaped field is `mcp::JsonObject` rather than `serde_json::Value`, and that is
-not a style choice: schemars renders `Value` as the JSON Schema `true` keyword, which
-Claude Code's client REJECTS, while `JsonObject` renders `{"type": "object"}`. The same
-gotcha applies to every envelope's `result` field.
+Non-fatal by design: a write failure logs and the call proceeds, so the call still returns
+its result and nonce and only a later rerun would miss the definition.
 
-A `JsonObject` at the top level also sidesteps the recursive-outputSchema `$defs`/`$ref`
-watch-item, since there is no JsonSchema-derived recursive enum on the schema params.
-
-`timeout_ms` has NO upper cap - the agent picks. None means `DEFAULT_TIMEOUT_MS`.
-
-## struct CachedRunBody
-Carries the CONVERTED nu positional-type strings, not the structured JSON schemas the agent
-submitted. Conversion already happened once, so rerun feeds the converted types straight to
-the template with no re-conversion and no re-lint.
-
-Per-call args are deliberately NOT cached; they are supplied fresh at rerun time, which is
-the whole point of the handle.
+## enum InFlightKind
+Every kind but `call` carries its LANE, the one thing `kill()` and the hang watch need to
+tell a stuck stateful lane from a held stateless permit; `call` always runs stateless.
 
 ## enum ToolOutput
 The two shapes every tool's structured result takes, its success envelope or the error
@@ -36,14 +25,6 @@ declared output schema, and a schema of the success envelope alone refused every
 envelope, which the client then reported as a schema mismatch in place of the error.
 The root carries `type: object` over the union's `anyOf` because MCP requires a tool's
 output schema to be an object; the generic wrapper's title is dropped as noise.
-
-## fn write_run_body
-PRE-DISPATCH and for EVERY run-family eval - success, error, or timeout alike. That is what
-leaves a timed-out run rerunnable: its error envelope carries the nonce, and
-`rerun(nonce, same_args, timeout_ms: bigger)` recovers it.
-
-Non-fatal by design: a write failure logs and the call proceeds, so the run still returns
-its result and nonce and only a later rerun would miss the body.
 
 ## struct NuSh
 One instance per process. The rmcp `#[tool_handler]` dispatches off `self.tool_router`,
@@ -74,9 +55,9 @@ works. Nushell reads its OWN OnceLock here, never rustls's process-global, which
 this call rather than a rustls one.
 
 ## fn dispatch_pooled
-THE HANDLER MINTS THE NONCE BEFORE SOURCE SYNTHESIS, so the builder can embed it as
-`$env.NONCE` and the dispatch then reuses the same nonce - which is what makes the ambient
-value equal the envelope's.
+THE HANDLER MINTS THE NONCE FIRST, and the dispatch hands it to the eval, which sets it as
+`$env.NONCE` on the eval's stack - which is what makes the ambient value equal the
+envelope's.
 
 `refresh_base_if_stale` runs before taking a clone, so this eval runs against current
 plugin decls rather than whatever the base held when it was built.
@@ -98,10 +79,11 @@ register for hang watching. A pure-Rust hung eval cannot be reached by the first
 that is the accepted residual - and the registration is what turns it into a reported
 condition rather than a silent leak.
 
-## fn dispatch_interact
-The engine handle is cloned OUT of the guard rather than held across the eval, because the
-engine thread serializes calls itself - holding the guard would serialize them twice and
-block an unrelated caller for the duration.
+## fn dispatch_stateful
+The stateful lane, a `def --env` definition's. The engine handle is cloned OUT of the guard
+rather than held across the eval, because the engine thread serializes calls itself -
+holding the guard would serialize them twice and block an unrelated caller for the
+duration. Its timeout covers the wait for the lane as well as the eval.
 
 ## struct InFlightCleanup
 Drop SPAWNS an async removal task because `Drop` cannot await, and the map is behind an

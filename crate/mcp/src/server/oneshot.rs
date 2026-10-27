@@ -39,50 +39,29 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
                     }))
                     .await
             }
-            CliTool::Run {
-                body,
-                args_schema,
-                result_schema,
-                args,
-                timeout_ms,
+            CliTool::Nu {
+                definition,
+                data,
+                timeout,
             } => {
                 server
-                    .run(mcp::Parameters(RunParams {
-                        args_schema: nuon_record_arg(args_schema.as_deref()),
-                        result_schema: nuon_record_arg(result_schema.as_deref()),
-                        args: nuon_record_arg(args.as_deref()),
-                        body,
-                        timeout_ms,
-                    }))
-                    .await
-            }
-            CliTool::Interact {
-                body,
-                args_schema,
-                result_schema,
-                args,
-                timeout_ms,
-            } => {
-                server
-                    .interact(mcp::Parameters(RunParams {
-                        args_schema: nuon_record_arg(args_schema.as_deref()),
-                        result_schema: nuon_record_arg(result_schema.as_deref()),
-                        args: nuon_record_arg(args.as_deref()),
-                        body,
-                        timeout_ms,
+                    .nu(mcp::Parameters(NuParams {
+                        definition,
+                        data,
+                        timeout,
                     }))
                     .await
             }
             CliTool::Rerun {
                 nonce,
-                args,
-                timeout_ms,
+                data,
+                timeout,
             } => {
                 server
                     .rerun(mcp::Parameters(RerunParams {
                         nonce,
-                        args: nuon_record_arg(args.as_deref()),
-                        timeout_ms,
+                        data,
+                        timeout,
                     }))
                     .await
             }
@@ -112,14 +91,20 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
             }
         };
         match result {
-            Ok(r) => match r.structured_content {
-                Some(value) => {
-                    let failed = value.get("error").is_some();
-                    println!("{value}");
-                    if failed { 1 } else { 0 }
+            Ok(r) => {
+                if let Some(mcp::ContentBlock::Text(text)) = r.content.first() {
+                    println!("{}", text.text);
+                    return if envelope_failed(&text.text) { 1 } else { 0 };
                 }
-                None => 0,
-            },
+                match r.structured_content {
+                    Some(value) => {
+                        let failed = value.get("error").is_some();
+                        println!("{value}");
+                        if failed { 1 } else { 0 }
+                    }
+                    None => 0,
+                }
+            }
             Err(e) => {
                 eprintln!("{e}");
                 1
@@ -128,6 +113,14 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
     }
     .await;
     process::ExitCode::from(exit_code as u8)
+}
+
+/// Whether an envelope's NUON text is the failure shape, holding `error`.
+fn envelope_failed(text: &str) -> bool {
+    nu::from_nuon(text, None)
+        .ok()
+        .and_then(|value| value.as_record().ok().map(|record| record.contains("error")))
+        .unwrap_or(true)
 }
 
 fn nuon_record_arg(input: Option<&str>) -> mcp::JsonObject {

@@ -117,8 +117,17 @@ pub enum GrammarMcpError {
         module_path: String,
         name: String,
     },
-    LintViolations {
+    DefinitionViolations {
         diagnostics: Vec<Diagnostic>,
+    },
+    DataInvalid {
+        reason: String,
+    },
+    ResultInvalid {
+        reason: String,
+    },
+    TimeoutInvalid {
+        reason: String,
     },
     SchemaInvalid {
         reason: String,
@@ -137,10 +146,6 @@ pub enum GrammarMcpError {
     },
     RerunBodyMissing {
         nonce: String,
-    },
-    RerunBodyDecode {
-        nonce: String,
-        reason: String,
     },
     ChannelStart {
         reason: String,
@@ -196,12 +201,14 @@ impl GrammarMcpError {
             Self::RigInvalidName { .. } => "rig::invalid_name",
             Self::RigInvalidModulePath { .. } => "rig::invalid_module_path",
             Self::FunctionNotDefined { .. } => "function::not_defined",
+            Self::DataInvalid { .. } => "data::invalid",
+            Self::ResultInvalid { .. } => "result::invalid",
+            Self::TimeoutInvalid { .. } => "timeout::invalid",
             Self::SchemaInvalid { .. } => "schema::invalid",
             Self::NamepathInvalid { .. } => "namepath::invalid",
             Self::PurviewInvalidId { .. } => "purview::invalid_id",
             Self::RerunInvalidNonce { .. } => "rerun::invalid_nonce",
             Self::RerunBodyMissing { .. } => "rerun::body_missing",
-            Self::RerunBodyDecode { .. } => "rerun::body_decode",
             Self::ChannelStart { .. } => "channel::start",
             Self::ChannelNotOpen => "channel::not_open",
             Self::ChannelNotClaimed => "channel::not_claimed",
@@ -216,7 +223,7 @@ impl GrammarMcpError {
             Self::ThreadReturnedError { .. } => "thread::returned_error",
             Self::ModuleCircularImport { .. } => "module::circular_import",
             Self::Internal { .. } => "internal",
-            Self::EquipViolations { .. } | Self::LintViolations { .. } => {
+            Self::EquipViolations { .. } | Self::DefinitionViolations { .. } => {
                 unreachable!("violation variants render via bucket, not kind_str")
             }
         }
@@ -266,6 +273,9 @@ impl GrammarMcpError {
                 module_path,
                 name,
             } => format!("function `{name}` is not defined in `{rig}:{module_path}`"),
+            Self::DataInvalid { reason }
+            | Self::ResultInvalid { reason }
+            | Self::TimeoutInvalid { reason } => reason.clone(),
             Self::SchemaInvalid { reason } => format!("invalid schema: {reason}"),
             Self::NamepathInvalid { namepath, reason } => {
                 format!("invalid namepath `{namepath}`: {reason}")
@@ -277,10 +287,7 @@ impl GrammarMcpError {
                 format!("invalid nonce `{nonce}`: {reason}")
             }
             Self::RerunBodyMissing { nonce } => {
-                format!("no cached run body for nonce `{nonce}`")
-            }
-            Self::RerunBodyDecode { nonce, reason } => {
-                format!("failed to decode cached run body for nonce `{nonce}`: {reason}")
+                format!("no cached definition for the nonce `{nonce}`; rerun takes a nu call's")
             }
             Self::ChannelStart { reason } => format!("cannot start the channel hub: {reason}"),
             Self::ChannelNotOpen => {
@@ -309,7 +316,7 @@ impl GrammarMcpError {
             Self::ThreadReturnedError { reason } => reason.clone(),
             Self::ModuleCircularImport { files } => files.clone(),
             Self::Internal { phase, reason } => format!("internal error [{phase}]: {reason}"),
-            Self::EquipViolations { .. } | Self::LintViolations { .. } => {
+            Self::EquipViolations { .. } | Self::DefinitionViolations { .. } => {
                 unreachable!("violation variants render via bucket, not message")
             }
         }
@@ -345,7 +352,8 @@ pub(crate) fn error_to_call_result(
     nonce: Option<datum::Nonce>,
 ) -> mcp::CallToolResult {
     let (errors, warnings) = match error {
-        GrammarMcpError::EquipViolations { diagnostics } | GrammarMcpError::LintViolations { diagnostics } => {
+        GrammarMcpError::EquipViolations { diagnostics }
+        | GrammarMcpError::DefinitionViolations { diagnostics } => {
             Diagnostic::bucket(diagnostics)
         }
         single => {

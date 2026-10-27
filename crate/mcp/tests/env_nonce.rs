@@ -11,27 +11,23 @@ static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integrat
 });
 
 #[test]
-fn run_body_sees_nonce_matching_envelope() {
+fn a_stateless_body_sees_the_envelope_nonce() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"noop": "int"}),
-        json!({"seen": "string"}),
-        json!({"noop": 0}),
-        "{ seen: $env.NONCE }",
+    let env = s.nu(
+        "def execute [data: nothing]: nothing -> record<seen: string> { {seen: $env.NONCE} }",
+        "null",
     );
     let nonce = env["nonce"].as_str().expect("envelope nonce");
     assert!(!nonce.is_empty(), "envelope nonce should be non-empty");
-    assert_eq!(env["result"]["seen"].as_str(), Some(nonce), "run body's $env.NONCE should equal the envelope nonce; got {env}");
+    assert_eq!(env["result"]["seen"].as_str(), Some(nonce), "$env.NONCE should equal the envelope nonce; got {env}");
 }
 
 #[test]
-fn run_nested_helper_inherits_nonce() {
+fn a_nested_helper_inherits_the_nonce() {
     let s = TESTING.harness();
-    let env = s.run(
-        json!({"noop": "int"}),
-        json!({"seen": "string"}),
-        json!({"noop": 0}),
-        "def grab [] { $env.NONCE }\n{ seen: (grab) }",
+    let env = s.nu(
+        "def execute [data: nothing]: nothing -> record<seen: string> {\n    def grab [] { $env.NONCE }\n    {seen: (grab)}\n}",
+        "null",
     );
     let nonce = env["nonce"].as_str().expect("envelope nonce");
     assert_eq!(env["result"]["seen"].as_str(), Some(nonce), "a nested helper should inherit $env.NONCE; got {env}");
@@ -61,35 +57,29 @@ fn call_target_sees_nonce() {
 }
 
 #[test]
-fn interact_body_sees_nonce() {
+fn a_stateful_body_sees_the_envelope_nonce() {
     let s = TESTING.harness();
-    let env = s.interact(
-        json!({"noop": "int"}),
-        json!({"seen": "string"}),
-        json!({"noop": 0}),
-        "{ seen: $env.NONCE }",
+    let env = s.nu(
+        "def --env execute [data: nothing]: nothing -> record<seen: string> { {seen: $env.NONCE} }",
+        "null",
     );
     let nonce = env["nonce"].as_str().expect("envelope nonce");
-    assert_eq!(env["result"]["seen"].as_str(), Some(nonce), "interact body's $env.NONCE should equal the envelope nonce; got {env}");
+    assert_eq!(env["result"]["seen"].as_str(), Some(nonce), "a stateful body's $env.NONCE should equal the envelope nonce; got {env}");
 }
 
 #[test]
-fn interact_nonce_is_fresh_per_call_and_keeps_env_persistence() {
+fn the_stateful_nonce_is_fresh_per_call_and_env_persists() {
     let s = TESTING.harness();
-    let a = s.interact(
-        json!({"noop": "int"}),
-        json!({"seen": "string"}),
-        json!({"noop": 0}),
-        "$env.KEEP = $env.NONCE\n{ seen: $env.NONCE }",
+    let a = s.nu(
+        "def --env execute [data: nothing]: nothing -> record<seen: string> {\n    $env.KEEP = $env.NONCE\n    {seen: $env.NONCE}\n}",
+        "null",
     );
     let nonce_a = a["nonce"].as_str().expect("A nonce").to_string();
-    assert_eq!(a["result"]["seen"].as_str(), Some(nonce_a.as_str()));
+    assert_eq!(a["result"]["seen"].as_str(), Some(nonce_a.as_str()), "{a}");
 
-    let b = s.interact(
-        json!({"noop": "int"}),
-        json!({"seen": "string", "keep": "string"}),
-        json!({"noop": 0}),
-        "{ seen: $env.NONCE, keep: $env.KEEP }",
+    let b = s.nu(
+        "def --env execute [data: nothing]: nothing -> record<seen: string, keep: string> {\n    {seen: $env.NONCE, keep: $env.KEEP}\n}",
+        "null",
     );
     let nonce_b = b["nonce"].as_str().expect("B nonce").to_string();
     assert_ne!(nonce_a, nonce_b, "each call gets a distinct nonce");

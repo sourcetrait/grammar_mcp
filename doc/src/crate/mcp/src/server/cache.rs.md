@@ -1,8 +1,9 @@
 # cache.rs
 
 ## enum CacheKind
-The variant-to-dir-name mapping lives in ONE place so the three per-call trees
-cannot drift apart from the enum that selects them.
+The variant-to-dir-name mapping lives in ONE place so the per-call trees cannot drift
+apart from the enum that selects them: `nu/` for every `nu` and `rerun` call, either
+lane, and `calls/` for a rig's call.
 
 ## static BASE_DIRS
 `directories::BaseDirs` honors `$XDG_CACHE_HOME` and `$XDG_DATA_HOME`, which is
@@ -27,13 +28,14 @@ place that decides a call's artifacts exist.
 The one place a nonce becomes a call's log dir at run time, for the host decls
 that act for the running call. The nonce comes from `$env.NONCE`, which a body
 can rewrite, so the base62 check lives HERE rather than at the tool boundary.
-All three kinds are searched because the nonce alone does not say which surface
-made the call, and a nonce names one call across all of them.
+Both kinds are searched because the nonce alone does not say which surface made
+the call, and a nonce names one call across all of them.
 
-## fn run_body_file
-Co-locating the body with that call's stdout and stderr means ONE prune of
-`runs/<nonce>/` reclaims logs and body together - there is no separate closure id
-space to reason about, because the nonce IS the rerun handle.
+## fn definition_file
+Co-locating the definition with that call's stdout and stderr means ONE prune of
+`nu/<nonce>/` reclaims logs and definition together - there is no separate id space
+to reason about, because the nonce IS the rerun handle. The definition is saved as the
+`.nu` source it is, readable and runnable as written.
 
 `nonce` must be base62-validated by the caller. That check is the path-traversal
 defense, and it lives at the tool boundary rather than here.

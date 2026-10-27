@@ -61,20 +61,30 @@ fn open_log(path: &Path) -> Result<fs::File, String> {
         .map_err(|e| format!("open {}: {e}", path.display()))
 }
 
-/// Evaluate a synthesized source string against `engine_state`.
+/// The env var naming the call an eval serves.
+pub(crate) const NONCE_VAR: &str = "NONCE";
+
+/// Evaluate a synthesized source string against `engine_state`, its value answered.
 pub(crate) fn eval_in_process(
     engine_state: &mut nu::EngineState,
     log_dir: &std::path::Path,
     source: &str,
     cancel: Arc<AtomicBool>,
     persist: bool,
-) -> Result<json::Value, EvalFailure> {
+    nonce: Option<&str>,
+) -> Result<nu::Value, EvalFailure> {
     let stdout_file = open_log(&log_dir.join(STDOUT_FILE))?;
     let stderr_file = open_log(&log_dir.join(STDERR_FILE))?;
     let mut stack = nu::Stack::new()
         .stdout_file(stdout_file)
         .stderr_file(stderr_file)
         .capture_all();
+    if let Some(nonce) = nonce {
+        stack.add_env_var(
+            NONCE_VAR.to_string(),
+            nu::Value::string(nonce, nu::Span::unknown()),
+        );
+    }
     engine_state.set_signals(nu::Signals::new(cancel));
     let mut working_set = nu::StateWorkingSet::new(engine_state);
     register_nuapi(&mut working_set);
@@ -115,11 +125,10 @@ pub(crate) fn eval_in_process(
         .into_value(nu::Span::unknown())
         .map_err(|e| format!("into_value: {e}"))?;
     if persist {
-        let _ = stack.remove_env_var(engine_state, "NONCE");
+        let _ = stack.remove_env_var(engine_state, NONCE_VAR);
         merge_env_no_chdir(engine_state, &mut stack);
     }
-    let json_value = nu::JsonValue::from_value(value).map_err(|e| format!("Value to JSON: {e}"))?;
-    json::to_value(&json_value).map_err(|e| format!("json value: {e}").into())
+    Ok(value)
 }
 
 /// Empty a jobs table a caught panic poisoned, and clear its poison.
@@ -139,9 +148,10 @@ pub(crate) async fn eval_stateless(
     cancel: Arc<AtomicBool>,
     log_dir: std::path::PathBuf,
     source: String,
+    nonce: String,
     permit: tk::OwnedSemaphorePermit,
     finished: Arc<AtomicBool>,
-) -> Result<json::Value, EvalFailure> {
+) -> Result<nu::Value, EvalFailure> {
     let (tx, rx) = tk::oneshot::channel();
     let spawned = std::thread::Builder::new()
         .stack_size(EVAL_STACK_SIZE)
@@ -150,7 +160,7 @@ pub(crate) async fn eval_stateless(
             let _permit = permit;
             let _finish = FinishGuard(finished);
             let outcome = catch_unwind(AssertUnwindSafe(|| {
-                eval_in_process(&mut engine, &log_dir, &source, cancel, false)
+                eval_in_process(&mut engine, &log_dir, &source, cancel, false, Some(&nonce))
             }));
             let result = match outcome {
                 Ok(r) => r,
@@ -170,28 +180,29 @@ pub(crate) async fn eval_stateless(
     }
 }
 
-/// The persistent stateful interact engine: one long-lived serial thread.
+/// The persistent stateful engine: one long-lived serial thread.
 #[derive(Clone)]
-pub(crate) struct InteractEngine {
-    tx: tk::UnboundedSender<InteractRequest>,
+pub(crate) struct StatefulEngine {
+    tx: tk::UnboundedSender<StatefulRequest>,
 }
 
-struct InteractRequest {
+struct StatefulRequest {
     log_dir: std::path::PathBuf,
     source: String,
+    nonce: String,
     cancel: Arc<AtomicBool>,
     tracker: nu::ThreadJob,
     finished: Arc<AtomicBool>,
-    respond: tk::oneshot::Sender<Result<json::Value, EvalFailure>>,
+    respond: tk::oneshot::Sender<Result<nu::Value, EvalFailure>>,
 }
 
-impl InteractEngine {
-    /// Spawn the interact engine thread with the host-owned jobs table.
+impl StatefulEngine {
+    /// Spawn the stateful engine thread with the host-owned jobs table.
     pub(crate) fn spawn(env_jobs: Arc<std::sync::Mutex<nu::Jobs>>) -> Self {
-        let (tx, mut rx) = tk::unbounded_channel::<InteractRequest>();
+        let (tx, mut rx) = tk::unbounded_channel::<StatefulRequest>();
         let _ = std::thread::Builder::new()
             .stack_size(EVAL_STACK_SIZE)
-            .name("nu-interact".to_string())
+            .name("nu-stateful".to_string())
             .spawn(move || {
                 let mut engine = startup(Mode::Stateful);
                 engine.jobs = env_jobs.clone();
@@ -199,7 +210,14 @@ impl InteractEngine {
                     let _finish = FinishGuard(req.finished.clone());
                     engine.current_job.background_thread_job = Some(req.tracker.clone());
                     let outcome = catch_unwind(AssertUnwindSafe(|| {
-                        eval_in_process(&mut engine, &req.log_dir, &req.source, req.cancel.clone(), true)
+                        eval_in_process(
+                            &mut engine,
+                            &req.log_dir,
+                            &req.source,
+                            req.cancel.clone(),
+                            true,
+                            Some(&req.nonce),
+                        )
                     }));
                     let result = match outcome {
                         Ok(r) => r,
@@ -207,7 +225,7 @@ impl InteractEngine {
                             heal_jobs(&env_jobs);
                             engine = startup(Mode::Stateful);
                             engine.jobs = env_jobs.clone();
-                            Err("panic during interact eval (caught); interact session reset"
+                            Err("panic during a stateful eval (caught); the stateful session reset"
                                 .to_string()
                                 .into())
                         }
@@ -218,29 +236,31 @@ impl InteractEngine {
         Self { tx }
     }
 
-    /// Submit one interact eval to the engine thread and await its result.
+    /// Submit one stateful eval to the engine thread and await its result.
     pub(crate) async fn eval(
         &self,
         log_dir: std::path::PathBuf,
         source: String,
+        nonce: String,
         cancel: Arc<AtomicBool>,
         tracker: nu::ThreadJob,
         finished: Arc<AtomicBool>,
-    ) -> Result<json::Value, EvalFailure> {
+    ) -> Result<nu::Value, EvalFailure> {
         let (respond, rx) = tk::oneshot::channel();
         self.tx
-            .send(InteractRequest {
+            .send(StatefulRequest {
                 log_dir,
                 source,
+                nonce,
                 cancel,
                 tracker,
                 finished,
                 respond,
             })
-            .map_err(|_| "interact engine thread is gone".to_string())?;
+            .map_err(|_| "the stateful engine thread is gone".to_string())?;
         match rx.await {
             Ok(r) => r,
-            Err(_) => Err("interact engine dropped the response".to_string().into()),
+            Err(_) => Err("the stateful engine dropped the response".to_string().into()),
         }
     }
 }

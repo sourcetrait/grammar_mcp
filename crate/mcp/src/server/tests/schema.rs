@@ -1,5 +1,6 @@
 
 use crate::*;
+use crate::server::schema::{args_schema_to_nu, result_schema_to_nu};
 
 fn obj(s: &str) -> mcp::JsonObject {
     match serde_json::from_str::<json::Value>(s).unwrap() {
