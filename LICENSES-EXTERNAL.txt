@@ -3,7 +3,7 @@
 0BSD (2): doctest-file, recvmsg
 0BSD OR Apache-2.0 (1): interprocess
 0BSD OR Apache-2.0 OR MIT (1): adler2
-AGPL-3.0-or-later (22): sourcetrait_agnostic, sourcetrait_agnostic_bridge, sourcetrait_agnostic_linux, sourcetrait_agnostic_macos, sourcetrait_agnostic_unix, sourcetrait_cereal, sourcetrait_cereal_macro, sourcetrait_cert_lib, sourcetrait_clapx, sourcetrait_common, sourcetrait_datum, sourcetrait_grammar_eye, sourcetrait_grammar_mcp, sourcetrait_grammar_soak, sourcetrait_grammar_tests, sourcetrait_stdx, sourcetrait_subsys, sourcetrait_testing, sourcetrait_testing_macro, sourcetrait_tomlx, sourcetrait_tooling, sourcetrait_twostr
+AGPL-3.0-or-later (25): nuval, sourcetrait_agnostic, sourcetrait_agnostic_bridge, sourcetrait_agnostic_linux, sourcetrait_agnostic_macos, sourcetrait_agnostic_unix, sourcetrait_cereal, sourcetrait_cereal_macro, sourcetrait_cert_lib, sourcetrait_clapx, sourcetrait_common, sourcetrait_datum, sourcetrait_grammar_engine, sourcetrait_grammar_eye, sourcetrait_grammar_mcp, sourcetrait_grammar_operator, sourcetrait_grammar_soak, sourcetrait_grammar_tests, sourcetrait_stdx, sourcetrait_subsys, sourcetrait_testing, sourcetrait_testing_macro, sourcetrait_tomlx, sourcetrait_tooling, sourcetrait_twostr
 Apache-2.0 (24): approx, better_default, buf-trait, bytesize, byteyarn, clang-sys, devicons, dtparse, gethostname, kdl, kdl, lmdb-master-sys, miette, miette, miette-derive, miette-derive, rmcp, rmcp-macros, similar, supports-color, supports-hyperlinks, supports-unicode, sync_wrapper, zopfli
 Apache-2.0 AND ISC (1): ring
 Apache-2.0 AND MIT (2): is_debug, shadow-rs
