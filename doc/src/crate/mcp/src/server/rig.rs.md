@@ -305,16 +305,17 @@ A token's text is read through `span_text`, from the file's start in the span sp
 never by the raw span: the engine's own files, the standard library's first, sit ahead of
 this one, and a raw read returns nothing, which would pass `main` anywhere silently.
 
-All three parse sites register the file's ABSOLUTE path as the parse fname AND push it onto
-`working_set.files` before parsing. The PUSH is the load-bearing half: `path self` reads
+Every parse site in this file registers the file's ABSOLUTE path as the parse fname AND
+pushes it onto `working_set.files` before parsing. The PUSH is the load-bearing half: `path self` reads
 `working_set.files.top()`, not the parse fname - the fname only feeds span mapping - so
 without the push a parse-time `const SELF = (path self)` const-resolves at serve and fails
 at validate. This mirrors nushell's own module-file loader.
 
 ## fn validate_mod_nu_ast
-A resolved private `use` or `overlay use` parses to `Expr::ImportPattern` or `Expr::Overlay`
-rather than a Call, so it is allowed BY SHAPE rather than by name - which is why those two
-arms exist beside the decl-name allowlist.
+A private `use` or `overlay use` parses to a Call to its decl on nu 0.116.1, its import
+pattern kept as the call's parser info, so the decl-name allowlist admits it whether its
+module resolved or not. The arm for a bare `Expr::ImportPattern` or `Expr::Overlay`
+admits a form 0.116.1 does not produce at a module's top level.
 
 `let` at module body level is a nu parse error and surfaces before this structural walk ever
 runs.
@@ -322,8 +323,8 @@ runs.
 ## fn validate_function_file_ast
 SCHEMAS ARE READ FROM SOURCE TEXT on both sides, and both parsed forms are lossy in
 different ways. `SyntaxShape` Display renders an empty-field record as the bare word
-`record`, which is not valid arg syntax, while the parsed output `Type` collapses path,
-directory and glob to string. Structure is still VALIDATED against the parsed signature -
+`record`, which is not valid arg syntax, while the parsed output `Type` collapses path and
+directory to string. Structure is still VALIDATED against the parsed signature -
 positional shape and output Type - so the text is used for the schema and the parse for the
 contract.
 

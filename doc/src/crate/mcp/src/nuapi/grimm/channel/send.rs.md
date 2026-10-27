@@ -1,4 +1,4 @@
-# channel_send.rs
+# send.rs
 
 ## struct GrimmChannelSend
 THE CHANNEL IS A NOTIFICATION LANE, NOT A SERIALIZATION LANE. `event` says "state
@@ -15,11 +15,11 @@ an author can correlate what it sent with what the agent later fetches.
 ### fn run
 ORDER IS DELIBERATE THROUGHOUT, and each step is placed where it is for a reason.
 
-The `mcp/` REFUSAL comes first, before the channel state is even consulted. A body
-is not the host, so letting it stamp a model under that prefix would let it forge a
-host control packet - and would destroy the property the reservation exists for,
-that provenance is checkable from the path alone. This is the one place a non-host
-picks a model, which is what makes it the right place to enforce it.
+The `mcp/` REFUSAL comes first, before the channel state is even consulted. A
+definition is not the host, so letting it stamp a model under that prefix would let
+it forge a host control packet - and would destroy the property the reservation
+exists for, that provenance is checkable from the path alone. This is the one place
+a non-host picks a model, which is what makes it the right place to enforce it.
 
 The PHASE is checked before any rendering, so a send that cannot happen costs a
 lock and an error rather than a hash and a render.
@@ -35,12 +35,11 @@ work started before verification emit to an unproven peer.
 The id is minted BEFORE the attachment write because the filename derives from it,
 which is also why the hash covers the attached CONTENT rather than its path.
 
-CapNoCap: after the id and the caller's attachment, the rendered event is checked
-against the notification cap (event_overflows, state.rs); an oversized event spills
-to inbox/<id>.event.nuon and a compact pointer rides the wire in its place. The
+After the id and the caller's attachment, the rendered event is checked against
+the notification cap (event_overflows, state.rs); an oversized event spills to
+inbox/<id>.event.nuon and a compact pointer rides the wire in its place. The
 pointer names its own spill file, so it is orthogonal to the caller's `attached` -
-a big event and a caller attachment both survive, in separate files. write_inbox_file
-is the generalized writer serving both.
+a big event and a caller attachment both survive, in separate files.
 
 ## fn shell_error
 `GenericError` renders its TITLE through Display, and the title is all the eval
@@ -67,3 +66,7 @@ also how it is verified.
 
 Only the PROCESSES of a killed job can fail to die; the table entry goes either
 way, and an external the job left behind is the tree-kill machinery's to reap.
+
+## fn write_inbox_file
+The one writer for both of a send's files: the caller's attachment, `<id>.nuon`,
+and an auto-spilled event, `<id>.event.nuon`.

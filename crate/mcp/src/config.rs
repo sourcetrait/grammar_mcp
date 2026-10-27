@@ -21,10 +21,10 @@ pub(crate) struct ConfigToml {
     pub supervisor: Option<SupervisorConfigToml>,
 }
 
-/// One `[[remote]]` entry (file layer): a peer to link with, addressed by alias.
-/// Role is the presence of `listen` - set means this host binds and waits
-/// (listener), unset means it dials `address` (connector). The field names are
-/// the operator's and are never renamed for internal use.
+/// One `[[remote]]` entry (file layer): a peer to link with, by its alias.
+///
+/// Its role is the presence of `listen`: set, this host binds and waits as the
+/// listener; unset, it dials `address` as the connector.
 #[derive(Debug, Clone, ser::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RemoteToml {
@@ -32,8 +32,7 @@ pub(crate) struct RemoteToml {
     pub alias: Option<String>,
     /// `ip:port` to bind; present = listener, absent = connector.
     pub listen: Option<String>,
-    /// Connector: the peer's `ip:port` to dial (required). Listener: optional -
-    /// a bare source IP to require on an inbound connection (no port).
+    /// A connector's peer `ip:port`, required; a listener's optional bare source IP.
     pub address: Option<String>,
     /// This host's own public key it presents.
     pub self_public_key_file: Option<String>,
@@ -43,8 +42,9 @@ pub(crate) struct RemoteToml {
     pub public_key_file: Option<String>,
 }
 
-/// The `.grammar/mcp/remotes.toml` file (file layer): the RemoteChannel peer set,
-/// as `[[remote]]` entries. Optional - an absent file means no RemoteChannel.
+/// The `.grammar/mcp/remotes.toml` file (file layer): its `[[remote]]` entries.
+///
+/// Optional: an absent file means no RemoteChannel.
 #[derive(Debug, Clone, Default, ser::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RemotesConfigToml {
@@ -100,15 +100,12 @@ pub(crate) struct Config {
     pub supervisor: SupervisorConfig,
     /// Configured remote peers (from `.grammar/mcp/remotes.toml`).
     pub remotes: RemotesConfig,
-    /// The process's cwd at startup, captured before any interact() `cd` can
-    /// move it - the root `.grammar/mcp/remotes.toml` is resolved against it.
-    /// Held for future cwd-relative reads; not read again after the first load.
+    /// The process's cwd at startup, which `.grammar/mcp/remotes.toml` resolves from.
     #[allow(dead_code)]
     pub startup_cwd: PathBuf,
 }
 
-/// A resolved remote peer (model layer): its role plus its known-public-key mTLS
-/// material. Field names mirror the toml.
+/// A resolved remote peer (model layer): its role and its mTLS key files.
 #[derive(Debug, Clone)]
 pub(crate) struct RemoteConfig {
     pub alias: String,
@@ -239,8 +236,9 @@ fn merged_supervisor(
     })
 }
 
-/// Load `.grammar/mcp/remotes.toml` under the startup cwd, if present. Absent =
-/// no RemoteChannel (an empty peer set).
+/// Load `.grammar/mcp/remotes.toml` under the startup cwd, if present.
+///
+/// An absent file is an empty peer set: no RemoteChannel.
 fn load_remotes(startup_cwd: &std::path::Path) -> Result<RemotesConfig, String> {
     let path = startup_cwd
         .join(".grammar")
@@ -259,8 +257,9 @@ fn load_remotes(startup_cwd: &std::path::Path) -> Result<RemotesConfig, String> 
 impl TryFrom<RemoteToml> for RemoteConfig {
     type Error = String;
 
-    /// Resolve one `[[remote]]` entry into a peer. Role is the presence of
-    /// `listen`; the three key paths are required and expanded at load.
+    /// Resolve one `[[remote]]` entry into a peer, its key paths expanded.
+    ///
+    /// Its role is the presence of `listen`; its three key paths are required.
     fn try_from(entry: RemoteToml) -> Result<Self, String> {
         let alias = entry
             .alias
@@ -315,8 +314,7 @@ impl TryFrom<RemoteToml> for RemoteConfig {
 impl TryFrom<RemotesConfigToml> for RemotesConfig {
     type Error = String;
 
-    /// Resolve every `[[remote]]` entry, keyed by alias; a duplicate alias is a
-    /// load error. There are no embedded defaults (deployment-specific).
+    /// Resolve every `[[remote]]` entry by alias; a duplicate alias fails the load.
     fn try_from(file: RemotesConfigToml) -> Result<Self, String> {
         let mut by_alias = HashMap::new();
         for entry in file.remote {
@@ -489,8 +487,6 @@ pub(crate) fn spec_default_for(
         "XDG_CONFIG_HOME" => ".config",
         "XDG_DATA_HOME" => ".local/share",
         "XDG_STATE_HOME" => ".local/state",
-        // SourceTrait's own concept: a standard user-level place for modern
-        // vendors to install to; EXECUTE_HOME is expected on the user's PATH.
         "XDGX_ASSET_HOME" => if dotsys { ".sys/local/share" } else { ".local/share" },
         "XDGX_EXECUTE_HOME" => if dotsys { ".sys/local/bin" } else { ".local/bin" },
         "XDGX_LIBRARY_HOME" => if dotsys { ".sys/local/lib" } else { ".local/lib" },

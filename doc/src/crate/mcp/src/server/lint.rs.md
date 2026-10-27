@@ -16,19 +16,24 @@ or go through a helper.
 
 ## const REGEX_RECEIVERS
 The built-in signatures carrying a `--regex` flag, source-grep verified against
-`nu-command/src/` at tag 0.113.1 and NOT re-audited since the 0.114.1 engine bump. A
-decl that GAINED `--regex` in 0.114 would false-positive on its pattern argument, which
-is carried as debt rather than assumed absent. Plugin commands are not covered at all.
+`nu-command/src/` at 0.116.1, the engine's version; nu-cmd-lang, nu-cmd-extra, and the
+standard library declare none. A decl that gains `--regex` in a later engine would
+false-positive on its pattern argument until the list is re-audited at that bump.
+Plugin commands are not covered at all.
+
+Two receivers still false-positive on a slash-led pattern: `find --regex` takes its
+pattern as the flag's value, which the walker checks like any named value, and
+`str replace --multiline` implies regex without the flag the skip looks for.
 
 ## const PARSE_PATH_RECEIVERS
 Decls whose positional 0 is a parse-time-const file or module path. Such a path CANNOT
 pass in data - it resolves at parse time, before any data exists - so flagging it would
 be a false positive by construction.
 
-A RESOLVED `use` or `overlay use` parses to `Expr::ImportPattern` or `Expr::Overlay`
-and is skipped by the walker's catch-all instead; this list covers the
-module-not-found FALLBACK, which is a plain Call, plus `source` and `source-env`
-always.
+`use` and `overlay use` parse to a Call whether their module resolves or not: nu
+0.116.1 parses the arguments by the decl's signature and keeps the import pattern as
+the call's parser info, which the walker never visits. So this list is what keeps a
+module path from tripping, resolved or not, as it is for `source` and `source-env`.
 
 ## fn lint_block
 The walker over a block another parse produced, positions measured from that text's

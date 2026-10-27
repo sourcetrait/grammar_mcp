@@ -16,15 +16,14 @@ needed for the first two.
 
 Three caveats are by design rather than gaps: a `def --env` definition's stateful lane is
 single-shot because the session state dies with the process; `processes` and `kill` are
-process-scoped, so a
-one-shot invocation's in-flight map is empty; and writing into a namespace a live agent
-host is using is the operator's own risk - git's index lock keeps the repo safe, but an
-in-flight agent call can transiently fail.
+process-scoped, so a one-shot invocation's in-flight map is empty; and writing into a
+namespace a live agent host is using is the operator's own risk - git's index lock keeps
+the repo safe, but an in-flight agent call can transiently fail.
 
 ## fn nuon_record_arg
 The parse chain is `from_nuon` to a nu Value, then `nu_json::Value::from_value`, then
-serde_json - the same converter semantics as the eval's own result path, so a record
-means the same thing on both surfaces.
+serde_json: `CallParams` carries its args as the JSON object an agent's `call` sends, so
+the operator's record crosses into the same shape.
 
 `nu_json` rather than serde's own Serialize on a nu Value is load-bearing: the latter
 emits the internal tagged representation with spans, not the friendly JSON `to json`

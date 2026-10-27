@@ -37,7 +37,7 @@ Callers ask only once a parse has FAILED: a runaway always ends in a parse error
 and a clean parse is never a cycle however often it registered a shared module.
 
 `baseline` is `num_files()` taken BEFORE the parse, so only this parse's own
-registrations count. Without it the interact lane, whose working set accumulates
+registrations count. Without it the stateful lane, whose working set accumulates
 across calls, would eventually look like a cycle on its own.
 
 A synthetic name - the submitted body - canonicalizes to nothing and drops out,

@@ -13,8 +13,10 @@ namespace, one XDG root, one equip git repo. Per-FILE isolation is therefore fre
 equip names and must not rely on a pristine namespace. A test that genuinely needs
 an empty namespace belongs in its own binary or in the system crate.
 
-`--test-threads=1` follows from the same constraint - a shared namespace and one
-git repo race concurrently.
+The tests within a binary still run in parallel: each file's `TestServer` is one
+`module_with!` instance its tests share, the equip repository's write lock serializes
+their commits, and a file whose tests read or write one shared state runs them as
+named steps of a single `Stepper` test rather than asking for `--test-threads=1`.
 
 ## fn sweep_dead_test_namespaces
 Each test BINARY gets its own `grammar_inproc_<pid>` root holding a full equip git

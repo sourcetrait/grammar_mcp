@@ -1,13 +1,8 @@
 #![allow(dead_code)]
-//! Known-public-key mTLS verifier: a peer's presented leaf DER must match a
-//! configured known public key.
+//! The known-public-key mTLS verifier: a peer's leaf must match a known key.
 use crate::*;
 
-/// Known-public-key verifier: the peer's presented leaf DER must match the one
-/// configured known public key, byte for byte. Fills BOTH rustls roles - as the
-/// connecting client it verifies the peer's server cert, as the accepting server
-/// it verifies the peer's client cert - because each end matches the SAME remote
-/// public key regardless of role.
+/// The verifier matching a peer's leaf DER to one known public key, byte for byte.
 #[derive(Debug)]
 pub(crate) struct PublicKeyVerifier {
     remote_public_key: rv::CertificateDer<'static>,

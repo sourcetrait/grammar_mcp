@@ -128,10 +128,6 @@ impl nu::Command for GrimmChannelSend {
             None => None,
         };
 
-        // CapNoCap: an event that would overflow the notification cap is spilled to
-        // an inbox file, and a compact pointer rides the wire in its place, so the
-        // full event survives to the receiving agent (the caller's attached is
-        // untouched - the pointer names its own spill file).
         let wire_event = if event_overflows(&event_nuon) {
             let rel = write_inbox_file(&channel, &format!("{id}.event.nuon"), &event_nuon)
                 .map_err(|e| shell_error(&e, call.head))?;
@@ -179,9 +175,7 @@ fn stop_offender(engine_state: &nu::EngineState) -> String {
     }
 }
 
-/// Write `nuon` to `inbox/<name>` and return the name the wire carries. Serves
-/// both the caller's attachment (`<id>.nuon`) and an auto-spilled event
-/// (`<id>.event.nuon`).
+/// Write `nuon` to `inbox/<name>` and return the name the wire carries.
 fn write_inbox_file(
     channel: &ChannelHandle,
     name: &str,

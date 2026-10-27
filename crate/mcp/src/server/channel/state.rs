@@ -9,9 +9,7 @@ pub(crate) const MAX_FRAME_BYTES: usize = 1_048_575;
 /// The env var naming the tmpfs IPC root the inbox lives under.
 pub(crate) const SHM_ROOT_VAR: &str = "$XDGX_SHM_DIR";
 
-/// `<shm>/mcp/<mcp_nom>/inbox` - where a channel's attachments and a remote
-/// link's landed files meet, so an injected packet's refs resolve for the local
-/// agent. The one composition point both producers share.
+/// `<shm>/mcp/<mcp_nom>/inbox`, where attachments and a link's landed files meet.
 pub(crate) fn inbox_dir(mcp_nom: &datum::NomPair) -> Result<PathBuf, String> {
     Ok(expand_path(Path::new(SHM_ROOT_VAR))?
         .join("mcp")
@@ -514,23 +512,17 @@ pub(crate) fn escape_line(rendered: &str) -> String {
     rendered.replace('\n', "\\n").replace('\r', "\\r")
 }
 
-/// The client's task-notification character cap: the whole rendered packet line
-/// truncates past this on the receiving agent (a claude-code constant the server
-/// never observes; measured 500). CapNoCap couples the event auto-spill to it.
+/// The client's task-notification cap on a rendered packet line, in characters.
 pub(crate) const NOTIFICATION_CAP: usize = 500;
 
-/// Reserve for the packet wrapper (id, from, model, attached, NUON punctuation)
-/// around the event; a rendered event longer than the cap minus this auto-spills.
+/// What the packet's wrapper takes of the cap around its event.
 const NOTIFICATION_WRAPPER_RESERVE: usize = 120;
 
-/// The reserved event key marking a spilled event: its value is the inbox-relative
-/// path to the full event NUON, which the receiving agent reads instead of the
-/// spilled-out inline event. `event_bytes` carries the original size.
+/// The event key marking a spilled event, its value the full event's path.
 pub(crate) const EVENT_SPILL_KEY: &str = "spilled_event_path";
 const EVENT_BYTES_KEY: &str = "event_bytes";
 
-/// The reserved dest name a remote event spill transfers under, inside the
-/// delivery's per-message inbox directory.
+/// The dest a remote event spill transfers under, in its delivery's directory.
 pub(crate) const EVENT_SPILL_DEST: &str = ".mcp_event.nuon";
 
 /// Would this rendered event NUON overflow the notification cap once wrapped?
@@ -538,8 +530,7 @@ pub(crate) fn event_overflows(event_nuon: &str) -> bool {
     event_nuon.chars().count() > NOTIFICATION_CAP - NOTIFICATION_WRAPPER_RESERVE
 }
 
-/// The compact pointer event that replaces an oversized event on the wire: it
-/// names the inbox-relative path holding the spilled full event, plus its size.
+/// The pointer event replacing an oversized one: the spill's path and its size.
 pub(crate) fn event_spill_pointer(
     path: &str,
     event_bytes: usize,

@@ -106,8 +106,7 @@ impl NuSh {
     }
 }
 
-/// A call's value as its envelope's result: nothing, a record, or a table as it
-/// is, anything else `{}`.
+/// A call's value as its result: nothing, a record, or a table as is, else `{}`.
 fn lenient_result(value: nu::Value) -> nu::Value {
     let kept = match &value {
         nu::Value::Nothing { .. } | nu::Value::Record { .. } => true,

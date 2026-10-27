@@ -12,22 +12,27 @@ its first byte - not an error and not a dropped event, but a malformed record th
 `from nuon` at the reader with nothing upstream to blame. Above the cap the frame is dropped
 whole and the watch closes.
 
+## fn inbox_dir
+The one composition point both producers share: a channel's attachments and a remote
+link's landed files meet here, so a relayed packet's refs resolve for the local agent.
+
 ## the auto-spill primitives (NOTIFICATION_CAP, event_overflows, event_spill_pointer)
 The second, lower cap. MAX_FRAME_BYTES (1 MiB) is what one wss frame carries, but the
-client truncates a task-notification at ~500 characters of the whole rendered packet line
-- a claude-code constant the server never observes. An event between the two transits and
-fires Sent (the transport write), yet renders back to the agent truncated, silently and
-unrecoverably (CapNoCap, RemoteFirstBlood). So a send whose rendered event would overflow
-the notification cap spills: the full event NUON goes to a file and a compact
+client truncates a task-notification at about 500 characters of the whole rendered
+packet line - a claude-code constant the server never observes, measured at 500. An event
+between the two transits and fires Sent (the transport write), yet renders back to the
+agent truncated, silently and unrecoverably. So a send whose rendered event would
+overflow the notification cap spills: the full event NUON goes to a file and a compact
 event_spill_pointer ({spilled_event_path, event_bytes}) rides the wire in its place, so
-the agent reads <inbox>/<spilled_event_path> for the real event. event_overflows tests the
-rendered-event char count against the cap minus a wrapper reserve (the id/from/model/
-attached around it), not the exact line, so one threshold serves every send path without
-re-deriving the wrapper. NOTIFICATION_CAP is the single coupling point to the client - a
-client-cap change is a one-line edit. Distinct from the frame cap: an event over 1 MiB
-cannot ride a Deliver frame inline, so the remote spill transfers it via the file
-connection (EVENT_SPILL_DEST), which is why the spill is a send-path act, not a render
-choice.
+the agent reads <inbox>/<spilled_event_path> for the real event, `event_bytes` its
+original size. event_overflows tests the rendered event's character count against the
+cap minus a wrapper reserve (the id, from, model, attached, and NUON punctuation around
+it), not the exact line, so one threshold serves every send path without re-deriving the
+wrapper. NOTIFICATION_CAP is the single coupling point to the client - a client-cap
+change is a one-line edit. Distinct from the frame cap: an event over 1 MiB cannot ride a
+Deliver frame inline, so the remote spill transfers it through the file connection under
+EVENT_SPILL_DEST, inside the delivery's own inbox directory, which is why the spill is a
+send-path act, not a render choice.
 
 ## enum ChannelPhase
 READ AT SEND TIME, NEVER CAPTURED. A job outliving its eval keeps its decl and everything it

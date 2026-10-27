@@ -4,8 +4,10 @@ use crate::*;
 #[derive(Clone)]
 pub(crate) struct GrimmRemoteChannelSend;
 
-/// `grimm remote_channel_send_with <mcp_nom> <model> <event> <attached>` - a
-/// message plus files; `attached` is the files table, src -> receiver dest.
+/// `grimm remote_channel_send_with <mcp_nom> <model> <event> <attached>`.
+///
+/// A message plus files: `attached` is the files table, each local `src` beside
+/// the `dest` the receiver lands it under.
 #[derive(Clone)]
 pub(crate) struct GrimmRemoteChannelSendWith;
 
@@ -107,9 +109,7 @@ impl nu::Command for GrimmRemoteChannelSendWith {
     }
 }
 
-/// Read each `{src, dest}` row into `(dest, bytes)`, validating the dest and
-/// reading the local src synchronously (a read failure fails the send outright,
-/// before the id is returned - a local problem the agent learns immediately).
+/// Read each `{src, dest}` row into `(dest, bytes)`, its dest checked first.
 fn read_attachments(value: &nu::Value) -> Result<Vec<(String, Vec<u8>)>, String> {
     let rows = match value {
         nu::Value::List { vals, .. } => vals,
@@ -146,13 +146,10 @@ fn mint_remote_id(
     mint_msg_id(channel_handle().nonce_gen(), "remote/send", model, event_nuon, None).to_string()
 }
 
-/// CapNoCap (sender side): if the rendered event would overflow the receiver's
-/// notification cap, move it to a transferred file (the reserved EVENT_SPILL_DEST,
-/// alongside any caller files) and return a compact pointer event in its place.
-/// The receiver rewrites the pointer's path under this delivery's inbox directory
-/// before relaying, so the agent resolves it as <inbox>/<spilled_event_path>. Via
-/// the file connection, so a >1 MiB event (which no Deliver frame could carry
-/// inline) still reaches the agent. Returns (wire event NUON, payloads).
+/// Spill an event the receiver's cap would truncate into a transferred file.
+///
+/// Returns the wire event's NUON, a pointer when it spilled, and the payloads,
+/// the spill among them.
 fn spill_remote_event(
     event_nuon: String,
     mut payloads: Vec<(String, Vec<u8>)>,

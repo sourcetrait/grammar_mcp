@@ -9,14 +9,16 @@ two diverged - the validator missing a layer the eval engine has - a rig calling
 be an `ExtraPositional` naming the builtin head the parser mis-bound, nothing in
 it suggesting a missing engine layer.
 
-`is_mcp = true` is load-bearing and easy to read as decoration: it routes an
-external command's stdin to null. The host's own stdin IS the JSON-RPC channel,
-so without it an external could steal the protocol stream.
+`is_mcp = true` is load-bearing and easy to read as decoration. On nu 0.116.1
+(`run_external.rs`) it routes an external's empty stdin to null, since the
+host's own stdin is the JSON-RPC channel and an external could otherwise steal
+the protocol stream; and it runs `setsid` before each external's exec, so every
+external leads its own session and process group with no controlling terminal.
 
-`is_interactive = false` has a second effect worth knowing about, well away from
-this file: nushell gates its foreground-process-group handling on it, so
-externals spawn with no setpgid and there is no process group to kill. That is
-why the teardown walks /proc instead.
+`is_interactive = false` keeps nushell's foreground handling out: no external
+takes a terminal's foreground group. The teardown still walks /proc rather than
+signalling a group, since a descendant that starts its own session or group
+leaves the external's (`server/teardown.rs`).
 
 ## fn startup
 THE HOST'S ONE STARTUP, following nushell's own `main` (nu 0.116.1,
@@ -24,7 +26,7 @@ THE HOST'S ONE STARTUP, following nushell's own `main` (nu 0.116.1,
 for the host's deltas: the namespace as the lib dirs, the namespace's plugin
 registry, the `plugin` commands in the stateful mode alone, the shadowed
 host-fatal decls, and a `print` writing to the call's log. Every engine is built
-here - the stateless eval base, the interact engine, the registration engine,
+here - the stateless eval base, the stateful engine, the registration engine,
 and the parse engine behind the lint and the validator - so validation still
 equals serving.
 

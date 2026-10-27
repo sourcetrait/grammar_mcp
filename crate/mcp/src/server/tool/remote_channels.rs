@@ -12,7 +12,7 @@ pub(crate) struct RemoteChannelEntry {
     pub address: String,
 }
 
-/// One bound-but-unpaired listener in the `listening` set: its alias + bind address.
+/// One bound-but-unpaired listener in the `listening` set: its alias and address.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct ListeningEntry {
     pub remote: String,

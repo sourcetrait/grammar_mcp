@@ -1,7 +1,7 @@
 # nu.rs
 
-The `nu` tool, NuNu's execute: one definition evaluated against NUON data, in place of
-run and interact. The contract is User's `doc/human/NuNu.md`.
+The `nu` tool, NuNu's execute: one definition evaluated against NUON data. The contract
+is User's `doc/human/NuNu.md`.
 
 ## struct NuParams
 Three strings, nothing structured: the definition is Nu source, the data NUON text, the

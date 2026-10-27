@@ -27,6 +27,10 @@ An install brings a RIG into view only when the equip has one; a lib alone has n
 a purview to show.
 
 ## fn purview_add_rig
+The purview table is namespace meta beside the equip repository, and its load,
+change, and save are not atomic, so it rides the repository's lock, as
+purview_configure's write does.
+
 ADDS, never replaces. `default` always carries a row - startup writes it as `['*']` - so the
 first install simply appends beside it, giving `['*', 'my/rig:']`, and nothing leaves view.
 Narrowing everything down to one rig as the price of installing it would be a surprising

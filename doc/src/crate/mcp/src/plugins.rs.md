@@ -15,8 +15,8 @@ registry item yields a `null` second slot rather than dropping it - the pair
 keeps its arity whatever the plugin reported.
 
 ## fn registry_path
-Per NAMESPACE, in its data dir beside the equip repository: a plugin added from
-interact() is that namespace's state and persists with it. Two binaries serving
+Per NAMESPACE, in its data dir beside the equip repository: a plugin added on the
+stateful lane is that namespace's state and persists with it. Two binaries serving
 one namespace take turns: nushell's upsert matches by plugin NAME, so each
 registration replaces the other's entry rather than doubling it.
 
@@ -30,8 +30,8 @@ step returns None and the engine simply carries no plugin decls.
 
 ## fn registry_mtime
 MTIME RATHER THAN CONTENT, because it is the one signal that catches every way
-the registry can move: the startup registration, a `plugin add/rm` driven
-through interact(), and an edit from outside.
+the registry can move: the startup registration, a `plugin add/rm` on the
+stateful lane, and an edit from outside.
 
 The Executor snapshots it when it builds the stateless base and re-stats it once
 per dispatch. That is affordable only because a stat is roughly

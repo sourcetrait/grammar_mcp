@@ -50,6 +50,11 @@ the namespace to `test` - resolved at the argument boundary, so nothing
 downstream re-reads it for that - and it ties the watchdog to the channel's
 phase. Everything else behaves identically.
 
+### field startup_cwd
+Captured once at load, since nothing an eval does moves the host's own cwd
+afterwards; it is held for future cwd-relative reads, nothing reading it again
+after the remotes file loads.
+
 ## struct ChannelConfig
 
 ### field spam

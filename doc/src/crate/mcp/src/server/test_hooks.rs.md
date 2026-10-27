@@ -16,8 +16,8 @@ exit.
 
 ## struct TestPanicDecl
 Exercises the `catch_unwind` guard: the host survives and the eval errors, and on
-the interact lane the engine resets.
+the stateful lane the engine resets.
 
 ## fn register_test_hooks
 Called by `engine::startup` for every engine, so a hook is reachable on the
-stateless pool and the interact lane alike, and the parse engine knows it.
+stateless pool and the stateful lane alike, and the parse engine knows it.

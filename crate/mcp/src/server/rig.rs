@@ -1278,7 +1278,7 @@ impl Drop for SelfView {
     }
 }
 
-/// Validate an equip's source kinds against one self-view, building the rig's index.
+/// Validate an equip's source kinds against one self-view, building its index.
 pub(crate) fn validate_equip_source(
     equip: &str,
     source_dir: &Path,

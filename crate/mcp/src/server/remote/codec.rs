@@ -16,16 +16,15 @@ pub(crate) enum RemoteStream {
     File,
 }
 
-/// A message-connection frame carrying one delivery, peer-neutral (both ends send
-/// it). Nothing rides back: the sender's own transport write is the ack, and
-/// mcp/remote/Sent|Unsent fire from that write.
+/// The message connection's frame: one delivery, sent by either end.
 #[derive(
     Debug, Clone, PartialEq, ser::Serialize, ser::Deserialize, bitcode::Encode, bitcode::Decode,
 )]
 pub(crate) enum MsgFrame {
-    /// A message to deliver: the sender's message id, the model + event NUON the
-    /// receiver relays, and the dest names it must receive on the file connection
-    /// before relaying (empty for a message with no files).
+    /// A message to deliver: its id, model, event, and the files it waits for.
+    ///
+    /// `files` names the dests the receiver awaits on the file connection before
+    /// it relays, empty for a message with none.
     Deliver {
         id: String,
         model: String,
@@ -48,15 +47,12 @@ pub(crate) enum FileFrame {
     },
 }
 
-/// Messages the link INITIATOR sends to the ACCEPTOR. A separate language per
-/// direction so a mis-send is a compile error, not a runtime surprise; the
-/// app-level frames (`Msg`/`File`) are peer-neutral and shared both ways.
+/// Messages the link INITIATOR sends to the ACCEPTOR.
 #[derive(
     Debug, Clone, PartialEq, ser::Serialize, ser::Deserialize, bitcode::Encode, bitcode::Decode,
 )]
 pub(crate) enum InitiatorToAcceptor {
-    /// Opening handshake: the initiator's McpNom and which stream this
-    /// connection carries.
+    /// The opening handshake: the initiator's nom and the stream it carries.
     Hello { mcp_nom: String, stream: RemoteStream },
     /// A message-connection frame (rides the Message connection).
     Msg(MsgFrame),

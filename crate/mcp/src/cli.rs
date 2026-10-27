@@ -41,7 +41,7 @@ pub struct CliEnv {
 /// The host's subcommands; absent means serve MCP over stdio.
 #[derive(clap::Subcommand)]
 pub enum CliCmd {
-    /// One-shot CLI over the tool surface; prints one line of bare compact JSON.
+    /// One-shot CLI over the tool surface; prints the tool's NUON envelope.
     Cli {
         #[command(subcommand)]
         tool: CliTool,

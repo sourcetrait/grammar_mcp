@@ -23,8 +23,7 @@ pub(crate) struct CheckSummary {
     pub warnings: Vec<Diagnostic>,
 }
 
-/// The per-action result; `install`'s is its commit's, and `uninstall` returns no
-/// summary.
+/// The per-action summary, `install`'s its commit's; `uninstall` returns none.
 #[derive(Debug, ser::Serialize)]
 #[serde(untagged)]
 pub(crate) enum EquipSummary {
@@ -170,8 +169,6 @@ fn purview_add_rig(
     rig: &str,
     current_ids: &[String],
 ) {
-    // The purview table is namespace meta beside the equip repo: its
-    // load-mutate-save is not atomic, so it rides the same repo-wide lock.
     let _repo = equip_repo_lock();
     let mut rows = match load_purviews() {
         Ok(rows) => rows.unwrap_or_default(),

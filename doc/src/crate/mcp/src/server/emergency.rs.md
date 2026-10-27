@@ -20,8 +20,8 @@ builtin, or a bare blocking syscall. Cooperative cancel cannot reach it and you 
 SIGKILL a thread.
 
 Lane-tagged with a FIELD rather than split into two look-alike variants. A stateless one
-also holds a concurrency permit, so enough of them saturate run(); the interact one
-deadlocks the single serial lane. `pool_held` and `pool_cap` snapshot that pressure at
+also holds a concurrency permit, so enough of them saturate the stateless pool; a
+stateful one deadlocks the single serial lane. `pool_held` and `pool_cap` snapshot that pressure at
 detection.
 
 An external child or plugin stuck the same way is NOT this condition - killing that

@@ -1,15 +1,14 @@
 #![allow(dead_code)]
-//! Remote link lifecycle: two known-public-key mTLS connections to one peer,
-//! message/control + file. A link is opened on demand by remote_channel_open
-//! (connector or listener, from config), after the agent's Channel is up. The
-//! open task owns the lifecycle: it emits mcp/remote/Connected once both
-//! connections handshake, drives the link, and emits mcp/remote/Disconnected
-//! when it ends. Sends carry Channel packets: the receiver renders + emits them
-//! onto its own Channel with from = mcp/remote/<sender_nom>, files alongside.
+//! Remote links: two known-public-key mTLS connections to one peer.
+//!
+//! One connection carries messages and control, the other files.
+//! remote_channel_open opens a link on demand, as a connector or a listener; its
+//! open task emits mcp/remote/Connected once both connections handshake and
+//! mcp/remote/Disconnected when the link ends. A sent packet is emitted on the
+//! receiver's Channel from `mcp/remote/<sender_nom>`, its files alongside.
 use crate::*;
 
-/// Server-name presented on the client handshake; the known-public-key match
-/// ignores it.
+/// The client handshake's server name, which the known-public-key match ignores.
 const PLACEHOLDER_SERVER_NAME: &str = "grammar.invalid";
 
 /// How long a closing side waits for the reciprocal `Close` before giving up.
@@ -18,18 +17,13 @@ const CLOSE_FRAME_GRACE: tk::TkDuration = tk::TkDuration::from_secs(2);
 /// One file chunk's uncompressed payload ceiling; zstd + the frame ride on top.
 const CHUNK_BYTES: usize = 256 * 1024;
 
-/// Host-origin lifecycle + delivery models, on the local Channel under the mcp/
-/// reservation.
+/// The host's lifecycle and delivery models, under the mcp/ reservation.
 const MODEL_CONNECTED: &str = "mcp/remote/Connected";
 const MODEL_DISCONNECTED: &str = "mcp/remote/Disconnected";
 const MODEL_SENT: &str = "mcp/remote/Sent";
 const MODEL_UNSENT: &str = "mcp/remote/Unsent";
 
-// ---- the process-wide open-link registry ----
-
-/// Every open link, keyed by alias. A std Mutex, not the async one, so a grimm
-/// send reaches it from the synchronous eval thread; guards are only held for
-/// map ops, never across an await.
+/// Every open link, keyed by alias, behind a std Mutex an eval thread can take.
 static REMOTE_LINKS: LazyLock<Arc<std::sync::Mutex<HashMap<String, RemoteLinkEntry>>>> =
     LazyLock::new(|| Arc::new(std::sync::Mutex::new(HashMap::new())));
 
@@ -74,8 +68,7 @@ pub(crate) async fn close_listener(alias: &str) -> bool {
     true
 }
 
-/// Find the open link to `mcp_nom` and enqueue a send. The lock is held only for
-/// the lookup + the synchronous mpsc pushes.
+/// Find the open link to `mcp_nom` and enqueue a send on it.
 pub(crate) fn find_link_send(
     mcp_nom: &str,
     id: String,
@@ -92,9 +85,7 @@ pub(crate) fn find_link_send(
     entry.handle.enqueue_send(id, model, event_nuon, payloads)
 }
 
-/// A dest is a relative path with no `..` component - never an escape from the
-/// per-packet inbox. Enforced sender-side (a clean error) and receiver-side
-/// (defence against a buggy peer).
+/// Whether a dest is a relative path of plain components, never an escape.
 pub(crate) fn safe_dest(dest: &str) -> bool {
     let path = std::path::Path::new(dest);
     !dest.is_empty()
@@ -104,13 +95,10 @@ pub(crate) fn safe_dest(dest: &str) -> bool {
             .all(|c| matches!(c, std::path::Component::Normal(_)))
 }
 
-/// The connector's blocking-connect timeout: the dial must land within this or
-/// the open returns a synchronous timeout error.
+/// How long a connector's dial may take before the open fails.
 const CONNECT_TIMEOUT: tk::TkDuration = tk::TkDuration::from_secs(20);
 
-/// Open a configured link, BLOCKING on its immediate networking result - bind
-/// for a listener, connect for a connector - so remote_channel_open returns
-/// synchronously. Only the listener's peer-wait stays asynchronous.
+/// Open a configured link, blocking on its bind or its connect.
 pub(crate) async fn open_remote_blocking(
     self_mcp_nom: &datum::NomPair,
     entry: RemoteConfig,
@@ -123,9 +111,7 @@ pub(crate) async fn open_remote_blocking(
     }
 }
 
-/// Connector: block on the connect (20s), register the established link, then
-/// watch for its teardown asynchronously. No Connected for the open attempt (the
-/// synchronous success is the notice); Disconnected still fires on a later drop.
+/// Connect, register the link, and watch for its teardown in the background.
 async fn open_connector(
     self_mcp_nom: &datum::NomPair,
     entry: RemoteConfig,
@@ -157,9 +143,7 @@ async fn open_connector(
     Ok(())
 }
 
-/// Listener: block on the BIND, then accept + serve asynchronously. The bind
-/// result returns synchronously (bound, or the bind error); Connected fires when
-/// a peer pairs, Disconnected when the paired link later drops.
+/// Bind, then accept and serve the peer in the background.
 async fn open_listener(
     self_mcp_nom: &datum::NomPair,
     entry: RemoteConfig,
@@ -253,8 +237,7 @@ fn unlisten(
     }
 }
 
-/// Drop the link registered under `alias` only if it is still the one this task
-/// established - a re-open may have replaced it under the same alias.
+/// Drop `alias`'s link only while it is still the one this task established.
 fn deregister_if_ours(
     alias: &str,
     peer_nom: &str,
@@ -318,9 +301,7 @@ pub(crate) struct RemoteLinkOptions {
     pub peer_public_key_file: PathBuf,
 }
 
-/// A running link: the peer McpNom, the outbound queues a send pushes onto, and
-/// the shared cancel. The join handles live in the open task, not here, so
-/// cancelling (remote_channel_close) lets that task observe the end and report.
+/// A running link: the peer's nom, its outbound queues, and their shared cancel.
 pub(crate) struct RemoteLinkHandle {
     pub remote_mcp_nom: String,
     cancel: tku::CancellationToken,
@@ -333,20 +314,14 @@ pub(crate) struct RemoteLinkHandle {
 }
 
 impl RemoteLinkHandle {
-    /// Cancel both drivers; the open task awaits their joins, deregisters, and
-    /// emits Disconnected.
+    /// Cancel both drivers; the open task then reports the link's end.
     pub(crate) fn cancel(&self) {
         if !self.cancel.is_cancelled() {
             self.cancel.cancel();
         }
     }
 
-    /// Register the send, then queue its frames (file chunks onto the file
-    /// connection, the Deliver onto the message connection). Synchronous (mpsc
-    /// sends), so a grimm eval thread drives it. Registration precedes the pushes
-    /// so no write outcome can arrive for an unknown id; a mid-push failure means
-    /// the driver is gone (link down at enqueue) - forget the send and surface a
-    /// synchronous error, since nothing left the host and there is no async notice.
+    /// Register a send, then queue its frames; a closed queue fails it synchronously.
     pub(crate) fn enqueue_send(
         &self,
         id: String,
@@ -374,9 +349,7 @@ impl RemoteLinkHandle {
     }
 }
 
-/// Queue every frame of one send: each file's chunks onto the file connection,
-/// then the Deliver onto the message connection. A closed receiver (the driver is
-/// gone) is the link-down-at-enqueue case, returned as an error.
+/// Queue one send's file chunks, then its Deliver; a closed queue is an error.
 fn push_frames(
     msg_out_tx: &tk::UnboundedSender<MsgFrame>,
     file_out_tx: &tk::UnboundedSender<FileFrame>,
@@ -423,12 +396,10 @@ fn push_frames(
         .map_err(|_| closing())
 }
 
-/// The drivers a spawn returns: the handle plus both join handles (the open task
-/// awaits the joins to learn when the link has ended).
+/// A spawned link: its handle and both drivers' join handles.
 type LinkDrivers = (RemoteLinkHandle, tk::JoinHandle<()>, tk::JoinHandle<()>);
 
-/// Connect as the initiator: two mTLS connections (message + file), each
-/// handshaked, both drivers spawned under one cancel.
+/// Connect as the initiator: both mTLS connections, handshaked, then driven.
 async fn connect_link(
     self_mcp_nom: &datum::NomPair,
     entry: &RemoteConfig,
@@ -454,8 +425,7 @@ async fn connect_link(
     ))
 }
 
-/// Bind the listener socket + build its known-public-key TLS acceptor: the
-/// synchronous half of a listener open, so a bind failure surfaces at the tool.
+/// Bind the listener and build its TLS acceptor, the open's synchronous half.
 async fn bind_listener(
     entry: &RemoteConfig,
     bind: std::net::SocketAddr,
@@ -470,9 +440,7 @@ async fn bind_listener(
     Ok((listener, acceptor))
 }
 
-/// Accept one peer's two connections (known-public-key-verified, optionally
-/// source-IP-filtered) on an already-bound listener + spawn its drivers. The
-/// asynchronous half of a listener open; the bind already succeeded.
+/// Accept one peer's two connections on a bound listener and drive them.
 async fn accept_and_pair(
     self_mcp_nom: &datum::NomPair,
     listener: tk::TcpListener,
@@ -606,8 +574,6 @@ fn pair_check(
     }
 }
 
-// ---- receive + send coordination (peer-neutral, shared by both roles) ----
-
 /// One inbound delivery's state, coordinating its message + file connections.
 #[derive(Default)]
 struct DeliverSlot {
@@ -653,10 +619,7 @@ impl RecvContext {
     }
 }
 
-/// The sender half: aggregate write-outcome tracking per outbound send. A send is
-/// Sent once the Deliver and every file dest have written OK across both
-/// connections, Unsent on the first write error or a link teardown with the send
-/// still in flight. No peer frame is involved - the transport write is the ack.
+/// Each outbound send's outstanding writes, reported Sent or Unsent.
 #[derive(Clone)]
 struct SendTracker {
     sends: Arc<std::sync::Mutex<HashMap<String, PendingSend>>>,
@@ -664,8 +627,7 @@ struct SendTracker {
     peer_nom: String,
 }
 
-/// One outbound send's outstanding writes: the file dests and the Deliver not yet
-/// written OK. Complete (-> Sent) when both are empty/false.
+/// One send's unwritten file dests and whether its Deliver is still unwritten.
 struct PendingSend {
     pending_dests: HashSet<String>,
     message_pending: bool,
@@ -685,8 +647,7 @@ impl SendTracker {
         }
     }
 
-    /// Register a send before its frames are queued, so no write outcome can
-    /// arrive for an unknown id.
+    /// Register a send before its frames are queued.
     fn register(
         &self,
         id: &str,
@@ -702,8 +663,7 @@ impl SendTracker {
         );
     }
 
-    /// Drop a registered send WITHOUT a report - the synchronous enqueue-failure
-    /// path, where the caller already surfaces the error to the agent.
+    /// Drop a registered send without a report.
     fn forget(
         &self,
         id: &str,
@@ -778,8 +738,7 @@ impl SendTracker {
         }
     }
 
-    /// Link teardown: fire Unsent for every still-pending send. Idempotent - the
-    /// drain empties the map, so a second driver's flush finds nothing.
+    /// Report every still-pending send Unsent, the link down; idempotent.
     fn flush_unsent(
         &self,
         kind: &str,
@@ -827,11 +786,7 @@ fn record_file_done(
     try_finalize(ctx, id);
 }
 
-/// If the Deliver is in and every manifest file has landed, relay once. Called by
-/// whichever driver completed the condition; the map remove makes it fire exactly
-/// once. Nothing goes back to the sender - its Sent already fired from its own
-/// write, and a receiver-side relay failure is intentionally not surfaced remotely
-/// (only logged locally).
+/// Relay a delivery once its Deliver and every file have landed.
 fn try_finalize(
     ctx: &RecvContext,
     id: &str,
@@ -895,9 +850,6 @@ fn relay_to_channel(
     }
     let event = nu::from_nuon(&info.event_nuon, None)
         .map_err(|e| ("event_unparseable".to_string(), e.to_string()))?;
-    // CapNoCap: a spilled-event pointer arrives with a dest-relative path; rewrite
-    // it to the inbox-relative path under this delivery's directory, so the agent
-    // resolves it uniformly as <inbox>/<spilled_event_path> (as for a local spill).
     let event = rewrite_spill_pointer(event, &ctx.peer_nom, id);
     let event_nuon = render_nuon(&event).map_err(|e| ("render".to_string(), e))?;
     let from = format!("{MCP_RESERVED_PREFIX}remote/{}", ctx.peer_nom);
@@ -917,9 +869,7 @@ fn relay_to_channel(
         .map_err(|e| ("channel".to_string(), e.message().to_string()))
 }
 
-/// Rewrite a spilled-event pointer's dest-relative path (EVENT_SPILL_DEST) to the
-/// inbox-relative path under this delivery's directory (<peer_nom>/<id>/<dest>). A
-/// no-op for a normal event, or a pointer whose path already carries a `/`.
+/// A spill pointer's dest made inbox-relative, under this delivery's directory.
 fn rewrite_spill_pointer(
     event: nu::Value,
     peer_nom: &str,
@@ -953,8 +903,7 @@ fn report_sent(
     push_report(MODEL_SENT, nu::Value::record(event, span));
 }
 
-/// Push an Unsent report {id, mcp_nom, error{kind, message}} onto the LOCAL
-/// (sender's own) Channel.
+/// Push an Unsent report onto the sender's own Channel.
 fn report_unsent(
     peer_nom: &str,
     id: &str,
@@ -972,9 +921,7 @@ fn report_unsent(
     push_report(MODEL_UNSENT, nu::Value::record(event, span));
 }
 
-/// Mint, render, and emit a host-origin packet (`from = mcp`) onto the Channel.
-/// Best effort: the local agent is running (it drove the send / open), so its
-/// Channel is Verified; a dropped packet on a since-closed channel is fine.
+/// Emit a host-origin packet onto the local Channel, best effort.
 fn push_report(
     model: &str,
     event: nu::Value,
@@ -1026,8 +973,6 @@ fn handle_file_frame(
     }
 }
 
-// ---- initiator (TLS client) ----
-
 type InitReadHalf = tk::ReadHalf<tls::client::TlsStream<tk::TcpStream>>;
 type InitWriteHalf = tk::WriteHalf<tls::client::TlsStream<tk::TcpStream>>;
 type InitFramedRead = tku::FramedRead<InitReadHalf, BitcodeCodec<AcceptorToInitiator>>;
@@ -1061,8 +1006,7 @@ async fn connect_conn(
     Ok((remote, framed_read, framed_write))
 }
 
-/// Drive the initiator's MESSAGE connection: send Deliver frames (reporting
-/// Sent/Unsent on the write), relay inbound ones.
+/// Drive the initiator's message connection, its Deliver frames both ways.
 async fn run_initiator_message(
     cancel: tku::CancellationToken,
     mut framed_read: InitFramedRead,
@@ -1179,8 +1123,6 @@ async fn close_initiator(
     .await;
 }
 
-// ---- acceptor (TLS server) ----
-
 type AcceptReadHalf = tk::ReadHalf<tls::server::TlsStream<tk::TcpStream>>;
 type AcceptWriteHalf = tk::WriteHalf<tls::server::TlsStream<tk::TcpStream>>;
 type AcceptFramedRead = tku::FramedRead<AcceptReadHalf, BitcodeCodec<InitiatorToAcceptor>>;
@@ -1210,8 +1152,7 @@ async fn accept_conn(
     Ok((remote, stream, framed_read, framed_write))
 }
 
-/// Drive the acceptor's MESSAGE connection: send Deliver frames (reporting
-/// Sent/Unsent on the write), relay inbound ones.
+/// Drive the acceptor's message connection, its Deliver frames both ways.
 async fn run_acceptor_message(
     cancel: tku::CancellationToken,
     mut framed_read: AcceptFramedRead,
@@ -1327,8 +1268,6 @@ async fn close_acceptor(
     })
     .await;
 }
-
-// ---- TLS config (known-public-key mTLS) ----
 
 /// Build the client config: present our public key, match the peer's known one.
 fn client_config(opts: &RemoteLinkOptions) -> io::Result<Arc<tls::ClientConfig>> {

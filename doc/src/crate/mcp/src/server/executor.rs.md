@@ -1,16 +1,18 @@
 # executor.rs
 
 ## struct Executor
-The ready buffer is a LATENCY PRE-PREPARATION, not clone reuse. Each clone is
-SINGLE-USE and drops after its one eval, which is what keeps statelessness intact;
-what the buffer buys is that a launching run or call never pays the clone inline.
+The ready buffer holds pre-built clones, not reused ones. Each clone is SINGLE-USE
+and drops after its one eval, which is what keeps statelessness intact. `take_clone`
+pops a ready clone and then refills the buffer before it returns, both on the
+dispatch path, so a launching call still pays one clone inline: the refill's, or the
+fallback's when the buffer is empty or stale.
 
 BASE INVALIDATION IS A CORRECTNESS HINGE, not a nicety. A pre-cloned engine is a
 SNAPSHOT of the base's plugin decls and env. The base is a swap point tagged with a
-`generation`; a plugin-registry change - a `plugin add/rm` on the interact lane, OR
+`generation`; a plugin-registry change - a `plugin add/rm` on the stateful lane, OR
 an external edit from the user's own shell, both seen through the file mtime -
-rebuilds the base, bumps the generation, and DROPS the stale ready buffer. So run()
-picks up a plugin the interact lane just registered without a restart.
+rebuilds the base, bumps the generation, and DROPS the stale ready buffer. So the
+stateless pool picks up a plugin the stateful lane just registered without a restart.
 
 In-flight evals finish on the clone they already hold, dispatched under the old
 state, which is fine; only the buffer and future clones pick the change up.

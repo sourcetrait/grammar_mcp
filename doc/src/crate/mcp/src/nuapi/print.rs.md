@@ -11,7 +11,7 @@ stderr already lands in.
 ONE DECL ON EVERY ENGINE, from `startup`, unlike the `grimm` family: `print` is
 standard nushell, so the validator parses it as the eval runs it. It finds its
 call at RUN time from `$env.NONCE` (`NuapiCall::current`), never at parse time:
-a module an earlier interact call parsed runs `print` in a later one, and a decl
+a module an earlier stateful call parsed runs `print` in a later one, and a decl
 carrying the earlier call's log wrote there - measured, the second call's output
 landed in the first call's log.
 

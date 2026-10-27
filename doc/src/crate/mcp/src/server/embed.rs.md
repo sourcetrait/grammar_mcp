@@ -2,8 +2,7 @@
 
 In-process nushell evaluation, the host-side eval engine. The stateless base is built
 once and held by the `Executor`, which hands each eval a pre-built clone onto a
-dedicated 64 MB blocking thread; the stateful interact engine is a single long-lived
-thread. Cancellation rides a per-eval `Signals` flag the dispatch layer registers in
+dedicated 64 MB blocking thread; the stateful engine is a single long-lived thread. Cancellation rides a per-eval `Signals` flag the dispatch layer registers in
 the resource registry.
 
 ## struct FinishGuard
@@ -23,9 +22,9 @@ distinction.
 ## fn merge_env_no_chdir
 NOT nushell's own `merge_env`, and this is the single most consequential deviation in
 the file. `merge_env` ends by calling `std::env::set_current_dir` with the stack's
-`$env.PWD` (nu-protocol engine_state.rs, 0.114.1 rev 0df4ca2) - correct for a REPL that
-owns its process, wrong here. Eval is IN-PROCESS, so that call would move the whole
-HOST's working directory whenever an interact body ran `cd`, and it would stay moved for
+`$env.PWD` (nu-protocol 0.116.1, `engine_state.rs`) - correct for a REPL that owns its
+process, wrong here. Eval is IN-PROCESS, so that call would move the whole HOST's
+working directory whenever a stateful definition ran `cd`, and it would stay moved for
 the process lifetime, pinning that directory open.
 
 The env-overlay drain mirrors nushell's exactly. The config half goes through the public
@@ -73,7 +72,7 @@ nonce, and only append keeps its bytes and an external's - which writes through 
 of this fd - from overwriting each other.
 
 `files_before` is taken BEFORE the parse so the cycle check counts only what THIS parse
-registered - the interact lane's working set accumulates across calls and would
+registered - the stateful lane's working set accumulates across calls and would
 eventually look like a cycle on its own.
 
 THE CYCLE CHECK COMES FIRST, before reporting parse errors, because a resolution cycle's
@@ -105,7 +104,7 @@ end. External children are reaped separately.
 
 The engine clone drops when the thread returns, which is what reclaims its memory.
 
-A caught panic heals the shared jobs table as the interact thread's does
+A caught panic heals the shared jobs table as the stateful thread's does
 (`heal_jobs`): the clone's `jobs` is the host's one `env_jobs`, so a panic holding its
 lock would leave every later `job` command panicking on the poison. The table is
 emptied and its poison cleared.
@@ -113,7 +112,7 @@ emptied and its poison cleared.
 ## fn heal_jobs
 Emptying is the only safe heal: a table a panic interrupted mid-update holds nothing
 trustworthy. A job thread still running loses its entry and with it its kill handle;
-that is the accepted cost, the same the interact lane's reset pays.
+that is the accepted cost, the same the stateful lane's reset pays.
 
 ## struct StatefulEngine
 The stateful lane, a `def --env` definition's, on the thread `nu-stateful`. The serial

@@ -111,7 +111,7 @@ fn remote_loopback_echo() {
     assert!(looped.event.contains("ping-1"), "the loopback carries the original payload; got {looped:?}");
 
     // Teardown: closing the link on A drops the established link; Disconnected is
-    // retained for an established-link teardown on BOTH roles (the_user).
+    // retained for an established-link teardown on BOTH roles.
     let close = a.host.call("remote_channel_close", json!({"alias": "peer"}));
     assert!(!has_error_path(&close), "remote_channel_close succeeds on an open link; got {close}");
     a.await_packet(|p| p.model == "mcp/remote/Disconnected", Duration::from_secs(15))

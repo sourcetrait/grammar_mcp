@@ -1,15 +1,15 @@
 # teardown.rs
 
-nushell runs externals HEADLESS (`is_interactive = false` takes the plain
-`command.spawn` branch, no setpgid), so there is no process group to killpg and a
-`ThreadJob` tracks only the DIRECT child pid. A naive SIGKILL of that child ORPHANS its
-grandchild.
+nushell 0.116.1 runs each external of an `is_mcp` engine in its own session, `setsid`
+before exec, so the external leads a process group of its own (`engine.rs`). A
+`ThreadJob` tracks only that direct child's pid, and a descendant that starts its own
+session or group leaves the external's, so neither the tracked pid nor a killpg reaches
+the whole tree: a plain SIGKILL of the child orphans its grandchild.
 
-The reap that works, verified against nushell rev 0df4ca2: `PR_SET_CHILD_SUBREAPER` on
-the host at startup, so orphans reparent to us and stay on the /proc ppid chain; plus a
-/proc descendant walk from each tracked child BEFORE the kill, which makes it
-deterministic; plus SIGKILL on each. `Jobs::kill_and_remove` alone reaches only the
-tracked direct child.
+The reap that works: `PR_SET_CHILD_SUBREAPER` on the host at startup, so orphans
+reparent to us and stay on the /proc ppid chain; plus a /proc descendant walk from each
+tracked child BEFORE the kill, which makes it deterministic; plus SIGKILL on each.
+`Jobs::kill_and_remove` alone reaches only the tracked direct child.
 
 All of it is Linux-gated. A non-target build degrades to a direct-child kill with no
 /proc walk, which keeps the shipped crate honest by construction rather than by

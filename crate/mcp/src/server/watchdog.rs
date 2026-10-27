@@ -380,7 +380,7 @@ pub(crate) fn spawn_watchdog(deps: WatchdogDeps) {
                 current.push((
                     "critical:stateless_saturation".to_string(),
                     Emergency::Critical(CriticalEmergency {
-                        reason: "all stateless engine-thread permits held by hung threads; run() cannot dispatch"
+                        reason: "all stateless engine-thread permits held by hung threads; the stateless pool cannot dispatch"
                             .to_string(),
                         hung: confirmed_stateless,
                         cap: deps.cap,

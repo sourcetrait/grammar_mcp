@@ -47,7 +47,7 @@ fn parse_timeout(text: Option<&str>) -> Result<(u64, nu::Value), GrammarMcpError
     }
 }
 
-/// Hold a call's definition, data, and timeout to the contract and build its source.
+/// Hold a call's definition, data, and timeout to the contract; build its source.
 pub(crate) fn prepare_nu(
     engine: &ParseEngine,
     definition: &str,
