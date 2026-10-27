@@ -19,7 +19,7 @@ pub struct Cli {
     /// Agent working directory, exported to bodies as $env.EQUIP_WORK_DIR.
     #[arg(long)]
     pub workdir: Option<PathBuf>,
-    /// Comma-separated tools to withhold from the registered surface.
+    /// Comma-separated tools, or interface commands by their words, to withhold.
     #[arg(long, value_delimiter = ',', value_parser = parse_deniable)]
     pub deny: Vec<DeniableTool>,
     #[command(subcommand)]
@@ -51,10 +51,6 @@ pub enum CliCmd {
 /// One-shot mirrors of the MCP tools, for an operator with no agent.
 #[derive(clap::Subcommand)]
 pub enum CliTool {
-    /// Versions, plugins, and rigs summary.
-    Info,
-    /// Documentation of one namepath, at any arity.
-    Inspect { namepath: String },
     /// Invoke a committed rig function.
     Call {
         /// The function's namepath: rig:module/path:function.
@@ -85,39 +81,9 @@ pub enum CliTool {
         #[arg(long)]
         timeout: Option<String>,
     },
-    /// List in-flight usage; a one-shot invocation shows none.
-    Processes,
-    /// Cancel an in-flight usage by nonce. Process-scoped.
-    Kill { nonce: String },
-    /// Scaffold module / function skeletons by namepath into an equip's rig.
-    New { namepaths: Vec<String> },
-    /// Validate + promote an equip's lib and rig from its source into the namespace.
-    Commit { namepath: String },
-    /// Equip administration.
-    Equip {
-        #[arg(value_enum)]
-        action: EquipCliAction,
-        /// The equip's source: an equip/<author>/<name> directory.
-        source_dir: String,
+    /// Run one interface command, such as `interface equip commit acme/geo`.
+    Interface {
+        /// The command, its arguments Nu literals.
+        command: String,
     },
-}
-
-/// The `cli equip` action; an unknown one fails at parse.
-#[derive(clap::ValueEnum, Clone, Copy, Debug)]
-pub enum EquipCliAction {
-    New,
-    Install,
-    Check,
-    Uninstall,
-}
-
-impl EquipCliAction {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::New => "new",
-            Self::Install => "install",
-            Self::Check => "check",
-            Self::Uninstall => "uninstall",
-        }
-    }
 }

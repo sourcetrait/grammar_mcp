@@ -7,7 +7,9 @@ what makes this the operator's no-agent contribution loop rather than a parallel
 implementation to keep in step.
 
 DENY DOES NOT APPLY on this path. It gates agent REGISTRATION at router assembly, and
-this bypasses the router entirely, so the operator always has the whole tool set.
+this bypasses the router entirely, so the operator always has the whole tool set; the
+interface is built with no denied command for the same reason, so a command an agent's
+host withholds still runs here.
 
 The envelope's NUON text prints as it is. The exit codes are 0 for success, 1 for an
 error envelope, an rmcp-boundary error, or an equip substrate that cannot be built, and
@@ -15,10 +17,10 @@ error envelope, an rmcp-boundary error, or an equip substrate that cannot be bui
 needed for the first two.
 
 Three caveats are by design rather than gaps: a `def --env` definition's stateful lane is
-single-shot because the session state dies with the process; `processes` and `kill` are
-process-scoped, so a one-shot invocation's in-flight map is empty; and writing into a
-namespace a live agent host is using is the operator's own risk - git's index lock keeps
-the repo safe, but an in-flight agent call can transiently fail.
+single-shot because the session state dies with the process; `interface process list` and
+`interface process kill` are process-scoped, so a one-shot invocation's in-flight map is
+empty; and writing into a namespace a live agent host is using is the operator's own risk -
+git's index lock keeps the repo safe, but an in-flight agent call can transiently fail.
 
 ## fn nuon_record_arg
 The parse chain is `from_nuon` to a nu Value, then `nu_json::Value::from_value`, then

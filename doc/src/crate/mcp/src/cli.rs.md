@@ -30,3 +30,6 @@ The consumer of this output is a WRAPPER, never a human eye - a nu-native front
 that takes real records and serializes at this argv boundary - which is why
 record-shaped inputs arrive as single-quoted NUON strings and the output is the
 tool's NUON envelope as the wire carries it, with no tty branch anywhere.
+
+`Interface` takes the command as one string, the text an agent sends, so the
+operator's command meets the same parse rather than a second grammar in clap.

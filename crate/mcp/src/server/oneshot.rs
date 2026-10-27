@@ -12,20 +12,8 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
         };
         let nonce_gen = Arc::new(datum::NonceGenerator::new());
         let lint_engine = Arc::new(LintEngine::new());
-        let server = NuSh::new(nonce_gen, rig_locks, lint_engine);
+        let server = NuSh::new(nonce_gen, rig_locks, lint_engine, &DenySet::default());
         let result = match tool {
-            CliTool::Info => {
-                server
-                    .info(mcp::Parameters(InfoParams {
-                        purviews: Vec::new(),
-                    }))
-                    .await
-            }
-            CliTool::Inspect { namepath } => {
-                server
-                    .inspect(mcp::Parameters(InspectParams { namepath }))
-                    .await
-            }
             CliTool::Call {
                 namepath,
                 args,
@@ -65,28 +53,9 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
                     }))
                     .await
             }
-            CliTool::Processes => {
+            CliTool::Interface { command } => {
                 server
-                    .processes(mcp::Parameters(ProcessesParams {}))
-                    .await
-            }
-            CliTool::Kill { nonce } => server.kill(mcp::Parameters(KillParams { nonce })).await,
-            CliTool::New { namepaths } => {
-                server
-                    .scaffold(mcp::Parameters(NewParams { namepaths }))
-                    .await
-            }
-            CliTool::Commit { namepath } => {
-                server
-                    .commit(mcp::Parameters(CommitParams { namepath }))
-                    .await
-            }
-            CliTool::Equip { action, source_dir } => {
-                server
-                    .equip(mcp::Parameters(EquipParams {
-                        action: action.as_str().to_string(),
-                        source_dir,
-                    }))
+                    .interface(mcp::Parameters(InterfaceParams { command }))
                     .await
             }
         };
