@@ -239,16 +239,33 @@ pub(crate) async fn dispatch_pooled(
         write_run_body(&log_dir, body);
     }
     executor.refresh_base_if_stale();
-    let permit = executor
-        .semaphore()
-        .acquire_owned()
-        .await
-        .map_err(|e| DispatchError {
-            error: GrammarMcpError::ThreadDispatch {
-                reason: format!("eval semaphore: {e}"),
-            },
-            nonce: None,
-        })?;
+    let effective_timeout = timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS);
+    let budget = tk::TkDuration::from_millis(effective_timeout);
+    let dispatched_at = Instant::now();
+    let semaphore = executor.semaphore();
+    let permit = match tk::timeout(budget, semaphore.clone().acquire_owned()).await {
+        Ok(Ok(permit)) => permit,
+        Ok(Err(e)) => {
+            return Err(DispatchError {
+                error: GrammarMcpError::ThreadDispatch {
+                    reason: format!("eval semaphore: {e}"),
+                },
+                nonce: None,
+            });
+        }
+        Err(_) => {
+            let cap = eval_concurrency_cap();
+            let held = cap.saturating_sub(semaphore.available_permits());
+            return Err(DispatchError {
+                error: GrammarMcpError::ThreadDispatch {
+                    reason: format!(
+                        "no eval permit within {effective_timeout} ms; {held} of {cap} permits held",
+                    ),
+                },
+                nonce: Some(nonce.to_nonce()),
+            });
+        }
+    };
     let mut engine = executor.take_clone();
     let cancel = Arc::new(AtomicBool::new(false));
     let started_at = now_millis();
@@ -271,9 +288,9 @@ pub(crate) async fn dispatch_pooled(
         map: in_flight.clone(),
         key: nonce.as_str().to_string(),
     };
-    let effective_timeout = timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS);
     let eval_fut = eval_stateless(engine, cancel.clone(), log_dir, source, permit, finished.clone());
-    let timed = tk::timeout(tk::TkDuration::from_millis(effective_timeout), eval_fut).await;
+    let remaining = budget.saturating_sub(dispatched_at.elapsed());
+    let timed = tk::timeout(remaining, eval_fut).await;
     match timed {
         Ok(Ok(result)) => Ok(DispatchOutcome { nonce: nonce.to_nonce(), result }),
         Ok(Err(failure)) => Err(DispatchError {

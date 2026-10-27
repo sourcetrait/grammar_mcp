@@ -81,6 +81,13 @@ value equal the envelope's.
 `refresh_base_if_stale` runs before taking a clone, so this eval runs against current
 plugin decls rather than whatever the base held when it was built.
 
+ONE DEADLINE covers the permit's wait and the eval: the call's timeout is what the agent
+is willing to wait for the call, so the eval gets what the wait left. Without the bound,
+a call arriving while every permit is held - hung threads holding them among the causes
+- waited without end, outside `processes()` and past its own timeout. A lapsed wait is
+`thread::dispatch` naming the permits held against the cap, with the nonce, since the
+call's log directory already exists.
+
 The tracker is set as the engine's `background_thread_job` BEFORE the eval starts, because
 nushell registers an external's pid at spawn time and a tracker attached later would miss
 it.
