@@ -1,7 +1,7 @@
 use crate::*;
 
-/// Parameters for `config_channel()` - a PARTIAL update.
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
+/// Parameters for `interface channel config`, a PARTIAL update.
+#[derive(Debug, ser::Deserialize, ser::Serialize)]
 pub struct ConfigChannelParams {
     /// Window for the SOFT threshold, in whole seconds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -37,14 +37,13 @@ impl From<SpamThresholds> for ConfigChannelResult {
     }
 }
 
-#[mcp::tool_router(router = config_channel_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(description = "Read or adjust the channel's send-rate thresholds at runtime.")]
-    pub(crate) async fn config_channel(
+    /// `interface channel config`: read or adjust the send-rate thresholds.
+    pub(crate) async fn channel_config(
         &self,
-        mcp::Parameters(p): mcp::Parameters<ConfigChannelParams>,
+        nonce: datum::Nonce,
+        p: ConfigChannelParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("config_channel", &p).to_nonce();
         match self.channel.set_thresholds(
             p.spam_warn_window_secs,
             p.spam_warn_rate,

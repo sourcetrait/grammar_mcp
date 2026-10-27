@@ -1,10 +1,6 @@
 use crate::*;
 
-/// Parameters for `processes()` (none).
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
-pub struct ProcessesParams {}
-
-/// One in-flight tool usage in the `processes()` snapshot.
+/// One in-flight tool usage in the process list.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct ProcessEntry {
     pub nonce: String,
@@ -17,20 +13,18 @@ pub(crate) struct ProcessEntry {
     pub path: Option<String>,
 }
 
-/// Success result of `processes()`.
+/// Success result of `interface process list`.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct ProcessesResult {
     pub processes: Vec<ProcessEntry>,
 }
 
-#[mcp::tool_router(router = processes_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(description = "List in-flight MCP tool usage.")]
-    pub(crate) async fn processes(
+    /// `interface process list`: every call in flight on the host.
+    pub(crate) async fn process_list(
         &self,
-        mcp::Parameters(p): mcp::Parameters<ProcessesParams>,
+        nonce: datum::Nonce,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("processes", &p).to_nonce();
         let map = self.in_flight.lock().await;
         let entries: Vec<ProcessEntry> = map
             .iter()

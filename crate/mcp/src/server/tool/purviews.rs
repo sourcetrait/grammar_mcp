@@ -1,10 +1,6 @@
 use crate::*;
 
-/// Parameters for `purviews()` (none).
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
-pub struct PurviewsParams {}
-
-/// Success result of `purviews()`.
+/// Success result of `interface purview list`.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct PurviewsResult {
     /// Every CONFIGURED purview, as persisted.
@@ -13,14 +9,12 @@ pub(crate) struct PurviewsResult {
     pub current: Vec<String>,
 }
 
-#[mcp::tool_router(router = purviews_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(description = "List every configured purview, and what is currently in view.")]
-    pub(crate) async fn purviews(
+    /// `interface purview list`: every configured purview, and what is in view.
+    pub(crate) async fn purview_list(
         &self,
-        mcp::Parameters(p): mcp::Parameters<PurviewsParams>,
+        nonce: datum::Nonce,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("purviews", &p).to_nonce();
         let rows = match load_purviews() {
             Ok(rows) => rows,
             Err(error) => return error_to_call_result(error, nonce),

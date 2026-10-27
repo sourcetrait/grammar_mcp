@@ -181,9 +181,9 @@ fn write_inbox_file(
     name: &str,
     nuon: &str,
 ) -> Result<String, String> {
-    let dir = channel
-        .inbox()
-        .ok_or_else(|| "the channel has no inbox; call channel_open() first".to_string())?;
+    let dir = channel.inbox().ok_or_else(|| {
+        "the channel has no inbox; run `interface channel open` first".to_string()
+    })?;
     fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
     let path = dir.join(name);
     fs::write(&path, nuon.as_bytes()).map_err(|e| format!("write {}: {e}", path.display()))?;

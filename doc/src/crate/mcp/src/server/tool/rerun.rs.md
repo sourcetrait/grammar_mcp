@@ -17,5 +17,5 @@ A FRESH nonce is minted, and the rerun caches the definition again under it, so 
 `nu` call's nonce, a rerun's included, is uniformly a handle, and the calls' logs stay
 apart.
 
-`InFlightKind::Rerun` carries the SOURCE nonce so `processes()` can show which definition
-a rerun is re-firing, the one thing a caller cannot infer from the fresh nonce.
+`InFlightKind::Rerun` carries the SOURCE nonce so `interface process list` can show which
+definition a rerun is re-firing, the one thing a caller cannot infer from the fresh nonce.

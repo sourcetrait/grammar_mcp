@@ -1,13 +1,10 @@
 # new.rs
 
-## fn scaffold
-The handler is named `scaffold` while the TOOL is named `new`, because `new` is not usable as a
-method name here - hence the explicit `name = "new"` on the attribute.
-
-A BARE EQUIP NAMEPATH IS REJECTED with a message pointing at `equip(new)`. This tool
-scaffolds modules and functions into an established equip's rig; establishing an equip is
-`equip(new)`'s job, so an author reaching for it that way needs the other tool named rather
-than a generic arity complaint.
+## fn equip_scaffold
+A BARE EQUIP NAMEPATH IS REJECTED with a message pointing at `interface equip new`. This
+command scaffolds modules and functions into an established equip's rig; establishing an
+equip is `interface equip new`'s job, so an author reaching for it that way needs the other
+command named rather than a generic arity complaint.
 
 THE BATCH IS ALL-OR-NOTHING ON PRE-EXISTENCE. Every target equip is locked in canonical sorted,
 deduped order first - sorted because a consistent lock order is what prevents a deadlock

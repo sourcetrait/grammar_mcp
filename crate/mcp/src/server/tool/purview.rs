@@ -1,27 +1,26 @@
 use crate::*;
 
-/// Success result of `purview()`.
+/// Success result of `interface purview set`.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct PurviewSetResult {
-    /// `info()`'s `signatures` for what this call brought INTO view, or null.
+    /// `info`'s `signatures` for what this call brought INTO view, or null.
     pub revealed: Option<String>,
 }
 
-/// Parameters for `purview()`.
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
+/// Parameters for `interface purview set`.
+#[derive(Debug, ser::Deserialize, ser::Serialize)]
 pub struct PurviewParams {
     /// The purview ids to put in view, REPLACING the current set.
     pub purviews: Vec<String>,
 }
 
-#[mcp::tool_router(router = purview_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(description = "Set the current view to these purviews.")]
-    pub(crate) async fn purview(
+    /// `interface purview set`: replace the current view with these purviews.
+    pub(crate) async fn purview_set(
         &self,
-        mcp::Parameters(p): mcp::Parameters<PurviewParams>,
+        nonce: datum::Nonce,
+        p: PurviewParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("purview", &p).to_nonce();
         let rows = match load_purviews() {
             Ok(rows) => rows,
             Err(error) => return error_to_call_result(error, nonce),

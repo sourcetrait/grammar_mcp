@@ -13,8 +13,8 @@ and unit-tested over fixture strings; the readers are thin wrappers, which is wh
 that split testable at all.
 
 ## struct HungWatch
-Registered on the TIMEOUT branch of either dispatch path, and on a `kill(nonce)` of a
-live entry. The timeout path has already triggered cancel and tree-killed the external
+Registered on the TIMEOUT branch of either dispatch path, and on an
+`interface process kill` of a live entry. The timeout path has already triggered cancel and tree-killed the external
 tree by then, so this registration is the additional "watch this for a hang" step rather
 than the response itself.
 

@@ -11,7 +11,7 @@ A std Mutex, not the async one, because a grimm send reaches it from the synchro
 eval thread. Its guards are held for map operations alone, never across an await.
 
 ## fn open_remote_blocking (open_connector / open_listener)
-Blocks on the link's immediate networking result so remote_channel_open returns
+Blocks on the link's immediate networking result so `interface remote open` returns
 synchronously; only a listener's peer-wait stays async. Binding is immediate, so a bind
 clash from a redundant listener open surfaces at once as "address already in use"
 rather than later as a confusing async Disconnected.

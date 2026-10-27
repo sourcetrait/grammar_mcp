@@ -1,7 +1,7 @@
 use crate::*;
 
-/// Parameters for `purview_extend()`.
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
+/// Parameters for `interface purview extend`.
+#[derive(Debug, ser::Deserialize, ser::Serialize)]
 pub struct PurviewExtendParams {
     /// Purview ids to add to the current view; additive.
     pub purviews: Vec<String>,
@@ -10,7 +10,7 @@ pub struct PurviewExtendParams {
 /// What a change to the current view did.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct PurviewDeltaResult {
-    /// `info()`'s `signatures` for what this call brought INTO view, or null.
+    /// `info`'s `signatures` for what this call brought INTO view, or null.
     pub revealed: Option<String>,
     /// The purview ids in view now - the KEYS alone.
     pub current: Vec<String>,
@@ -45,14 +45,13 @@ impl NuSh {
     }
 }
 
-#[mcp::tool_router(router = purview_extend_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(description = "Bring more purviews into the current view.")]
+    /// `interface purview extend`: bring more purviews into the current view.
     pub(crate) async fn purview_extend(
         &self,
-        mcp::Parameters(p): mcp::Parameters<PurviewExtendParams>,
+        nonce: datum::Nonce,
+        p: PurviewExtendParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("purview_extend", &p).to_nonce();
         let rows = match load_purviews() {
             Ok(rows) => rows,
             Err(error) => return error_to_call_result(error, nonce),

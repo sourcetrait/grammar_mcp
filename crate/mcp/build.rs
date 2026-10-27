@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 /// Capture the embedded `nu-protocol` crate version from the workspace
 /// `Cargo.lock` and emit it as the `NU_VERSION` env var so the runtime
-/// `info()` tool can echo it without an extra runtime dep.
+/// `interface info` command can echo it without an extra runtime dep.
 ///
 /// The lockfile is two directories up from the crate manifest
 /// (`crate/mcp/Cargo.toml` -> `Cargo.lock` at the workspace root).

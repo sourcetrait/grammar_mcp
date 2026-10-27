@@ -117,12 +117,12 @@ an empty comment.
 
 ## fn signature_of
 THE TWO MODES OVER ONE IMPLEMENTATION. The TREE form passes the LEAF name, because the
-indentation around it supplies the hierarchy; a STANDALONE inspect passes the FULL
+indentation around it supplies the hierarchy; a STANDALONE help passes the FULL
 NAMEPATH, because nothing around it does. Everything after that first token is identical,
 which is the point - the two surfaces cannot drift.
 
 A render failure logs and substitutes `<?>` rather than failing the whole block, so one bad
-schema cannot make `info()` unusable.
+schema cannot make `interface info` unusable.
 
 ## fn push_within_signatures
 CALLS BEFORE SUBMODULES: the callables at a level are what a reader scans for, and a
@@ -143,9 +143,9 @@ The buffering is not stylistic: whether a module's own line belongs in the block
 knowable until its subtree has been walked.
 
 ## fn render_signatures_within
-THE ONE RENDERER. `info()` shows the current purview through it, a pattern `inspect()` shows
-one pattern through it, and the whole namespace is just the `*` pattern - so none of the
-three can drift. This is the agent's FIRST read after the skill, so it is compact by
+THE ONE RENDERER. `interface info` shows the current purview through it, a pattern's
+`interface help` shows one pattern through it, and the whole namespace is just the `*`
+pattern - so none of the three can drift. This is the agent's FIRST read after the skill, so it is compact by
 design: a structured nested-JSON tree of the same surface runs roughly 8 KB for just two
 rigs.
 
@@ -169,7 +169,8 @@ Two further arguments favour SHAPE over separators. REUSE: a new kind extends th
 taking a new SHAPE - a helper would be `name [...]` beside a call's `name <> <>` - rather
 than by carving another character out of a two-character vocabulary that is already
 overloaded. Separators do not scale; shapes do. And this block is the PROTOTYPE for a
-general nu-tree renderer, which argues for keeping it general rather than info()-shaped.
+general nu-tree renderer, which argues for keeping it general rather than shaped to
+`interface info`.
 
 A rig appears when its OWN namepath is covered or when anything inside it is, which is what
 lets a bare `author/` list a rig with no calls yet while a pattern naming a module the rig
@@ -218,7 +219,7 @@ mod.nu leading comment and a `main` doc comment divide identically.
 
 ## fn check_summary_length
 A WARNING rather than an error, so an over-long summary COMMITS and then surfaces in
-`equip(check)`. Only Error-severity rows block.
+`interface equip check`. Only Error-severity rows block.
 
 ## const NAME_DENYLIST
 These names would collide with conventional directory meanings inside a namespace, so they

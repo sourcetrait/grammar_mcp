@@ -62,7 +62,7 @@ simpler for it: `resolve_patterns` has no absent-default arm, `is_nameable_purvi
 special-cases only `*`, an equip install just appends to the rows it finds, and an
 uninstall has no "is this namespace configured yet" question to ask.
 
-It is also why `purview_configure("default", [])` RESETS to `['*']` rather than
+It is also why `interface purview configure default []` RESETS to `['*']` rather than
 deleting: `default` has no not-existing state, so the delete operation everywhere else
 puts it back to what startup would have written.
 
@@ -76,7 +76,7 @@ an install never adds the second spelling beside the first, and an uninstall tak
 
 ## fn parse_patterns
 A stored pattern that no longer parses is treated as ABSENT rather than fatal: a purview
-file is agent-authored data, and one bad row must not take `info()` down with it.
+file is agent-authored data, and one bad row must not take `interface info` down with it.
 
 ## fn pattern_requires
 The `@id` check comes BEFORE parsing, because `@id` is not a namepath and must never

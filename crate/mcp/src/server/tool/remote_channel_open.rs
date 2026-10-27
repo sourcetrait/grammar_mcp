@@ -1,22 +1,19 @@
 use crate::*;
 
-/// Parameters for `remote_channel_open()`.
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
+/// Parameters for `interface remote open`.
+#[derive(Debug, ser::Deserialize, ser::Serialize)]
 pub struct RemoteChannelOpenParams {
     /// The `[[remote]]` alias to open, from `.grammar/mcp/remotes.toml`.
     pub alias: String,
 }
 
-#[mcp::tool_router(router = remote_channel_open_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "Open a configured remote link by alias; blocks on bind (listener) or connect (connector, 20s) and returns synchronously - void on success, an error envelope on failure. A listener then emits mcp/remote/Connected when a peer pairs; Disconnected fires on any established-link teardown."
-    )]
-    pub(crate) async fn remote_channel_open(
+    /// `interface remote open`: open a configured link, blocking on its network step.
+    pub(crate) async fn remote_open(
         &self,
-        mcp::Parameters(p): mcp::Parameters<RemoteChannelOpenParams>,
+        nonce: datum::Nonce,
+        p: RemoteChannelOpenParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("remote_channel_open", &p).to_nonce();
         if !matches!(self.channel.status().phase, ChannelPhase::Verified) {
             return error_to_call_result(GrammarMcpError::RemoteChannelUnverified, nonce);
         }

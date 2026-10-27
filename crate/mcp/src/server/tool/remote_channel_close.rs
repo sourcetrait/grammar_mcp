@@ -1,20 +1,19 @@
 use crate::*;
 
-/// Parameters for `remote_channel_close()`.
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
+/// Parameters for `interface remote close`.
+#[derive(Debug, ser::Deserialize, ser::Serialize)]
 pub struct RemoteChannelCloseParams {
     /// The alias of the open link to close.
     pub alias: String,
 }
 
-#[mcp::tool_router(router = remote_channel_close_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(description = "Close an open mTLS link to a remote grammar host.")]
-    pub(crate) async fn remote_channel_close(
+    /// `interface remote close`: close an open link, or a listener still waiting.
+    pub(crate) async fn remote_close(
         &self,
-        mcp::Parameters(p): mcp::Parameters<RemoteChannelCloseParams>,
+        nonce: datum::Nonce,
+        p: RemoteChannelCloseParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("remote_channel_close", &p).to_nonce();
         let entry = self
             .remote_links
             .lock()

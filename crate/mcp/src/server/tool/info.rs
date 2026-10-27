@@ -1,14 +1,14 @@
 use crate::*;
 
-/// Parameters for `info()`.
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
+/// Parameters for `interface info`.
+#[derive(Debug, ser::Deserialize, ser::Serialize)]
 pub struct InfoParams {
     /// Purview ids to render as if in view; EMPTY means the CURRENT purview.
     #[serde(default)]
     pub purviews: Vec<String>,
 }
 
-/// Success result of `info()`.
+/// Success result of `interface info`.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct InfoResult {
     pub name: String,
@@ -28,14 +28,13 @@ pub(crate) struct InfoResult {
     pub purview: Vec<PurviewView>,
 }
 
-#[mcp::tool_router(router = info_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(description = "Versions, plugins, and every rig's callable signatures.")]
+    /// `interface info`: versions, plugins, and every rig's callable signatures.
     pub(crate) async fn info(
         &self,
-        mcp::Parameters(p): mcp::Parameters<InfoParams>,
+        nonce: datum::Nonce,
+        p: InfoParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("info", &p).to_nonce();
         let rows = match load_purviews() {
             Ok(rows) => rows,
             Err(error) => return error_to_call_result(error, nonce),

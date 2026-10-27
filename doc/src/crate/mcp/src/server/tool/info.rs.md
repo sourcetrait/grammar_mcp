@@ -1,8 +1,8 @@
 # info.rs
 
-`info()` exists because the rmcp init handshake's `serverInfo` is not relayed into agent
-context by Claude Code. The tool surfaces the same facts through `tools/call` - including
-the LIVE callable surface, so no stale skill index is needed.
+`interface info` exists because the rmcp init handshake's `serverInfo` is not relayed into
+agent context by Claude Code. The command surfaces the same facts through `tools/call` -
+including the LIVE callable surface, so no stale skill index is needed.
 
 ## struct InfoParams
 

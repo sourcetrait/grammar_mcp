@@ -1,29 +1,25 @@
 use crate::*;
 
-/// Parameters for `new()`.
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
+/// Parameters for `interface equip scaffold`.
+#[derive(Debug, ser::Deserialize, ser::Serialize)]
 pub struct NewParams {
     /// Namepaths to scaffold into installed equips' rigs: a module or a function.
     pub namepaths: Vec<String>,
 }
 
-/// Success result of `new()` -- every path created across the batch.
+/// Success result of `interface equip scaffold`: every path the batch made.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct NewResult {
     pub created: Vec<String>,
 }
 
-#[mcp::tool_router(router = new_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        name = "new",
-        description = "Scaffold modules / functions (by namepath) into an equip's rig."
-    )]
-    pub(crate) async fn scaffold(
+    /// `interface equip scaffold`: modules and calls scaffolded into rigs.
+    pub(crate) async fn equip_scaffold(
         &self,
-        mcp::Parameters(p): mcp::Parameters<NewParams>,
+        nonce: datum::Nonce,
+        p: NewParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("new", &p).to_nonce();
         let mut targets: Vec<(String, String, Option<String>)> = Vec::new();
         for np in &p.namepaths {
             match Namepath(np.clone()).validate() {
@@ -40,7 +36,8 @@ impl NuSh {
                     return error_to_call_result(
                         GrammarMcpError::NamepathInvalid {
                             namepath: np.clone(),
-                            reason: "new() needs a module or function namepath; use equip(new) to create an equip"
+                            reason: "scaffold needs a module or function namepath; use \
+                                     `interface equip new` to create an equip"
                                 .to_string(),
                         },
                         nonce,

@@ -1,7 +1,7 @@
 use crate::*;
 
-/// Parameters for `purview_configure()`.
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
+/// Parameters for `interface purview configure`.
+#[derive(Debug, ser::Deserialize, ser::Serialize)]
 pub struct PurviewConfigureParams {
     /// The purview to set, created if absent; a path-like snake label.
     pub purview: String,
@@ -9,21 +9,20 @@ pub struct PurviewConfigureParams {
     pub namepaths: Vec<String>,
 }
 
-/// Success result of `purview_configure()` - the state after the write.
+/// Success result of `interface purview configure`, the state after the write.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct PurviewConfigureResult {
     /// Everything this purview reveals; null when the call deleted it.
     pub signatures: Option<String>,
 }
 
-#[mcp::tool_router(router = purview_configure_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(description = "Set a purview's namepath patterns; an empty list deletes it.")]
+    /// `interface purview configure`: set a purview's patterns; empty deletes it.
     pub(crate) async fn purview_configure(
         &self,
-        mcp::Parameters(p): mcp::Parameters<PurviewConfigureParams>,
+        nonce: datum::Nonce,
+        p: PurviewConfigureParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("purview_configure", &p).to_nonce();
         if is_derived_purview(&p.purview) {
             return error_to_call_result(
                 GrammarMcpError::PurviewInvalidId {

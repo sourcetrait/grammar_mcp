@@ -24,7 +24,7 @@ pub(crate) enum ChannelPhase {
     Closed,
     /// The hub is up but the peer has not yet proven it owns the session.
     Open,
-    /// `channel_verified()` succeeded; emits flow.
+    /// `interface channel ready` succeeded; emits flow.
     Verified,
 }
 
@@ -97,9 +97,10 @@ pub(crate) enum ChannelSendError {
 impl ChannelSendError {
     pub(crate) fn message(self) -> &'static str {
         match self {
-            Self::NotOpen => "the channel is not open; call channel_open() first",
+            Self::NotOpen => "the channel is not open; run `interface channel open` first",
             Self::NotVerified => {
-                "the channel is not verified; emitting before channel_verified() is forbidden"
+                "the channel is not verified; emitting before `interface channel ready` is \
+                 forbidden"
             }
             Self::HubGone => "the channel hub is gone",
         }
@@ -109,7 +110,7 @@ impl ChannelSendError {
 /// Why a verification was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChannelVerifyError {
-    /// Nothing to verify - `channel_open()` has not run.
+    /// Nothing to verify - `interface channel open` has not run.
     NotOpen,
     /// The hub is up but nothing has connected, so there is no claim to prove.
     NotClaimed,

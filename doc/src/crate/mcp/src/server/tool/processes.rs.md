@@ -5,10 +5,10 @@
 tool produced it without a discriminant field.
 
 `args` is what lets an agent match entries against its OWN send-set, which matters because this
-tool shows ALL in-flight work on the host - a subagent sees the primary's calls and vice
+command shows ALL in-flight work on the host - a subagent sees the primary's calls and vice
 versa.
 
-## fn processes
+## fn process_list
 PROCESS-SCOPED. A one-shot CLI invocation has an empty in-flight map by construction, so this
 reports nothing there rather than reaching into another host.
 

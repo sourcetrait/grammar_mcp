@@ -5,8 +5,8 @@ The two halves are ASYMMETRIC on purpose: extending normally only ADDS, so a `hi
 would report an empty list that reads like a result.
 
 ## fn purview_delta
-`revealed` is `info()`'s block rendered for the patterns that were newly ADDED - NOT a diff of
-two whole blocks. So when the view already carries `*`, what it shows was visible before as
+`revealed` is `interface info`'s block rendered for the patterns that were newly ADDED - NOT a
+diff of two whole blocks. So when the view already carries `*`, what it shows was visible before as
 well: the PATTERNS are what changed, and the block says what they name.
 
 The delta is computed on EXPANDED values on both sides, so a `@ref` to something already in

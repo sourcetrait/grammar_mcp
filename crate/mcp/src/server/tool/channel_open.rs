@@ -1,10 +1,6 @@
 use crate::*;
 
-/// Parameters for `channel_open()` (none).
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
-pub struct ChannelOpenParams {}
-
-/// Success result of `channel_open()`.
+/// Success result of `interface channel open`.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct ChannelOpenResult {
     /// `new` when this call started the hub, `existing` when one was running.
@@ -66,14 +62,12 @@ fn arm_verify_timer(channel: Arc<ChannelHandle>) {
     });
 }
 
-#[mcp::tool_router(router = channel_open_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(description = "Open the host's packet channel and return the endpoint to watch.")]
+    /// `interface channel open`: open the packet channel; answer its endpoint.
     pub(crate) async fn channel_open(
         &self,
-        mcp::Parameters(p): mcp::Parameters<ChannelOpenParams>,
+        nonce: datum::Nonce,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("channel_open", &p).to_nonce();
         let inbox = match ensure_inbox(&self.channel, &self.mcp_nom) {
             Ok(path) => path,
             Err(error) => return error_to_call_result(error, nonce),

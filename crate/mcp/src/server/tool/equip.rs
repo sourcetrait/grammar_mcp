@@ -1,12 +1,10 @@
 use crate::*;
 
-/// Parameters for `equip()`.
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
+/// Parameters for each `interface equip` action on a source.
+#[derive(Debug, ser::Deserialize, ser::Serialize)]
 pub struct EquipParams {
-    /// One of: `new`, `install`, `check`, `uninstall`.
-    pub action: String,
     /// The equip's source: an `equip/<author>/<name>` directory.
-    pub source_dir: String,
+    pub source: String,
 }
 
 /// `new` summary: the paths scaffolded for the fresh equip's rig.
@@ -32,136 +30,142 @@ pub(crate) enum EquipSummary {
     Check(CheckSummary),
 }
 
-/// Success result of `equip()`.
+/// Success result of each `interface equip` action on a source.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct EquipResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<EquipSummary>,
 }
 
-/// The actions `equip()` takes.
-const ACTIONS: [&str; 4] = ["new", "install", "check", "uninstall"];
-
-#[mcp::tool_router(router = equip_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "Equip administration on an equip/<author>/<name> source dir: new, install, check, uninstall."
-    )]
-    pub(crate) async fn equip(
+    /// `interface equip new`: register an equip at its source and seed its rig.
+    pub(crate) async fn equip_new(
         &self,
-        mcp::Parameters(p): mcp::Parameters<EquipParams>,
+        nonce: datum::Nonce,
+        p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("equip", &p).to_nonce();
-        if !ACTIONS.contains(&p.action.as_str()) {
-            return error_to_call_result(
-                GrammarMcpError::EquipInvalidAction {
-                    action: p.action.clone(),
-                },
-                nonce,
-            );
-        }
-        let source_dir = Path::new(&p.source_dir);
+        let source_dir = Path::new(&p.source);
         let equip = match equip_namepath_of(source_dir) {
             Ok(equip) => equip,
             Err(e) => return error_to_call_result(e, nonce),
         };
-        match p.action.as_str() {
-            "new" => {
-                let lock = match self.rig_locks.register(&equip).await {
-                    Ok(l) => l,
-                    Err(_) => {
-                        return error_to_call_result(
-                            GrammarMcpError::EquipAlreadyRegistered { equip },
-                            nonce,
-                        );
-                    }
-                };
-                let _guard = lock.write().await;
-                match establish_equip(&equip, source_dir) {
-                    Ok(created) => success(
-                        nonce,
-                        &EquipResult {
-                            summary: Some(EquipSummary::New(NewSummary { created })),
-                        },
-                    ),
-                    Err(e) => {
-                        self.rig_locks.unregister(&equip).await;
-                        error_to_call_result(e, nonce)
-                    }
-                }
+        let lock = match self.rig_locks.register(&equip).await {
+            Ok(l) => l,
+            Err(_) => {
+                return error_to_call_result(GrammarMcpError::EquipAlreadyRegistered { equip }, nonce);
             }
-            "install" => {
-                let lock = match self.rig_locks.register(&equip).await {
-                    Ok(l) => l,
-                    Err(_) => {
-                        return error_to_call_result(
-                            GrammarMcpError::EquipAlreadyRegistered { equip },
-                            nonce,
-                        );
-                    }
-                };
-                let _guard = lock.write().await;
-                let engine = self.lint_engine.current();
-                match install_equip(&equip, source_dir, &engine) {
-                    Ok(result) => {
-                        if rig_dir(&equip).exists() {
-                            purview_add_rig(&equip, &self.current_purview.ids());
-                        }
-                        success(
-                            nonce,
-                            &EquipResult {
-                                summary: Some(EquipSummary::Install(result)),
-                            },
-                        )
-                    }
-                    Err(e) => {
-                        self.rig_locks.unregister(&equip).await;
-                        error_to_call_result(e, nonce)
-                    }
-                }
+        };
+        let _guard = lock.write().await;
+        match establish_equip(&equip, source_dir) {
+            Ok(created) => success(
+                nonce,
+                &EquipResult {
+                    summary: Some(EquipSummary::New(NewSummary { created })),
+                },
+            ),
+            Err(e) => {
+                self.rig_locks.unregister(&equip).await;
+                error_to_call_result(e, nonce)
             }
-            "check" => {
-                let Some(lock) = self.rig_locks.lookup(&equip).await else {
-                    return error_to_call_result(
-                        GrammarMcpError::EquipNotRegistered { equip },
-                        nonce,
-                    );
-                };
-                let _guard = lock.read().await;
-                if let Err(e) = check_source_dir(&equip, source_dir) {
-                    return error_to_call_result(e, nonce);
-                }
-                let engine = self.lint_engine.current();
-                match check_equip(&equip, &engine) {
-                    Ok(result) => success(
-                        nonce,
-                        &EquipResult {
-                            summary: Some(EquipSummary::Check(check_summary_from(&result))),
-                        },
-                    ),
-                    Err(e) => error_to_call_result(e, nonce),
-                }
+        }
+    }
+
+    /// `interface equip install`: validate an equip's whole source and install it.
+    pub(crate) async fn equip_install(
+        &self,
+        nonce: datum::Nonce,
+        p: EquipParams,
+    ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let source_dir = Path::new(&p.source);
+        let equip = match equip_namepath_of(source_dir) {
+            Ok(equip) => equip,
+            Err(e) => return error_to_call_result(e, nonce),
+        };
+        let lock = match self.rig_locks.register(&equip).await {
+            Ok(l) => l,
+            Err(_) => {
+                return error_to_call_result(GrammarMcpError::EquipAlreadyRegistered { equip }, nonce);
             }
-            _ => {
-                let Some(lock) = self.rig_locks.lookup(&equip).await else {
-                    return success(nonce, &EquipResult { summary: None });
-                };
-                let guard = lock.write().await;
-                if let Err(e) = check_source_dir(&equip, source_dir) {
-                    return error_to_call_result(e, nonce);
+        };
+        let _guard = lock.write().await;
+        let engine = self.lint_engine.current();
+        match install_equip(&equip, source_dir, &engine) {
+            Ok(result) => {
+                if rig_dir(&equip).exists() {
+                    purview_add_rig(&equip, &self.current_purview.ids());
                 }
-                match uninstall_equip(&equip) {
-                    Ok(()) => {
-                        drop(guard);
-                        self.rig_locks.unregister(&equip).await;
-                        if let Some(rows) = purview_remove_rig(&equip) {
-                            self.current_purview.retain_known(Some(&rows));
-                        }
-                        success(nonce, &EquipResult { summary: None })
-                    }
-                    Err(e) => error_to_call_result(e, nonce),
-                }
+                success(
+                    nonce,
+                    &EquipResult {
+                        summary: Some(EquipSummary::Install(result)),
+                    },
+                )
             }
+            Err(e) => {
+                self.rig_locks.unregister(&equip).await;
+                error_to_call_result(e, nonce)
+            }
+        }
+    }
+
+    /// `interface equip check`: validate an installed equip's source, writing nothing.
+    pub(crate) async fn equip_check(
+        &self,
+        nonce: datum::Nonce,
+        p: EquipParams,
+    ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let source_dir = Path::new(&p.source);
+        let equip = match equip_namepath_of(source_dir) {
+            Ok(equip) => equip,
+            Err(e) => return error_to_call_result(e, nonce),
+        };
+        let Some(lock) = self.rig_locks.lookup(&equip).await else {
+            return error_to_call_result(GrammarMcpError::EquipNotRegistered { equip }, nonce);
+        };
+        let _guard = lock.read().await;
+        if let Err(e) = check_source_dir(&equip, source_dir) {
+            return error_to_call_result(e, nonce);
+        }
+        let engine = self.lint_engine.current();
+        match check_equip(&equip, &engine) {
+            Ok(result) => success(
+                nonce,
+                &EquipResult {
+                    summary: Some(EquipSummary::Check(check_summary_from(&result))),
+                },
+            ),
+            Err(e) => error_to_call_result(e, nonce),
+        }
+    }
+
+    /// `interface equip uninstall`: remove an installed equip; its source stays.
+    pub(crate) async fn equip_uninstall(
+        &self,
+        nonce: datum::Nonce,
+        p: EquipParams,
+    ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let source_dir = Path::new(&p.source);
+        let equip = match equip_namepath_of(source_dir) {
+            Ok(equip) => equip,
+            Err(e) => return error_to_call_result(e, nonce),
+        };
+        let Some(lock) = self.rig_locks.lookup(&equip).await else {
+            return success(nonce, &EquipResult { summary: None });
+        };
+        let guard = lock.write().await;
+        if let Err(e) = check_source_dir(&equip, source_dir) {
+            return error_to_call_result(e, nonce);
+        }
+        match uninstall_equip(&equip) {
+            Ok(()) => {
+                drop(guard);
+                self.rig_locks.unregister(&equip).await;
+                if let Some(rows) = purview_remove_rig(&equip) {
+                    self.current_purview.retain_known(Some(&rows));
+                }
+                success(nonce, &EquipResult { summary: None })
+            }
+            Err(e) => error_to_call_result(e, nonce),
         }
     }
 }

@@ -14,8 +14,8 @@ Plain `mcp`, not `mcp/<id>`: the channel is 1:1, so there is no second MCP to te
 
 ## fn open_packet
 Built in one place because it has TWO emitters: the hub greets a freshly connected peer
-with it, and `channel_open` re-sends it on an EXISTING channel, where a FAILING send is
-what reveals a peer that has actually gone.
+with it, and `interface channel open` re-sends it on an EXISTING channel, where a FAILING
+send is what reveals a peer that has actually gone.
 
 ## fn server_config
 The ring provider is passed EXPLICITLY rather than taken from the process default. rustls
@@ -29,9 +29,10 @@ support: its input is `{url, protocols}` and carries no headers, no client cert 
 hook.
 
 ## fn start
-EPHEMERAL PORT by default. The agent always learns the endpoint from `channel_open`'s
-return, so a fixed port buys nothing and costs a squatting failure mode - a stale host or
-an escaped child holding it makes the next open fail with a raw `Address already in use`.
+EPHEMERAL PORT by default. The agent always learns the endpoint from
+`interface channel open`'s return, so a fixed port buys nothing and costs a squatting
+failure mode - a stale host or an escaped child holding it makes the next open fail with a
+raw `Address already in use`.
 
 The port is read back from `local_addr` rather than trusted from config: with 0 it is the
 only way to know it, and with a pinned one it confirms what was actually bound.

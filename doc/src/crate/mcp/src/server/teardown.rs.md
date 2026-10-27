@@ -92,8 +92,8 @@ plugin IPC pipe and makes the eval's plugin read return an error. Plugins respaw
 on next use.
 
 BROAD BY NATURE - nushell shares plugin subprocesses across evals - so it fires only on
-an explicit `kill(nonce)` and on the shutdown sweep, NEVER on an automatic timeout, where
-the supervisor scopes that escalation instead.
+an explicit `interface process kill` and on the shutdown sweep, NEVER on an automatic
+timeout, where the supervisor scopes that escalation instead.
 
 ## fn descendants_of
 Walked BEFORE the kill, which is what makes the set deterministic rather than a race

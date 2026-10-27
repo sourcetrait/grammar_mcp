@@ -845,13 +845,13 @@ pub struct CallDoc {
     pub details: String,
 }
 
-/// What a PATTERN inspect returns: the `info()` block rooted at the pattern.
+/// A pattern's `interface help`: the `interface info` block at the pattern.
 #[derive(Debug, ser::Serialize)]
 pub struct SignaturesDoc {
     pub signatures: String,
 }
 
-/// What `inspect()` returns - one exact namepath, or a pattern's block.
+/// What `interface help` returns - one exact namepath, or a pattern's block.
 #[derive(Debug, ser::Serialize)]
 #[serde(untagged)]
 pub enum InspectDoc {

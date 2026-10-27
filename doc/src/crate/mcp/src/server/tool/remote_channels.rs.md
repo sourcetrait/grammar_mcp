@@ -1,6 +1,6 @@
 # remote_channels.rs
 
-## fn remote_channels
+## fn remote_list
 Two read-only sets from the process-global registries (remote_links and
 bound_listeners, link.rs): `channels`, the established links, each {alias,
 remote_mcp_nom, address}, and `listening`, the bound-but-unpaired listeners, each

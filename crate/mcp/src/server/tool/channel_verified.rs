@@ -1,19 +1,11 @@
 use crate::*;
 
-/// Parameters for `channel_verified()` (none).
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
-pub struct ChannelVerifiedParams {}
-
-#[mcp::tool_router(router = channel_verified_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "Confirm the channel/Open packet was seen; ends the verify window."
-    )]
-    pub(crate) async fn channel_verified(
+    /// `interface channel ready`: the channel/Open packet seen; verify it.
+    pub(crate) async fn channel_ready(
         &self,
-        mcp::Parameters(p): mcp::Parameters<ChannelVerifiedParams>,
+        nonce: datum::Nonce,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("channel_verified", &p).to_nonce();
         match self.channel.mark_verified() {
             Ok(()) => success_void(nonce),
             Err(ChannelVerifyError::NotOpen) => {

@@ -1,10 +1,6 @@
 use crate::*;
 
-/// Parameters for `remote_channels()` (none).
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
-pub struct RemoteChannelsParams {}
-
-/// One established remote link in the `remote_channels()` snapshot.
+/// One established remote link in the `interface remote list` snapshot.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct RemoteChannelEntry {
     pub alias: String,
@@ -19,23 +15,19 @@ pub(crate) struct ListeningEntry {
     pub address: String,
 }
 
-/// Success result of `remote_channels()`.
+/// Success result of `interface remote list`.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct RemoteChannelsResult {
     pub channels: Vec<RemoteChannelEntry>,
     pub listening: Vec<ListeningEntry>,
 }
 
-#[mcp::tool_router(router = remote_channels_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "List remote grammar-host links: established `channels` plus bound-but-unpaired `listening` listeners."
-    )]
-    pub(crate) async fn remote_channels(
+    /// `interface remote list`: established links and listeners still waiting.
+    pub(crate) async fn remote_list(
         &self,
-        mcp::Parameters(p): mcp::Parameters<RemoteChannelsParams>,
+        nonce: datum::Nonce,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("remote_channels", &p).to_nonce();
         let links = self.remote_links.lock().unwrap_or_else(|e| e.into_inner());
         let mut channels: Vec<RemoteChannelEntry> = links
             .iter()

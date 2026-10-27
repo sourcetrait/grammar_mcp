@@ -1,22 +1,19 @@
 use crate::*;
 
-/// Parameters for `kill()`.
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
+/// Parameters for `interface process kill`.
+#[derive(Debug, ser::Deserialize, ser::Serialize)]
 pub struct KillParams {
-    /// The nonce of the in-flight call to cancel; list them with processes().
+    /// The nonce of the in-flight call to cancel.
     pub nonce: String,
 }
 
-#[mcp::tool_router(router = kill_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "Cancel an in-flight usage by its nonce."
-    )]
-    pub(crate) async fn kill(
+    /// `interface process kill`: cancel an in-flight call by its nonce.
+    pub(crate) async fn process_kill(
         &self,
-        mcp::Parameters(p): mcp::Parameters<KillParams>,
+        nonce: datum::Nonce,
+        p: KillParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("kill", &p).to_nonce();
         let found = {
             let map = self.in_flight.lock().await;
             match map.get(&p.nonce) {

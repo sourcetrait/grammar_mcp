@@ -1,6 +1,6 @@
 # remote_channel_open.rs
 
-## fn remote_channel_open
+## fn remote_open
 The Channel's phase is checked first: a link's Connected, Disconnected, Sent, and
 Unsent notices and every relayed message ride the Channel's verified gate, so on an
 unverified Channel they would drop silently. The refusal, `remote::channel_unverified`,
@@ -13,4 +13,4 @@ remotes.toml, a link already open for that alias, or the bind or connect itself 
 succeeded - a listener is bound, or a connector is connected - not merely that an open
 started. A listener's peer-wait (Connected) and any established link's teardown
 (Disconnected) still surface later on the Channel. The keys and addresses come from
-the configured remotes file, so the tool takes no address or key of its own.
+the configured remotes file, so the command takes no address or key of its own.

@@ -1,7 +1,7 @@
 # commit.rs
 
-## fn commit
-A builtin's bare name resolves to its equip first, so `commit("gram")` commits
+## fn equip_commit
+A builtin's bare name resolves to its equip first, so `interface equip commit gram` commits
 `sourcetrait/gram`.
 
 Takes the equip's WRITE lock, since a commit wipes and rebuilds the canonical subtree, both

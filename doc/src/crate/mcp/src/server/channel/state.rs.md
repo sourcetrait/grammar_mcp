@@ -39,8 +39,9 @@ READ AT SEND TIME, NEVER CAPTURED. A job outliving its eval keeps its decl and e
 closed over, so a spawn-time snapshot would let work started before verification emit to an
 unproven peer - exactly what the gating forbids.
 
-Channels are OPTIONAL and start lazily on the first `channel_open()`, which is why `Closed`
-is an ordinary state and an emit there is a plain catchable error rather than a fault.
+Channels are OPTIONAL and start lazily on the first `interface channel open`, which is why
+`Closed` is an ordinary state and an emit there is a plain catchable error rather than a
+fault.
 
 ## type CloseSignal
 The completion half exists for SHUTDOWN. The frame is written by the hub task
@@ -76,8 +77,8 @@ verification, a close and a re-arm all stand the timer down. That is also why re
 cannot leave two timers racing one channel.
 
 ### field inbox
-A DELIBERATE `channel_close()` takes it and prunes it; every OTHER teardown leaves it. The
-shutdown close, the verify-timer expiry and the unverified-emit teardown are all
+A DELIBERATE `interface channel closed` takes it and prunes it; every OTHER teardown leaves
+it. The shutdown close, the verify-timer expiry and the unverified-emit teardown are all
 HOST-initiated, so an attachment stays readable by nonce when the channel went away without
 the caller asking for it.
 

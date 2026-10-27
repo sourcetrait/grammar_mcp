@@ -17,9 +17,9 @@ An enum rather than a string key, because the pinnable set is CLOSED by design a
 this makes it closed in the type system too: a new pinnable setting cannot be added
 without the compiler asking what it means everywhere.
 
-`[channel]` is deliberately absent. `config_channel` already mutates those, and a
-value with two mutators is a value whose effective setting depends on which surface
-you happen to ask.
+`[channel]` is deliberately absent. `interface channel config` already mutates those,
+and a value with two mutators is a value whose effective setting depends on which
+surface you happen to ask.
 
 ### fn field
 This is what the file layer's validators take, because they compose the table prefix

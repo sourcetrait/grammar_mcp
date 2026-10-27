@@ -1,22 +1,19 @@
 use crate::*;
 
-/// Parameters for `commit()`.
-#[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
+/// Parameters for `interface equip commit`.
+#[derive(Debug, ser::Deserialize, ser::Serialize)]
 pub struct CommitParams {
     /// The equip to commit: its `<author>/<name>`, or a builtin's name.
     pub namepath: String,
 }
 
-#[mcp::tool_router(router = commit_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "Commit an equip's lib and rig from its source to the MCP's repository for live use."
-    )]
-    pub(crate) async fn commit(
+    /// `interface equip commit`: an equip's source promoted into the namespace.
+    pub(crate) async fn equip_commit(
         &self,
-        mcp::Parameters(p): mcp::Parameters<CommitParams>,
+        nonce: datum::Nonce,
+        p: CommitParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("commit", &p).to_nonce();
         let equip = resolve_builtin(&p.namepath);
         let lock = match self.rig_locks.lookup(&equip).await {
             Some(l) => l,

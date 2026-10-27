@@ -9,9 +9,9 @@ absent: they are not config-file settings, and a body already reads them ambient
 as the `EQUIP_*` trio.
 
 VALUES ARE LIVE RATHER THAN AS-LAUNCHED. The channel's spam thresholds come from
-the channel handle, which `config_channel` mutates, and the supervisor lines come
-through the pin layer - so what a body reads is what is actually in force rather
-than the startup seed. A startup seed nobody is using would be a lie with a
+the channel handle, which `interface channel config` mutates, and the supervisor
+lines come through the pin layer - so what a body reads is what is actually in force
+rather than the startup seed. A startup seed nobody is using would be a lie with a
 timestamp.
 
 ## const KEY_SEP
@@ -60,6 +60,6 @@ one of them is a bug the caller wants to hear about.
 
 ## struct GrimmPinConfig
 Only the `[supervisor]` warning lines are pinnable. `[channel]` is excluded so
-`config_channel` stays the sole mutator there - a value with two mutators is one
-whose effective setting depends on which surface you happen to ask. Everything else
-in the config is not a runtime value at all.
+`interface channel config` stays the sole mutator there - a value with two mutators
+is one whose effective setting depends on which surface you happen to ask.
+Everything else in the config is not a runtime value at all.
