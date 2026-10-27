@@ -35,7 +35,8 @@ fn tools_list_and_execute_round_trip() {
 
 /// Every tool requires `host`: its schema lists it, any alias but `local` is
 /// refused as `host::unknown` before the tool does anything, and a call naming
-/// no host fails to deserialize at rmcp's boundary.
+/// no host fails to deserialize at rmcp's boundary, which answers an `isError`
+/// result carrying its own text rather than an envelope.
 #[tested]
 fn every_tool_names_its_host() {
     let t = testing::test!({ .using_temp_dir() });
@@ -64,5 +65,11 @@ fn every_tool_names_its_host() {
 
     let id = host.request_as_given("interface", json!({"command": "interface info"}));
     let resp = host.read_id(id);
-    assert!(resp.get("error").is_some(), "a call naming no host fails at the boundary; got {resp}");
+    assert_eq!(resp["result"]["isError"], json!(true), "refused at the boundary; got {resp}");
+    assert!(
+        resp["result"]["content"][0]["text"]
+            .as_str()
+            .is_some_and(|text| text.contains("missing field `host`")),
+        "rmcp names the missing field; got {resp}",
+    );
 }
