@@ -101,9 +101,6 @@ pub enum GrammarMcpError {
     EquipViolations {
         diagnostics: Vec<Diagnostic>,
     },
-    EquipInvalidAction {
-        action: String,
-    },
     RigInvalidName {
         name: String,
         reason: String,
@@ -118,6 +115,9 @@ pub enum GrammarMcpError {
         name: String,
     },
     DefinitionViolations {
+        diagnostics: Vec<Diagnostic>,
+    },
+    InterfaceViolations {
         diagnostics: Vec<Diagnostic>,
     },
     DataInvalid {
@@ -197,7 +197,6 @@ impl GrammarMcpError {
             Self::EquipSourcePathMismatch { .. } => "equip::source_path_mismatch",
             Self::EquipNoKinds { .. } => "equip::no_kinds",
             Self::EquipNoRig { .. } => "equip::no_rig",
-            Self::EquipInvalidAction { .. } => "equip::invalid_action",
             Self::RigInvalidName { .. } => "rig::invalid_name",
             Self::RigInvalidModulePath { .. } => "rig::invalid_module_path",
             Self::FunctionNotDefined { .. } => "function::not_defined",
@@ -223,7 +222,9 @@ impl GrammarMcpError {
             Self::ThreadReturnedError { .. } => "thread::returned_error",
             Self::ModuleCircularImport { .. } => "module::circular_import",
             Self::Internal { .. } => "internal",
-            Self::EquipViolations { .. } | Self::DefinitionViolations { .. } => {
+            Self::EquipViolations { .. }
+            | Self::DefinitionViolations { .. }
+            | Self::InterfaceViolations { .. } => {
                 unreachable!("violation variants render via bucket, not kind_str")
             }
         }
@@ -261,7 +262,6 @@ impl GrammarMcpError {
                 format!("equip source `{source_dir}` holds neither a lib/ nor a rig/")
             }
             Self::EquipNoRig { equip } => format!("equip `{}` has no rig", display_equip(equip)),
-            Self::EquipInvalidAction { action } => format!("unknown equip action `{action}`"),
             Self::RigInvalidName { name, reason } => {
                 format!("invalid name `{name}`: {reason}")
             }
@@ -295,14 +295,14 @@ impl GrammarMcpError {
             }
             Self::ChannelStart { reason } => format!("cannot start the channel hub: {reason}"),
             Self::ChannelNotOpen => {
-                "the channel is not open; call channel_open() first".to_string()
+                "the channel is not open; run `interface channel open` first".to_string()
             }
             Self::ChannelNotClaimed => "nothing has connected to the channel yet; start \
-                 a Monitor at the wss endpoint channel_open() returned, see the \
-                 channel/Open packet, then verify"
+                 a Monitor at the wss endpoint `interface channel open` returned, see the \
+                 channel/Open packet, then run `interface channel ready`"
                 .to_string(),
-            Self::ChannelPeerGone => "the channel's peer connection is gone; call \
-                 channel_close() then channel_open() for a fresh channel"
+            Self::ChannelPeerGone => "the channel's peer connection is gone; run \
+                 `interface channel closed` then `interface channel open` for a fresh channel"
                 .to_string(),
             Self::RemoteInvalidParams { reason } => {
                 format!("invalid remote link parameters: {reason}")
@@ -320,7 +320,9 @@ impl GrammarMcpError {
             Self::ThreadReturnedError { reason } => reason.clone(),
             Self::ModuleCircularImport { files } => files.clone(),
             Self::Internal { phase, reason } => format!("internal error [{phase}]: {reason}"),
-            Self::EquipViolations { .. } | Self::DefinitionViolations { .. } => {
+            Self::EquipViolations { .. }
+            | Self::DefinitionViolations { .. }
+            | Self::InterfaceViolations { .. } => {
                 unreachable!("violation variants render via bucket, not message")
             }
         }
@@ -343,7 +345,8 @@ pub(crate) fn error_to_call_result(
 ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
     let rows = match error {
         GrammarMcpError::EquipViolations { diagnostics }
-        | GrammarMcpError::DefinitionViolations { diagnostics } => {
+        | GrammarMcpError::DefinitionViolations { diagnostics }
+        | GrammarMcpError::InterfaceViolations { diagnostics } => {
             Diagnostic::bucket(diagnostics).0
         }
         single => vec![Diagnostic::error(single.kind_str(), None, single.message())],

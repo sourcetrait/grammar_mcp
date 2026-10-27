@@ -1,0 +1,332 @@
+//! An interface command held to its contract: one call, its arguments literals.
+use crate::*;
+
+/// The name a command is parsed under, which positions its diagnostics.
+const COMMAND_FILE: &str = "command";
+
+/// The kind every refusal is reported under.
+pub(crate) const KIND_INTERFACE: &str = "interface::invalid";
+
+/// A parsed command, carrying its tool's parameters as they are.
+#[derive(Debug)]
+pub(crate) enum InterfaceCommand {
+    Info(InfoParams),
+    Help(InspectParams),
+    ProcessList,
+    ProcessKill(KillParams),
+    PurviewList,
+    PurviewSet(PurviewParams),
+    PurviewExtend(PurviewExtendParams),
+    PurviewConfigure(PurviewConfigureParams),
+    ChannelOpen,
+    ChannelReady,
+    ChannelClosed,
+    ChannelConfig(ConfigChannelParams),
+    RemoteOpen(RemoteChannelOpenParams),
+    RemoteClose(RemoteChannelCloseParams),
+    RemoteList,
+    EquipNew(EquipParams),
+    EquipInstall(EquipParams),
+    EquipCheck(EquipParams),
+    EquipUninstall(EquipParams),
+    EquipScaffold(NewParams),
+    EquipCommit(CommitParams),
+}
+
+/// One literal argument's value.
+enum Literal {
+    Text(String),
+    Texts(Vec<String>),
+    Whole(i64),
+}
+
+/// A call's literal arguments by name, each with its span.
+type Literals = HashMap<&'static str, (Literal, nu::Span)>;
+
+/// A refusal before it is positioned: its span, if any, and its message.
+type Refusal = (Option<nu::Span>, String);
+
+/// Hold `text` to the contract: one interface call, its arguments literals.
+pub(crate) fn parse_command(
+    engine: &nu::EngineState,
+    text: &str,
+) -> Result<InterfaceCommand, Vec<Diagnostic>> {
+    let mut ws = nu::StateWorkingSet::new(engine);
+    let block = nu::parse(&mut ws, Some(COMMAND_FILE), text.as_bytes(), false);
+    let start = file_start(&ws, COMMAND_FILE);
+    let row = |(span, message): Refusal| -> Diagnostic {
+        let position = match span {
+            Some(span) => {
+                let (line, col) = span_to_line_col(text, span.start.saturating_sub(start));
+                [line, col]
+            }
+            None => [0, 0],
+        };
+        Diagnostic::error(
+            KIND_INTERFACE,
+            Some(Source {
+                path: None,
+                position,
+            }),
+            message,
+        )
+    };
+    if !ws.parse_errors.is_empty() {
+        let mut rows: Vec<Diagnostic> = Vec::new();
+        for error in &ws.parse_errors {
+            let refused = row((Some(error.span()), format!("parse error: {error:?}")));
+            if !rows.iter().any(|seen| seen.message == refused.message) {
+                rows.push(refused);
+            }
+        }
+        rows.truncate(LINT_VIOLATION_CAP);
+        return Err(rows);
+    }
+    match held_call(&ws, &block, text) {
+        Ok(command) => Ok(command),
+        Err(refusals) => {
+            let mut rows: Vec<Diagnostic> = refusals.into_iter().map(row).collect();
+            rows.truncate(LINT_VIOLATION_CAP);
+            Err(rows)
+        }
+    }
+}
+
+/// The one call the block holds, mapped to its command.
+fn held_call(
+    ws: &nu::StateWorkingSet,
+    block: &nu::Block,
+    text: &str,
+) -> Result<InterfaceCommand, Vec<Refusal>> {
+    let refuse = |span: Option<nu::Span>, message: String| vec![(span, message)];
+    let [pipeline] = block.pipelines.as_slice() else {
+        return Err(refuse(
+            None,
+            format!(
+                "one `{INTERFACE}` command, alone; found {} statements",
+                block.pipelines.len(),
+            ),
+        ));
+    };
+    let element = match pipeline.elements.as_slice() {
+        [element] => element,
+        [_, next, ..] => {
+            return Err(refuse(
+                Some(next.expr.span),
+                format!("one `{INTERFACE}` command, never piped"),
+            ));
+        }
+        [] => {
+            return Err(refuse(None, format!("one `{INTERFACE}` command, alone")));
+        }
+    };
+    if element.redirection.is_some() {
+        return Err(refuse(
+            Some(element.expr.span),
+            format!("an `{INTERFACE}` command takes no redirection"),
+        ));
+    }
+    let nu::Expr::Call(call) = &element.expr.expr else {
+        return Err(refuse(
+            Some(element.expr.span),
+            format!(
+                "`{}` is no `{INTERFACE}` command; the commands are in the tool's description",
+                text.trim(),
+            ),
+        ));
+    };
+    let Some(spec) = command_spec(ws.get_decl(call.decl_id).name()) else {
+        return Err(refuse(
+            Some(element.expr.span),
+            format!("`{}` is no `{INTERFACE}` command", text.trim()),
+        ));
+    };
+    let mut literals: Literals = HashMap::new();
+    let mut refusals: Vec<Refusal> = Vec::new();
+    let mut index = 0usize;
+    for argument in &call.arguments {
+        match argument {
+            nu::Argument::Positional(expr) => {
+                match spec.positionals.get(index) {
+                    Some(arg) => match literal(expr, arg) {
+                        Ok(value) => {
+                            literals.insert(arg.name, (value, expr.span));
+                        }
+                        Err(refused) => refusals.push(refused),
+                    },
+                    None => refusals.push((Some(expr.span), "an extra argument".to_string())),
+                }
+                index += 1;
+            }
+            nu::Argument::Named((flag, _, value)) => {
+                let Some(arg) = spec.flags.iter().find(|arg| arg.name == flag.item) else {
+                    refusals.push((
+                        Some(flag.span),
+                        format!("`{}` takes no flag `--{}`", spec.name, flag.item),
+                    ));
+                    continue;
+                };
+                match value {
+                    Some(expr) => match literal(expr, arg) {
+                        Ok(value) => {
+                            literals.insert(arg.name, (value, expr.span));
+                        }
+                        Err(refused) => refusals.push(refused),
+                    },
+                    None => refusals.push((
+                        Some(flag.span),
+                        format!("`--{}` takes a value", arg.name),
+                    )),
+                }
+            }
+            nu::Argument::Unknown(expr) | nu::Argument::Spread(expr) => {
+                refusals.push((Some(expr.span), "a literal argument, never spread".to_string()));
+            }
+        }
+    }
+    if !refusals.is_empty() {
+        return Err(refusals);
+    }
+    command(spec.kind, &mut literals).map_err(|refused| vec![refused])
+}
+
+/// An argument's literal, refused when it is anything else.
+fn literal(
+    expr: &nu::Expression,
+    arg: &ArgSpec,
+) -> Result<Literal, Refusal> {
+    let refused = || {
+        (
+            Some(expr.span),
+            format!(
+                "`{}` takes a {} literal, never a variable, an expression, or a spread",
+                arg.name,
+                match arg.shape {
+                    ArgShape::String => "string",
+                    ArgShape::Strings => "list-of-strings",
+                    ArgShape::Int => "int",
+                },
+            ),
+        )
+    };
+    match (arg.shape, &expr.expr) {
+        (ArgShape::String, nu::Expr::String(text) | nu::Expr::RawString(text)) => {
+            Ok(Literal::Text(text.clone()))
+        }
+        (ArgShape::Int, nu::Expr::Int(whole)) => Ok(Literal::Whole(*whole)),
+        (ArgShape::Strings, nu::Expr::List(items)) => {
+            let mut texts = Vec::new();
+            for item in items {
+                let nu::ListItem::Item(item) = item else {
+                    return Err(refused());
+                };
+                match &item.expr {
+                    nu::Expr::String(text) | nu::Expr::RawString(text) => texts.push(text.clone()),
+                    _ => return Err(refused()),
+                }
+            }
+            Ok(Literal::Texts(texts))
+        }
+        _ => Err(refused()),
+    }
+}
+
+/// A string argument; a required one the parse has already held present.
+fn text(
+    literals: &mut Literals,
+    name: &str,
+) -> String {
+    match literals.remove(name) {
+        Some((Literal::Text(text), _)) => text,
+        _ => String::new(),
+    }
+}
+
+/// A list-of-strings argument; an absent optional one is empty.
+fn texts(
+    literals: &mut Literals,
+    name: &str,
+) -> Vec<String> {
+    match literals.remove(name) {
+        Some((Literal::Texts(texts), _)) => texts,
+        _ => Vec::new(),
+    }
+}
+
+/// A whole-number flag in its parameter's range; absent when not given.
+fn count<T: TryFrom<i64>>(
+    literals: &mut Literals,
+    name: &str,
+) -> Result<Option<T>, Refusal> {
+    match literals.remove(name) {
+        None => Ok(None),
+        Some((Literal::Whole(whole), span)) => T::try_from(whole).map(Some).map_err(|_| {
+            (
+                Some(span),
+                format!("`--{name}` takes a non-negative whole number in range, not {whole}"),
+            )
+        }),
+        Some((_, span)) => Err((Some(span), format!("`--{name}` takes an int"))),
+    }
+}
+
+/// The command a spec names, its parameters from the literals.
+fn command(
+    kind: CommandKind,
+    literals: &mut Literals,
+) -> Result<InterfaceCommand, Refusal> {
+    let source = |literals: &mut Literals| EquipParams {
+        source: text(literals, "source"),
+    };
+    Ok(match kind {
+        CommandKind::Info => InterfaceCommand::Info(InfoParams {
+            purviews: texts(literals, "purviews"),
+        }),
+        CommandKind::Help => InterfaceCommand::Help(InspectParams {
+            namepath: text(literals, "namepath"),
+        }),
+        CommandKind::ProcessList => InterfaceCommand::ProcessList,
+        CommandKind::ProcessKill => InterfaceCommand::ProcessKill(KillParams {
+            nonce: text(literals, "nonce"),
+        }),
+        CommandKind::PurviewList => InterfaceCommand::PurviewList,
+        CommandKind::PurviewSet => InterfaceCommand::PurviewSet(PurviewParams {
+            purviews: texts(literals, "purviews"),
+        }),
+        CommandKind::PurviewExtend => InterfaceCommand::PurviewExtend(PurviewExtendParams {
+            purviews: texts(literals, "purviews"),
+        }),
+        CommandKind::PurviewConfigure => {
+            InterfaceCommand::PurviewConfigure(PurviewConfigureParams {
+                purview: text(literals, "purview"),
+                namepaths: texts(literals, "namepaths"),
+            })
+        }
+        CommandKind::ChannelOpen => InterfaceCommand::ChannelOpen,
+        CommandKind::ChannelReady => InterfaceCommand::ChannelReady,
+        CommandKind::ChannelClosed => InterfaceCommand::ChannelClosed,
+        CommandKind::ChannelConfig => InterfaceCommand::ChannelConfig(ConfigChannelParams {
+            spam_warn_window_secs: count(literals, "spam-warn-window-secs")?,
+            spam_warn_rate: count(literals, "spam-warn-rate")?,
+            spam_error_window_secs: count(literals, "spam-error-window-secs")?,
+            spam_error_rate: count(literals, "spam-error-rate")?,
+        }),
+        CommandKind::RemoteOpen => InterfaceCommand::RemoteOpen(RemoteChannelOpenParams {
+            alias: text(literals, "alias"),
+        }),
+        CommandKind::RemoteClose => InterfaceCommand::RemoteClose(RemoteChannelCloseParams {
+            alias: text(literals, "alias"),
+        }),
+        CommandKind::RemoteList => InterfaceCommand::RemoteList,
+        CommandKind::EquipNew => InterfaceCommand::EquipNew(source(literals)),
+        CommandKind::EquipInstall => InterfaceCommand::EquipInstall(source(literals)),
+        CommandKind::EquipCheck => InterfaceCommand::EquipCheck(source(literals)),
+        CommandKind::EquipUninstall => InterfaceCommand::EquipUninstall(source(literals)),
+        CommandKind::EquipScaffold => InterfaceCommand::EquipScaffold(NewParams {
+            namepaths: texts(literals, "namepaths"),
+        }),
+        CommandKind::EquipCommit => InterfaceCommand::EquipCommit(CommitParams {
+            namepath: text(literals, "namepath"),
+        }),
+    })
+}

@@ -13,6 +13,10 @@ pub(crate) mod server {
     pub(crate) mod emergency;
     pub(crate) mod execute;
     pub(crate) mod executor;
+    pub(crate) mod interface {
+        pub(crate) mod contract;
+        pub(crate) mod grammar;
+    }
     pub(crate) mod rig;
     pub(crate) mod lint;
     pub(crate) mod liveness;
@@ -43,6 +47,7 @@ pub(crate) mod server {
         pub(crate) mod handler;
         pub(crate) mod info;
         pub(crate) mod inspect;
+        pub(crate) mod interface;
         pub(crate) mod equip;
         pub(crate) mod kill;
         pub(crate) mod new;
@@ -61,6 +66,7 @@ pub(crate) mod server {
     mod tests {
         mod channel;
         mod emergency;
+        mod interface;
         mod remote;
         mod rig;
         mod namepath;
@@ -168,6 +174,13 @@ pub(crate) use crate::{
         },
         execute::{EXECUTE, ExecuteDef, analyze_definition},
         executor::Executor,
+        interface::{
+            contract::{InterfaceCommand, parse_command},
+            grammar::{
+                ArgShape, ArgSpec, COMMANDS, CommandKind, INTERFACE, command_by_words,
+                command_spec, interface_engine, render_signatures,
+            },
+        },
         rig::{
             CommitResult, RigLocks, ValidationResult, check_equip,
             check_source_dir, commit_equip, ensure_substrate, establish_equip,
@@ -221,8 +234,6 @@ pub(crate) use crate::{
         },
         tool::{
             call::CallParams,
-            channel_close::ChannelCloseParams,
-            channel_verified::ChannelVerifiedParams,
             commit::CommitParams,
             config_channel::ConfigChannelParams,
             equip::EquipParams,
@@ -233,14 +244,15 @@ pub(crate) use crate::{
             },
             info::InfoParams,
             inspect::InspectParams,
+            interface::{INTERFACE_TOOL, InterfaceParams, interface_description},
             kill::KillParams,
             new::NewParams,
             nu::{NuParams, prepare_nu},
-            processes::ProcessesParams,
             purview_configure::PurviewConfigureParams,
             purview_extend::PurviewExtendParams,
-            purviews::PurviewsParams,
             purview::PurviewParams,
+            remote_channel_close::RemoteChannelCloseParams,
+            remote_channel_open::RemoteChannelOpenParams,
             rerun::RerunParams,
         },
     },
@@ -391,7 +403,7 @@ pub(crate) mod json {
 
 pub use crate::{
     cli::{
-        Cli, CliEnv, CliTool, CliCmd, EquipCliAction,
+        Cli, CliEnv, CliTool, CliCmd,
     },
     config::{
         DeniableTool,

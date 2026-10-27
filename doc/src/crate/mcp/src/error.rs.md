@@ -23,8 +23,8 @@ the wire and the check summary both carry.
 
 WHERE A ROW RIDES CONVEYS ITS SEVERITY, which is why `severity` is `#[serde(skip)]` and
 absent from the wire: an error row in a failure's `error` table, a warning row in the
-`warnings` of the result that raised it, `commit`'s and `equip`'s install and check
-summaries. It is an internal partition key only.
+`warnings` of the result that raised it, an `interface equip` commit's, install's, or
+check's. It is an internal partition key only.
 
 Per-condition data (`timeout_ms`, names, reason) lives IN `message`, not a typed
 per-variant field: it is text either way, and a per-variant field would vary its shape
@@ -32,14 +32,14 @@ by kind.
 
 ## enum GrammarMcpError
 Stays the ergonomic typed value the impls build and bubble with `?`; it is not
-serde-tagged on the wire. Two variants carry already-unified rows, and the rest are
+serde-tagged on the wire. Three variants carry already-unified rows, and the rest are
 single-condition.
 
 `From<io::Error>` blanket-converts to `Internal { phase: "io" }` so the equip impls can
 use `?` freely rather than mapping at every filesystem call.
 
 ### fn kind_str
-The two violation variants `unreachable!()` here deliberately: they render through
+The three violation variants `unreachable!()` here deliberately: they render through
 `bucket`, and reaching this arm would mean a caller bypassed that path.
 
 REGISTRATION is `equip::*`, because the unit installed, committed, and addressed by a
@@ -52,9 +52,9 @@ a resolution cycle is not a rig-structure rule even when the validator is what f
 it. The validator already emits non-`rig::` kinds, `lint::summary_length` among them.
 
 `remote::open_failed` is the SYNCHRONOUS bind/connect failure of a blocking
-remote_channel_open (ConnectionWoes): distinct from the async `mcp/remote/Disconnected
-{error}` Channel model, which now fires only for a listener's post-bind accept failure
-or an established link's later teardown.
+`interface remote open` (ConnectionWoes): distinct from the async
+`mcp/remote/Disconnected {error}` Channel model, which now fires only for a listener's
+post-bind accept failure or an established link's later teardown.
 
 A `nu` call's refusals each name their part of the contract: `definition::invalid` rows,
 gathered with the lint's under `DefinitionViolations`, for the definition; `data::invalid`
@@ -62,7 +62,11 @@ for data that isn't NUON or doesn't conform; `timeout::invalid` for a timeout th
 positive duration; and `result::invalid` for a value the definition's return type refuses.
 Each message carries the path or the position, so the agent fixes the one thing named.
 
-`remote::channel_unverified` refuses a remote_channel_open while the Channel isn't
+An `interface` call's refusal is `interface::invalid` rows, gathered under
+`InterfaceViolations`, each at its position in the command; a command that parsed and ran
+refuses with its own kinds, as its tool did.
+
+`remote::channel_unverified` refuses an `interface remote open` while the Channel isn't
 verified, before any bind or connect: the link's notices and relays ride the Channel's
 gate and would drop.
 
