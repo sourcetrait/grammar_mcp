@@ -11,7 +11,7 @@ impl Drop for FinishGuard {
 }
 
 /// The lane an eval runs on: the stateless pool, or the stateful engine.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cereal::derived(Data, Copy, Eq)]
 pub enum Lane {
     Stateless,
     Stateful,

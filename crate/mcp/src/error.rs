@@ -6,20 +6,8 @@ pub type GrammarMcpResult<T> = Result<T, GrammarMcpError>;
 pub enum GrammarMcpError {
     /// What the engine refused or failed at, its kinds and messages its own.
     Engine(EngineError),
-    DefinitionViolations {
-        diagnostics: Vec<Diagnostic>,
-    },
     InterfaceViolations {
         diagnostics: Vec<Diagnostic>,
-    },
-    DataInvalid {
-        reason: String,
-    },
-    ResultInvalid {
-        reason: String,
-    },
-    TimeoutInvalid {
-        reason: String,
     },
     SchemaInvalid {
         reason: String,
@@ -27,13 +15,6 @@ pub enum GrammarMcpError {
     PurviewInvalidId {
         id: String,
         reason: String,
-    },
-    RerunInvalidNonce {
-        nonce: String,
-        reason: String,
-    },
-    RerunBodyMissing {
-        nonce: String,
     },
     ChannelStart {
         reason: String,
@@ -55,12 +36,6 @@ pub enum GrammarMcpError {
         reason: String,
     },
     RemoteChannelUnverified,
-    ThreadDispatch {
-        reason: String,
-    },
-    ThreadTimeout {
-        timeout_ms: u64,
-    },
     Internal {
         phase: String,
         reason: String,
@@ -71,13 +46,8 @@ impl GrammarMcpError {
     fn kind_str(&self) -> &'static str {
         match self {
             Self::Engine(error) => error.kind(),
-            Self::DataInvalid { .. } => "data::invalid",
-            Self::ResultInvalid { .. } => "result::invalid",
-            Self::TimeoutInvalid { .. } => "timeout::invalid",
             Self::SchemaInvalid { .. } => "schema::invalid",
             Self::PurviewInvalidId { .. } => "purview::invalid_id",
-            Self::RerunInvalidNonce { .. } => "rerun::invalid_nonce",
-            Self::RerunBodyMissing { .. } => "rerun::body_missing",
             Self::ChannelStart { .. } => "channel::start",
             Self::ChannelNotOpen => "channel::not_open",
             Self::ChannelNotClaimed => "channel::not_claimed",
@@ -87,10 +57,8 @@ impl GrammarMcpError {
             Self::RemoteNotOpen { .. } => "remote::not_open",
             Self::RemoteOpenFailed { .. } => "remote::open_failed",
             Self::RemoteChannelUnverified => "remote::channel_unverified",
-            Self::ThreadDispatch { .. } => "thread::dispatch",
-            Self::ThreadTimeout { .. } => "thread::timeout",
             Self::Internal { .. } => "internal",
-            Self::DefinitionViolations { .. } | Self::InterfaceViolations { .. } => {
+            Self::InterfaceViolations { .. } => {
                 unreachable!("violation variants render via bucket, not kind_str")
             }
         }
@@ -99,18 +67,9 @@ impl GrammarMcpError {
     fn message(&self) -> String {
         match self {
             Self::Engine(error) => error.message(),
-            Self::DataInvalid { reason }
-            | Self::ResultInvalid { reason }
-            | Self::TimeoutInvalid { reason } => reason.clone(),
             Self::SchemaInvalid { reason } => format!("invalid schema: {reason}"),
             Self::PurviewInvalidId { id, reason } => {
                 format!("invalid purview id `{id}`: {reason}")
-            }
-            Self::RerunInvalidNonce { nonce, reason } => {
-                format!("invalid nonce `{nonce}`: {reason}")
-            }
-            Self::RerunBodyMissing { nonce } => {
-                format!("no cached definition for the nonce `{nonce}`; rerun takes an execute call's nonce")
             }
             Self::ChannelStart { reason } => format!("cannot start the channel hub: {reason}"),
             Self::ChannelNotOpen => {
@@ -134,10 +93,8 @@ impl GrammarMcpError {
             Self::RemoteChannelUnverified => "the channel is not verified; a remote link's \
                  notices ride it, so open and verify the channel before the link"
                 .to_string(),
-            Self::ThreadDispatch { reason } => format!("eval dispatch failed: {reason}"),
-            Self::ThreadTimeout { timeout_ms } => format!("eval timed out after {timeout_ms} ms"),
             Self::Internal { phase, reason } => format!("internal error [{phase}]: {reason}"),
-            Self::DefinitionViolations { .. } | Self::InterfaceViolations { .. } => {
+            Self::InterfaceViolations { .. } => {
                 unreachable!("violation variants render via bucket, not message")
             }
         }
@@ -166,10 +123,7 @@ pub(crate) fn error_to_call_result(
 ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
     let rows = match error.into() {
         GrammarMcpError::Engine(error) => error.rows(),
-        GrammarMcpError::DefinitionViolations { diagnostics }
-        | GrammarMcpError::InterfaceViolations { diagnostics } => {
-            Diagnostic::bucket(diagnostics).0
-        }
+        GrammarMcpError::InterfaceViolations { diagnostics } => Diagnostic::bucket(diagnostics).0,
         single => vec![Diagnostic::error(single.kind_str(), None, single.message())],
     };
     envelope_text(nonce, "error", serde_to_nu(&rows)?)

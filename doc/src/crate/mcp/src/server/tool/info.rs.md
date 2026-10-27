@@ -34,6 +34,10 @@ follows it.
 THE CURRENT VIEW ALONE: the command takes no argument, so what it renders is what the
 session has in view, and `interface purview set` is how a view changes (User).
 
+THE VIEW IS THE HOST'S, THE BLOCK THE ENGINE'S: purviews are mcp's own state, so the host
+resolves the session's view into patterns and the engine's `Signatures` renders the rigs
+within them.
+
 FILTERING EXPANDS `@` references while the reported `purview` field carries the RAW
 configuration - the two go through different functions on purpose, so a report shows what
 was written and the filter matches what it means.

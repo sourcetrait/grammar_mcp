@@ -19,7 +19,7 @@ pub(crate) fn init_engine() -> Result<(), String> {
 }
 
 /// The substrate: the equip store, the default purview, the registry, builtins.
-pub(crate) async fn ensure_substrate() -> io::Result<Arc<RigLocks>> {
+pub(crate) async fn ensure_substrate() -> io::Result<()> {
     let fresh = ensure_equip_store()?;
     if let Err(e) = ensure_default_purview() {
         eprintln!("grammar: default purview not materialized: {e:?}");
@@ -28,9 +28,7 @@ pub(crate) async fn ensure_substrate() -> io::Result<Arc<RigLocks>> {
     if fresh {
         seed_builtin_purviews(&install_builtins());
     }
-    let locks = Arc::new(RigLocks::new());
-    locks.hydrate_from_disk().await?;
-    Ok(locks)
+    Ok(())
 }
 
 /// The engine's host: the Channel, the remote links, the config, and the pins.

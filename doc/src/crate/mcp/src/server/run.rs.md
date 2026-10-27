@@ -6,6 +6,10 @@ THE ORDER HERE IS LOAD-BEARING, top to bottom.
 `install_child_subreaper` comes first so an eval's orphaned grandchildren stay on our
 /proc ppid chain for the tree-kill. Everything after it can spawn externals.
 
+The ENGINE starts after the substrate: its system hydrates the equips' locks from the
+store the substrate makes, builtins included, so an engine started first would answer a
+call to a builtin `equip::not_registered`.
+
 The EMERGENCY LANE is built before the watchdog, because the watchdog is its producer
 and there is nothing to push onto until it exists. The channel's spam classifier is
 installed onto the same lane here rather than at `NuSh` construction for the same
@@ -31,6 +35,10 @@ open for either protocol era.
 The shutdown path runs once the service ends, whatever ended it: the channel is told
 we are going away and every in-flight eval is cancelled and reaped, so a disconnect
 mid-eval leaks no process tree.
+
+## fn teardown
+A REQUEST to the engine, its `Teardown`: the calls in flight are the engine's, so the host
+holds nothing of its own to sweep. A failure is logged and the shutdown goes on.
 
 ## const CLOSE_FLUSH_GRACE
 Bounded because a peer that has already gone must never hold the shutdown open.

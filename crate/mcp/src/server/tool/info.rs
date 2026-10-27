@@ -31,10 +31,11 @@ impl NuSh {
             Err(error) => return error_to_call_result(error, nonce),
         };
         let ids = self.current_purview.ids();
-        let patterns = parse_patterns(&expand_values(
-            &resolve_patterns(&ids, rows.as_ref()),
-            rows.as_ref(),
-        ));
+        let patterns = expand_values(&resolve_patterns(&ids, rows.as_ref()), rows.as_ref());
+        let signatures = match self.signatures(patterns).await {
+            Ok(signatures) => signatures,
+            Err(error) => return error_to_call_result(error, nonce),
+        };
         success(
             nonce,
             &InfoResult {
@@ -46,7 +47,7 @@ impl NuSh {
                 mcp_nom: self.mcp_nom.as_str().to_string(),
                 work_dir: config().work_dir.display().to_string(),
                 plugins: list_registered_plugins(),
-                signatures: render_signatures_within(&self.rig_locks, &patterns).await,
+                signatures,
                 purview: purview_views(&ids, rows.as_ref()),
             },
         )

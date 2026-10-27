@@ -115,7 +115,7 @@ pub(crate) use crate::{
             CurrentPurview, PURVIEW_ALL, PURVIEW_CORE, PURVIEW_DEFAULT, PURVIEW_REF, PurviewRow,
             PurviewView, is_derived_purview, is_rig_pattern, is_valid_purview_id, load_purviews,
             ensure_default_purview, expand_values, is_nameable_purview, is_valid_purview_ref,
-            parse_patterns, pattern_delta, prune_dangling, purview_ref, purview_views,
+            pattern_delta, prune_dangling, purview_ref, purview_views,
             purviews_path, resolve_patterns, save_purviews, seed_builtin, seed_builtin_purviews,
         },
         remote::{
@@ -130,28 +130,22 @@ pub(crate) use crate::{
             verify::PublicKeyVerifier,
         },
         run::run_server,
-        teardown::{
-            OrphanReaper, install_child_subreaper, kill_plugin_subprocesses, make_tracker,
-            process_start_time, tree_kill,
-        },
-        watchdog::{
-            HungRegistry, HungWatch, WatchdogDeps, register_hung, spawn_watchdog,
-        },
+        teardown::{OrphanReaper, install_child_subreaper, process_start_time},
+        watchdog::{WatchdogDeps, spawn_watchdog},
         tool::{
             call::CallParams,
             commit::CommitParams,
             config_channel::ConfigChannelParams,
             equip::EquipParams,
             common::{
-                DEFAULT_TIMEOUT_MS, InFlightEntry, InFlightKind, NuSh, RemoteLinkEntry,
-                dispatch_pooled, dispatch_stateful, envelope_text, now_millis, serde_to_nu,
-                success, success_value, success_void, teardown_all_in_flight,
+                NuSh, RemoteLinkEntry, answer_value, envelope_text, now_millis, serde_to_nu,
+                success, success_value, success_void, unexpected,
             },
             inspect::InspectParams,
             interface::{INTERFACE_TOOL, InterfaceParams, interface_description},
             kill::KillParams,
             new::NewParams,
-            execute::{ExecuteParams, prepare_execute},
+            execute::ExecuteParams,
             purview_configure::PurviewConfigureParams,
             purview_extend::PurviewExtendParams,
             purview::PurviewParams,
@@ -166,20 +160,19 @@ pub(crate) use crate::{
 };
 
 pub(crate) use sourcetrait_grammar_engine::{
-    self as engine, CacheKind, ChannelSend, CommitResult, DEFINITION_FILE, Diagnostic,
-    EVAL_STACK_SIZE, EngineError, EngineHost, EngineParams, ExecuteDef, Executor, InspectDoc,
-    LINT_VIOLATION_CAP, Lane, LintEngine, NU_VERSION, Namepath, NamepathPattern, NamepathRef,
-    NamepathStr, ParseEngine, PluginInfo, RemoteSend, RigLocks, SignaturesDoc, Source,
-    StatefulEngine, ValidationResult, analyze_definition, build_call_source,
-    build_execute_source, builtin_equip, builtin_name, cache_dir, check_equip,
-    check_source_dir, check_value, commit_equip, definition_file, ensure_equip_store,
-    ensure_plugin_registry, equip_namepath_of, equip_repo_lock, equip_root, establish_equip,
-    eval_concurrency_cap, eval_stateless, file_start, index_from_nuon, index_node,
-    inspect_impl, install_builtins, install_equip, json_value_to_nu_value, lib_dir,
-    lint_block, list_registered_plugins, load_index, registered_rig_names,
-    render_signatures_within, require_rig, resolve_builtin, rig_dir, rig_meta_path,
-    scaffold_leaf, scaffold_leaf_exists, span_to_line_col, typedef_text, uninstall_equip,
+    self as engine, CallRequest, ChannelSend, CheckSummary, CommitResult, ControlAnswer,
+    Diagnostic, EVAL_STACK_SIZE, EngineCommand, EngineError, EngineHandle,
+    EngineHealth, EngineHost, EngineParams, EngineResult, ExecuteRequest, Host, HungEval,
+    InspectDoc, LINT_VIOLATION_CAP, Lane, LintEngine, NU_VERSION, NamepathPattern,
+    NamepathStr, ParseEngine, PluginInfo, RemoteSend, RerunRequest, SignaturesDoc, Source,
+    ValueAnswer, analyze_definition, build_call_source, build_execute_source, builtin_equip,
+    builtin_name, definition_file, ensure_equip_store, ensure_plugin_registry, equip_repo_lock,
+    equip_root, file_start, index_from_nuon, install_builtins, json_value_to_nu_value, lib_dir,
+    lint_block, list_registered_plugins, registered_rig_names, rig_dir, rig_meta_path,
+    span_to_line_col, typedef_text,
 };
+
+pub(crate) use nuval::{NuVal, TryFromNu, TryIntoNu};
 
 pub(crate) use std::{
     collections::{HashMap, HashSet},
@@ -207,24 +200,20 @@ pub(crate) mod dirs {
 }
 
 pub(crate) mod nu {
-    pub(crate) use nu_command::tls::CRYPTO_PROVIDER;
     pub(crate) use nu_engine::command_prelude::Call;
     pub(crate) use nu_json::Value as JsonValue;
     pub(crate) use nu_parser::parse;
     pub(crate) use nu_protocol::{
-        Category, FromValue, PipelineData, Record, ShellError, Signals, Signature, Span,
-        SyntaxShape, Type, Value,
+        Category, FromValue, PipelineData, Record, ShellError, Signature, Span, SyntaxShape,
+        Type, Value,
         ast::{Argument, Block, Expr, Expression, ListItem},
-        engine::{Command, EngineState, Job, Jobs, Mail, Stack, StateWorkingSet, ThreadJob},
+        engine::{Command, EngineState, Stack, StateWorkingSet},
     };
     pub(crate) use nu_protocol::shell_error::generic::GenericError;
     pub(crate) use nuon::{ToNuonConfig, from_nuon, to_nuon};
 }
 
-pub(crate) use sourcetrait_common::{
-    cereal,
-    datum,
-};
+pub(crate) use sourcetrait_common::datum;
 
 pub(crate) mod ser {
     pub(crate) use ::serde::{Deserialize, Serialize};
@@ -281,7 +270,7 @@ pub(crate) mod tk {
         signal::unix::{SignalKind, signal},
         task::{JoinHandle, spawn_blocking},
         sync::{
-            Mutex as AsyncMutex, Semaphore, oneshot,
+            Mutex as AsyncMutex, oneshot,
             mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
         },
         time::{Duration as TkDuration, sleep, timeout},

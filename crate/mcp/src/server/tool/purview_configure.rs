@@ -90,10 +90,10 @@ impl NuSh {
             .map(|row| row.namepath_patterns.clone());
         let signatures = match values {
             None => None,
-            Some(values) => {
-                let patterns = parse_patterns(&expand_values(&values, Some(&rows)));
-                Some(render_signatures_within(&self.rig_locks, &patterns).await)
-            }
+            Some(values) => match self.signatures(expand_values(&values, Some(&rows))).await {
+                Ok(signatures) => Some(signatures),
+                Err(error) => return error_to_call_result(error, nonce),
+            },
         };
         success(nonce, &PurviewConfigureResult { signatures })
     }

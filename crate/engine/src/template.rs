@@ -3,20 +3,18 @@ use indoc::formatdoc;
 
 const CALL_ALIAS: &str = "__call";
 
-fn args_to_nuon(args: &json::JsonObject) -> String {
-    let value = json_object_to_nu_value(args);
-    let engine_state = nu::EngineState::new();
-    nu::to_nuon(&engine_state, &value, nu::ToNuonConfig::default())
-        .unwrap_or_else(|_| "{}".to_string())
+/// A value as compact NUON, the literal a source carries.
+pub(crate) fn render_nuon(value: &nu::Value) -> Result<String, String> {
+    nu::to_nuon(&nu::EngineState::new(), value, nu::ToNuonConfig::default())
+        .map_err(|e| e.to_string())
 }
 
-fn json_object_to_nu_value(map: &json::JsonObject) -> nu::Value {
-    let span = nu::Span::unknown();
-    let mut record = nu::Record::new();
-    for (k, v) in map {
-        record.insert(k.clone(), json_value_to_nu_value(v));
+/// A call's arguments as their literal: `null` when empty, else their NUON.
+fn args_to_nuon(args: &nu::Value) -> String {
+    match args {
+        nu::Value::Record { val, .. } if val.is_empty() => "null".to_string(),
+        value => render_nuon(value).unwrap_or_else(|_| "{}".to_string()),
     }
-    nu::Value::record(record, span)
 }
 
 /// serde_json to nu: the one JSON-to-Value bridge in the crate.
@@ -49,17 +47,14 @@ pub fn json_value_to_nu_value(v: &serde_json::Value) -> nu::Value {
     }
 }
 
+/// The source of a call: its target's module overlaid, then driven on its args.
 pub fn build_call_source(
     rig: &str,
     module_path: &str,
     name: &str,
-    args: &json::JsonObject,
+    args: &nu::Value,
 ) -> String {
-    let lit = if args.is_empty() {
-        "null".to_string()
-    } else {
-        args_to_nuon(args)
-    };
+    let lit = args_to_nuon(args);
     let target = if module_path.is_empty() {
         format!("{rig}/rig/{name}")
     } else {

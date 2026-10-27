@@ -1,32 +1,9 @@
 # teardown.rs
 
-nushell 0.116.1 runs each external of an `is_mcp` engine in its own session, `setsid`
-before exec, so the external leads a process group of its own (the engine's
-`engine.rs`). A
-`ThreadJob` tracks only that direct child's pid, and a descendant that starts its own
-session or group leaves the external's, so neither the tracked pid nor a killpg reaches
-the whole tree: a plain SIGKILL of the child orphans its grandchild.
-
-The reap that works: `PR_SET_CHILD_SUBREAPER` on the host at startup, so orphans
-reparent to us and stay on the /proc ppid chain; plus a /proc descendant walk from each
-tracked child BEFORE the kill, which makes it deterministic; plus SIGKILL on each.
-`Jobs::kill_and_remove` alone reaches only the tracked direct child.
-
-All of it is Linux-gated. A non-target build degrades to a direct-child kill with no
-/proc walk, which keeps the shipped crate honest by construction rather than by
-assumption - we target Linux, and saying so in `cfg` is more honest than pretending
-otherwise.
-
-## fn make_tracker
-Setting the returned job as an engine's `current_job.background_thread_job` is what makes
-nushell register the pid of every external that eval spawns into an Arc-shared set, which
-the kill and timeout paths then read.
-
-The Mail sender is a THROWAWAY on purpose: pid tracking is sender-independent, and a
-foreground eval never emits job Mail.
-
-Its `Signals` share the eval's cancel flag, so once cancel fires no further pid is
-registered.
+The host's half of an eval's teardown. The engine kills an eval's external tree by a /proc
+descendant walk (the engine's `teardown.rs`); the walk reaches a grandchild only while
+that grandchild stays on the host's ppid chain, which is what the subreaper here keeps it
+on, and adoption leaves zombies the host must then reap.
 
 ## const REAP_GRACE_SECS
 THE GRACE IS THE SAFETY MECHANISM, not a tuning knob.
@@ -84,18 +61,4 @@ already reaped returns ECHILD, which is exactly the no-op wanted.
 
 ## fn install_child_subreaper
 Best-effort and called once at host startup. The subreaper only buys RACE-SAFETY on
-kill-time orphans; the /proc descendant walk is the actual mechanism.
-
-## fn kill_plugin_subprocesses
-Unblocks a plugin-hung eval, which nothing else can: a hung plugin ignores the cancel
-`Signals` and is not a tracked external, so killing its subprocess is what closes the
-plugin IPC pipe and makes the eval's plugin read return an error. Plugins respawn lazily
-on next use.
-
-BROAD BY NATURE - nushell shares plugin subprocesses across evals - so it fires only on
-an explicit `interface process kill` and on the shutdown sweep, NEVER on an automatic
-timeout, where the supervisor scopes that escalation instead.
-
-## fn descendants_of
-Walked BEFORE the kill, which is what makes the set deterministic rather than a race
-against reparenting.
+kill-time orphans; the engine's /proc descendant walk is the actual mechanism.

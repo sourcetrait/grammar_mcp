@@ -13,14 +13,6 @@ pub(crate) struct NewSummary {
     pub created: Vec<String>,
 }
 
-/// `check` summary: `ok` is true iff there are no error rows.
-#[derive(Debug, ser::Serialize)]
-pub(crate) struct CheckSummary {
-    pub ok: bool,
-    pub errors: Vec<Diagnostic>,
-    pub warnings: Vec<Diagnostic>,
-}
-
 /// The per-action summary, `install`'s its commit's; `uninstall` returns none.
 #[derive(Debug, ser::Serialize)]
 #[serde(untagged)]
@@ -44,29 +36,15 @@ impl NuSh {
         nonce: datum::Nonce,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let source_dir = Path::new(&p.source);
-        let equip = match equip_namepath_of(source_dir) {
-            Ok(equip) => equip,
-            Err(e) => return error_to_call_result(e, nonce),
-        };
-        let lock = match self.rig_locks.register(&equip).await {
-            Ok(l) => l,
-            Err(_) => {
-                return error_to_call_result(EngineError::EquipAlreadyRegistered { equip }, nonce);
-            }
-        };
-        let _guard = lock.write().await;
-        match establish_equip(&equip, source_dir) {
-            Ok(created) => success(
+        match self.engine.control(EngineCommand::EquipNew { source: p.source }).await {
+            Ok(ControlAnswer::Created(created)) => success(
                 nonce,
                 &EquipResult {
                     summary: Some(EquipSummary::New(NewSummary { created })),
                 },
             ),
-            Err(e) => {
-                self.rig_locks.unregister(&equip).await;
-                error_to_call_result(e, nonce)
-            }
+            Ok(_) => error_to_call_result(unexpected("equip_new"), nonce),
+            Err(e) => error_to_call_result(e, nonce),
         }
     }
 
@@ -76,21 +54,8 @@ impl NuSh {
         nonce: datum::Nonce,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let source_dir = Path::new(&p.source);
-        let equip = match equip_namepath_of(source_dir) {
-            Ok(equip) => equip,
-            Err(e) => return error_to_call_result(e, nonce),
-        };
-        let lock = match self.rig_locks.register(&equip).await {
-            Ok(l) => l,
-            Err(_) => {
-                return error_to_call_result(EngineError::EquipAlreadyRegistered { equip }, nonce);
-            }
-        };
-        let _guard = lock.write().await;
-        let engine = self.lint_engine.current();
-        match install_equip(&equip, source_dir, &engine) {
-            Ok(result) => {
+        match self.engine.control(EngineCommand::EquipInstall { source: p.source }).await {
+            Ok(ControlAnswer::Installed { equip, result }) => {
                 if rig_dir(&equip).exists() {
                     purview_add_rig(&equip, &self.current_purview.ids());
                 }
@@ -101,10 +66,8 @@ impl NuSh {
                     },
                 )
             }
-            Err(e) => {
-                self.rig_locks.unregister(&equip).await;
-                error_to_call_result(e, nonce)
-            }
+            Ok(_) => error_to_call_result(unexpected("equip_install"), nonce),
+            Err(e) => error_to_call_result(e, nonce),
         }
     }
 
@@ -114,26 +77,14 @@ impl NuSh {
         nonce: datum::Nonce,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let source_dir = Path::new(&p.source);
-        let equip = match equip_namepath_of(source_dir) {
-            Ok(equip) => equip,
-            Err(e) => return error_to_call_result(e, nonce),
-        };
-        let Some(lock) = self.rig_locks.lookup(&equip).await else {
-            return error_to_call_result(EngineError::EquipNotRegistered { equip }, nonce);
-        };
-        let _guard = lock.read().await;
-        if let Err(e) = check_source_dir(&equip, source_dir) {
-            return error_to_call_result(e, nonce);
-        }
-        let engine = self.lint_engine.current();
-        match check_equip(&equip, &engine) {
-            Ok(result) => success(
+        match self.engine.control(EngineCommand::EquipCheck { source: p.source }).await {
+            Ok(ControlAnswer::Checked(summary)) => success(
                 nonce,
                 &EquipResult {
-                    summary: Some(EquipSummary::Check(check_summary_from(&result))),
+                    summary: Some(EquipSummary::Check(summary)),
                 },
             ),
+            Ok(_) => error_to_call_result(unexpected("equip_check"), nonce),
             Err(e) => error_to_call_result(e, nonce),
         }
     }
@@ -144,27 +95,16 @@ impl NuSh {
         nonce: datum::Nonce,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let source_dir = Path::new(&p.source);
-        let equip = match equip_namepath_of(source_dir) {
-            Ok(equip) => equip,
-            Err(e) => return error_to_call_result(e, nonce),
-        };
-        let Some(lock) = self.rig_locks.lookup(&equip).await else {
-            return success(nonce, &EquipResult { summary: None });
-        };
-        let guard = lock.write().await;
-        if let Err(e) = check_source_dir(&equip, source_dir) {
-            return error_to_call_result(e, nonce);
-        }
-        match uninstall_equip(&equip) {
-            Ok(()) => {
-                drop(guard);
-                self.rig_locks.unregister(&equip).await;
-                if let Some(rows) = purview_remove_rig(&equip) {
+        match self.engine.control(EngineCommand::EquipUninstall { source: p.source }).await {
+            Ok(ControlAnswer::Uninstalled { equip }) => {
+                if let Some(equip) = equip
+                    && let Some(rows) = purview_remove_rig(&equip)
+                {
                     self.current_purview.retain_known(Some(&rows));
                 }
                 success(nonce, &EquipResult { summary: None })
             }
+            Ok(_) => error_to_call_result(unexpected("equip_uninstall"), nonce),
             Err(e) => error_to_call_result(e, nonce),
         }
     }
@@ -234,13 +174,4 @@ fn purview_remove_rig(rig: &str) -> Option<Vec<PurviewRow>> {
         return None;
     }
     Some(rows)
-}
-
-fn check_summary_from(result: &ValidationResult) -> CheckSummary {
-    let (errors, warnings) = Diagnostic::bucket(result.diagnostics.clone());
-    CheckSummary {
-        ok: errors.is_empty(),
-        errors,
-        warnings,
-    }
 }

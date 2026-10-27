@@ -1,21 +1,10 @@
 # call.rs
 
 ## fn call
-NO FILESYSTEM PATH IS RESOLVED FROM THE NAMEPATH. The traversal defense is the ident rules in
-`Namepath::validate` plus the INDEX as the authority: callability is checked against
-`.meta/rig.nuon` via `index_node` and function-name membership, and the template then drives
-the module-qualified name - no filesystem path is composed from the namepath at all.
+The arguments cross to the engine as a `NuVal`, converted from the agent's JSON object
+through the crate's one JSON-to-Value path, so the request is plain data whichever engine
+serves it. The engine resolves the namepath, takes the equip's lock, and runs the call
+(the engine's `serve.rs`).
 
-The equip's READ lock is held across the whole dispatch, so a concurrent `commit` cannot
-swap the canonical tree out from under a running call. A lib-only equip answers
-`equip::no_rig` under that lock, before the index is read.
-
-`None` is passed for the cache body: call targets are NOT rerunnable, because the body is the
-committed rig's own and the handle would point at something the agent does not own.
-
-Arity is checked HERE rather than in the parser: `validate` happily returns a Rig or Module
-namepath, and only this tool knows that a call requires a Function.
-
-THE RESULT IS LENIENT, as an authored definition's always was: nothing, a record, or a
-table rides as it is, and anything else, or a value NUON cannot render, answers `{}`.
-The strict result check is `execute`'s alone, for the definitions an agent writes and sends.
+THE RESULT IS LENIENT to its last step: the engine answers nothing, a record, a table, or
+`{}`, and a value NUON then cannot render answers `{}` here, where the render happens.

@@ -20,100 +20,35 @@ impl NuSh {
         &self,
         mcp::Parameters(p): mcp::Parameters<CallParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let pair = self.mint("call", &p);
-        let nonce = pair.to_nonce();
-        let (rig, module_path, name) = match Namepath(p.namepath.clone()).validate() {
-            Ok(NamepathRef::Function {
-                rig,
-                module_path,
-                name,
-            }) => (rig, module_path, name),
-            Ok(_) => {
-                return error_to_call_result(
-                    EngineError::NamepathInvalid {
-                        namepath: p.namepath.clone(),
-                        reason: "call requires a function namepath: rig:module/path:function"
-                            .to_string(),
-                    },
-                    nonce,
-                );
-            }
-            Err(e) => return error_to_call_result(e, nonce),
-        };
-        let lock = match self.rig_locks.lookup(&rig).await {
-            Some(l) => l,
-            None => {
-                return error_to_call_result(
-                    EngineError::EquipNotRegistered {
-                        equip: rig.clone(),
-                    },
-                    nonce,
-                );
-            }
-        };
-        let _guard = lock.read().await;
-        if let Err(e) = require_rig(&rig) {
-            return error_to_call_result(e, nonce);
-        }
-        let index = match load_index(&rig) {
-            Ok(i) => i,
+        let nonce = self.mint("call", &p).to_nonce();
+        let args = json_value_to_nu_value(&json::Value::Object(p.args));
+        let args = match NuVal::try_from_nu(args) {
+            Ok(args) => args,
             Err(e) => {
                 return error_to_call_result(
                     GrammarMcpError::Internal {
-                        phase: "call::load_index".to_string(),
+                        phase: "call::args".to_string(),
                         reason: e.to_string(),
                     },
                     nonce,
                 );
             }
         };
-        let is_call_target = index_node(&index, &module_path)
-            .map(|(fns, _)| fns.iter().any(|f| f.name == name))
-            .unwrap_or(false);
-        if !is_call_target {
-            return error_to_call_result(
-                EngineError::FunctionNotDefined {
-                    rig: rig.clone(),
-                    module_path: module_path.clone(),
-                    name: name.clone(),
-                },
+        let answer = self
+            .engine
+            .request(CallRequest {
+                host: Host::Local,
                 nonce,
-            );
+                namepath: p.namepath,
+                args,
+                timeout_ms: p.timeout_ms,
+            })
+            .await;
+        match answer_value(answer) {
+            Ok(value) => success_value(nonce, value).or_else(|_| success_value(nonce, empty_record())),
+            Err(error) => error_to_call_result(error, nonce),
         }
-        let source = build_call_source(&rig, &module_path, &name, &p.args);
-        let path_str = p.namepath.clone();
-        let args_json = serde_json::Value::Object(p.args.clone());
-        let outcome = match dispatch_pooled(
-            &self.executor,
-            &self.in_flight,
-            &self.hung_watch,
-            CacheKind::Calls,
-            pair,
-            source,
-            "call",
-            args_json,
-            InFlightKind::Call { path: path_str },
-            None,
-            p.timeout_ms,
-        )
-        .await
-        {
-            Ok(o) => o,
-            Err(de) => return error_to_call_result(de.error, de.nonce),
-        };
-        success_value(nonce, lenient_result(outcome.value))
-            .or_else(|_| success_value(nonce, empty_record()))
     }
-}
-
-/// A call's value as its result: nothing, a record, or a table as is, else `{}`.
-fn lenient_result(value: nu::Value) -> nu::Value {
-    let kept = match &value {
-        nu::Value::Nothing { .. } | nu::Value::Record { .. } => true,
-        nu::Value::List { vals, .. } => vals.iter().all(|v| matches!(v, nu::Value::Record { .. })),
-        _ => false,
-    };
-    if kept { value } else { empty_record() }
 }
 
 fn empty_record() -> nu::Value {

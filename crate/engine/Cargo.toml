@@ -18,6 +18,7 @@ test-hooks = []
 [dependencies]
 bitcode.workspace = true
 indoc.workspace = true
+nix.workspace = true
 nu-cmd-extra.workspace = true
 nu-cmd-lang.workspace = true
 nu-cmd-plugin.workspace = true

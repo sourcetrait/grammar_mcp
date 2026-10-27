@@ -42,6 +42,16 @@ keep `rig::*` and a lib's are `lib::*`. `equip::no_rig` stays apart from
 `equip::not_registered`: the one is an installed equip asked for calls it does not
 have, the other a name nothing answers to.
 
+An `execute` call's refusals each name their part of the contract: `definition::invalid`
+rows, gathered with the lint's under `DefinitionViolations`, for the definition;
+`data::invalid` for data that isn't NUON or doesn't conform; `timeout::invalid` for a
+timeout that isn't a positive duration; and `result::invalid` for a value the definition's
+return type refuses. Each message carries the path or the position, so the agent fixes the
+one thing named.
+
+`host::unserved` refuses a request naming a host whose engine this process doesn't serve,
+before anything of it runs.
+
 `module::circular_import` is a TOP-LEVEL namespace rather than a `rig::` kind, because
 a resolution cycle is not a rig-structure rule even when the validator is what finds
 it. The validator already emits non-`rig::` kinds, `lint::summary_length` among them.

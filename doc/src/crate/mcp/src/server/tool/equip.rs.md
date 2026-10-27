@@ -13,21 +13,18 @@ as `interface equip commit`'s carry them. `check` keeps both buckets, `errors` a
 `warnings`: it is the validator's report, so an error there is a finding rather than a
 refusal.
 
-## fn equip_new
-REGISTERS THE LOCK FIRST and unregisters on failure, as `equip_install` does. That ordering
-is what makes "already registered" a lock-level answer rather than a filesystem race, and it
-is why both error paths call `unregister` explicitly.
-
 ## fn equip_install
 An install brings a RIG into view only when the equip has one; a lib alone has no calls for
 a purview to show.
 
+THE INSTALL IS THE ENGINE'S, THE VIEW THE HOST'S, so the purview update follows the
+engine's answer, outside the equip's lock (the engine's `serve.rs`). An uninstall landing
+in between leaves nothing behind: the update's own prune judges by registration, and drops
+the pattern it just added for a rig no longer there.
+
 ## fn equip_uninstall
 An unknown equip returns success with no summary rather than an error, because absent IS the
 requested state.
-
-The guard is dropped explicitly before `unregister`: unregistering while still holding the
-lock would drop the map entry the guard belongs to.
 
 ## fn purview_add_rig
 The purview table is namespace meta beside the equip repository, and its load,

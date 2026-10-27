@@ -46,9 +46,10 @@ The config is built from `Config::default()` rather than field-by-field so the
 harness picks up every embedded default, `[channel]` included, without restating
 them; only the id, namespace and work dir are test-specific.
 
-nushell's config dirs are resolved here as the host resolves them at startup,
-since every engine reads them; the lint and template drivers below call this
-first, because they build an engine without a `TestServer`.
+The engine is initialized here, once a process, since its parameters and its host are
+process-wide: `init_engine` resolves nushell's config dirs as the host does at startup,
+which every engine reads, so the lint and template drivers below call this first,
+because they build an engine without a `TestServer`.
 
 ## struct TestServer
 
@@ -58,10 +59,10 @@ and the rig validator parse inline on a worker, and a pathological module graph
 overflows the 2 MB default and ABORTS - which in-process would take the TEST
 BINARY down rather than just a host.
 
-A fresh `TestServer` per test builds a fresh `NuSh`, which is roughly the spawned
-binary's startup cost MINUS the process spawn. That is what makes the in-process
-tier fast and cleanly isolated - each test gets its own stateful engine on its own
-runtime, with no subprocess.
+A fresh `TestServer` per test builds a fresh `NuSh` on an engine system of its own,
+which is roughly the spawned binary's startup cost MINUS the process spawn. That is what
+makes the in-process tier fast and cleanly isolated - each test gets its own stateful
+engine on its own runtime, with no subprocess.
 
 ### fn interface
 The whole tool, parse and dispatch, for a test of the contract or of a command as an

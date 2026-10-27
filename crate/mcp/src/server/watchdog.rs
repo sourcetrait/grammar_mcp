@@ -1,29 +1,6 @@
 //! The watchdog: sample the host, classify trouble, emit it edge-triggered.
 use crate::*;
 
-/// A cancelled engine thread the watchdog watches for a hang.
-#[derive(Clone)]
-pub(crate) struct HungWatch {
-    pub nonce: String,
-    pub tool: &'static str,
-    pub lane: Lane,
-    pub started_at: u64,
-    pub cancelled_at: u64,
-    pub finished: Arc<AtomicBool>,
-}
-
-/// The cancelled-thread registry the watchdog scans for hangs. Keyed by nonce.
-pub(crate) type HungRegistry = Arc<std::sync::Mutex<HashMap<String, HungWatch>>>;
-
-/// Record a cancelled-but-maybe-alive engine thread for the watchdog.
-pub(crate) fn register_hung(
-    registry: &HungRegistry,
-    watch: HungWatch,
-) {
-    let mut map = registry.lock().unwrap_or_else(|e| e.into_inner());
-    map.entry(watch.nonce.clone()).or_insert(watch);
-}
-
 /// How often the watchdog samples.
 const SAMPLE_INTERVAL: tk::TkDuration = tk::TkDuration::from_secs(2);
 /// A cancelled thread still alive this long past its cancel is hung.
@@ -192,18 +169,15 @@ fn sampling_online() -> bool {
     !config().test || !matches!(channel_handle().status().phase, ChannelPhase::Closed)
 }
 
-/// Everything the watchdog samples. All Arc handles onto NuSh state.
+/// What the watchdog samples beyond the process: the engine, and its lane out.
 pub(crate) struct WatchdogDeps {
-    pub hung_watch: HungRegistry,
-    pub semaphore: Arc<tk::Semaphore>,
-    pub cap: usize,
-    pub env_jobs: Arc<std::sync::Mutex<nu::Jobs>>,
+    pub engine: Arc<EngineHandle>,
     pub tx: EmergencyTx,
 }
 
-/// Prune finished entries and confirm the rest as hung past `grace_ms`.
+/// Confirm the engine's watched threads as hung past `grace_ms`.
 pub(crate) fn scan_hung(
-    registry: &HungRegistry,
+    hung: &[HungEval],
     now: u64,
     grace_ms: u64,
     pool_held: usize,
@@ -211,9 +185,7 @@ pub(crate) fn scan_hung(
 ) -> (Vec<(String, Emergency)>, usize) {
     let mut out = Vec::new();
     let mut confirmed_stateless = 0usize;
-    let mut map = registry.lock().unwrap_or_else(|e| e.into_inner());
-    map.retain(|_, w| !w.finished.load(Ordering::SeqCst));
-    for w in map.values() {
+    for w in hung {
         let hung_ms = now.saturating_sub(w.cancelled_at);
         if hung_ms <= grace_ms {
             continue;
@@ -236,6 +208,46 @@ pub(crate) fn scan_hung(
         ));
     }
     (out, confirmed_stateless)
+}
+
+/// The engine's confirmed hangs, and the Critical when they hold every permit.
+fn engine_conditions(
+    health: &EngineHealth,
+    now: u64,
+) -> Vec<(String, Emergency)> {
+    let held = health.permits_held as usize;
+    let cap = health.permits_cap as usize;
+    let (mut conditions, confirmed_stateless) =
+        scan_hung(&health.hung, now, HUNG_GRACE_MS, held, cap);
+    if cap > 0 && confirmed_stateless >= cap {
+        conditions.push((
+            "critical:stateless_saturation".to_string(),
+            Emergency::Critical(CriticalEmergency {
+                reason: "all stateless engine-thread permits held by hung threads; the stateless pool cannot dispatch"
+                    .to_string(),
+                hung: confirmed_stateless,
+                cap,
+            }),
+        ));
+    }
+    conditions
+}
+
+/// The conditions newly arisen, and the active set the next sample diffs against.
+pub(crate) fn rising_edges(
+    prev_active: &HashSet<String>,
+    current: Option<Vec<(String, Emergency)>>,
+) -> (HashSet<String>, Vec<Emergency>) {
+    let Some(current) = current else {
+        return (prev_active.clone(), Vec::new());
+    };
+    let active = current.iter().map(|(key, _)| key.clone()).collect();
+    let risen = current
+        .into_iter()
+        .filter(|(key, _)| !prev_active.contains(key))
+        .map(|(_, emergency)| emergency)
+        .collect();
+    (active, risen)
 }
 
 /// Parse VmRSS (kB) out of `/proc/self/status` contents.
@@ -319,10 +331,12 @@ async fn sample_vram() -> Option<(u64, u64)> {
     .flatten()
 }
 
-/// Count the host-owned environment-wide background jobs. Poison-tolerant.
-fn job_count(env_jobs: &Arc<std::sync::Mutex<nu::Jobs>>) -> usize {
-    let jobs = env_jobs.lock().unwrap_or_else(|e| e.into_inner());
-    jobs.iter().count()
+/// The engine's health, or none when it doesn't answer within a sample's interval.
+async fn engine_health(engine: &EngineHandle) -> Option<EngineHealth> {
+    match tk::timeout(SAMPLE_INTERVAL, engine.control(EngineCommand::Health)).await {
+        Ok(Ok(ControlAnswer::Health(health))) => Some(health),
+        _ => None,
+    }
 }
 
 /// Spawn the watchdog task.
@@ -354,36 +368,24 @@ pub(crate) fn spawn_watchdog(deps: WatchdogDeps) {
             }
             let supervisor = effective_supervisor();
             let now = now_millis();
-            let mut current: Vec<(String, Emergency)> = Vec::new();
 
-            let held = deps.cap.saturating_sub(deps.semaphore.available_permits());
-            let (hung, confirmed_stateless) =
-                scan_hung(&deps.hung_watch, now, HUNG_GRACE_MS, held, deps.cap);
-            current.extend(hung);
-            if deps.cap > 0 && confirmed_stateless >= deps.cap {
-                current.push((
-                    "critical:stateless_saturation".to_string(),
-                    Emergency::Critical(CriticalEmergency {
-                        reason: "all stateless engine-thread permits held by hung threads; the stateless pool cannot dispatch"
-                            .to_string(),
-                        hung: confirmed_stateless,
-                        cap: deps.cap,
-                    }),
-                ));
-            }
+            let health = engine_health(&deps.engine).await;
+            let current = health.as_ref().map(|health| engine_conditions(health, now));
 
             let sample_at = Instant::now();
-            let jobs = job_count(&deps.env_jobs);
-            if jobs_gate.sample(
-                jobs as f64,
-                JOBS_THRESHOLD,
-                sample_at,
-                LEVEL_SUSTAIN,
-                LEVEL_REWARN,
-            ) {
-                let _ = deps.tx.send(Emergency::BackgroundJobsWarning(
-                    BackgroundJobsWarningEmergency { job_count: jobs },
-                ));
+            if let Some(health) = &health {
+                let jobs = health.jobs as usize;
+                if jobs_gate.sample(
+                    jobs as f64,
+                    JOBS_THRESHOLD,
+                    sample_at,
+                    LEVEL_SUSTAIN,
+                    LEVEL_REWARN,
+                ) {
+                    let _ = deps.tx.send(Emergency::BackgroundJobsWarning(
+                        BackgroundJobsWarningEmergency { job_count: jobs },
+                    ));
+                }
             }
 
             if let Some(rss) = read_rss_kb()
@@ -451,13 +453,11 @@ pub(crate) fn spawn_watchdog(deps: WatchdogDeps) {
                 }
             }
 
-            let keys: HashSet<String> = current.iter().map(|(k, _)| k.clone()).collect();
-            for (k, em) in current {
-                if !prev_active.contains(&k) {
-                    let _ = deps.tx.send(em);
-                }
+            let (active, risen) = rising_edges(&prev_active, current);
+            for emergency in risen {
+                let _ = deps.tx.send(emergency);
             }
-            prev_active = keys;
+            prev_active = active;
         }
     });
 }

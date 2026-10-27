@@ -12,19 +12,10 @@ and nvidia-smi is RUNTIME-probed, so a GPU-less box simply skips it. The parsers
 and unit-tested over fixture strings; the readers are thin wrappers, which is what makes
 that split testable at all.
 
-## struct HungWatch
-Registered on the TIMEOUT branch of either dispatch path, and on an
-`interface process kill` of a live entry. The timeout path has already triggered cancel and tree-killed the external
-tree by then, so this registration is the additional "watch this for a hang" step rather
-than the response itself.
-
-`finished` is the deterministic discriminator: the eval thread carries a `FinishGuard`
-that flips it on DROP, so a normal return OR a caught panic both flip it, and only a true
-hang leaves it false.
-
-## fn register_hung
-Idempotent per nonce, because a kill and the later timeout both fire for one eval and the
-FIRST stamp is the honest one. Poison-tolerant, like every long-lived lock here.
+## struct WatchdogDeps
+The watchdog holds the engine's handle, never its registries: the threads watched for a
+hang, the permits held, and the jobs arrive in one `Health` answer, the engine's own
+snapshot (the engine's `dispatch.rs` watches the threads).
 
 ## const HUNG_GRACE_MS
 Because tree-kill fires at timeout, an eval merely BLOCKED on an external is unblocked -
@@ -100,8 +91,20 @@ is spawned per host and `sample_vram` reads the whole card. `--test` is precisel
 that says this host is the second one.
 
 ## fn scan_hung
-Pure over the registry so it is unit-testable with a synthetic map, and it returns the
-stateless count separately because that is what the derived Critical is measured against.
+Pure over the engine's snapshot so it is unit-testable with synthetic rows, and it returns
+the stateless count separately because that is what the derived Critical is measured
+against.
+
+## fn engine_health
+Bounded by one sample's interval: an engine that cannot answer within a tick gives that
+tick no reading rather than stalling the watchdog, whose housekeeping and other samples
+keep their cadence.
+
+## fn rising_edges
+AN ABSENT READING IS NO READING. A tick the engine didn't answer leaves the active set as
+it was, so a hang it reported stays active, and its next answer raises nothing twice.
+Diffing an absent reading as an empty one would clear every condition and re-raise each on
+the next answer.
 
 ## fn parse_cpu_ticks
 Fields counted AFTER the last ')' since the comm field can contain spaces and parens, so
@@ -122,6 +125,7 @@ fire on a sustain window covering a period nobody measured. A reading we never o
 worse than no reading.
 
 EDGE-TRIGGERED: the hung and Critical conditions are emitted once when they first arise,
-via a rising-edge diff of the active-key set between samples, so the log captures distinct
-EVENTS rather than a per-second time series of one ongoing condition. The resource levels
-reach the same outcome by a different route, through their own gates.
+via a rising-edge diff of the active-key set between the engine's readings
+(`rising_edges`), so the log captures distinct EVENTS rather than a per-second time series
+of one ongoing condition. The resource levels reach the same outcome by a different route,
+through their own gates.

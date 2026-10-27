@@ -73,11 +73,11 @@ impl TestServer {
             .thread_stack_size(EVAL_STACK_SIZE)
             .build()
             .expect("tokio runtime");
-        let locks = rt.block_on(ensure_substrate()).expect("ensure_substrate");
+        rt.block_on(ensure_substrate()).expect("ensure_substrate");
+        let engine = rt.block_on(EngineHandle::start()).expect("the engine starts");
         let nush = NuSh::new(
             Arc::new(datum::NonceGenerator::new()),
-            locks,
-            Arc::new(LintEngine::new()),
+            Arc::new(engine),
             &config().deny,
         );
         Self { rt, nush }
@@ -486,14 +486,6 @@ pub fn valid_function_source(args_schema: &str, result_schema: &str, body: &str)
     )
 }
 
-fn to_obj(v: json::Value) -> mcp::JsonObject {
-    match v {
-        json::Value::Object(m) => m,
-        json::Value::Null => mcp::JsonObject::new(),
-        other => panic!("expected a JSON object, got {other}"),
-    }
-}
-
 /// Lint a definition as `execute`'s contract does, parse errors aside, as JSON.
 pub fn lint_definition(definition: &str) -> Vec<json::Value> {
     ensure_test_config();
@@ -562,5 +554,5 @@ pub fn build_call_source(
     name: &str,
     args: json::Value,
 ) -> String {
-    crate::build_call_source(rig, module_path, name, &to_obj(args))
+    crate::build_call_source(rig, module_path, name, &json_value_to_nu_value(&args))
 }

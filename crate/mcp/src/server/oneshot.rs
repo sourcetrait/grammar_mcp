@@ -3,16 +3,19 @@ use crate::*;
 pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
     let exit_code = async move {
         install_child_subreaper();
-        let rig_locks = match ensure_substrate().await {
-            Ok(rig_locks) => rig_locks,
+        if let Err(e) = ensure_substrate().await {
+            eprintln!("grammar: the equip substrate: {e}");
+            return 1;
+        }
+        let engine = match EngineHandle::start().await {
+            Ok(engine) => Arc::new(engine),
             Err(e) => {
-                eprintln!("grammar: the equip substrate: {e}");
+                eprintln!("{e}");
                 return 1;
             }
         };
         let nonce_gen = Arc::new(datum::NonceGenerator::new());
-        let lint_engine = Arc::new(LintEngine::new());
-        let server = NuSh::new(nonce_gen, rig_locks, lint_engine, &DenySet::default());
+        let server = NuSh::new(nonce_gen, engine, &DenySet::default());
         let result = match tool {
             CliTool::Call {
                 namepath,

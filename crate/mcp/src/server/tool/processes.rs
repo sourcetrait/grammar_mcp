@@ -1,51 +1,46 @@
 use crate::*;
 
-/// One in-flight tool usage in the process list.
-#[derive(Debug, ser::Serialize)]
-pub(crate) struct ProcessEntry {
-    pub nonce: String,
-    pub tool: String,
-    pub started_at: u64,
-    pub args: mcp::JsonObject,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_nonce: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
-}
-
-/// Success result of `interface process list`.
-#[derive(Debug, ser::Serialize)]
-pub(crate) struct ProcessesResult {
-    pub processes: Vec<ProcessEntry>,
-}
-
 impl NuSh {
     /// `interface process list`: every call in flight on the host.
     pub(crate) async fn process_list(
         &self,
         nonce: datum::Nonce,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let map = self.in_flight.lock().await;
-        let entries: Vec<ProcessEntry> = map
-            .iter()
-            .map(|(nonce_str, entry)| {
-                let args_obj = entry.args.as_object().cloned().unwrap_or_default();
-                let (source_nonce, path) = match &entry.kind {
-                    InFlightKind::Execute { .. } => (None, None),
-                    InFlightKind::Rerun { source_nonce, .. } => (Some(source_nonce.clone()), None),
-                    InFlightKind::Call { path } => (None, Some(path.clone())),
-                };
-                ProcessEntry {
-                    nonce: nonce_str.clone(),
-                    tool: entry.tool.to_string(),
-                    started_at: entry.started_at,
-                    args: args_obj,
-                    source_nonce,
-                    path,
+        let rows = match self.engine.control(EngineCommand::Processes).await {
+            Ok(ControlAnswer::Processes(rows)) => rows,
+            Ok(_) => return error_to_call_result(unexpected("processes"), nonce),
+            Err(error) => return error_to_call_result(error, nonce),
+        };
+        let span = nu::Span::unknown();
+        let mut processes = Vec::with_capacity(rows.len());
+        for row in rows {
+            let args = match row.args.try_into_nu(span) {
+                Ok(args) => args,
+                Err(e) => {
+                    return error_to_call_result(
+                        GrammarMcpError::Internal {
+                            phase: "process_list::args".to_string(),
+                            reason: e.to_string(),
+                        },
+                        nonce,
+                    );
                 }
-            })
-            .collect();
-        drop(map);
-        success(nonce, &ProcessesResult { processes: entries })
+            };
+            let mut record = nu::Record::new();
+            record.insert("nonce", nu::Value::string(row.nonce, span));
+            record.insert("tool", nu::Value::string(row.tool, span));
+            record.insert("started_at", nu::Value::int(row.started_at as i64, span));
+            record.insert("args", args);
+            if let Some(source_nonce) = row.source_nonce {
+                record.insert("source_nonce", nu::Value::string(source_nonce, span));
+            }
+            if let Some(path) = row.path {
+                record.insert("path", nu::Value::string(path, span));
+            }
+            processes.push(nu::Value::record(record, span));
+        }
+        let mut result = nu::Record::new();
+        result.insert("processes", nu::Value::list(processes, span));
+        success_value(nonce, nu::Value::record(result, span))
     }
 }

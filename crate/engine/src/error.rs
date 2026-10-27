@@ -125,6 +125,35 @@ pub enum EngineError {
         namepath: String,
         reason: String,
     },
+    DefinitionViolations {
+        diagnostics: Vec<Diagnostic>,
+    },
+    DataInvalid {
+        reason: String,
+    },
+    ResultInvalid {
+        reason: String,
+    },
+    TimeoutInvalid {
+        reason: String,
+    },
+    RerunInvalidNonce {
+        nonce: String,
+        reason: String,
+    },
+    RerunBodyMissing {
+        nonce: String,
+    },
+    Dispatch {
+        reason: String,
+    },
+    Timeout {
+        timeout_ms: u64,
+    },
+    /// A request for a host whose engine this process doesn't serve.
+    HostUnserved {
+        host: String,
+    },
     Internal {
         phase: String,
         reason: String,
@@ -154,7 +183,15 @@ impl EngineError {
             Self::RigInvalidModulePath { .. } => "rig::invalid_module_path",
             Self::FunctionNotDefined { .. } => "function::not_defined",
             Self::NamepathInvalid { .. } => "namepath::invalid",
-            Self::EquipViolations { .. } => {
+            Self::DataInvalid { .. } => "data::invalid",
+            Self::ResultInvalid { .. } => "result::invalid",
+            Self::TimeoutInvalid { .. } => "timeout::invalid",
+            Self::RerunInvalidNonce { .. } => "rerun::invalid_nonce",
+            Self::RerunBodyMissing { .. } => "rerun::body_missing",
+            Self::Dispatch { .. } => "thread::dispatch",
+            Self::Timeout { .. } => "thread::timeout",
+            Self::HostUnserved { .. } => "host::unserved",
+            Self::EquipViolations { .. } | Self::DefinitionViolations { .. } => {
                 unreachable!("a violations error renders through its rows, not a kind")
             }
         }
@@ -214,7 +251,19 @@ impl EngineError {
             Self::NamepathInvalid { namepath, reason } => {
                 format!("invalid namepath `{namepath}`: {reason}")
             }
-            Self::EquipViolations { .. } => {
+            Self::DataInvalid { reason }
+            | Self::ResultInvalid { reason }
+            | Self::TimeoutInvalid { reason } => reason.clone(),
+            Self::RerunInvalidNonce { nonce, reason } => {
+                format!("invalid nonce `{nonce}`: {reason}")
+            }
+            Self::RerunBodyMissing { nonce } => {
+                format!("no cached definition for the nonce `{nonce}`; rerun takes an execute call's nonce")
+            }
+            Self::Dispatch { reason } => format!("eval dispatch failed: {reason}"),
+            Self::Timeout { timeout_ms } => format!("eval timed out after {timeout_ms} ms"),
+            Self::HostUnserved { host } => format!("no engine is served on the host `{host}`"),
+            Self::EquipViolations { .. } | Self::DefinitionViolations { .. } => {
                 unreachable!("a violations error renders through its rows, not a message")
             }
         }
@@ -223,7 +272,9 @@ impl EngineError {
     /// The error rows a failure reports: a violations error's own, else one.
     pub fn rows(self) -> Vec<Diagnostic> {
         match self {
-            Self::EquipViolations { diagnostics } => Diagnostic::bucket(diagnostics).0,
+            Self::EquipViolations { diagnostics } | Self::DefinitionViolations { diagnostics } => {
+                Diagnostic::bucket(diagnostics).0
+            }
             single => vec![Diagnostic::error(single.kind(), None, single.message())],
         }
     }
@@ -250,7 +301,7 @@ impl Display for EngineError {
         f: &mut std::fmt::Formatter<'_>,
     ) -> std::fmt::Result {
         match self {
-            Self::EquipViolations { diagnostics } => {
+            Self::EquipViolations { diagnostics } | Self::DefinitionViolations { diagnostics } => {
                 let messages: Vec<&str> =
                     diagnostics.iter().map(|d| d.message.as_str()).collect();
                 f.write_str(&messages.join("; "))

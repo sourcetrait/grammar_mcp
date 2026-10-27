@@ -234,14 +234,6 @@ pub(crate) fn is_rig_pattern(
     matches!(NamepathPattern::parse(pattern), Ok(NamepathPattern::Rig { rig: named }) if named == rig)
 }
 
-/// Parse pattern strings into the matcher form, dropping any that fail.
-pub(crate) fn parse_patterns(patterns: &[String]) -> Vec<NamepathStr> {
-    patterns
-        .iter()
-        .filter_map(|p| NamepathStr::parse(p).ok())
-        .collect()
-}
-
 /// What a stored value needs in order to mean anything.
 fn pattern_requires(pattern: &str) -> Option<PatternNeed> {
     if let Some(id) = purview_ref(pattern) {

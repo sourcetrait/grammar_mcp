@@ -16,7 +16,10 @@ use sourcetrait_common::testing::prelude::*;
 /// One shared in-process server per test binary: constructing a TestServer runs
 /// the namespace substrate (keypair, equip repo git config), which must not race
 /// itself across parallel tests. Every test commits the SAME patlib fixture:
-/// the first establish wins, later ones are idempotent no-change commits.
+/// the first establish wins, later ones are idempotent no-change commits. Each
+/// test writes its source WHOLE before `equip new`, so the source the first
+/// establish registers is complete before any test's commit reads it; written
+/// after, a parallel commit could validate it half-written.
 static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integration, {
     .using_temp_dir()
     .setup(|_| TestServer::new())
@@ -44,7 +47,6 @@ fn commit_patlib(
     root: &Path,
 ) {
     let source = equip_source(root, "sourcetrait/patlib");
-    let _ = s.equip("new", source.to_str().unwrap());
     let rig = source.join("rig");
     let src = rig.as_path();
     write_source(src, "mod.nu", "# the patlib rig\nexport module m\nexport module other\n");
@@ -66,6 +68,7 @@ fn commit_patlib(
         "other/solo/mod.nu",
         &valid_function_source("n: int", "out: int", "{ out: $args.n }"),
     );
+    let _ = s.equip("new", source.to_str().unwrap());
     let committed = s.commit("sourcetrait/patlib");
     assert!(!has_error(&committed), "commit failed: {committed}");
 }

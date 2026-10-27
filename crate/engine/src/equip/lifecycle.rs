@@ -168,7 +168,7 @@ pub fn scaffold_leaf(
 }
 
 /// A commit's changed paths, grouped by kind, and the validator's warning rows.
-#[derive(Debug, ser::Serialize)]
+#[cereal::derived(Data)]
 pub struct CommitResult {
     pub added: Vec<String>,
     pub modified: Vec<String>,

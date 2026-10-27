@@ -14,22 +14,12 @@ impl NuSh {
         nonce: datum::Nonce,
         p: CommitParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let equip = resolve_builtin(&p.namepath);
-        let lock = match self.rig_locks.lookup(&equip).await {
-            Some(l) => l,
-            None => {
-                return error_to_call_result(
-                    EngineError::EquipNotRegistered {
-                        equip: p.namepath.clone(),
-                    },
-                    nonce,
-                );
-            }
+        let command = EngineCommand::EquipCommit {
+            namepath: p.namepath,
         };
-        let _guard = lock.write().await;
-        let engine = self.lint_engine.current();
-        match commit_equip(&equip, &engine) {
-            Ok(result) => success(nonce, &result),
+        match self.engine.control(command).await {
+            Ok(ControlAnswer::Committed(result)) => success(nonce, &result),
+            Ok(_) => error_to_call_result(unexpected("equip_commit"), nonce),
             Err(error) => error_to_call_result(error, nonce),
         }
     }

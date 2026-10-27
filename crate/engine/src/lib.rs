@@ -2,6 +2,7 @@ pub(crate) mod blocked;
 pub(crate) mod cache;
 pub(crate) mod config_dirs;
 pub(crate) mod cycle;
+pub(crate) mod dispatch;
 pub(crate) mod embed;
 pub(crate) mod engine;
 pub(crate) mod equip {
@@ -16,6 +17,7 @@ pub(crate) mod executor;
 pub(crate) mod host;
 pub(crate) mod lint;
 pub(crate) mod mode;
+pub(crate) mod msg;
 pub(crate) mod nuapi {
     pub(crate) mod grimm {
         pub(crate) mod category;
@@ -40,12 +42,16 @@ pub(crate) mod params;
 pub(crate) mod parse_engine;
 pub(crate) mod plugins;
 pub(crate) mod schema;
+pub(crate) mod serve;
+pub(crate) mod system;
+pub(crate) mod teardown;
 pub(crate) mod template;
 #[cfg(feature = "test-hooks")]
 pub(crate) mod test_hooks;
 #[cfg(test)]
 mod tests {
     mod equip;
+    mod health;
     mod namepath;
     mod schema;
 }
@@ -54,13 +60,18 @@ pub(crate) use crate::{
     blocked::shadow_host_fatal_decls,
     cache::call_log_dir,
     config_dirs::{config_dirs, init_config_dirs},
+    dispatch::{
+        DEFAULT_TIMEOUT_MS, Dispatch, HungRegistry, HungWatch, InFlight, InFlightKind,
+        READY_POOL_TARGET, dispatch_pooled, dispatch_stateful, hung_snapshot, now_millis,
+        register_hung, teardown_all_in_flight,
+    },
     embed::{eval_in_process, merge_env_no_chdir},
     engine::startup,
     equip::{
         store::{
             EQUIP_DIR, EQUIP_KINDS, KIND_LIB, KIND_RIG, META_FILE, check_equip_name, equip_dir,
-            index_to_nuon, is_valid_equip, is_valid_ident, is_valid_module_path, lib_meta_path,
-            load_lib_index, meta_to_nuon, rig_docs_dir, run_git,
+            index_to_nuon, is_valid_equip, is_valid_ident, is_valid_module_path, keypair_dir,
+            lib_meta_path, load_lib_index, meta_to_nuon, rig_docs_dir, run_git,
         },
         validate::{NAME_DENYLIST, is_reserved_term, validate_equip_source},
     },
@@ -86,6 +97,9 @@ pub(crate) use crate::{
     parse_engine::{LIB_DIRS_CONST, PLUGIN_DIRS_CONST, dirs_value, set_dirs_const},
     plugins::{load_plugin_decls, registry_mtime, registry_path},
     schema::{data_typedef, result_typedef},
+    serve::{EngineCore, serve_call, serve_control, serve_execute, serve_rerun},
+    teardown::{kill_plugin_subprocesses, make_tracker, tree_kill},
+    template::render_nuon,
 };
 
 pub(crate) use std::{
@@ -102,7 +116,7 @@ pub(crate) use std::{
         Arc, OnceLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 pub(crate) mod nu {
@@ -110,6 +124,7 @@ pub(crate) mod nu {
     pub(crate) use nu_cmd_extra::add_extra_command_context;
     pub(crate) use nu_cmd_plugin::add_plugin_command_context;
     pub(crate) use nu_command::add_shell_command_context;
+    pub(crate) use nu_command::tls::CRYPTO_PROVIDER;
     pub(crate) use nu_config::{CliOverrides, EnvAccess, NushellConfigDirs, SystemEnv, resolve_paths};
     pub(crate) use nu_engine::convert_env_values;
     pub(crate) use nu_engine::eval_block;
@@ -129,7 +144,7 @@ pub(crate) mod nu {
             Operator, Pattern, RecordItem,
         },
         debugger::WithoutDebug,
-        engine::{Command, EngineState, Jobs, Stack, StateWorkingSet, ThreadJob},
+        engine::{Command, EngineState, Job, Jobs, Mail, Stack, StateWorkingSet, ThreadJob},
     };
     pub(crate) use nu_protocol::ast::Call as AstCall;
     pub(crate) use nu_protocol::shell_error::generic::GenericError;
@@ -139,16 +154,23 @@ pub(crate) mod nu {
 
 pub(crate) use nu::{CallExt, FromValue, IntoValue};
 
-pub(crate) use sourcetrait_common::{cereal, datum};
+pub(crate) use nuval::{NuVal, TryFromNu, TryIntoNu};
+
+pub(crate) use sourcetrait_common::{agnostic, cereal, datum, subsys};
 
 pub(crate) mod ser {
     pub(crate) use ::serde::{Deserialize, Serialize, de::DeserializeOwned};
 }
 
 pub(crate) mod tk {
-    pub(crate) use tokio::sync::{
-        Mutex as AsyncMutex, OwnedSemaphorePermit, RwLock as AsyncRwLock, Semaphore, oneshot,
-        mpsc::{UnboundedSender, unbounded_channel},
+    pub(crate) use tokio::{
+        spawn,
+        sync::{
+            Mutex as AsyncMutex, OwnedSemaphorePermit, RwLock as AsyncRwLock, Semaphore,
+            oneshot,
+            mpsc::{UnboundedSender, unbounded_channel},
+        },
+        time::{Duration as TkDuration, timeout},
     };
 }
 
@@ -186,6 +208,11 @@ pub use crate::{
     executor::{Executor, eval_concurrency_cap},
     host::{ChannelSend, EngineHost, RemoteSend},
     lint::{LINT_VIOLATION_CAP, lint_block},
+    msg::{
+        CallRequest, CheckSummary, ControlAnswer, ControlRequest, EngineCommand, EngineHealth,
+        ExecuteRequest, FromEngineSys, Host, HungEval, ProcessRow, RerunRequest, ToEngineSys,
+        ValueAnswer,
+    },
     namepath::{
         BUILTINS, Namepath, NamepathPattern, NamepathRef, NamepathStr, PATTERN_ALL,
         PATTERN_CURRENT, builtin_equip, builtin_name, display_equip, resolve_builtin,
@@ -199,5 +226,6 @@ pub use crate::{
         NuTypedef, args_schema_to_signature, check_value, nu_to_args_schema,
         nu_to_result_schema, result_schema_to_signature, typedef_text,
     },
+    system::{EngineHandle, EngineSysConfig, EngineSysParams, EngineSysPaths, EngineSystem},
     template::{build_call_source, build_execute_source, json_value_to_nu_value},
 };

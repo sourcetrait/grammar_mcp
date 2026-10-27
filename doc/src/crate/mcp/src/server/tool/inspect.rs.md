@@ -14,6 +14,6 @@ only thing that knows what `.` names, so the parser leaves it unresolved and an 
 `.` matches nothing. Resolving it at this one call site is what makes `interface help .`
 render the current view rather than an empty block.
 
-A PATTERN SPANS EQUIPS, so the per-equip READ locks are taken inside the renderer rather than
-around one lookup here. That is why the pattern arm returns early instead of falling through
-to the lock below.
+An EXACT namepath is the engine's `Help`, read under its one equip's lock. A PATTERN SPANS
+EQUIPS, so it renders as a signature block through the engine's `Signatures`, whose
+renderer takes each equip's lock itself.

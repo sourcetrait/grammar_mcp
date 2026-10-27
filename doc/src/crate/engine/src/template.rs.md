@@ -13,10 +13,6 @@ shadowed - the keyword wins at parse under `use`, `overlay use` and
 `run` call target in the estate, so aliasing the overlay sidesteps the namespace
 entirely and the drive is a constant rather than the target's own name.
 
-## fn args_to_nuon
-
-## fn json_object_to_nu_value
-
 ## fn json_value_to_nu_value
 Also the write half of the rig index's NUON round-trip and the serde bridge every
 tool's record crosses, which is why it is in the engine's public face rather than

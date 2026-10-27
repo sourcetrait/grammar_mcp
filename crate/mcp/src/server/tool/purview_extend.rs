@@ -33,7 +33,10 @@ impl NuSh {
         let revealed_block = if revealed.is_empty() {
             None
         } else {
-            Some(render_signatures_within(&self.rig_locks, &parse_patterns(&revealed)).await)
+            match self.signatures(revealed).await {
+                Ok(signatures) => Some(signatures),
+                Err(error) => return error_to_call_result(error, nonce),
+            }
         };
         success(
             nonce,

@@ -21,7 +21,8 @@ substrate because every engine base loads the registry it writes, so it must lan
 the first base is built, on every entry point: the server, the one-shot CLI, and the test
 server.
 
-The locks hydrate LAST, so they hold the builtins installed a moment before.
+The engine starts AFTER it, its locks hydrated from the store this makes, so they hold the
+builtins installed a moment before (`run.rs`).
 
 ## struct McpHost
 What an eval asks of mcp runs here, on the eval's thread, inside the `grimm`

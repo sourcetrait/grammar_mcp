@@ -1,7 +1,7 @@
 use crate::*;
 use crate::server::watchdog::{
     DiskWatch, LevelGate, parse_cpu_ticks, parse_df, parse_mem_total_kb, parse_rss_kb, parse_vram,
-    scan_hung,
+    rising_edges, scan_hung,
 };
 
 /// Real `df -P` output from the box, including the two cases that matter: the 4 KiB
@@ -148,30 +148,21 @@ fn a_long_sustained_level_warns_only_twice_in_an_hour() {
     );
 }
 
-fn watch_entry(nonce: &str, lane: Lane, cancelled_at: u64, finished: bool) -> HungWatch {
-    HungWatch {
+fn watch_entry(nonce: &str, lane: Lane, cancelled_at: u64) -> HungEval {
+    HungEval {
         nonce: nonce.to_string(),
-        tool: "execute",
+        tool: "execute".to_string(),
         lane,
         started_at: 0,
         cancelled_at,
-        finished: Arc::new(AtomicBool::new(finished)),
     }
-}
-
-fn registry(entries: Vec<HungWatch>) -> HungRegistry {
-    let mut map = HashMap::new();
-    for e in entries {
-        map.insert(e.nonce.clone(), e);
-    }
-    Arc::new(std::sync::Mutex::new(map))
 }
 
 #[test]
 fn scan_confirms_stateless_hang_past_grace() {
-    let reg = registry(vec![watch_entry("w1", Lane::Stateless, 1000, false)]);
+    let hung = vec![watch_entry("w1", Lane::Stateless, 1000)];
     // now 7000 - cancelled 1000 = hung 6000 > grace 5000 -> confirmed
-    let (ems, confirmed) = scan_hung(&reg, 7000, 5000, 2, 8);
+    let (ems, confirmed) = scan_hung(&hung, 7000, 5000, 2, 8);
     assert_eq!(confirmed, 1);
     assert_eq!(ems.len(), 1);
     assert_eq!(ems[0].0, "hung:stateless:w1");
@@ -180,33 +171,38 @@ fn scan_confirms_stateless_hang_past_grace() {
 
 #[test]
 fn scan_ignores_within_grace() {
-    let reg = registry(vec![watch_entry("w1", Lane::Stateless, 1000, false)]);
+    let hung = vec![watch_entry("w1", Lane::Stateless, 1000)];
     // hung 2000 <= grace 5000 -> not yet confirmed
-    let (ems, confirmed) = scan_hung(&reg, 3000, 5000, 0, 8);
+    let (ems, confirmed) = scan_hung(&hung, 3000, 5000, 0, 8);
     assert_eq!(confirmed, 0);
     assert!(ems.is_empty());
-}
-
-#[test]
-fn scan_prunes_finished_entries() {
-    let reg = registry(vec![watch_entry("done", Lane::Stateless, 1000, true)]);
-    let (ems, confirmed) = scan_hung(&reg, 9999, 5000, 0, 8);
-    assert_eq!(confirmed, 0);
-    assert!(ems.is_empty());
-    assert!(
-        reg.lock().unwrap().is_empty(),
-        "a finished entry must be pruned from the registry"
-    );
 }
 
 #[test]
 fn scan_stateful_hang_is_not_a_stateless_permit() {
-    let reg = registry(vec![watch_entry("i1", Lane::Stateful, 0, false)]);
-    let (ems, confirmed) = scan_hung(&reg, 10000, 5000, 0, 8);
+    let hung = vec![watch_entry("i1", Lane::Stateful, 0)];
+    let (ems, confirmed) = scan_hung(&hung, 10000, 5000, 0, 8);
     assert_eq!(confirmed, 0, "a stateful-lane hang holds no pooled permit");
     assert_eq!(ems.len(), 1);
     assert_eq!(ems[0].0, "hung:stateful:i1");
     assert!(matches!(ems[0].1, Emergency::HungEngineThread(_)));
+}
+
+/// A sample the engine didn't answer is no reading: the hang it reported stays
+/// active, so its answer on the next sample raises nothing twice.
+#[test]
+fn an_absent_reading_keeps_the_active_set() {
+    let hung = scan_hung(&[watch_entry("w1", Lane::Stateless, 0)], 10_000, 5_000, 1, 8).0;
+    let (active, risen) = rising_edges(&HashSet::new(), Some(hung.clone()));
+    assert_eq!(risen.len(), 1, "a new condition rises once");
+    let (kept, quiet) = rising_edges(&active, None);
+    assert!(quiet.is_empty());
+    assert_eq!(kept, active, "an absent reading leaves the active set as it was");
+    let (_, again) = rising_edges(&kept, Some(hung));
+    assert!(again.is_empty(), "a condition still active is not raised again");
+    let (cleared, none) = rising_edges(&kept, Some(Vec::new()));
+    assert!(none.is_empty());
+    assert!(cleared.is_empty(), "a reading without the condition clears it");
 }
 
 #[test]

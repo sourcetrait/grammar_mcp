@@ -4,20 +4,17 @@ use crate::*;
 pub(crate) async fn run_server() -> Result<(), String> {
     install_child_subreaper();
     ensure_cert_profile();
-    let rig_locks = ensure_substrate()
+    ensure_substrate()
         .await
         .map_err(|e| format!("the equip substrate: {e}"))?;
+    let engine = Arc::new(EngineHandle::start().await.map_err(|e| e.to_string())?);
     let nonce_gen = Arc::new(datum::NonceGenerator::new());
-    let lint_engine = Arc::new(LintEngine::new());
-    let server = NuSh::new(nonce_gen, rig_locks, lint_engine, &config().deny);
+    let server = NuSh::new(nonce_gen, engine.clone(), &config().deny);
     let (emergency_tx, emergency_rx) = tk::unbounded_channel::<Emergency>();
     spawn_emergency_responder(emergency_rx, server.mcp_nom.as_str().to_string());
     server.channel.install_emergency(emergency_tx.clone());
     spawn_watchdog(WatchdogDeps {
-        hung_watch: server.hung_watch.clone(),
-        semaphore: server.executor.semaphore(),
-        cap: eval_concurrency_cap(),
-        env_jobs: server.env_jobs.clone(),
+        engine: engine.clone(),
         tx: emergency_tx,
     });
     let _host_lock = match acquire_host_lock(server.mcp_nom.as_str()) {
@@ -27,19 +24,24 @@ pub(crate) async fn run_server() -> Result<(), String> {
             None
         }
     };
-    let in_flight = server.in_flight.clone();
-    let env_jobs = server.env_jobs.clone();
-    spawn_signal_sweep(in_flight.clone(), env_jobs.clone());
+    spawn_signal_sweep(engine.clone());
     let service = server
         .serve(mcp::stdio())
         .await
         .map_err(|e| format!("serve stdio: {e}"))?;
     let served = service.waiting().await;
     close_channel_for_shutdown().await;
-    teardown_all_in_flight(&in_flight, &env_jobs).await;
+    teardown(&engine).await;
     served
         .map(|_| ())
         .map_err(|e| format!("the stdio service: {e}"))
+}
+
+/// Cancel every call in flight and reap its tree, the engine's jobs and plugins.
+async fn teardown(engine: &EngineHandle) {
+    if let Err(e) = engine.control(EngineCommand::Teardown).await {
+        eprintln!("grammar: the engine's teardown: {e}");
+    }
 }
 
 /// RFC 6455 "going away" - a server shutting down, which is exactly this.
@@ -57,10 +59,7 @@ async fn close_channel_for_shutdown() {
 }
 
 /// Sweep on TERM / INT / HUP, then exit with the conventional `128 + signo`.
-fn spawn_signal_sweep(
-    in_flight: Arc<tk::AsyncMutex<HashMap<String, InFlightEntry>>>,
-    env_jobs: Arc<std::sync::Mutex<nu::Jobs>>,
-) {
+fn spawn_signal_sweep(engine: Arc<EngineHandle>) {
     tk::spawn(async move {
         let mut term = match tk::signal(tk::SignalKind::terminate()) {
             Ok(s) => s,
@@ -89,7 +88,7 @@ fn spawn_signal_sweep(
             _ = hangup.recv() => nix::sys::signal::Signal::SIGHUP as i32,
         };
         close_channel_for_shutdown().await;
-        teardown_all_in_flight(&in_flight, &env_jobs).await;
+        teardown(&engine).await;
         process::exit(128 + signo);
     });
 }

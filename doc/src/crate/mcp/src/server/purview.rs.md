@@ -79,10 +79,6 @@ the view rather than silently open it.
 Asked by PARSE rather than by string, so `gram:` and `sourcetrait/gram:` are one pattern:
 an install never adds the second spelling beside the first, and an uninstall takes either.
 
-## fn parse_patterns
-A stored pattern that no longer parses is treated as ABSENT rather than fatal: a purview
-file is agent-authored data, and one bad row must not take `interface info` down with it.
-
 ## fn pattern_requires
 The `@id` check comes BEFORE parsing, because `@id` is not a namepath and must never
 reach the namepath grammar at all.

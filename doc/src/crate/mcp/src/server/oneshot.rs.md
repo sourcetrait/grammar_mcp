@@ -1,10 +1,10 @@
 # oneshot.rs
 
 ## fn run_oneshot
-Builds the SAME substrate the serve path builds and dispatches ONE invocation straight
-to the `pub(crate)` handler methods on `NuSh` - no rmcp transport anywhere. That is
-what makes this the operator's no-agent contribution loop rather than a parallel
-implementation to keep in step.
+Builds the SAME substrate the serve path builds, starts an engine of its own on it, and
+dispatches ONE invocation straight to the `pub(crate)` handler methods on `NuSh` - no rmcp
+transport anywhere. That is what makes this the operator's no-agent contribution loop
+rather than a parallel implementation to keep in step.
 
 DENY DOES NOT APPLY on this path. It gates agent REGISTRATION at router assembly, and
 this bypasses the router entirely, so the operator always has the whole tool set; the
@@ -12,13 +12,13 @@ interface is built with no denied command for the same reason, so a command an a
 host withholds still runs here.
 
 The envelope's NUON text prints as it is. The exit codes are 0 for success, 1 for an
-error envelope, an rmcp-boundary error, or an equip substrate that cannot be built, and
-2 for unparseable operator input. The envelope's `error` field is the only discriminator
+error envelope, an rmcp-boundary error, an equip substrate that cannot be built, or an
+engine that cannot start, and 2 for unparseable operator input. The envelope's `error` field is the only discriminator
 needed for the first two.
 
 Three caveats are by design rather than gaps: a `def --env` definition's stateful lane is
 single-shot because the session state dies with the process; `interface process list` and
-`interface process kill` are process-scoped, so a one-shot invocation's in-flight map is
+`interface process kill` reach the invocation's own engine, so its in-flight map is
 empty; and writing into a namespace a live agent host is using is the operator's own risk -
 git's index lock keeps the repo safe, but an in-flight agent call can transiently fail.
 
