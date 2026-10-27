@@ -13,7 +13,6 @@ static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integrat
 fn nonce_of(env: &Value) -> String {
     env["nonce"]
         .as_str()
-        .or_else(|| env["error"]["nonce"].as_str())
         .unwrap_or_else(|| panic!("no nonce in {env}"))
         .to_string()
 }

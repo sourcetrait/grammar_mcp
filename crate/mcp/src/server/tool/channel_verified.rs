@@ -11,15 +11,16 @@ impl NuSh {
     )]
     pub(crate) async fn channel_verified(
         &self,
-        mcp::Parameters(_p): mcp::Parameters<ChannelVerifiedParams>,
+        mcp::Parameters(p): mcp::Parameters<ChannelVerifiedParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("channel_verified", &p).to_nonce();
         match self.channel.mark_verified() {
-            Ok(()) => Ok(mcp::CallToolResult::default()),
+            Ok(()) => success_void(nonce),
             Err(ChannelVerifyError::NotOpen) => {
-                Ok(error_to_call_result(GrammarMcpError::ChannelNotOpen, None))
+                error_to_call_result(GrammarMcpError::ChannelNotOpen, nonce)
             }
             Err(ChannelVerifyError::NotClaimed) => {
-                Ok(error_to_call_result(GrammarMcpError::ChannelNotClaimed, None))
+                error_to_call_result(GrammarMcpError::ChannelNotClaimed, nonce)
             }
         }
     }

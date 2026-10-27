@@ -8,8 +8,8 @@ pub struct PurviewExtendParams {
 }
 
 /// What a change to the current view did.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct PurviewDeltaEnvelope {
+#[derive(Debug, ser::Serialize)]
+pub(crate) struct PurviewDeltaResult {
     /// `info()`'s `signatures` for what this call brought INTO view, or null.
     pub revealed: Option<String>,
     /// The purview ids in view now - the KEYS alone.
@@ -20,6 +20,7 @@ impl NuSh {
     /// The shared delta report for a change to the current view.
     pub(crate) async fn purview_delta(
         &self,
+        nonce: datum::Nonce,
         before: Vec<String>,
         after: Vec<String>,
         ids: Vec<String>,
@@ -34,41 +35,42 @@ impl NuSh {
         } else {
             Some(render_signatures_within(&self.rig_locks, &parse_patterns(&revealed)).await)
         };
-        envelope_to_structured(&PurviewDeltaEnvelope {
-            revealed: revealed_block,
-            current: ids,
-        })
+        success(
+            nonce,
+            &PurviewDeltaResult {
+                revealed: revealed_block,
+                current: ids,
+            },
+        )
     }
 }
 
 #[mcp::tool_router(router = purview_extend_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "Bring more purviews into the current view.",
-        output_schema = tool_output_schema::<PurviewDeltaEnvelope>()
-    )]
+    #[mcp::tool(description = "Bring more purviews into the current view.")]
     pub(crate) async fn purview_extend(
         &self,
         mcp::Parameters(p): mcp::Parameters<PurviewExtendParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("purview_extend", &p).to_nonce();
         let rows = match load_purviews() {
             Ok(rows) => rows,
-            Err(error) => return Ok(error_to_call_result(error, None)),
+            Err(error) => return error_to_call_result(error, nonce),
         };
         for id in &p.purviews {
             if !is_nameable_purview(id, rows.as_ref()) {
-                return Ok(error_to_call_result(
+                return error_to_call_result(
                     GrammarMcpError::PurviewInvalidId {
                         id: id.clone(),
                         reason: "no such purview; configure it first".to_string(),
                     },
-                    None,
-                ));
+                    nonce,
+                );
             }
         }
         let before = resolve_patterns(&self.current_purview.ids(), rows.as_ref());
         let ids = self.current_purview.extend(&p.purviews);
         let after = resolve_patterns(&ids, rows.as_ref());
-        self.purview_delta(before, after, ids, rows).await
+        self.purview_delta(nonce, before, after, ids, rows).await
     }
 }

@@ -90,13 +90,13 @@ impl TestServer {
         }
     }
 
-    /// A tool's envelope as JSON, read from its NUON text or its structured content.
+    /// A tool's envelope as JSON, read from its NUON text.
     fn envelope(r: Result<mcp::CallToolResult, mcp::ErrorData>) -> json::Value {
         let ctr = r.unwrap_or_else(|e| panic!("unexpected rmcp-boundary error: {e:?}"));
-        if let Some(mcp::ContentBlock::Text(text)) = ctr.content.first() {
-            return nuon_to_json(&text.text);
+        match ctr.content.first() {
+            Some(mcp::ContentBlock::Text(text)) => nuon_to_json(&text.text),
+            other => panic!("a result without its envelope text: {other:?}"),
         }
-        ctr.structured_content.unwrap_or(json::Value::Null)
     }
 
     /// `nu` on a definition and its data's NUON text.
@@ -267,7 +267,7 @@ impl TestServer {
         )
     }
 
-    /// `kill` is a no-return tool: the envelope is JSON null on success.
+    /// `kill` is a void tool: its result is null on success.
     pub fn kill(&self, nonce: &str) -> json::Value {
         let p = KillParams {
             nonce: nonce.to_string(),
@@ -275,7 +275,7 @@ impl TestServer {
         Self::envelope(self.rt.block_on(self.nush.kill(mcp::Parameters(p))))
     }
 
-    /// `channel_verified` is a no-return tool; the envelope is null.
+    /// `channel_verified` is a void tool; its result is null.
     pub fn channel_verified(&self) -> json::Value {
         Self::envelope(
             self.rt
@@ -300,7 +300,7 @@ impl TestServer {
         Self::envelope(self.rt.block_on(self.nush.config_channel(mcp::Parameters(p))))
     }
 
-    /// `channel_close` is a no-return tool; closing a closed channel succeeds.
+    /// `channel_close` is a void tool; closing a closed channel succeeds.
     pub fn channel_close(&self) -> json::Value {
         Self::envelope(
             self.rt
@@ -355,57 +355,44 @@ pub fn nuon_to_json(text: &str) -> json::Value {
     json::to_value(&converted).expect("a JSON value serializes")
 }
 
-/// True when the envelope is the error shape (`{ error: ... }`).
+/// True when the envelope is the failure shape, `{nonce, error}`.
 pub fn has_error(env: &json::Value) -> bool {
     env.get("error").is_some()
 }
 
-/// The first error diagnostic's `kind`, if any.
-pub fn error_kind(env: &json::Value) -> Option<&str> {
-    env.get("error")?
-        .get("errors")?
-        .as_array()?
-        .first()?
-        .get("kind")?
-        .as_str()
+/// The envelope's error rows, none on a success.
+fn error_rows(env: &json::Value) -> &[json::Value] {
+    env.get("error")
+        .and_then(|e| e.as_array())
+        .map(Vec::as_slice)
+        .unwrap_or_default()
 }
 
-/// Every error/warning diagnostic `kind` in the envelope.
+/// The first error row's `kind`, if any.
+pub fn error_kind(env: &json::Value) -> Option<&str> {
+    error_rows(env).first()?.get("kind")?.as_str()
+}
+
+/// Every error row's `kind`.
 pub fn error_kinds(env: &json::Value) -> Vec<String> {
-    let mut out = Vec::new();
-    if let Some(err) = env.get("error") {
-        for bucket in ["errors", "warnings"] {
-            if let Some(arr) = err.get(bucket).and_then(|v| v.as_array()) {
-                for d in arr {
-                    if let Some(k) = d.get("kind").and_then(|k| k.as_str()) {
-                        out.push(k.to_string());
-                    }
-                }
-            }
-        }
-    }
-    out
+    error_rows(env)
+        .iter()
+        .filter_map(|row| row.get("kind").and_then(|k| k.as_str()))
+        .map(str::to_string)
+        .collect()
 }
 
 pub fn has_kind(env: &json::Value, kind: &str) -> bool {
     error_kinds(env).iter().any(|k| k == kind)
 }
 
-/// Every ERROR-bucket diagnostic `message` in the envelope.
+/// Every error row's `message`.
 pub fn error_messages(env: &json::Value) -> Vec<String> {
-    let mut out = Vec::new();
-    if let Some(arr) = env
-        .get("error")
-        .and_then(|e| e.get("errors"))
-        .and_then(|v| v.as_array())
-    {
-        for d in arr {
-            if let Some(m) = d.get("message").and_then(|m| m.as_str()) {
-                out.push(m.to_string());
-            }
-        }
-    }
-    out
+    error_rows(env)
+        .iter()
+        .filter_map(|row| row.get("message").and_then(|m| m.as_str()))
+        .map(str::to_string)
+        .collect()
 }
 
 /// The whole error object rendered to a string.

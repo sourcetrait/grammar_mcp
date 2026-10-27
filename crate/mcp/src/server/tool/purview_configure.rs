@@ -10,63 +10,61 @@ pub struct PurviewConfigureParams {
 }
 
 /// Success result of `purview_configure()` - the state after the write.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct PurviewConfigureEnvelope {
+#[derive(Debug, ser::Serialize)]
+pub(crate) struct PurviewConfigureResult {
     /// Everything this purview reveals; null when the call deleted it.
     pub signatures: Option<String>,
 }
 
 #[mcp::tool_router(router = purview_configure_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "Set a purview's namepath patterns; an empty list deletes it.",
-        output_schema = tool_output_schema::<PurviewConfigureEnvelope>()
-    )]
+    #[mcp::tool(description = "Set a purview's namepath patterns; an empty list deletes it.")]
     pub(crate) async fn purview_configure(
         &self,
         mcp::Parameters(p): mcp::Parameters<PurviewConfigureParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("purview_configure", &p).to_nonce();
         if is_derived_purview(&p.purview) {
-            return Ok(error_to_call_result(
+            return error_to_call_result(
                 GrammarMcpError::PurviewInvalidId {
                     id: p.purview.clone(),
                     reason: "`.` and `*` are derived, not stored, so they cannot be configured"
                         .to_string(),
                 },
-                None,
-            ));
+                nonce,
+            );
         }
         if !is_valid_purview_id(&p.purview) {
-            return Ok(error_to_call_result(
+            return error_to_call_result(
                 GrammarMcpError::PurviewInvalidId {
                     id: p.purview.clone(),
                     reason: "must be slash-separated snake components, bare relative \
                              (no leading `/` or `./`)"
                         .to_string(),
                 },
-                None,
-            ));
+                nonce,
+            );
         }
         for value in &p.namepaths {
             if let Some(id) = purview_ref(value)
                 && !is_valid_purview_ref(id)
             {
-                return Ok(error_to_call_result(
+                return error_to_call_result(
                     GrammarMcpError::PurviewInvalidId {
                         id: value.clone(),
                         reason: "`@` must reference a configurable purview; `@.` and `@*` \
                                  are derived and are never rows"
                             .to_string(),
                     },
-                    None,
-                ));
+                    nonce,
+                );
             }
         }
         let rows = {
             let _repo = equip_repo_lock();
             let mut rows = match load_purviews() {
                 Ok(rows) => rows.unwrap_or_default(),
-                Err(error) => return Ok(error_to_call_result(error, None)),
+                Err(error) => return error_to_call_result(error, nonce),
             };
             rows.retain(|row| row.id != p.purview);
             let namepaths = if p.namepaths.is_empty() && p.purview == PURVIEW_DEFAULT {
@@ -82,7 +80,7 @@ impl NuSh {
             }
             prune_dangling(&mut rows);
             if let Err(error) = save_purviews(&rows) {
-                return Ok(error_to_call_result(error, None));
+                return error_to_call_result(error, nonce);
             }
             rows
         };
@@ -98,6 +96,6 @@ impl NuSh {
                 Some(render_signatures_within(&self.rig_locks, &patterns).await)
             }
         };
-        envelope_to_structured(&PurviewConfigureEnvelope { signatures })
+        success(nonce, &PurviewConfigureResult { signatures })
     }
 }

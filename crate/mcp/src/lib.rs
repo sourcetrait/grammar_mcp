@@ -136,7 +136,7 @@ pub(crate) use crate::{
         ensure_plugin_registry, list_registered_plugins, load_plugin_decls, registry_mtime,
         registry_path,
     },
-    error::{Diagnostic, ErrorEnvelope, Severity, Source, error_to_call_result},
+    error::{Diagnostic, Severity, Source, error_to_call_result},
     server::{
         blocked::shadow_host_fatal_decls,
         cache::{
@@ -169,7 +169,7 @@ pub(crate) use crate::{
         execute::{EXECUTE, ExecuteDef, analyze_definition},
         executor::Executor,
         rig::{
-            RigLocks, ValidationResult, check_equip,
+            CommitResult, RigLocks, ValidationResult, check_equip,
             check_source_dir, commit_equip, ensure_substrate, establish_equip,
             render_signatures_within, SignaturesDoc,
             InspectDoc, equip_namepath_of, equip_repo_lock, equip_root, index_node, inspect_impl,
@@ -228,8 +228,8 @@ pub(crate) use crate::{
             equip::EquipParams,
             common::{
                 DEFAULT_TIMEOUT_MS, InFlightEntry, InFlightKind, NuSh, RemoteLinkEntry,
-                ToolOutput, dispatch_pooled, dispatch_stateful, envelope_to_structured,
-                now_millis, teardown_all_in_flight, tool_output_schema,
+                dispatch_pooled, dispatch_stateful, envelope_text, now_millis, serde_to_nu,
+                success, success_value, success_void, teardown_all_in_flight,
             },
             info::InfoParams,
             inspect::InspectParams,
@@ -329,7 +329,6 @@ pub(crate) mod mcp {
     pub(crate) use rmcp::{
         ErrorData, ServerHandler, ServiceExt,
         handler::server::router::tool::ToolRouter,
-        handler::server::tool::schema_for_type,
         handler::server::wrapper::Parameters,
         model::{
             CallToolResult, ContentBlock, Implementation, JsonObject, ServerCapabilities,

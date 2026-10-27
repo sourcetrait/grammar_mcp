@@ -91,20 +91,16 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
             }
         };
         match result {
-            Ok(r) => {
-                if let Some(mcp::ContentBlock::Text(text)) = r.content.first() {
+            Ok(r) => match r.content.first() {
+                Some(mcp::ContentBlock::Text(text)) => {
                     println!("{}", text.text);
-                    return if envelope_failed(&text.text) { 1 } else { 0 };
+                    if envelope_failed(&text.text) { 1 } else { 0 }
                 }
-                match r.structured_content {
-                    Some(value) => {
-                        let failed = value.get("error").is_some();
-                        println!("{value}");
-                        if failed { 1 } else { 0 }
-                    }
-                    None => 0,
+                _ => {
+                    eprintln!("grammar: the result carries no envelope text");
+                    1
                 }
-            }
+            },
             Err(e) => {
                 eprintln!("{e}");
                 1

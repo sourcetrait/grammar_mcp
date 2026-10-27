@@ -4,6 +4,10 @@
 UNTAGGED: the caller knows the variant from the action it invoked, and the shapes are distinct.
 `uninstall` returns no summary at all - void, matching its idempotent success.
 
+`install`'s summary is its commit's result, the validator's warning rows in its `warnings`
+as `commit`'s carry them. `check` keeps both buckets, `errors` and `warnings`: it is the
+validator's report, so an error there is a finding rather than a refusal.
+
 ## fn equip
 The ACTION is checked before the source path, so an unknown action is named as one whatever
 path rode with it. The namepath then comes from the path alone: the equip is wherever its

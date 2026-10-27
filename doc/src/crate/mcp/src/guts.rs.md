@@ -2,7 +2,7 @@
 
 The test-only-`pub` convention's landing site. `TestServer` wraps a `NuSh` plus a
 tokio runtime and drives the REAL tool handlers in-process, returning each tool's
-envelope as a serde_json Value - the same shape the wire carries - so the
+envelope parsed from the NUON text the wire carries into a serde_json Value, so the
 integration tests exercise the handlers without spawning the binary.
 
 THE PROCESS-GLOBAL CONSTRAINT is the thing to hold before writing a test here.
@@ -58,7 +58,7 @@ BINARY down rather than just a host.
 
 A fresh `TestServer` per test builds a fresh `NuSh`, which is roughly the spawned
 binary's startup cost MINUS the process spawn. That is what makes the in-process
-tier fast and cleanly isolated - each test gets its own interact engine on its own
+tier fast and cleanly isolated - each test gets its own stateful engine on its own
 runtime, with no subprocess.
 
 ### fn channel_verified

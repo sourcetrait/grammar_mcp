@@ -1,6 +1,6 @@
 # purview.rs
 
-## struct PurviewSetEnvelope
+## struct PurviewSetResult
 ONE field. The caller just SET the view, so it needs telling neither what is in view nor what
 left - only what it can now see.
 

@@ -12,20 +12,6 @@ its result and nonce and only a later rerun would miss the definition.
 Every kind but `call` carries its LANE, the one thing `kill()` and the hang watch need to
 tell a stuck stateful lane from a held stateless permit; `call` always runs stateless.
 
-## enum ToolOutput
-The two shapes every tool's structured result takes, its success envelope or the error
-envelope, as ONE type. `envelope_to_structured` and `error_to_call_result` both
-serialize through it and `tool_output_schema` derives each tool's declared schema from
-it, so the schema a client validates against and the result it receives come from the
-same type. Untagged, so the wire carries the envelope itself, as the skills document it.
-
-## fn tool_output_schema
-A client of the 2026-07-28 era validates a structured result against the tool's
-declared output schema, and a schema of the success envelope alone refused every error
-envelope, which the client then reported as a schema mismatch in place of the error.
-The root carries `type: object` over the union's `anyOf` because MCP requires a tool's
-output schema to be an object; the generic wrapper's title is dropped as noise.
-
 ## struct NuSh
 One instance per process. The rmcp `#[tool_handler]` dispatches off `self.tool_router`,
 which is assembled deny-filtered at construction.
@@ -53,6 +39,23 @@ see each other's calls and the primary's.
 `nu::CRYPTO_PROVIDER.default()` installs nushell's TLS provider once so the `http` family
 works. Nushell reads its OWN OnceLock here, never rustls's process-global, which is why
 this call rather than a rustls one.
+
+## fn NuSh::mint
+EVERY TOOL MINTS ITS NONCE FIRST, before any check, from its name and its parameters,
+so every envelope, a refusal's included, carries one. The name rides in the hash beside
+the parameters, so two tools given the same parameters at the same instant still part.
+
+## fn envelope_text
+ONE SEAM for every envelope, a success's here and a failure's through
+`error_to_call_result` (error.rs): a nu record, `nonce` first, rendered by `render_nuon`
+as the result's one text content. There is no structured content and no output schema;
+the text is the result, NUON the agent reads as it reads its own data.
+
+## fn success
+A tool's own result struct crosses to nu through the serde bridge
+(`json_value_to_nu_value`), the crate's one JSON-to-Value path. `nu` and `rerun` hand
+their checked value to `success_value` as it is, so a duration stays a duration. A void
+tool answers `{nonce, result: null}`.
 
 ## fn dispatch_pooled
 THE HANDLER MINTS THE NONCE FIRST, and the dispatch hands it to the eval, which sets it as

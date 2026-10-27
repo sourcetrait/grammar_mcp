@@ -1,6 +1,6 @@
 # inspect.rs
 
-## struct InspectEnvelope
+## struct InspectResult
 EXACTLY ONE FIELD. The namepath is not reprinted because the caller supplied it, and the
 per-kind shapes carry nothing in common worth hoisting beside it.
 

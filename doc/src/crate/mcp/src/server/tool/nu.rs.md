@@ -32,11 +32,6 @@ is never optional.
 A rerun passes `lint` false: its definition is the host's own cache of a definition the
 lint already passed.
 
-## fn nu_success
-The success envelope, `{nonce, result}`, nonce first, as one NUON text content. The
-result is the checked value itself, rendered once: no JSON conversion, so a duration
-stays a duration and a filesize a filesize.
-
 ## fn dispatch_nu
 The lane is the definition's: `def execute` on the stateless pool, `def --env execute` on
 the stateful thread, so the agent picks persistence in the language it writes rather
@@ -47,6 +42,9 @@ THE RESULT CHECK runs on the eval's value before anything renders it: nushell ch
 output when a command runs, so a body declaring `record<a: int>` and returning a list, a
 record with an extra field, or nothing at all would otherwise succeed. A mismatch is
 `result::invalid` with the nonce; the eval's side effects stand, nothing being rolled back.
+
+A value that passes is the envelope's `result` itself, rendered once as NUON with no
+JSON conversion, so a duration stays a duration and a filesize a filesize.
 
 ## fn nu
 The nonce is minted FIRST, over the parameters, so every refusal carries it.

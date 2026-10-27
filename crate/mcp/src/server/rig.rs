@@ -822,7 +822,7 @@ async fn rig_signatures(
 }
 
 /// A rig's documentation; `srcdir` is the COMMITTED CANONICAL directory.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
+#[derive(Debug, ser::Serialize)]
 pub struct RigDoc {
     pub srcdir: String,
     pub summary: String,
@@ -830,7 +830,7 @@ pub struct RigDoc {
 }
 
 /// A module's documentation; `src` is its committed `mod.nu`.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
+#[derive(Debug, ser::Serialize)]
 pub struct ModuleDoc {
     pub src: String,
     pub summary: String,
@@ -838,7 +838,7 @@ pub struct ModuleDoc {
 }
 
 /// A call's documentation; `src` is the committed `mod.nu` holding its `main`.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
+#[derive(Debug, ser::Serialize)]
 pub struct CallDoc {
     pub src: String,
     pub signature: String,
@@ -846,13 +846,13 @@ pub struct CallDoc {
 }
 
 /// What a PATTERN inspect returns: the `info()` block rooted at the pattern.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
+#[derive(Debug, ser::Serialize)]
 pub struct SignaturesDoc {
     pub signatures: String,
 }
 
 /// What `inspect()` returns - one exact namepath, or a pattern's block.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
+#[derive(Debug, ser::Serialize)]
 #[serde(untagged)]
 pub enum InspectDoc {
     Rig(RigDoc),
@@ -2421,11 +2421,13 @@ fn decl_line(
 }
 
 
+/// A commit's changed paths, grouped by kind, and the validator's warning rows.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct CommitResult {
     pub added: Vec<String>,
     pub modified: Vec<String>,
     pub removed: Vec<String>,
+    pub warnings: Vec<Diagnostic>,
 }
 
 impl CommitResult {
@@ -2455,6 +2457,7 @@ fn parse_git_changes(porcelain: &str) -> CommitResult {
         added: Vec::new(),
         modified: Vec::new(),
         removed: Vec::new(),
+        warnings: Vec::new(),
     };
     for line in porcelain.lines() {
         if line.len() < 4 {
@@ -2600,7 +2603,8 @@ fn promote_equip(
     }
     run_git(&equip_root(), &["add", "--", equip])?;
     let porcelain = run_git_output(&equip_root(), &["status", "--porcelain", "--", equip])?;
-    let changed = parse_git_changes(&porcelain);
+    let mut changed = parse_git_changes(&porcelain);
+    changed.warnings = Diagnostic::bucket(result.diagnostics).1;
     if changed.is_empty() {
         return Ok(changed);
     }

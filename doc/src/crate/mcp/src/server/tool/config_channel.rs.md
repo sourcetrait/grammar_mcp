@@ -7,7 +7,7 @@ not have to restate the other three and risk reverting a change it did not make.
 Windows are INTEGER SECONDS because MCP arguments cross as JSON, which cannot carry a nu
 `duration`. The `10sec` form lives in the model and the docs, never on the wire.
 
-## struct ConfigChannelEnvelope
+## struct ConfigChannelResult
 Returns what is in force WHETHER OR NOT this call changed it, so a caller never has to assume
 its own update took.
 

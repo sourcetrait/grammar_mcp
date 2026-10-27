@@ -5,8 +5,8 @@ use crate::*;
 pub struct PurviewsParams {}
 
 /// Success result of `purviews()`.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct PurviewsEnvelope {
+#[derive(Debug, ser::Serialize)]
+pub(crate) struct PurviewsResult {
     /// Every CONFIGURED purview, as persisted.
     pub purviews: Vec<PurviewView>,
     /// The purview ids in view right now - the KEYS alone.
@@ -15,25 +15,26 @@ pub(crate) struct PurviewsEnvelope {
 
 #[mcp::tool_router(router = purviews_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "List every configured purview, and what is currently in view.",
-        output_schema = tool_output_schema::<PurviewsEnvelope>()
-    )]
+    #[mcp::tool(description = "List every configured purview, and what is currently in view.")]
     pub(crate) async fn purviews(
         &self,
-        mcp::Parameters(_p): mcp::Parameters<PurviewsParams>,
+        mcp::Parameters(p): mcp::Parameters<PurviewsParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("purviews", &p).to_nonce();
         let rows = match load_purviews() {
             Ok(rows) => rows,
-            Err(error) => return Ok(error_to_call_result(error, None)),
+            Err(error) => return error_to_call_result(error, nonce),
         };
         let configured: Vec<String> = rows
             .as_ref()
             .map(|r| r.iter().map(|row| row.id.clone()).collect())
             .unwrap_or_default();
-        envelope_to_structured(&PurviewsEnvelope {
-            purviews: purview_views(&configured, rows.as_ref()),
-            current: self.current_purview.ids(),
-        })
+        success(
+            nonce,
+            &PurviewsResult {
+                purviews: purview_views(&configured, rows.as_ref()),
+                current: self.current_purview.ids(),
+            },
+        )
     }
 }

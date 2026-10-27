@@ -16,6 +16,7 @@ impl NuSh {
         &self,
         mcp::Parameters(p): mcp::Parameters<KillParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("kill", &p).to_nonce();
         let found = {
             let map = self.in_flight.lock().await;
             match map.get(&p.nonce) {
@@ -42,6 +43,6 @@ impl NuSh {
             tree_kill(&pids);
             kill_plugin_subprocesses();
         }
-        Ok(mcp::CallToolResult::default())
+        success_void(nonce)
     }
 }

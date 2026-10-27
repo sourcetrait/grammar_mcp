@@ -9,8 +9,8 @@ pub struct InfoParams {
 }
 
 /// Success result of `info()`.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct InfoEnvelope {
+#[derive(Debug, ser::Serialize)]
+pub(crate) struct InfoResult {
     pub name: String,
     pub version: String,
     pub nu_version: String,
@@ -30,17 +30,15 @@ pub(crate) struct InfoEnvelope {
 
 #[mcp::tool_router(router = info_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "Versions, plugins, and every rig's callable signatures.",
-        output_schema = tool_output_schema::<InfoEnvelope>()
-    )]
+    #[mcp::tool(description = "Versions, plugins, and every rig's callable signatures.")]
     pub(crate) async fn info(
         &self,
         mcp::Parameters(p): mcp::Parameters<InfoParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("info", &p).to_nonce();
         let rows = match load_purviews() {
             Ok(rows) => rows,
-            Err(error) => return Ok(error_to_call_result(error, None)),
+            Err(error) => return error_to_call_result(error, nonce),
         };
         let ids: Vec<String> = if p.purviews.is_empty() {
             self.current_purview.ids()
@@ -54,17 +52,20 @@ impl NuSh {
             &resolve_patterns(&ids, rows.as_ref()),
             rows.as_ref(),
         ));
-        envelope_to_structured(&InfoEnvelope {
-            name: consts::GRAMMAR.to_string(),
-            version: env!("CARGO_PKG_VERSION").to_string(),
-            nu_version: env!("NU_VERSION").to_string(),
-            id: config().id.clone(),
-            namespace: config().namespace.clone(),
-            mcp_nom: self.mcp_nom.as_str().to_string(),
-            work_dir: config().work_dir.display().to_string(),
-            plugins: list_registered_plugins(),
-            signatures: render_signatures_within(&self.rig_locks, &patterns).await,
-            purview: purview_views(&ids, rows.as_ref()),
-        })
+        success(
+            nonce,
+            &InfoResult {
+                name: consts::GRAMMAR.to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                nu_version: env!("NU_VERSION").to_string(),
+                id: config().id.clone(),
+                namespace: config().namespace.clone(),
+                mcp_nom: self.mcp_nom.as_str().to_string(),
+                work_dir: config().work_dir.display().to_string(),
+                plugins: list_registered_plugins(),
+                signatures: render_signatures_within(&self.rig_locks, &patterns).await,
+                purview: purview_views(&ids, rows.as_ref()),
+            },
+        )
     }
 }

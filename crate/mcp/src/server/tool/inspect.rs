@@ -8,29 +8,27 @@ pub struct InspectParams {
 }
 
 /// Success result of `inspect()`.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct InspectEnvelope {
+#[derive(Debug, ser::Serialize)]
+pub(crate) struct InspectResult {
     /// An exact namepath's documentation, or a pattern's `signatures` block.
     pub doc: InspectDoc,
 }
 
 #[mcp::tool_router(router = inspect_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "Detailed documentation for rigs, modules, and calls.",
-        output_schema = tool_output_schema::<InspectEnvelope>()
-    )]
+    #[mcp::tool(description = "Detailed documentation for rigs, modules, and calls.")]
     pub(crate) async fn inspect(
         &self,
         mcp::Parameters(p): mcp::Parameters<InspectParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("inspect", &p).to_nonce();
         let namepath = match NamepathStr::parse(&p.namepath) {
             Ok(NamepathStr::Pattern(pattern)) => {
                 let patterns = match pattern {
                     NamepathPattern::Current => {
                         let rows = match load_purviews() {
                             Ok(rows) => rows,
-                            Err(error) => return Ok(error_to_call_result(error, None)),
+                            Err(error) => return error_to_call_result(error, nonce),
                         };
                         parse_patterns(&expand_values(
                             &resolve_patterns(&self.current_purview.ids(), rows.as_ref()),
@@ -41,12 +39,15 @@ impl NuSh {
                 };
                 let signatures =
                     render_signatures_within(&self.rig_locks, &patterns).await;
-                return envelope_to_structured(&InspectEnvelope {
-                    doc: InspectDoc::Signatures(SignaturesDoc { signatures }),
-                });
+                return success(
+                    nonce,
+                    &InspectResult {
+                        doc: InspectDoc::Signatures(SignaturesDoc { signatures }),
+                    },
+                );
             }
             Ok(NamepathStr::Namepath(n)) => n,
-            Err(e) => return Ok(error_to_call_result(e, None)),
+            Err(e) => return error_to_call_result(e, nonce),
         };
         let (rig, module_path, name) = match namepath.validate() {
             Ok(NamepathRef::Rig { rig }) => (rig, String::new(), None),
@@ -59,23 +60,23 @@ impl NuSh {
                 module_path,
                 name,
             }) => (rig, module_path, Some(name)),
-            Err(e) => return Ok(error_to_call_result(e, None)),
+            Err(e) => return error_to_call_result(e, nonce),
         };
         let lock = match self.rig_locks.lookup(&rig).await {
             Some(l) => l,
             None => {
-                return Ok(error_to_call_result(
+                return error_to_call_result(
                     GrammarMcpError::EquipNotRegistered {
                         equip: rig.clone(),
                     },
-                    None,
-                ));
+                    nonce,
+                );
             }
         };
         let _guard = lock.read().await;
         match inspect_impl(&rig, &module_path, name.as_deref()) {
-            Ok(doc) => envelope_to_structured(&InspectEnvelope { doc }),
-            Err(error) => Ok(error_to_call_result(error, None)),
+            Ok(doc) => success(nonce, &InspectResult { doc }),
+            Err(error) => error_to_call_result(error, nonce),
         }
     }
 }

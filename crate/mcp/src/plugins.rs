@@ -16,7 +16,7 @@ const PLUGIN_KINDS: [&str; 3] = ["core", "grammar", "rig"];
 const REGISTRATION_LOG_DIR: &str = "plugins";
 
 /// One plugin as a positional `[name, version]` pair (version may be null).
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
+#[derive(Debug, ser::Serialize)]
 pub(crate) struct PluginInfo(pub String, pub Option<String>);
 
 /// The registry this namespace owns, `<data dir>/plugin.msgpackz`, once set.

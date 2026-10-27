@@ -192,16 +192,12 @@ There is NO `summary` field, and its absence is deliberate: SUMMARY IS PART OF T
 SIGNATURE, carried as the trailing ` # ...` exactly as the block does it.
 
 ## enum InspectDoc
-UNTAGGED, so each member serializes as its own bare shape and schemars renders the set as a
-`oneOf`. The caller always knows which member it will get, because it knows whether it
-passed a pattern or an exact namepath.
+UNTAGGED, so each member serializes as its own bare shape under the result's `doc`. The
+caller always knows which member it will get, because it knows whether it passed a pattern
+or an exact namepath.
 
-It rides under the envelope's single `doc` field rather than at the root because a
-root-level oneOf carries no `type: "object"` and Claude Code rejects it.
-
-The four shapes stay distinguishable by FIELD SET alone, which is what an untagged oneOf
-needs: `srcdir` marks a rig, `src` plus `summary` a module, `src` plus `signature` a call,
-and a lone `signatures` a pattern.
+The four shapes stay distinguishable by FIELD SET alone: `srcdir` marks a rig, `src` plus
+`summary` a module, `src` plus `signature` a call, and a lone `signatures` a pattern.
 
 ## fn inspect_impl
 Every path composes from the NAMEPATH against the COMMITTED canonical tree, so nothing here
@@ -355,6 +351,9 @@ rather than merged with the last one.
 
 An empty porcelain means idempotent no-op: grouped-but-empty result and NO commit, so
 re-committing an unchanged equip does not accumulate history.
+
+The validator's WARNING rows ride in the result, the no-op's included: a source that
+validates commits past its warnings, and the agent still reads them.
 
 ## fn install_equip
 ATOMIC by order: the source is validated whole before anything is written, so a failed

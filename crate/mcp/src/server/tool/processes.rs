@@ -5,7 +5,7 @@ use crate::*;
 pub struct ProcessesParams {}
 
 /// One in-flight tool usage in the `processes()` snapshot.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
+#[derive(Debug, ser::Serialize)]
 pub(crate) struct ProcessEntry {
     pub nonce: String,
     pub tool: String,
@@ -18,21 +18,19 @@ pub(crate) struct ProcessEntry {
 }
 
 /// Success result of `processes()`.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct ProcessesEnvelope {
+#[derive(Debug, ser::Serialize)]
+pub(crate) struct ProcessesResult {
     pub processes: Vec<ProcessEntry>,
 }
 
 #[mcp::tool_router(router = processes_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "List in-flight MCP tool usage.",
-        output_schema = tool_output_schema::<ProcessesEnvelope>()
-    )]
+    #[mcp::tool(description = "List in-flight MCP tool usage.")]
     pub(crate) async fn processes(
         &self,
-        mcp::Parameters(_p): mcp::Parameters<ProcessesParams>,
+        mcp::Parameters(p): mcp::Parameters<ProcessesParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("processes", &p).to_nonce();
         let map = self.in_flight.lock().await;
         let entries: Vec<ProcessEntry> = map
             .iter()
@@ -54,6 +52,6 @@ impl NuSh {
             })
             .collect();
         drop(map);
-        envelope_to_structured(&ProcessesEnvelope { processes: entries })
+        success(nonce, &ProcessesResult { processes: entries })
     }
 }

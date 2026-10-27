@@ -1,8 +1,8 @@
 use crate::*;
 
 /// Success result of `purview()`.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct PurviewSetEnvelope {
+#[derive(Debug, ser::Serialize)]
+pub(crate) struct PurviewSetResult {
     /// `info()`'s `signatures` for what this call brought INTO view, or null.
     pub revealed: Option<String>,
 }
@@ -16,17 +16,15 @@ pub struct PurviewParams {
 
 #[mcp::tool_router(router = purview_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "Set the current view to these purviews.",
-        output_schema = tool_output_schema::<PurviewSetEnvelope>()
-    )]
+    #[mcp::tool(description = "Set the current view to these purviews.")]
     pub(crate) async fn purview(
         &self,
         mcp::Parameters(p): mcp::Parameters<PurviewParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("purview", &p).to_nonce();
         let rows = match load_purviews() {
             Ok(rows) => rows,
-            Err(error) => return Ok(error_to_call_result(error, None)),
+            Err(error) => return error_to_call_result(error, nonce),
         };
         let want: Vec<String> = p
             .purviews
@@ -35,13 +33,13 @@ impl NuSh {
             .collect();
         for id in &want {
             if !is_nameable_purview(id, rows.as_ref()) {
-                return Ok(error_to_call_result(
+                return error_to_call_result(
                     GrammarMcpError::PurviewInvalidId {
                         id: id.clone(),
                         reason: "no such purview; configure it first".to_string(),
                     },
-                    None,
-                ));
+                    nonce,
+                );
             }
         }
         let before = resolve_patterns(&self.current_purview.ids(), rows.as_ref());
@@ -56,6 +54,6 @@ impl NuSh {
         } else {
             Some(render_signatures_within(&self.rig_locks, &parse_patterns(&revealed)).await)
         };
-        envelope_to_structured(&PurviewSetEnvelope { revealed: block })
+        success(nonce, &PurviewSetResult { revealed: block })
     }
 }

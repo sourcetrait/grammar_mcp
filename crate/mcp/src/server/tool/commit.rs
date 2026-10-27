@@ -7,45 +7,33 @@ pub struct CommitParams {
     pub namepath: String,
 }
 
-/// Success result of `commit()` -- the changed paths, grouped by kind.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct CommitEnvelope {
-    pub added: Vec<String>,
-    pub modified: Vec<String>,
-    pub removed: Vec<String>,
-}
-
 #[mcp::tool_router(router = commit_router, vis = "pub(crate)")]
 impl NuSh {
     #[mcp::tool(
-        description = "Commit an equip's lib and rig from its source to the MCP's repository for live use.",
-        output_schema = tool_output_schema::<CommitEnvelope>()
+        description = "Commit an equip's lib and rig from its source to the MCP's repository for live use."
     )]
     pub(crate) async fn commit(
         &self,
         mcp::Parameters(p): mcp::Parameters<CommitParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("commit", &p).to_nonce();
         let equip = resolve_builtin(&p.namepath);
         let lock = match self.rig_locks.lookup(&equip).await {
             Some(l) => l,
             None => {
-                return Ok(error_to_call_result(
+                return error_to_call_result(
                     GrammarMcpError::EquipNotRegistered {
                         equip: p.namepath.clone(),
                     },
-                    None,
-                ));
+                    nonce,
+                );
             }
         };
         let _guard = lock.write().await;
         let engine = self.lint_engine.current();
         match commit_equip(&equip, &engine) {
-            Ok(result) => envelope_to_structured(&CommitEnvelope {
-                added: result.added,
-                modified: result.modified,
-                removed: result.removed,
-            }),
-            Err(error) => Ok(error_to_call_result(error, None)),
+            Ok(result) => success(nonce, &result),
+            Err(error) => error_to_call_result(error, nonce),
         }
     }
 }

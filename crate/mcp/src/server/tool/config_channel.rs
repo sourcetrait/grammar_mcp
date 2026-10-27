@@ -18,15 +18,15 @@ pub struct ConfigChannelParams {
 }
 
 /// The policy now IN FORCE, whether or not this call changed it.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct ConfigChannelEnvelope {
+#[derive(Debug, ser::Serialize)]
+pub(crate) struct ConfigChannelResult {
     pub spam_warn_window_secs: u64,
     pub spam_warn_rate: u32,
     pub spam_error_window_secs: u64,
     pub spam_error_rate: u32,
 }
 
-impl From<SpamThresholds> for ConfigChannelEnvelope {
+impl From<SpamThresholds> for ConfigChannelResult {
     fn from(spam: SpamThresholds) -> Self {
         Self {
             spam_warn_window_secs: spam.warn_window.as_secs(),
@@ -39,22 +39,20 @@ impl From<SpamThresholds> for ConfigChannelEnvelope {
 
 #[mcp::tool_router(router = config_channel_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "Read or adjust the channel's send-rate thresholds at runtime.",
-        output_schema = tool_output_schema::<ConfigChannelEnvelope>()
-    )]
+    #[mcp::tool(description = "Read or adjust the channel's send-rate thresholds at runtime.")]
     pub(crate) async fn config_channel(
         &self,
         mcp::Parameters(p): mcp::Parameters<ConfigChannelParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("config_channel", &p).to_nonce();
         match self.channel.set_thresholds(
             p.spam_warn_window_secs,
             p.spam_warn_rate,
             p.spam_error_window_secs,
             p.spam_error_rate,
         ) {
-            Ok(spam) => envelope_to_structured(&ConfigChannelEnvelope::from(spam)),
-            Err(reason) => Ok(error_to_call_result(GrammarMcpError::SchemaInvalid { reason }, None)),
+            Ok(spam) => success(nonce, &ConfigChannelResult::from(spam)),
+            Err(reason) => error_to_call_result(GrammarMcpError::SchemaInvalid { reason }, nonce),
         }
     }
 }

@@ -15,3 +15,7 @@ committed rig's own and the handle would point at something the agent does not o
 
 Arity is checked HERE rather than in the parser: `validate` happily returns a Rig or Module
 namepath, and only this tool knows that a call requires a Function.
+
+THE RESULT IS LENIENT, as an authored definition's always was: nothing, a record, or a
+table rides as it is, and anything else, or a value NUON cannot render, answers `{}`.
+The strict result check is `nu`'s alone, for the definitions an agent writes and sends.

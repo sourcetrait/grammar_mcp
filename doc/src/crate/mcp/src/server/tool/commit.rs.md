@@ -10,3 +10,6 @@ kinds of it, and a concurrent call reading the rig's index would see it mid-flig
 The engine comes from `lint_engine.current()` rather than a stored handle, so the validator
 picks up a plugin registered since the host started. A validator that never refreshed would
 reject source that RUNS.
+
+The result is the commit's own, its changed paths and the validator's `warnings`; a
+refusal's error table carries its errors alone.

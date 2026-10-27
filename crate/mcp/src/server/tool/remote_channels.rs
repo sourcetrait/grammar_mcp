@@ -5,7 +5,7 @@ use crate::*;
 pub struct RemoteChannelsParams {}
 
 /// One established remote link in the `remote_channels()` snapshot.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
+#[derive(Debug, ser::Serialize)]
 pub(crate) struct RemoteChannelEntry {
     pub alias: String,
     pub remote_mcp_nom: String,
@@ -13,15 +13,15 @@ pub(crate) struct RemoteChannelEntry {
 }
 
 /// One bound-but-unpaired listener in the `listening` set: its alias + bind address.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
+#[derive(Debug, ser::Serialize)]
 pub(crate) struct ListeningEntry {
     pub remote: String,
     pub address: String,
 }
 
 /// Success result of `remote_channels()`.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct RemoteChannelsEnvelope {
+#[derive(Debug, ser::Serialize)]
+pub(crate) struct RemoteChannelsResult {
     pub channels: Vec<RemoteChannelEntry>,
     pub listening: Vec<ListeningEntry>,
 }
@@ -29,13 +29,13 @@ pub(crate) struct RemoteChannelsEnvelope {
 #[mcp::tool_router(router = remote_channels_router, vis = "pub(crate)")]
 impl NuSh {
     #[mcp::tool(
-        description = "List remote grammar-host links: established `channels` plus bound-but-unpaired `listening` listeners.",
-        output_schema = tool_output_schema::<RemoteChannelsEnvelope>()
+        description = "List remote grammar-host links: established `channels` plus bound-but-unpaired `listening` listeners."
     )]
     pub(crate) async fn remote_channels(
         &self,
-        mcp::Parameters(_p): mcp::Parameters<RemoteChannelsParams>,
+        mcp::Parameters(p): mcp::Parameters<RemoteChannelsParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("remote_channels", &p).to_nonce();
         let links = self.remote_links.lock().unwrap_or_else(|e| e.into_inner());
         let mut channels: Vec<RemoteChannelEntry> = links
             .iter()
@@ -60,6 +60,6 @@ impl NuSh {
         drop(bound);
         listening.sort_by(|a, b| a.remote.cmp(&b.remote));
 
-        envelope_to_structured(&RemoteChannelsEnvelope { channels, listening })
+        success(nonce, &RemoteChannelsResult { channels, listening })
     }
 }

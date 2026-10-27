@@ -7,14 +7,14 @@ pub enum Severity {
 }
 
 /// A diagnostic's location; `path` is equip-repo-relative, or null in a body.
-#[derive(Debug, Clone, ser::Serialize, schema::JsonSchema)]
+#[derive(Debug, Clone, ser::Serialize)]
 pub struct Source {
     pub path: Option<String>,
     pub position: [usize; 2],
 }
 
 /// One agent-facing diagnostic row.
-#[derive(Debug, Clone, ser::Serialize, schema::JsonSchema)]
+#[derive(Debug, Clone, ser::Serialize)]
 pub struct Diagnostic {
     pub kind: String,
     #[serde(skip)]
@@ -332,43 +332,17 @@ impl From<io::Error> for GrammarMcpError {
     }
 }
 
-/// Top-of-wire envelope: the structured error body keyed under `error`.
-#[derive(Debug, Clone, ser::Serialize, schema::JsonSchema)]
-pub struct ErrorEnvelope {
-    pub error: ErrorBody,
-}
-
-/// The unified error body: `errors`, `warnings`, and an optional nonce.
-#[derive(Debug, Clone, ser::Serialize, schema::JsonSchema)]
-pub struct ErrorBody {
-    pub errors: Vec<Diagnostic>,
-    pub warnings: Vec<Diagnostic>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub nonce: Option<String>,
-}
-
+/// A failure, `{nonce, error}`: the error's rows, its warnings dropped.
 pub(crate) fn error_to_call_result(
     error: GrammarMcpError,
-    nonce: Option<datum::Nonce>,
-) -> mcp::CallToolResult {
-    let (errors, warnings) = match error {
+    nonce: datum::Nonce,
+) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+    let rows = match error {
         GrammarMcpError::EquipViolations { diagnostics }
         | GrammarMcpError::DefinitionViolations { diagnostics } => {
-            Diagnostic::bucket(diagnostics)
+            Diagnostic::bucket(diagnostics).0
         }
-        single => {
-            let diagnostic = Diagnostic::error(single.kind_str(), None, single.message());
-            (vec![diagnostic], Vec::new())
-        }
+        single => vec![Diagnostic::error(single.kind_str(), None, single.message())],
     };
-    let envelope = ErrorEnvelope {
-        error: ErrorBody {
-            errors,
-            warnings,
-            nonce: nonce.map(|n| n.into_pair().as_str().to_string()),
-        },
-    };
-    let mut r = mcp::CallToolResult::default();
-    r.structured_content = json::to_value(ToolOutput::<()>::Failure(envelope)).ok();
-    r
+    envelope_text(nonce, "error", serde_to_nu(&rows)?)
 }

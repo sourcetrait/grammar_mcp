@@ -9,12 +9,14 @@ implementation to keep in step.
 DENY DOES NOT APPLY on this path. It gates agent REGISTRATION at router assembly, and
 this bypasses the router entirely, so the operator always has the whole tool set.
 
-The exit codes are 0 for success, 1 for an error envelope, an rmcp-boundary error, or
-an equip substrate that cannot be built, and 2 for unparseable operator input. The `error` wrapper on the envelope is the only
-discriminator needed for the first two.
+The envelope's NUON text prints as it is. The exit codes are 0 for success, 1 for an
+error envelope, an rmcp-boundary error, or an equip substrate that cannot be built, and
+2 for unparseable operator input. The envelope's `error` field is the only discriminator
+needed for the first two.
 
-Three caveats are by design rather than gaps: `interact` is single-shot because the
-session state dies with the process; `processes` and `kill` are process-scoped, so a
+Three caveats are by design rather than gaps: a `def --env` definition's stateful lane is
+single-shot because the session state dies with the process; `processes` and `kill` are
+process-scoped, so a
 one-shot invocation's in-flight map is empty; and writing into a namespace a live agent
 host is using is the operator's own risk - git's index lock keeps the repo safe, but an
 in-flight agent call can transiently fail.

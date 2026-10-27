@@ -107,32 +107,59 @@ impl NuSh {
     }
 }
 
-/// A tool's structured result: its success envelope, or the error envelope
-/// any tool returns on a failure.
-#[derive(ser::Serialize, schema::JsonSchema)]
-#[serde(untagged)]
-pub(crate) enum ToolOutput<T> {
-    Success(T),
-    Failure(ErrorEnvelope),
+impl NuSh {
+    /// A call's nonce, minted first from its tool and its parameters.
+    pub(crate) fn mint<P: ser::Serialize>(
+        &self,
+        tool: &str,
+        params: &P,
+    ) -> datum::NoncePair {
+        let payload = json::to_vec(params).unwrap_or_default();
+        self.nonce_gen.generate_with(&(tool, payload)).into_pair()
+    }
 }
 
-/// The output schema a tool declares: `ToolOutput<T>`'s, its root an object
-/// as MCP requires.
-pub(crate) fn tool_output_schema<T: schema::JsonSchema + std::any::Any>() -> Arc<mcp::JsonObject> {
-    let mut schema = mcp::schema_for_type::<ToolOutput<T>>().as_ref().clone();
-    schema.remove("title");
-    schema.insert("type".to_string(), json::Value::String("object".to_string()));
-    Arc::new(schema)
-}
-
-pub(crate) fn envelope_to_structured<T: ser::Serialize>(
-    envelope: &T,
+/// An envelope, `nonce` first and one more field, as the result's one NUON text.
+pub(crate) fn envelope_text(
+    nonce: datum::Nonce,
+    field: &str,
+    value: nu::Value,
 ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-    let value = json::to_value(ToolOutput::Success(envelope))
+    let span = nu::Span::unknown();
+    let mut envelope = nu::Record::new();
+    envelope.insert("nonce", nu::Value::string(nonce.to_string(), span));
+    envelope.insert(field, value);
+    let text = render_nuon(&nu::Value::record(envelope, span))
+        .map_err(|e| mcp::ErrorData::internal_error(format!("envelope render: {e}"), None))?;
+    Ok(mcp::CallToolResult::success(vec![mcp::ContentBlock::text(text)]))
+}
+
+/// A tool's record as a nu value, through the serde bridge.
+pub(crate) fn serde_to_nu<T: ser::Serialize>(value: &T) -> Result<nu::Value, mcp::ErrorData> {
+    let json = json::to_value(value)
         .map_err(|e| mcp::ErrorData::internal_error(format!("envelope serialize: {e}"), None))?;
-    let mut result = mcp::CallToolResult::default();
-    result.structured_content = Some(value);
-    Ok(result)
+    Ok(json_value_to_nu_value(&json))
+}
+
+/// A success, `{nonce, result}`: the result a nu value the tool built.
+pub(crate) fn success_value(
+    nonce: datum::Nonce,
+    result: nu::Value,
+) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+    envelope_text(nonce, "result", result)
+}
+
+/// A success, `{nonce, result}`: the result a tool's record.
+pub(crate) fn success<T: ser::Serialize>(
+    nonce: datum::Nonce,
+    result: &T,
+) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+    success_value(nonce, serde_to_nu(result)?)
+}
+
+/// A success with nothing to answer, `{nonce, result: null}`.
+pub(crate) fn success_void(nonce: datum::Nonce) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+    success_value(nonce, nu::Value::nothing(nu::Span::unknown()))
 }
 
 pub(crate) struct DispatchOutcome {
@@ -142,7 +169,7 @@ pub(crate) struct DispatchOutcome {
 
 pub(crate) struct DispatchError {
     pub(crate) error: GrammarMcpError,
-    pub(crate) nonce: Option<datum::Nonce>,
+    pub(crate) nonce: datum::Nonce,
 }
 
 pub(crate) async fn dispatch_pooled(
@@ -164,7 +191,7 @@ pub(crate) async fn dispatch_pooled(
             phase: "dispatch_pooled::create_log_dir".to_string(),
             reason: format!("create_dir_all {}: {e}", log_dir.display()),
         },
-        nonce: None,
+        nonce: nonce.to_nonce(),
     })?;
     if let Some(definition) = definition {
         write_definition(&log_dir, definition);
@@ -181,7 +208,7 @@ pub(crate) async fn dispatch_pooled(
                 error: GrammarMcpError::ThreadDispatch {
                     reason: format!("eval semaphore: {e}"),
                 },
-                nonce: None,
+                nonce: nonce.to_nonce(),
             });
         }
         Err(_) => {
@@ -193,7 +220,7 @@ pub(crate) async fn dispatch_pooled(
                         "no eval permit within {effective_timeout} ms; {held} of {cap} permits held",
                     ),
                 },
-                nonce: Some(nonce.to_nonce()),
+                nonce: nonce.to_nonce(),
             });
         }
     };
@@ -237,7 +264,7 @@ pub(crate) async fn dispatch_pooled(
         }),
         Ok(Err(failure)) => Err(DispatchError {
             error: failure.into_error(),
-            nonce: Some(nonce.to_nonce()),
+            nonce: nonce.to_nonce(),
         }),
         Err(_) => {
             cancel.store(true, Ordering::SeqCst);
@@ -257,7 +284,7 @@ pub(crate) async fn dispatch_pooled(
                 error: GrammarMcpError::ThreadTimeout {
                     timeout_ms: effective_timeout,
                 },
-                nonce: Some(nonce.to_nonce()),
+                nonce: nonce.to_nonce(),
             })
         }
     }
@@ -282,7 +309,7 @@ pub(crate) async fn dispatch_stateful(
             phase: "dispatch_stateful::create_log_dir".to_string(),
             reason: format!("create_dir_all {}: {e}", log_dir.display()),
         },
-        nonce: None,
+        nonce: nonce.to_nonce(),
     })?;
     if let Some(definition) = definition {
         write_definition(&log_dir, definition);
@@ -334,7 +361,7 @@ pub(crate) async fn dispatch_stateful(
         }),
         Ok(Err(failure)) => Err(DispatchError {
             error: failure.into_error(),
-            nonce: Some(nonce.to_nonce()),
+            nonce: nonce.to_nonce(),
         }),
         Err(_) => {
             cancel.store(true, Ordering::SeqCst);
@@ -354,7 +381,7 @@ pub(crate) async fn dispatch_stateful(
                 error: GrammarMcpError::ThreadTimeout {
                     timeout_ms: effective_timeout,
                 },
-                nonce: Some(nonce.to_nonce()),
+                nonce: nonce.to_nonce(),
             })
         }
     }

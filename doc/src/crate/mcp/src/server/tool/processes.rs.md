@@ -12,5 +12,5 @@ versa.
 PROCESS-SCOPED. A one-shot CLI invocation has an empty in-flight map by construction, so this
 reports nothing there rather than reaching into another host.
 
-The guard is dropped explicitly before building the envelope, so the registry is not held
+The guard is dropped explicitly before building the result, so the registry is not held
 across the serialization.

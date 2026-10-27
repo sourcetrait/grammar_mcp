@@ -6,8 +6,8 @@ JSON-RPC error codes for domain failures.
 
 ## struct Source
 `path` is equip-repo-relative (`<equip>/<kind>/<file>`) for a validation diagnostic
-and NULL for a run or interact body diagnostic, because a body diagnostic is located in
-the body and there is no file to name. `position` is 1-based, and `[0, 0]` means
+and NULL for a `nu` definition's diagnostic, because that one is located in the
+definition and there is no file to name. `position` is 1-based, and `[0, 0]` means
 file-level rather than line 0.
 
 Both fields serialize as PRESENT, with `path` as null when absent rather than omitted.
@@ -21,8 +21,10 @@ directly, rather than a nested source-carrier the reader would have to unwrap.
 The single type for both a validation finding and a body-lint finding - one shape
 the wire and the check summary both carry.
 
-THE BUCKET CONVEYS SEVERITY, which is why `severity` is `#[serde(skip)]` - absent from
-the wire AND from the emitted JSON schema. It is an internal partition key only.
+WHERE A ROW RIDES CONVEYS ITS SEVERITY, which is why `severity` is `#[serde(skip)]` and
+absent from the wire: an error row in a failure's `error` table, a warning row in the
+`warnings` of the result that raised it, `commit`'s and `equip`'s install and check
+summaries. It is an internal partition key only.
 
 Per-condition data (`timeout_ms`, names, reason) lives IN `message`, not a typed
 per-variant field: it is text either way, and a per-variant field would vary its shape
@@ -65,17 +67,19 @@ verified, before any bind or connect: the link's notices and relays ride the Cha
 gate and would drop.
 
 ## fn error_to_call_result
-WHY SUCCESS-SHAPE ERRORS: in the Claude Code CLI a success-shape result carrying
-`structured_content` renders a green bullet whose body is visible on expand, while
-every `is_error = true` variant and every JSON-RPC error renders a red bullet with NO
-body. Success-shape is the ONLY path where the agent can actually read the typed error,
-which is the entire reason the wire looks like this.
+The failure envelope, `{nonce, error}`: the error's rows as a table of `kind`,
+`source`, and `message`, rendered through the same seam as a success
+(`envelope_text`, `server/tool/common.rs`). A violations error carries its error rows
+alone and drops its warnings: a refusal's table holds what refused it.
 
-A success-shape error must still satisfy the tool's declared output schema: a client of
-the 2026-07-28 era validates every structured result against it and reports a mismatch
-in place of the result. The envelope serializes as `ToolOutput`'s `Failure`, the type
-each tool's schema is derived from (`server/tool/common.rs`).
+WHY SUCCESS-SHAPE ERRORS: in the Claude Code CLI every `is_error = true` result and
+every JSON-RPC error renders a red bullet with NO body, so a failure flagged as one is a
+failure the agent cannot read. The envelope rides a plain success result, and its
+`error` field is what tells the two shapes apart.
 
-`Err(mcp::ErrorData)` stays reserved for genuine rmcp-boundary failures. The nonce
-attaches when dispatch had already allocated a per-call log dir, so the agent can fetch
-that call's stdout and stderr for a failure that produced output before dying.
+Every tool mints its nonce before any check, so every failure carries one. For an eval
+it names the call's log directory, where a failure that produced output before dying
+left its stdout and stderr.
+
+`Err(mcp::ErrorData)` stays reserved for genuine rmcp-boundary failures, an envelope
+that will not render among them.

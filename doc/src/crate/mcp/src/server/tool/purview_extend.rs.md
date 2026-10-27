@@ -1,6 +1,6 @@
 # purview_extend.rs
 
-## struct PurviewDeltaEnvelope
+## struct PurviewDeltaResult
 The two halves are ASYMMETRIC on purpose: extending normally only ADDS, so a `hidden` field
 would report an empty list that reads like a result.
 

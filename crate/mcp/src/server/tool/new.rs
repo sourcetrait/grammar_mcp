@@ -8,8 +8,8 @@ pub struct NewParams {
 }
 
 /// Success result of `new()` -- every path created across the batch.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct NewEnvelope {
+#[derive(Debug, ser::Serialize)]
+pub(crate) struct NewResult {
     pub created: Vec<String>,
 }
 
@@ -17,13 +17,13 @@ pub(crate) struct NewEnvelope {
 impl NuSh {
     #[mcp::tool(
         name = "new",
-        description = "Scaffold modules / functions (by namepath) into an equip's rig.",
-        output_schema = tool_output_schema::<NewEnvelope>()
+        description = "Scaffold modules / functions (by namepath) into an equip's rig."
     )]
     pub(crate) async fn scaffold(
         &self,
         mcp::Parameters(p): mcp::Parameters<NewParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("new", &p).to_nonce();
         let mut targets: Vec<(String, String, Option<String>)> = Vec::new();
         for np in &p.namepaths {
             match Namepath(np.clone()).validate() {
@@ -37,16 +37,16 @@ impl NuSh {
                     name,
                 }) => targets.push((rig, module_path, Some(name))),
                 Ok(NamepathRef::Rig { .. }) => {
-                    return Ok(error_to_call_result(
+                    return error_to_call_result(
                         GrammarMcpError::NamepathInvalid {
                             namepath: np.clone(),
                             reason: "new() needs a module or function namepath; use equip(new) to create an equip"
                                 .to_string(),
                         },
-                        None,
-                    ));
+                        nonce,
+                    );
                 }
-                Err(e) => return Ok(error_to_call_result(e, None)),
+                Err(e) => return error_to_call_result(e, nonce),
             }
         }
 
@@ -58,12 +58,12 @@ impl NuSh {
             match self.rig_locks.lookup(lib).await {
                 Some(l) => locks.push(l),
                 None => {
-                    return Ok(error_to_call_result(
+                    return error_to_call_result(
                         GrammarMcpError::EquipNotRegistered {
                             equip: lib.clone(),
                         },
-                        None,
-                    ));
+                        nonce,
+                    );
                 }
             }
         }
@@ -75,7 +75,7 @@ impl NuSh {
         for (rig, module_path, name) in &targets {
             match scaffold_leaf_exists(rig, module_path, name.as_deref()) {
                 Ok(true) => {
-                    return Ok(error_to_call_result(
+                    return error_to_call_result(
                         GrammarMcpError::RigInvalidName {
                             name: module_path.clone(),
                             reason: format!(
@@ -83,11 +83,11 @@ impl NuSh {
                                 name.clone().unwrap_or_else(|| module_path.clone()),
                             ),
                         },
-                        None,
-                    ));
+                        nonce,
+                    );
                 }
                 Ok(false) => {}
-                Err(e) => return Ok(error_to_call_result(e, None)),
+                Err(e) => return error_to_call_result(e, nonce),
             }
         }
 
@@ -95,9 +95,9 @@ impl NuSh {
         for (rig, module_path, name) in &targets {
             match scaffold_leaf(rig, module_path, name.as_deref()) {
                 Ok(mut c) => created.append(&mut c),
-                Err(e) => return Ok(error_to_call_result(e, None)),
+                Err(e) => return error_to_call_result(e, nonce),
             }
         }
-        envelope_to_structured(&NewEnvelope { created })
+        success(nonce, &NewResult { created })
     }
 }

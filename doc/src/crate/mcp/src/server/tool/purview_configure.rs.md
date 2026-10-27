@@ -1,6 +1,6 @@
 # purview_configure.rs
 
-## struct PurviewConfigureEnvelope
+## struct PurviewConfigureResult
 THE WHOLE SET, never a delta: the caller needs to CHECK what it just wrote. A delta cannot
 answer "what does this configuration actually do now", and against a purview the session is
 not looking through - the common case - it answers nothing at all (several distinct writes

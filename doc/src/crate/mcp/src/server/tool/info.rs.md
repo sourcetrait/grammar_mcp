@@ -14,7 +14,7 @@ surface at bootstrap while keeping its own.
 EMPTY means CURRENT, never `default`. Those differ the moment a session has extended its
 view, and defaulting to `default` would silently narrow a caller that passed nothing.
 
-## struct InfoEnvelope
+## struct InfoResult
 
 ### field id
 The agent's self-confirmation channel for which namespace it is talking to. The same pair

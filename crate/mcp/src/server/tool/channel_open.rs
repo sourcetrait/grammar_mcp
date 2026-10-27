@@ -5,8 +5,8 @@ use crate::*;
 pub struct ChannelOpenParams {}
 
 /// Success result of `channel_open()`.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct ChannelOpenEnvelope {
+#[derive(Debug, ser::Serialize)]
+pub(crate) struct ChannelOpenResult {
     /// `new` when this call started the hub, `existing` when one was running.
     pub status: String,
     /// The endpoint to point a Monitor at, with the port actually bound.
@@ -68,48 +68,49 @@ fn arm_verify_timer(channel: Arc<ChannelHandle>) {
 
 #[mcp::tool_router(router = channel_open_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        description = "Open the host's packet channel and return the endpoint to watch.",
-        output_schema = tool_output_schema::<ChannelOpenEnvelope>()
-    )]
+    #[mcp::tool(description = "Open the host's packet channel and return the endpoint to watch.")]
     pub(crate) async fn channel_open(
         &self,
-        mcp::Parameters(_p): mcp::Parameters<ChannelOpenParams>,
+        mcp::Parameters(p): mcp::Parameters<ChannelOpenParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("channel_open", &p).to_nonce();
         let inbox = match ensure_inbox(&self.channel, &self.mcp_nom) {
             Ok(path) => path,
-            Err(error) => return Ok(error_to_call_result(error, None)),
+            Err(error) => return error_to_call_result(error, nonce),
         };
         let _opening = self.channel_open_lock.lock().await;
         let status = self.channel.status();
         let (label, wss) = if matches!(status.phase, ChannelPhase::Closed) {
             match start_channel_hub(&self.channel, &self.mcp_nom, self.nonce_gen.clone()).await {
                 Ok(url) => (STATUS_NEW, url),
-                Err(error) => return Ok(error_to_call_result(error, None)),
+                Err(error) => return error_to_call_result(error, nonce),
             }
         } else {
             let Some(url) = status.url else {
-                return Ok(error_to_call_result(
+                return error_to_call_result(
                     GrammarMcpError::Internal {
                         phase: "channel_open::url".to_string(),
                         reason: "an open channel carries no url".to_string(),
                     },
-                    None,
-                ));
+                    nonce,
+                );
             };
             if status.claimed
                 && let Err(error) =
                     resend_open_packet(&self.channel, &self.nonce_gen, &self.mcp_nom)
             {
-                return Ok(error_to_call_result(error, None));
+                return error_to_call_result(error, nonce);
             }
             (STATUS_EXISTING, url)
         };
         arm_verify_timer(self.channel.clone());
-        envelope_to_structured(&ChannelOpenEnvelope {
-            status: label.to_string(),
-            wss,
-            inbox,
-        })
+        success(
+            nonce,
+            &ChannelOpenResult {
+                status: label.to_string(),
+                wss,
+                inbox,
+            },
+        )
     }
 }

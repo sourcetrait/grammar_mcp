@@ -14,6 +14,7 @@ impl NuSh {
         &self,
         mcp::Parameters(p): mcp::Parameters<RemoteChannelCloseParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("remote_channel_close", &p).to_nonce();
         let entry = self
             .remote_links
             .lock()
@@ -22,13 +23,10 @@ impl NuSh {
         match entry {
             Some(entry) => {
                 entry.handle.cancel();
-                Ok(mcp::CallToolResult::default())
+                success_void(nonce)
             }
-            None if close_listener(&p.alias).await => Ok(mcp::CallToolResult::default()),
-            None => Ok(error_to_call_result(
-                GrammarMcpError::RemoteNotOpen { alias: p.alias },
-                None,
-            )),
+            None if close_listener(&p.alias).await => success_void(nonce),
+            None => error_to_call_result(GrammarMcpError::RemoteNotOpen { alias: p.alias }, nonce),
         }
     }
 }

@@ -384,7 +384,7 @@ impl CurrentPurview {
 }
 
 /// One `[id, namepath_patterns]` pair as the tools report it.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
+#[derive(Debug, ser::Serialize)]
 pub struct PurviewView(pub String, pub Vec<String>);
 
 /// Each id beside the namepath patterns it resolves to.

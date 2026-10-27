@@ -1,6 +1,6 @@
 # purviews.rs
 
-## struct PurviewsEnvelope
+## struct PurviewsResult
 `purviews` reports the configured table VERBATIM with `@` references unexpanded, because this
 is a report rather than a filter - a reader here wants the configuration as written.
 

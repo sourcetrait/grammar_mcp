@@ -16,19 +16,20 @@ impl NuSh {
         &self,
         mcp::Parameters(p): mcp::Parameters<RemoteChannelOpenParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("remote_channel_open", &p).to_nonce();
         if !matches!(self.channel.status().phase, ChannelPhase::Verified) {
-            return Ok(error_to_call_result(GrammarMcpError::RemoteChannelUnverified, None));
+            return error_to_call_result(GrammarMcpError::RemoteChannelUnverified, nonce);
         }
         let Some(entry) = config().remotes.by_alias.get(&p.alias).cloned() else {
-            return Ok(error_to_call_result(
+            return error_to_call_result(
                 GrammarMcpError::RemoteInvalidParams {
                     reason: format!(
                         "no remote `{}` in .grammar/mcp/remotes.toml",
                         p.alias,
                     ),
                 },
-                None,
-            ));
+                nonce,
+            );
         };
         if self
             .remote_links
@@ -36,22 +37,22 @@ impl NuSh {
             .unwrap_or_else(|e| e.into_inner())
             .contains_key(&p.alias)
         {
-            return Ok(error_to_call_result(
+            return error_to_call_result(
                 GrammarMcpError::RemoteAlreadyOpen {
                     alias: p.alias.clone(),
                 },
-                None,
-            ));
+                nonce,
+            );
         }
         match open_remote_blocking(&self.mcp_nom, entry).await {
-            Ok(()) => Ok(mcp::CallToolResult::default()),
-            Err(reason) => Ok(error_to_call_result(
+            Ok(()) => success_void(nonce),
+            Err(reason) => error_to_call_result(
                 GrammarMcpError::RemoteOpenFailed {
                     alias: p.alias,
                     reason,
                 },
-                None,
-            )),
+                nonce,
+            ),
         }
     }
 }

@@ -82,20 +82,6 @@ pub(crate) fn prepare_nu(
     })
 }
 
-/// A `nu` call's success, `{nonce, result}` as NUON text.
-fn nu_success(
-    nonce: datum::Nonce,
-    value: nu::Value,
-) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-    let span = nu::Span::unknown();
-    let mut envelope = nu::Record::new();
-    envelope.insert("nonce", nu::Value::string(nonce.into_pair().as_str().to_string(), span));
-    envelope.insert("result", value);
-    let text = render_nuon(&nu::Value::record(envelope, span))
-        .map_err(|e| mcp::ErrorData::internal_error(format!("result render: {e}"), None))?;
-    Ok(mcp::CallToolResult::success(vec![mcp::ContentBlock::text(text)]))
-}
-
 impl NuSh {
     /// Dispatch a prepared call on its lane and hold its result to the contract.
     pub(crate) async fn dispatch_nu(
@@ -148,15 +134,12 @@ impl NuSh {
         };
         let outcome = match dispatched {
             Ok(outcome) => outcome,
-            Err(de) => return Ok(error_to_call_result(de.error, de.nonce)),
+            Err(de) => return error_to_call_result(de.error, de.nonce),
         };
         if let Err(reason) = check_value(&outcome.value, &def.result_type, "result") {
-            return Ok(error_to_call_result(
-                GrammarMcpError::ResultInvalid { reason },
-                Some(outcome.nonce),
-            ));
+            return error_to_call_result(GrammarMcpError::ResultInvalid { reason }, outcome.nonce);
         }
-        nu_success(outcome.nonce, outcome.value)
+        success_value(outcome.nonce, outcome.value)
     }
 }
 
@@ -170,15 +153,12 @@ impl NuSh {
         &self,
         mcp::Parameters(p): mcp::Parameters<NuParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self
-            .nonce_gen
-            .generate_with(&(&p.definition, &p.data, &p.timeout))
-            .into_pair();
+        let nonce = self.mint("nu", &p);
         let engine = self.lint_engine.current();
         let prepared =
             match prepare_nu(&engine, &p.definition, &p.data, p.timeout.as_deref(), true) {
                 Ok(prepared) => prepared,
-                Err(error) => return Ok(error_to_call_result(error, Some(nonce.to_nonce()))),
+                Err(error) => return error_to_call_result(error, nonce.to_nonce()),
             };
         let kind = InFlightKind::Nu {
             lane: prepared.lane(),

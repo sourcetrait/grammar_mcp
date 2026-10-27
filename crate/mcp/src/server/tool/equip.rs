@@ -10,39 +10,32 @@ pub struct EquipParams {
 }
 
 /// `new` summary: the paths scaffolded for the fresh equip's rig.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
+#[derive(Debug, ser::Serialize)]
 pub(crate) struct NewSummary {
     pub created: Vec<String>,
 }
 
-/// `install` summary: the commit's changed paths, grouped.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct InstallSummary {
-    pub added: Vec<String>,
-    pub modified: Vec<String>,
-    pub removed: Vec<String>,
-}
-
 /// `check` summary: `ok` is true iff there are no error rows.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
+#[derive(Debug, ser::Serialize)]
 pub(crate) struct CheckSummary {
     pub ok: bool,
     pub errors: Vec<Diagnostic>,
     pub warnings: Vec<Diagnostic>,
 }
 
-/// The per-action result; `uninstall` returns no summary.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
+/// The per-action result; `install`'s is its commit's, and `uninstall` returns no
+/// summary.
+#[derive(Debug, ser::Serialize)]
 #[serde(untagged)]
 pub(crate) enum EquipSummary {
     New(NewSummary),
-    Install(InstallSummary),
+    Install(CommitResult),
     Check(CheckSummary),
 }
 
-/// Success envelope for `equip()`.
-#[derive(Debug, ser::Serialize, schema::JsonSchema)]
-pub(crate) struct EquipEnvelope {
+/// Success result of `equip()`.
+#[derive(Debug, ser::Serialize)]
+pub(crate) struct EquipResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<EquipSummary>,
 }
@@ -53,45 +46,48 @@ const ACTIONS: [&str; 4] = ["new", "install", "check", "uninstall"];
 #[mcp::tool_router(router = equip_router, vis = "pub(crate)")]
 impl NuSh {
     #[mcp::tool(
-        description = "Equip administration on an equip/<author>/<name> source dir: new, install, check, uninstall.",
-        output_schema = tool_output_schema::<EquipEnvelope>()
+        description = "Equip administration on an equip/<author>/<name> source dir: new, install, check, uninstall."
     )]
     pub(crate) async fn equip(
         &self,
         mcp::Parameters(p): mcp::Parameters<EquipParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let nonce = self.mint("equip", &p).to_nonce();
         if !ACTIONS.contains(&p.action.as_str()) {
-            return Ok(error_to_call_result(
+            return error_to_call_result(
                 GrammarMcpError::EquipInvalidAction {
                     action: p.action.clone(),
                 },
-                None,
-            ));
+                nonce,
+            );
         }
         let source_dir = Path::new(&p.source_dir);
         let equip = match equip_namepath_of(source_dir) {
             Ok(equip) => equip,
-            Err(e) => return Ok(error_to_call_result(e, None)),
+            Err(e) => return error_to_call_result(e, nonce),
         };
         match p.action.as_str() {
             "new" => {
                 let lock = match self.rig_locks.register(&equip).await {
                     Ok(l) => l,
                     Err(_) => {
-                        return Ok(error_to_call_result(
+                        return error_to_call_result(
                             GrammarMcpError::EquipAlreadyRegistered { equip },
-                            None,
-                        ));
+                            nonce,
+                        );
                     }
                 };
                 let _guard = lock.write().await;
                 match establish_equip(&equip, source_dir) {
-                    Ok(created) => envelope_to_structured(&EquipEnvelope {
-                        summary: Some(EquipSummary::New(NewSummary { created })),
-                    }),
+                    Ok(created) => success(
+                        nonce,
+                        &EquipResult {
+                            summary: Some(EquipSummary::New(NewSummary { created })),
+                        },
+                    ),
                     Err(e) => {
                         self.rig_locks.unregister(&equip).await;
-                        Ok(error_to_call_result(e, None))
+                        error_to_call_result(e, nonce)
                     }
                 }
             }
@@ -99,10 +95,10 @@ impl NuSh {
                 let lock = match self.rig_locks.register(&equip).await {
                     Ok(l) => l,
                     Err(_) => {
-                        return Ok(error_to_call_result(
+                        return error_to_call_result(
                             GrammarMcpError::EquipAlreadyRegistered { equip },
-                            None,
-                        ));
+                            nonce,
+                        );
                     }
                 };
                 let _guard = lock.write().await;
@@ -112,55 +108,57 @@ impl NuSh {
                         if rig_dir(&equip).exists() {
                             purview_add_rig(&equip, &self.current_purview.ids());
                         }
-                        envelope_to_structured(&EquipEnvelope {
-                            summary: Some(EquipSummary::Install(InstallSummary {
-                                added: result.added,
-                                modified: result.modified,
-                                removed: result.removed,
-                            })),
-                        })
+                        success(
+                            nonce,
+                            &EquipResult {
+                                summary: Some(EquipSummary::Install(result)),
+                            },
+                        )
                     }
                     Err(e) => {
                         self.rig_locks.unregister(&equip).await;
-                        Ok(error_to_call_result(e, None))
+                        error_to_call_result(e, nonce)
                     }
                 }
             }
             "check" => {
                 let Some(lock) = self.rig_locks.lookup(&equip).await else {
-                    return Ok(error_to_call_result(
+                    return error_to_call_result(
                         GrammarMcpError::EquipNotRegistered { equip },
-                        None,
-                    ));
+                        nonce,
+                    );
                 };
                 let _guard = lock.read().await;
                 if let Err(e) = check_source_dir(&equip, source_dir) {
-                    return Ok(error_to_call_result(e, None));
+                    return error_to_call_result(e, nonce);
                 }
                 let engine = self.lint_engine.current();
                 match check_equip(&equip, &engine) {
-                    Ok(result) => envelope_to_structured(&EquipEnvelope {
-                        summary: Some(EquipSummary::Check(check_summary_from(&result))),
-                    }),
-                    Err(e) => Ok(error_to_call_result(e, None)),
+                    Ok(result) => success(
+                        nonce,
+                        &EquipResult {
+                            summary: Some(EquipSummary::Check(check_summary_from(&result))),
+                        },
+                    ),
+                    Err(e) => error_to_call_result(e, nonce),
                 }
             }
             _ => {
                 let Some(lock) = self.rig_locks.lookup(&equip).await else {
-                    return envelope_to_structured(&EquipEnvelope { summary: None });
+                    return success(nonce, &EquipResult { summary: None });
                 };
                 let guard = lock.write().await;
                 if let Err(e) = check_source_dir(&equip, source_dir) {
-                    return Ok(error_to_call_result(e, None));
+                    return error_to_call_result(e, nonce);
                 }
                 match uninstall_equip(&equip) {
                     Ok(()) => {
                         drop(guard);
                         self.rig_locks.unregister(&equip).await;
                         purview_remove_rig(&equip);
-                        envelope_to_structured(&EquipEnvelope { summary: None })
+                        success(nonce, &EquipResult { summary: None })
                     }
-                    Err(e) => Ok(error_to_call_result(e, None)),
+                    Err(e) => error_to_call_result(e, nonce),
                 }
             }
         }
