@@ -9,6 +9,9 @@ pub enum GrammarMcpError {
     InterfaceViolations {
         diagnostics: Vec<Diagnostic>,
     },
+    HostUnknown {
+        host: String,
+    },
     SchemaInvalid {
         reason: String,
     },
@@ -46,6 +49,7 @@ impl GrammarMcpError {
     fn kind_str(&self) -> &'static str {
         match self {
             Self::Engine(error) => error.kind(),
+            Self::HostUnknown { .. } => "host::unknown",
             Self::SchemaInvalid { .. } => "schema::invalid",
             Self::PurviewInvalidId { .. } => "purview::invalid_id",
             Self::ChannelStart { .. } => "channel::start",
@@ -67,6 +71,10 @@ impl GrammarMcpError {
     fn message(&self) -> String {
         match self {
             Self::Engine(error) => error.message(),
+            Self::HostUnknown { host } => format!(
+                "unknown host `{host}`: `{LOCAL_HOST}` is this MCP's own host, \
+                 and no other is configured"
+            ),
             Self::SchemaInvalid { reason } => format!("invalid schema: {reason}"),
             Self::PurviewInvalidId { id, reason } => {
                 format!("invalid purview id `{id}`: {reason}")

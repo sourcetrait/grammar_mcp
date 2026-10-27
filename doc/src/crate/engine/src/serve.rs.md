@@ -22,8 +22,8 @@ machine.
 ## fn parse_timeout
 The call's timeout and nothing else: parsed as NUON, which reads a duration literal, and
 held to a positive duration. It is converted to whole milliseconds rounded up, so a
-sub-millisecond duration still gets one. Its value goes on to the definition's
-`timeout?` when the signature takes one, so a body can budget against what the host
+sub-millisecond duration still gets one. Its value goes on to a definition's or a main's
+`timeout?` when its signature takes one, so a body can budget against what the host
 allows it. 120sec when absent, uncapped as every tool's timeout is.
 
 ## fn prepare_execute
@@ -31,20 +31,28 @@ THE ORDER IS THE CONTRACT'S: the definition first, since its signature is what t
 is checked against; then the data; then the timeout. Every refusal comes before any log
 directory exists.
 
-The data is parsed by `from_nuon`, which evaluates constants alone and refuses a
-pipeline, then held to the declared type by the strict check, then rendered back by
-`to_nuon` as the call's literal. The literal is therefore the engine's own render of a
-plain value, never the agent's text: nothing the agent wrote reaches the source but the
-definition, which the contract has already held to one def. An empty text is refused
-rather than read as null, since a `data: nothing` definition takes `null` and the field
-is never optional.
-
 A rerun passes `lint` false: its definition is the engine's own cache of a definition the
 lint already passed.
 
-## fn execute_args
-What the process list shows of an `execute` call or a rerun: the data and the timeout as
-the agent sent them, its own text, so an agent matches an entry against what it sent.
+## fn hold_data
+One reading of the data for `execute`, a rerun, and a call alike. The text is parsed by
+`from_nuon`, which evaluates constants alone and refuses a pipeline, then held to the
+declared type by the strict check, then rendered back by `to_nuon` as the source's
+literal. The literal is therefore the engine's own render of a plain value, never the
+agent's text: nothing the agent wrote reaches an `execute` source but the definition,
+which the contract has already held to one def, and nothing at all reaches a call's. An
+empty text is refused rather than read as null, since a `data: nothing` signature takes
+`null` and the field is never optional.
+
+## fn hold_timeout
+The timeout always bounds the eval; its literal goes into the source only when the
+signature takes `timeout?`, since nushell refuses an argument a signature has no place
+for.
+
+## fn request_args
+What the process list shows of an `execute` call, a rerun, or a call: the data and the
+timeout as the agent sent them, its own text, so an agent matches an entry against what
+it sent.
 
 ## fn run_prepared
 The lane is the definition's: `def execute` on the stateless pool, `def --env execute` on
@@ -89,17 +97,17 @@ The equip's READ lock is held across the whole dispatch, so a concurrent commit 
 swap the canonical tree out from under a running call. A lib-only equip answers
 `equip::no_rig` under that lock, before the index is read.
 
+THE CONTRACT IS EXECUTE'S. The index's entry for the function carries the data and
+result typedefs the validator read from `main`'s signature at commit, so the data is held
+to its type before the dispatch and the value to its type after, `data::invalid` and
+`result::invalid` as `execute` answers them, with no parse of the rig per call. A main
+taking `timeout?` receives the call's timeout as a definition does.
+
 No definition is cached: call targets are NOT rerunnable, because the body is the
 committed rig's own and the handle would point at something the agent does not own.
 
 Arity is checked HERE rather than in the parser: `validate` happily returns a Rig or Module
 namepath, and only a call knows that it requires a Function.
-
-## fn lenient_result
-THE RESULT IS LENIENT, as an authored definition's always was: nothing, a record, or a
-table rides as it is, and anything else answers `{}`, as does a value no `NuVal` can hold.
-The strict result check is `execute`'s alone, for the definitions an agent writes and
-sends.
 
 ## fn processes
 ENGINE-SCOPED. The map is this engine's, so a one-shot CLI's own engine reports nothing in

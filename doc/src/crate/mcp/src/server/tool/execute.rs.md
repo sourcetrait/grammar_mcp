@@ -1,13 +1,13 @@
 # execute.rs
 
 The `execute` tool, User's `grammar/execute`: one definition evaluated against NUON
-data. The contract is User's `doc/human/NuNu.md`, and the engine holds a call to it
-(the engine's `serve.rs`).
+data. The contract is User's `include/human/mcp/execute.md`, its parameters his
+`doc/human/tools.md`, and the engine holds a call to it (the engine's `serve.rs`).
 
 ## struct ExecuteParams
-Three strings, nothing structured: the definition is Nu source, the data NUON text, the
-timeout a Nu duration's text. The agent writes Nu and NUON, never a JSON schema; the
-definition's own signature is the schema.
+Four strings, nothing structured: the host an alias, the definition Nu source, the data
+NUON text, the timeout a Nu duration's text. The agent writes Nu and NUON, never a JSON
+schema; the definition's own signature is the schema.
 
 ## fn execute
 The description is User's `include/human/mcp/execute.md`, verbatim through
@@ -16,6 +16,6 @@ The description is User's `include/human/mcp/execute.md`, verbatim through
 wrote it. The doc lint's list-indent rule is allowed on this one fn: the text is written
 for the agent, not for rustdoc, and it stays as he wrote it.
 
-The nonce is minted FIRST, over the parameters, so every refusal carries it. The
-parameters go to the engine as the agent sent them: the contract is checked by the engine
-that runs the call, never twice.
+The nonce is minted FIRST, over the parameters, so every refusal carries it; the host
+is resolved next (`resolve_host`, `common.rs`). The rest go to the engine as the agent
+sent them: the contract is checked by the engine that runs the call, never twice.

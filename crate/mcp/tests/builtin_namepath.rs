@@ -1,4 +1,3 @@
-use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{
     TestServer, error_kind, error_messages, has_error, valid_function_source, write_source,
 };
@@ -23,14 +22,14 @@ fn a_builtin_is_reached_by_its_bare_name() {
     write_source(
         &src,
         "m/tally/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x + 1) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x + 1) }"),
     );
     let committed = s.commit("gram");
     assert!(!has_error(&committed), "commit() takes a builtin's bare name; got {committed}");
 
-    let called = s.call("gram:m:tally", json!({"x": 41}));
+    let called = s.call("gram:m:tally", "{x: 41}");
     assert_eq!(called["result"]["out"].as_i64(), Some(42), "got {called}");
-    let full = s.call("sourcetrait/gram:m:tally", json!({"x": 1}));
+    let full = s.call("sourcetrait/gram:m:tally", "{x: 1}");
     assert_eq!(full["result"]["out"].as_i64(), Some(2), "the full name still calls; got {full}");
 
     let inspected = s.inspect("gram:m:tally");
@@ -55,7 +54,7 @@ fn a_builtin_is_reached_by_its_bare_name() {
     let pattern = s.inspect("gram:");
     assert_eq!(pattern["result"]["doc"]["signatures"].as_str(), Some(block), "got {pattern}");
 
-    let missing = s.call("gram:m:nosuch", json!({}));
+    let missing = s.call("gram:m:nosuch", "null");
     assert_eq!(error_kind(&missing), Some("function::not_defined"), "got {missing}");
     assert_eq!(
         error_messages(&missing),
@@ -77,7 +76,7 @@ fn an_uninstalled_builtin_takes_its_bare_patterns_with_it() {
     write_source(
         &src,
         "eye/dir/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
+        &valid_function_source("x: int", "out: int", "{ out: $data.x }"),
     );
     let committed = s.commit("grammar");
     assert!(!has_error(&committed), "got {committed}");

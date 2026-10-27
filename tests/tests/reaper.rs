@@ -77,7 +77,7 @@ fn adopted_orphans_are_reaped() {
     write_source(
         &src,
         "m/double/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let committed = host.commit("zombielib");
     assert!(!has_error_path(&committed), "commit should succeed; got {committed}");

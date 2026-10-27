@@ -23,8 +23,8 @@ indentation around it supplies the hierarchy; a STANDALONE help passes the FULL
 NAMEPATH, because nothing around it does. Everything after that first token is identical,
 which is the point - the two surfaces cannot drift.
 
-A render failure logs and substitutes `<?>` rather than failing the whole block, so one bad
-schema cannot make `interface info` unusable.
+The groups render from the index's typedefs, which cannot fail to render, so a line
+needs no fallback.
 
 ## fn push_within_signatures
 CALLS BEFORE SUBMODULES: the callables at a level are what a reader scans for, and a
@@ -68,7 +68,7 @@ override rule, and an override rule IS re-inference wearing a costume. Shape set
 case including that one, because a call is recognizable on its own.
 
 Two further arguments favour SHAPE over separators. REUSE: a new kind extends the format by
-taking a new SHAPE - a helper would be `name [...]` beside a call's `name <> <>` - rather
+taking a new SHAPE - a helper would be `name [...]` beside a call's `name <...> <...>` - rather
 than by carving another character out of a two-character vocabulary that is already
 overloaded. Separators do not scale; shapes do. And this block is the PROTOTYPE for a
 general nu-tree renderer, which argues for keeping it general rather than shaped to

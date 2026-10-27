@@ -71,11 +71,11 @@ pub(crate) use crate::{
         store::{
             EQUIP_DIR, EQUIP_KINDS, KIND_LIB, KIND_RIG, META_FILE, check_equip_name, equip_dir,
             index_to_nuon, is_valid_equip, is_valid_ident, is_valid_module_path, keypair_dir,
-            lib_meta_path, load_lib_index, meta_to_nuon, rig_docs_dir, run_git,
+            lib_meta_path, load_lib_index, load_rig_source, meta_to_nuon, rig_docs_dir, run_git,
         },
         validate::{NAME_DENYLIST, is_reserved_term, validate_equip_source},
     },
-    execute::EXECUTE,
+    execute::{EXECUTE, contract_signature},
     host::{host, set_host},
     mode::Mode,
     nuapi::{
@@ -96,7 +96,7 @@ pub(crate) use crate::{
     params::{cache_home, data_home, params, started},
     parse_engine::{LIB_DIRS_CONST, PLUGIN_DIRS_CONST, dirs_value, set_dirs_const},
     plugins::{load_plugin_decls, registry_mtime, registry_path},
-    schema::{data_typedef, result_typedef},
+    schema::{data_typedef, result_typedef, signature_group},
     serve::{EngineCore, serve_call, serve_control, serve_execute, serve_rerun},
     teardown::{kill_plugin_subprocesses, make_tracker, tree_kill},
     template::render_nuon,
@@ -138,7 +138,7 @@ pub(crate) mod nu {
         BlockId, ByteStreamSource, ByteStreamType, Category, CollectionColumns, Config, DeclId,
         FromValue, IntoValue, Module, PipelineData, PluginRegistryFile, Example,
         PluginRegistryItemData, Record, ShellError, Signals, Signature, Span, SyntaxShape, Type,
-        Value, VarId, record, write_all_and_flush,
+        Value, record, write_all_and_flush,
         ast::{
             Argument, Block, Comparison, Expr, Expression, ExternalArgument, ListItem,
             Operator, Pattern, RecordItem,
@@ -154,7 +154,7 @@ pub(crate) mod nu {
 
 pub(crate) use nu::{CallExt, FromValue, IntoValue};
 
-pub(crate) use nuval::{NuVal, TryFromNu, TryIntoNu};
+pub(crate) use nuval::{NuVal, TryFromNu};
 
 pub(crate) use sourcetrait_common::{agnostic, cereal, datum, subsys};
 
@@ -175,10 +175,7 @@ pub(crate) mod tk {
 }
 
 pub(crate) mod json {
-    pub(crate) use serde_json::{Value, from_value, to_value};
-
-    /// A JSON object, as a tool's arguments and schemas carry one.
-    pub(crate) type JsonObject = serde_json::Map<String, Value>;
+    pub(crate) use serde_json::{from_value, to_value};
 }
 
 pub use crate::{
@@ -222,10 +219,7 @@ pub use crate::{
         LintEngine, ParseEngine, file_start, span_text, span_to_line_col, wrap_as_module,
     },
     plugins::{PluginInfo, ensure_plugin_registry, list_registered_plugins},
-    schema::{
-        NuTypedef, args_schema_to_signature, check_value, nu_to_args_schema,
-        nu_to_result_schema, result_schema_to_signature, typedef_text,
-    },
+    schema::{NuTypedef, check_value, typedef_text},
     system::{EngineHandle, EngineSysConfig, EngineSysParams, EngineSysPaths, EngineSystem},
     template::{build_call_source, build_execute_source, json_value_to_nu_value},
 };

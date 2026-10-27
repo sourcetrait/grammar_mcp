@@ -3,54 +3,43 @@ use crate::*;
 /// Parameters for `call()`.
 #[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
 pub struct CallParams {
+    /// The host alias the tool runs on; `local` for this MCP's own host.
+    pub host: String,
     /// The function's namepath: `rig:module/path:function`.
     pub namepath: String,
-    /// JSON object of argument values passed to the function as `$args`.
-    pub args: mcp::JsonObject,
-    /// Optional per-call timeout in milliseconds; defaults to 120000 (2 minutes).
+    /// The function's data as NUON text; `null` for `data: nothing`.
+    pub data: String,
+    /// The call's timeout as a Nu duration, such as `30sec`; 120sec by default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub timeout_ms: Option<u64>,
+    pub timeout: Option<String>,
 }
 
 #[mcp::tool_router(router = call_router, vis = "pub(crate)")]
 impl NuSh {
     #[doc = include_str!("../../../../../include/mcp/tool/call.md")]
-    #[mcp::tool(description = "Invoke a committed rig function with typed args.")]
+    #[mcp::tool(description = "Invoke a committed rig function on its typed data.")]
     pub(crate) async fn call(
         &self,
         mcp::Parameters(p): mcp::Parameters<CallParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         let nonce = self.mint("call", &p).to_nonce();
-        let args = json_value_to_nu_value(&json::Value::Object(p.args));
-        let args = match NuVal::try_from_nu(args) {
-            Ok(args) => args,
-            Err(e) => {
-                return error_to_call_result(
-                    GrammarMcpError::Internal {
-                        phase: "call::args".to_string(),
-                        reason: e.to_string(),
-                    },
-                    nonce,
-                );
-            }
+        let host = match resolve_host(&p.host) {
+            Ok(host) => host,
+            Err(error) => return error_to_call_result(error, nonce),
         };
         let answer = self
             .system
             .request(CallRequest {
-                host: Host::Local,
+                host,
                 nonce,
                 namepath: p.namepath,
-                args,
-                timeout_ms: p.timeout_ms,
+                data: p.data,
+                timeout: p.timeout,
             })
             .await;
         match answer_value(answer) {
-            Ok(value) => success_value(nonce, value).or_else(|_| success_value(nonce, empty_record())),
+            Ok(value) => success_value(nonce, value),
             Err(error) => error_to_call_result(error, nonce),
         }
     }
-}
-
-fn empty_record() -> nu::Value {
-    nu::Value::record(nu::Record::new(), nu::Span::unknown())
 }

@@ -9,14 +9,6 @@ pub(crate) fn render_nuon(value: &nu::Value) -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
-/// A call's arguments as their literal: `null` when empty, else their NUON.
-fn args_to_nuon(args: &nu::Value) -> String {
-    match args {
-        nu::Value::Record { val, .. } if val.is_empty() => "null".to_string(),
-        value => render_nuon(value).unwrap_or_else(|_| "{}".to_string()),
-    }
-}
-
 /// serde_json to nu: the one JSON-to-Value bridge in the crate.
 pub fn json_value_to_nu_value(v: &serde_json::Value) -> nu::Value {
     let span = nu::Span::unknown();
@@ -47,27 +39,31 @@ pub fn json_value_to_nu_value(v: &serde_json::Value) -> nu::Value {
     }
 }
 
-/// The source of a call: its target's module overlaid, then driven on its args.
+/// The source of a call: its target's module overlaid, then driven on its data.
 pub fn build_call_source(
     rig: &str,
     module_path: &str,
     name: &str,
-    args: &nu::Value,
+    data_literal: &str,
+    timeout_literal: Option<&str>,
 ) -> String {
-    let lit = args_to_nuon(args);
     let target = if module_path.is_empty() {
         format!("{rig}/rig/{name}")
     } else {
         format!("{rig}/rig/{module_path}/{name}")
     };
+    let timeout = timeout_literal
+        .map(|literal| format!(" {literal}"))
+        .unwrap_or_default();
     formatdoc!(
         r#"
         overlay use --prefix equip/{target} as {alias}
-        {alias} {lit}
+        {alias} {data_literal}{timeout}
     "#,
         target = target,
         alias = CALL_ALIAS,
-        lit = lit,
+        data_literal = data_literal,
+        timeout = timeout,
     )
 }
 

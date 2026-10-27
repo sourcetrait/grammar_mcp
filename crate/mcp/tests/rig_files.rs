@@ -1,7 +1,6 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{
     TestServer, equip_source, error_kind, error_kinds, has_error, has_kind, valid_function_source,
     write_source,
@@ -28,7 +27,7 @@ fn author_valid_base(src: &Path) {
     write_source(
         src,
         "m/double/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
 }
 
@@ -354,7 +353,7 @@ fn install_carries_assets_and_is_callable() {
         "install must carry .assets/ too"
     );
     assert!(canon.join("README.md").exists(), "install carries root README.md");
-    let called = s.call("sourcetrait/shipassetlib:m:double", json!({"x": 21}));
+    let called = s.call("sourcetrait/shipassetlib:m:double", "{x: 21}");
     assert_eq!(
         called["result"]["out"].as_i64(),
         Some(42),

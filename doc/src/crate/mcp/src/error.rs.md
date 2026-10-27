@@ -35,6 +35,10 @@ refuses with its own kinds, as its tool did.
 verified, before any bind or connect: the link's notices and relays ride the Channel's
 gate and would drop.
 
+`host::unknown` is a tool's `host` alias naming no host this MCP knows, its message
+naming `local`. The engine's own `host::unserved` stays apart: that is a request naming
+a host its engine doesn't serve, which no tool sends.
+
 ## fn error_to_call_result
 The failure envelope, `{nonce, error}`: the error's rows as a table of `kind`,
 `source`, and `message`, rendered through the same seam as a success

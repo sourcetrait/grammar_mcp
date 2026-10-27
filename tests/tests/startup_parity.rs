@@ -282,7 +282,7 @@ fn a_reserved_main_is_still_refused() {
     write_source(
         &src,
         "m/probe/mod.nu",
-        "export def main [args: record<noop: int>]: nothing -> record<n: int> {\n\
+        "export def main [data: record<noop: int>]: nothing -> record<n: int> {\n\
          let main = 1\n\
          { n: $main }\n\
          }\n",
@@ -310,7 +310,7 @@ fn a_rigs_call_sees_the_same_startup() {
         "m/probe/mod.nu",
         "use std/assert\n\
          const HOME = $nu.home-dir\n\
-         export def main [args: record<noop: int>]: nothing -> \
+         export def main [data: record<noop: int>]: nothing -> \
          record<home: string, path: string, plugin_dirs: list<string>> {\n\
          assert equal 1 1\n\
          print 'PRINTMARK call'\n\
@@ -319,7 +319,7 @@ fn a_rigs_call_sees_the_same_startup() {
     );
     let committed = p.host.commit("sourcetrait/parity");
     assert!(!has_error_path(&committed), "the validator takes the rig; got {committed}");
-    let resp = p.host.call_np("sourcetrait/parity:m:probe", json!({"noop": 0}));
+    let resp = p.host.call_np("sourcetrait/parity:m:probe", "{noop: 0}");
     let env = extract_envelope(&resp).unwrap_or_else(|| panic!("the call should succeed; got {resp}"));
     let expected = json!({
         "home": shown(&p.dirs.home_dir),

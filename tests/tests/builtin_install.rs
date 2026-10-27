@@ -3,7 +3,6 @@
 
 use std::path::{Path, PathBuf};
 
-use serde_json::json;
 use sourcetrait_grammar_tests::*;
 use sourcetrait_common::testing::prelude::*;
 
@@ -121,7 +120,7 @@ fn deploy(root: &Path, names: &[&str]) -> PathBuf {
         write_source(
             &rig,
             "m/ping/mod.nu",
-            &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
+            &valid_function_source("x: int", "out: int", "{ out: $data.x }"),
         );
     }
     dir
@@ -129,7 +128,7 @@ fn deploy(root: &Path, names: &[&str]) -> PathBuf {
 
 /// A builtin's ping by its bare name; None when the call fails.
 fn ping(host: &mut Host, name: &str) -> Option<i64> {
-    let resp = host.call_np(&format!("{name}:m:ping"), json!({"x": 7}));
+    let resp = host.call_np(&format!("{name}:m:ping"), "{x: 7}");
     if has_error_path(&resp) {
         return None;
     }

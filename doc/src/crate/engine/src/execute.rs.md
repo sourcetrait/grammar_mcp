@@ -1,8 +1,10 @@
 # execute.rs
 
-The execute contract, User's `doc/human/NuNu.md`: an `execute` call's definition is exactly
+The execute contract, User's `include/human/mcp/execute.md`: an `execute` call's definition is exactly
 one top-level `def execute` with an infix signature, and it is held to that before
-anything is built or dispatched, so a refusal costs one parse and no thread.
+anything is built or dispatched, so a refusal costs one parse and no thread. A call's
+contract is execute's for its data, timeout, input, and return, User's ruling, so a rig's
+`main` is held to the same signature check at commit.
 
 ## struct ExecuteDef
 What the rest of a call needs from its definition and nothing more: the lane, the two
@@ -32,17 +34,27 @@ reach the caller, which the stateful lane then merges into its engine. `--wrappe
 refused: it would admit unknown flags the contract has no place for.
 
 THE SIGNATURE comes from the registered decl rather than the AST, since nushell has
-already resolved defaults, optionality, and shapes there. `data` is the one required
-positional; `timeout?` the one optional, typed `duration`, its default refused because
-the host always passes the call's timeout and a default would only mislead. nushell adds
-`--help` to every custom command, the one flag allowed. An absent infix signature reads
-as `any -> any` and is refused with the input check.
-
-`data`'s type is read from its `SyntaxShape`, which keeps `path`, `directory`, and an
-open record apart; the return type from the output `Type`, which folds `path` and
-`directory` into `string`, a difference a value check cannot see anyway.
+already resolved defaults, optionality, and shapes there.
 
 Violations are gathered where they are independent and capped at the lint's three, so
 an agent fixing a definition sees its several faults in one round. The lint runs only on
 a definition that holds to the contract, and is skipped when `lint` is false: a rerun
 re-analyzes a definition the host cached after linting it.
+
+## struct SignatureContract
+The part of the contract a signature settles alone, shared by a definition and a rig's
+`main`; the lane and the lint are execute's own. A call's main is free of the lint's
+restrictions, User's ruling, so it may hard-code a path or run a denied command.
+
+## fn contract_signature
+`data` is the one required positional; `timeout?` the one optional, typed `duration`, its
+default refused because the host always passes the call's timeout and a default would
+only mislead. nushell adds `--help` to every custom command, the one flag allowed. An
+absent infix signature reads as `any -> any` and is refused with the input check.
+
+`data`'s type is read from its `SyntaxShape`, which keeps `path`, `directory`, and an
+open record apart; the return type from the output `Type`, which folds `path` and
+`directory` into `string`, a difference a value check cannot see anyway.
+
+Each refusal names its command, `execute` or `main`, so an author reads the one held.
+Every violation is gathered rather than the first returned, as the definition's are.

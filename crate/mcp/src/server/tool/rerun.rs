@@ -3,6 +3,8 @@ use crate::*;
 /// Parameters for `rerun()`.
 #[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
 pub struct RerunParams {
+    /// The host alias the tool runs on; `local` for this MCP's own host.
+    pub host: String,
     /// The nonce of an earlier `execute` call, whose definition this evaluates again.
     pub nonce: String,
     /// Fresh data as NUON text, as `execute` takes it.
@@ -20,10 +22,14 @@ impl NuSh {
         mcp::Parameters(p): mcp::Parameters<RerunParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         let nonce = self.mint("rerun", &p).to_nonce();
+        let host = match resolve_host(&p.host) {
+            Ok(host) => host,
+            Err(error) => return error_to_call_result(error, nonce),
+        };
         let answer = self
             .system
             .request(RerunRequest {
-                host: Host::Local,
+                host,
                 nonce,
                 source: p.nonce,
                 data: p.data,

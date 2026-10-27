@@ -3,6 +3,8 @@ use crate::*;
 /// Parameters for `execute()`.
 #[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
 pub struct ExecuteParams {
+    /// The host alias the tool runs on; `local` for this MCP's own host.
+    pub host: String,
     /// One Nu definition: `def execute [data: <type>]: nothing -> <type> { ... }`.
     pub definition: String,
     /// The definition's data as NUON text; `null` for `data: nothing`.
@@ -22,10 +24,14 @@ impl NuSh {
         mcp::Parameters(p): mcp::Parameters<ExecuteParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         let nonce = self.mint("execute", &p).to_nonce();
+        let host = match resolve_host(&p.host) {
+            Ok(host) => host,
+            Err(error) => return error_to_call_result(error, nonce),
+        };
         let answer = self
             .system
             .request(ExecuteRequest {
-                host: Host::Local,
+                host,
                 nonce,
                 definition: p.definition,
                 data: p.data,

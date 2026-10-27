@@ -43,6 +43,17 @@ so every envelope, a refusal's included, carries one. The name rides in the hash
 the parameters, so two tools given the same parameters at the same instant still part.
 The request carries the nonce to the engine, which runs the call under it.
 
+## const LOCAL_HOST
+`local` is hard-coded and every other alias is the configuration's, User's ruling, so
+this host's alias can never be configured away. No configuration names a host yet.
+
+## fn resolve_host
+Every tool takes `host`, required, User's ruling: an agent working beside remote hosts,
+possibly several, names where each call runs rather than leaving it to a default it might
+assume wrongly. Each tool resolves it right after minting its nonce, so an unknown alias
+is refused, nonce and all, before the tool's own checks. The match is exact, so a case
+or a space makes another alias.
+
 ## fn unexpected
 An answer of another command's kind is the engine breaking its own protocol, so it is
 `internal`, never the agent's error.
@@ -55,9 +66,9 @@ the text is the result, NUON the agent reads as it reads its own data.
 
 ## fn success
 A tool's own result struct crosses to nu through the serde bridge
-(`json_value_to_nu_value`), the crate's one JSON-to-Value path. `execute` and `rerun` hand
-their checked value to `success_value` as it is, so a duration stays a duration. A void
-tool answers `{nonce, result: null}`.
+(`json_value_to_nu_value`), the crate's one JSON-to-Value path. `execute`, `rerun`, and
+`call` hand their checked value to `success_value` as it is, so a duration stays a
+duration. A tool answering nothing carries `{nonce, result: null}`.
 
 ## fn answer_value
 An eval's value crosses back as a `NuVal` and is rebuilt here into the nushell value the

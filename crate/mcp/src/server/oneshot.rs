@@ -17,17 +17,19 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
             }
         };
         let server = NuSh::new(nonce_gen, mcp_nom, system, &DenySet::default());
+        let host = LOCAL_HOST.to_string();
         let result = match tool {
             CliTool::Call {
                 namepath,
-                args,
-                timeout_ms,
+                data,
+                timeout,
             } => {
                 server
                     .call(mcp::Parameters(CallParams {
+                        host,
                         namepath,
-                        args: nuon_record_arg(args.as_deref()),
-                        timeout_ms,
+                        data,
+                        timeout,
                     }))
                     .await
             }
@@ -38,6 +40,7 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
             } => {
                 server
                     .execute(mcp::Parameters(ExecuteParams {
+                        host,
                         definition,
                         data,
                         timeout,
@@ -51,6 +54,7 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
             } => {
                 server
                     .rerun(mcp::Parameters(RerunParams {
+                        host,
                         nonce,
                         data,
                         timeout,
@@ -59,7 +63,7 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
             }
             CliTool::Interface { command } => {
                 server
-                    .interface(mcp::Parameters(InterfaceParams { command }))
+                    .interface(mcp::Parameters(InterfaceParams { host, command }))
                     .await
             }
         };
@@ -90,42 +94,4 @@ fn envelope_failed(text: &str) -> bool {
         .ok()
         .and_then(|value| value.as_record().ok().map(|record| record.contains("error")))
         .unwrap_or(true)
-}
-
-fn nuon_record_arg(input: Option<&str>) -> mcp::JsonObject {
-    let Some(raw) = input else {
-        return mcp::JsonObject::new();
-    };
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return mcp::JsonObject::new();
-    }
-    let value = match nu::from_nuon(trimmed, None) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("invalid NUON record `{trimmed}`: {e}");
-            process::exit(2);
-        }
-    };
-    let json_compat = match nu::JsonValue::from_value(value) {
-        Ok(j) => j,
-        Err(e) => {
-            eprintln!("NUON value does not convert to JSON: {e}");
-            process::exit(2);
-        }
-    };
-    let serde_value = match json::to_value(&json_compat) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("NUON value does not serialize: {e}");
-            process::exit(2);
-        }
-    };
-    match serde_value {
-        json::Value::Object(map) => map,
-        other => {
-            eprintln!("expected a NUON record (e.g. '{{x: 5}}'), got `{other}`");
-            process::exit(2);
-        }
-    }
 }

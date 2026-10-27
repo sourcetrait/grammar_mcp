@@ -37,8 +37,9 @@ Importing the target alone rather than the whole rig costs nothing: the target's
 own `use equip/...` references bind at THAT file's parse against the const
 `$NU_LIB_DIRS`, never through this import.
 
-The literal is `null` whenever the args are empty, whatever the declared type: a call
-is an authored definition, and its leniency is the author's.
+The data's literal is the engine's render of the call's data once it holds to `main`'s
+type, as an `execute` source's is; the timeout's follows only when `main` takes
+`timeout?`.
 
 ## fn build_execute_source
 The definition as the agent wrote it, a newline, then the one call. The newline is

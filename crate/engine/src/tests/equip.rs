@@ -1,24 +1,53 @@
 use crate::*;
 use crate::equip::store::{
-    IndexFunction, IndexModule, RigIndex, index_from_nuon, index_to_nuon,
+    IndexFunction, IndexModule, RigIndex, index_from_nuon, index_source_from_nuon, index_to_nuon,
 };
 
-fn obj(s: &str) -> json::JsonObject {
-    match serde_json::from_str::<json::Value>(s).unwrap() {
-        json::Value::Object(m) => m,
-        _ => panic!("not an object"),
-    }
+fn columns(fields: Vec<(&str, nu::SyntaxShape)>) -> nu::CollectionColumns<nu::SyntaxShape> {
+    fields
+        .into_iter()
+        .map(|(name, shape)| (name.to_string(), shape))
+        .collect()
 }
 
-/// The index carries agent-authored SCHEMAS, so its round-trip has to survive the
-/// whole grammar rather than the easy scalar case: an empty (void) schema, an OPEN
-/// record, a table, a list, a nested record, and a `oneof<>` whose KEY contains angle
-/// brackets and whose member is a bare null. Each of those is a place where a NUON
-/// render could quietly change the value's type on the way back.
+/// A data typedef with a path, an open record, and a oneof holding `nothing`.
+fn wide_data() -> NuTypedef {
+    data_typedef(&nu::SyntaxShape::Record(columns(vec![
+        ("n", nu::SyntaxShape::Int),
+        ("p", nu::SyntaxShape::Filepath),
+        ("extra", nu::SyntaxShape::record()),
+        (
+            "u",
+            nu::SyntaxShape::OneOf(vec![nu::SyntaxShape::Int, nu::SyntaxShape::Nothing]),
+        ),
+    ])))
+    .expect("a data type")
+}
+
+/// A return typedef with a table, a list column, and a nested record.
+fn wide_result() -> NuTypedef {
+    let row = vec![
+        ("name".to_string(), nu::Type::String),
+        ("tags".to_string(), nu::Type::List(Box::new(nu::Type::String))),
+    ];
+    let nested = vec![("a".to_string(), nu::Type::Bool)];
+    result_typedef(&nu::Type::Record(
+        vec![
+            ("rows".to_string(), nu::Type::Table(row.into())),
+            ("nested".to_string(), nu::Type::Record(nested.into())),
+        ]
+        .into(),
+    ))
+    .expect("a return type")
+}
+
+/// The index carries each call's contract, so its round-trip has to survive the
+/// whole type grammar rather than the easy scalar case: `nothing` as data and as a
+/// return, an OPEN record, a oneof with `nothing` among its members, a table, a
+/// list, and a nested record. Each is a place where a NUON render could quietly
+/// change the value's type on the way back.
 #[test]
-fn the_index_round_trips_through_nuon_across_the_schema_grammar() {
-    let args = r#"{"n":"int","p":"path","extra":{},"u":{"oneof<>":["int",null]}}"#;
-    let result = r#"{"rows":[{"name":"string","tags":["string"]}],"nested":{"a":"bool"}}"#;
+fn the_index_round_trips_through_nuon_across_the_type_grammar() {
     let index = RigIndex {
         source_path: PathBuf::from("/tmp/proj/thing"),
         functions: Vec::new(),
@@ -26,14 +55,16 @@ fn the_index_round_trips_through_nuon_across_the_schema_grammar() {
             name: "m".to_string(),
             functions: vec![
                 IndexFunction {
-                    name: "void_fn".to_string(),
-                    args_schema: obj("{}"),
-                    result_schema: obj("{}"),
+                    name: "quiet".to_string(),
+                    data_type: NuTypedef::Nothing,
+                    result_type: NuTypedef::Nothing,
+                    takes_timeout: false,
                 },
                 IndexFunction {
                     name: "wide".to_string(),
-                    args_schema: obj(args),
-                    result_schema: obj(result),
+                    data_type: wide_data(),
+                    result_type: wide_result(),
+                    takes_timeout: true,
                 },
             ],
             modules: vec![IndexModule {
@@ -57,21 +88,20 @@ fn the_index_round_trips_through_nuon_across_the_schema_grammar() {
     let m = &back.modules[0];
     assert_eq!(m.name, "m");
     assert_eq!(m.modules[0].name, "deep", "module nesting survives");
+    assert_eq!(m.functions[0].data_type, NuTypedef::Nothing, "`nothing` survives as data");
+    assert_eq!(m.functions[0].result_type, NuTypedef::Nothing, "and as a return");
+    assert!(!m.functions[0].takes_timeout);
     assert_eq!(
-        m.functions[0].args_schema,
-        obj("{}"),
-        "a void function's empty schema must come back an empty record, not vanish",
+        m.functions[1].data_type,
+        wide_data(),
+        "the path, the open record, and the oneof's `nothing` must survive",
     );
     assert_eq!(
-        m.functions[1].args_schema,
-        obj(args),
-        "the open record, and the oneof's bracketed key + bare null member, must survive",
-    );
-    assert_eq!(
-        m.functions[1].result_schema,
-        obj(result),
+        m.functions[1].result_type,
+        wide_result(),
         "the table, its list column and the nested record must survive",
     );
+    assert!(m.functions[1].takes_timeout);
 }
 
 /// A malformed index is a decode ERROR, never a silently empty rig - detection
@@ -80,4 +110,23 @@ fn the_index_round_trips_through_nuon_across_the_schema_grammar() {
 fn a_malformed_index_fails_to_parse() {
     assert!(index_from_nuon("{not: valid").is_err(), "truncated NUON");
     assert!(index_from_nuon("[1 2 3]").is_err(), "a list is not an index record");
+}
+
+/// An index an older build wrote, its entries carrying JSON schemas, as a
+/// namespace holds one until its rig is committed again. The commit reads the
+/// source from it, so the source must decode though the entries do not.
+#[test]
+fn an_older_index_still_names_its_source() {
+    let older = "{source_path: \"/tmp/proj/thing/rig\", functions: [], modules: \
+                 [[name, functions, modules]; [get, [[name, args_schema, result_schema]; \
+                 [log, {refs: [string]}, {logs: [[rev, summary]; [int, string]]}]], []]]}";
+    assert!(
+        index_from_nuon(older).is_err(),
+        "an older build's entries are not this build's",
+    );
+    assert_eq!(
+        index_source_from_nuon(older).expect("the source decodes"),
+        PathBuf::from("/tmp/proj/thing/rig"),
+        "the source is the one field a commit reads",
+    );
 }

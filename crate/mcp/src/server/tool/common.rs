@@ -66,6 +66,20 @@ impl NuSh {
     }
 }
 
+/// The alias of this MCP's own host, hard-coded; any other is configured.
+pub(crate) const LOCAL_HOST: &str = "local";
+
+/// A tool's `host` alias as the engine's host; `local` is the one known.
+pub(crate) fn resolve_host(alias: &str) -> GrammarMcpResult<Host> {
+    if alias == LOCAL_HOST {
+        Ok(Host::Local)
+    } else {
+        Err(GrammarMcpError::HostUnknown {
+            host: alias.to_string(),
+        })
+    }
+}
+
 /// The internal error an answer of another command's kind is.
 pub(crate) fn unexpected(command: &str) -> GrammarMcpError {
     GrammarMcpError::Internal {

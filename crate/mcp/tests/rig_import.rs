@@ -1,4 +1,3 @@
-use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{
     TestServer, equip_source, error_kind, error_kinds, error_messages, error_text, has_error,
     valid_function_source, write_source,
@@ -23,7 +22,7 @@ fn commit_accepts_path_self_call_target() {
     write_source(
         &src,
         "m/whereami/mod.nu",
-        "export def main [args: record<noop: int>]: nothing -> record<here: string> {\n    const SELF = (path self)\n    { here: $SELF }\n}\n",
+        "export def main [data: record<noop: int>]: nothing -> record<here: string> {\n    const SELF = (path self)\n    { here: $SELF }\n}\n",
     );
     let env = s.commit("sourcetrait/selflib");
     assert!(
@@ -46,7 +45,7 @@ fn commit_accepts_path_self_in_mod_nu_const() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let env = s.commit("sourcetrait/modselflib");
     assert!(
@@ -65,7 +64,7 @@ fn commit_happy_path_writes_repo_and_meta() {
     write_source(
         &src,
         "math/double/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
 
     let env = s.commit("sourcetrait/happylib");
@@ -129,7 +128,7 @@ fn commit_accepts_multiline_def_signature() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        "export def main [\n    args: record<x: int>\n]: nothing -> record<out: int> {\n    { out: ($args.x * 2) }\n}\n",
+        "export def main [\n    data: record<x: int>\n]: nothing -> record<out: int> {\n    { out: ($data.x * 2) }\n}\n",
     );
     let env = s.commit("sourcetrait/multilinelib");
     assert!(!has_error(&env), "multi-line signature should pass; got {env}");
@@ -145,7 +144,7 @@ fn commit_rejects_function_with_syntax_error() {
     write_source(
         &src,
         "m/broken/mod.nu",
-        "export def main [args: record<x: int>]: nothing -> record<out: int> {\n    { out: ($args.x * 2) \n",
+        "export def main [data: record<x: int>]: nothing -> record<out: int> {\n    { out: ($data.x * 2) \n",
     );
     let env = s.commit("sourcetrait/syntaxlib");
     assert!(has_error(&env));
@@ -166,15 +165,15 @@ fn commit_rejects_main_without_output_type() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        "export def main [args: record<x: int>] { { out: $args.x } }\n",
+        "export def main [data: record<x: int>] { { out: $data.x } }\n",
     );
 
     let env = s.commit("sourcetrait/badlib1");
     assert!(has_error(&env));
     let msg = error_text(&env);
     assert!(
-        msg.contains("output type"),
-        "expected missing-output-type violation; got {msg:?}",
+        msg.contains("rig::contract") && msg.contains("infix signature"),
+        "expected the contract's missing-signature violation; got {msg:?}",
     );
 }
 
@@ -188,7 +187,7 @@ fn commit_accepts_call_target_with_helper_export() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        "export def helper [n: int] { $n * 2 }\nexport def main [args: record<x: int>]: nothing -> record<out: int> { { out: $args.x } }\n",
+        "export def helper [n: int] { $n * 2 }\nexport def main [data: record<x: int>]: nothing -> record<out: int> { { out: $data.x } }\n",
     );
 
     let env = s.commit("sourcetrait/helperexportlib");
@@ -196,7 +195,7 @@ fn commit_accepts_call_target_with_helper_export() {
         !has_error(&env),
         "a call-target may export helpers beside main; got {env}"
     );
-    let called = s.call("sourcetrait/helperexportlib:m:thing", json!({"x": 5}));
+    let called = s.call("sourcetrait/helperexportlib:m:thing", "{x: 5}");
     assert_eq!(
         called["result"]["out"].as_i64(),
         Some(5),
@@ -214,15 +213,16 @@ fn commit_rejects_main_empty_record_output() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        "export def main [args: record<x: int>]: nothing -> record<> { {} }\n",
+        "export def main [data: record<x: int>]: nothing -> record<> { {} }\n",
     );
 
     let env = s.commit("sourcetrait/badlib3");
     assert!(has_error(&env));
+    assert_eq!(error_kind(&env), Some("rig::contract"), "got {env}");
     let msg = error_text(&env);
     assert!(
-        msg.contains("unfleshed skeleton") || msg.contains("real fields"),
-        "expected empty-output-record violation; got {msg:?}",
+        msg.contains("the return type") && msg.contains("declare the fields"),
+        "expected the open return record refused; got {msg:?}",
     );
 }
 
@@ -307,12 +307,12 @@ fn commit_aggregates_multiple_violations() {
     write_source(
         &src,
         "a/skel/mod.nu",
-        "export def main [args: record<>]: nothing -> record<out: int> { { out: 1 } }\n",
+        "export def main [data: record<>]: nothing -> record<out: int> { { out: 1 } }\n",
     );
     write_source(
         &src,
         "a/noout/mod.nu",
-        "export def main [args: record<x: int>] { { out: $args.x } }\n",
+        "export def main [data: record<x: int>] { { out: $data.x } }\n",
     );
 
     let env = s.commit("sourcetrait/badlib5");
@@ -322,11 +322,11 @@ fn commit_aggregates_multiple_violations() {
         "got {messages:?}"
     );
     assert!(
-        messages.iter().any(|m| m.contains("unfleshed skeleton")),
+        messages.iter().any(|m| m.contains("`data`") && m.contains("declare the fields")),
         "got {messages:?}"
     );
     assert!(
-        messages.iter().any(|m| m.contains("output type")),
+        messages.iter().any(|m| m.contains("infix signature")),
         "got {messages:?}"
     );
 }
@@ -356,7 +356,7 @@ fn commit_rejects_root_call_target() {
     write_source(
         &src,
         "thing/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let env = s.commit("sourcetrait/rootfnlib");
     assert!(
@@ -382,7 +382,7 @@ fn commit_succeeds_then_check_warns_long_summary() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
+        &valid_function_source("x: int", "out: int", "{ out: $data.x }"),
     );
     let committed = s.commit("sourcetrait/doclib");
     assert!(
@@ -431,7 +431,7 @@ fn commit_accepts_short_summary() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let env = s.commit("sourcetrait/okdoclib");
     assert!(
@@ -466,13 +466,13 @@ fn commit_picks_up_mutated_source() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let _ = s.commit("sourcetrait/livelib");
     write_source(
         &src,
         "m/thing/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x + 1000) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x + 1000) }"),
     );
     let env = s.commit("sourcetrait/livelib");
     assert!(!has_error(&env), "re-commit should succeed; got {env}");
@@ -504,7 +504,7 @@ fn commit_validates_by_name_cross_rig_use() {
     write_source(
         &base,
         "m/double/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let committed_base = s.commit("sourcetrait/baselib");
     assert!(
@@ -518,7 +518,7 @@ fn commit_validates_by_name_cross_rig_use() {
     write_source(
         &consumer,
         "app/compute/mod.nu",
-        "use equip/sourcetrait/baselib/rig/m\nexport def main [args: record<x: int>]: nothing -> record<out: int> {\n    m double {x: $args.x}\n}\n",
+        "use equip/sourcetrait/baselib/rig/m\nexport def main [data: record<x: int>]: nothing -> record<out: int> {\n    m double {x: $data.x}\n}\n",
     );
     let committed = s.commit("sourcetrait/consumer");
     assert!(
@@ -526,7 +526,7 @@ fn commit_validates_by_name_cross_rig_use() {
         "a rig using a committed sibling by name should commit; got {committed}"
     );
 
-    let called = s.call("sourcetrait/consumer:app:compute", json!({"x": 5}));
+    let called = s.call("sourcetrait/consumer:app:compute", "{x: 5}");
     assert_eq!(
         called["result"]["out"].as_i64(),
         Some(10),
@@ -545,14 +545,14 @@ fn commit_and_call_resolves_authored_self_ref() {
     write_source(
         &src,
         "top/double/mod.nu",
-        "use equip/sourcetrait/selfreflib/rig/base\nexport def main [args: nothing]: nothing -> record<out: int> {\n    { out: ((base val) * 2) }\n}\n",
+        "use equip/sourcetrait/selfreflib/rig/base\nexport def main [data: nothing]: nothing -> record<out: int> {\n    { out: ((base val) * 2) }\n}\n",
     );
     let committed = s.commit("sourcetrait/selfreflib");
     assert!(
         !has_error(&committed),
         "a rig with an authored self-ref target must validate at commit; got {committed}"
     );
-    let called = s.call("sourcetrait/selfreflib:top:double", json!({}));
+    let called = s.call("sourcetrait/selfreflib:top:double", "null");
     assert_eq!(
         called["result"]["out"].as_i64(),
         Some(42),
@@ -592,7 +592,7 @@ fn commit_accepts_mod_nu_with_export_const_and_def() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let env = s.commit("sourcetrait/modutillib");
     assert!(
@@ -611,14 +611,15 @@ fn commit_rejects_empty_record_skeleton() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        "export def main [args: record<>]: nothing -> record<n: int> { { n: 1 } }\n",
+        "export def main [data: record<>]: nothing -> record<n: int> { { n: 1 } }\n",
     );
     let env = s.commit("sourcetrait/skellib");
     assert!(has_error(&env));
+    assert_eq!(error_kind(&env), Some("rig::contract"), "got {env}");
     let msg = error_text(&env);
     assert!(
-        msg.contains("unfleshed skeleton") || msg.contains("real fields"),
-        "expected skeleton-rejection violation; got {msg:?}",
+        msg.contains("`data`") && msg.contains("declare the fields"),
+        "expected the open data record refused; got {msg:?}",
     );
 }
 
@@ -665,7 +666,7 @@ fn commit_rejects_const_named_reserved() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let env = s.commit("sourcetrait/constreslib");
     assert!(has_error(&env));
@@ -686,7 +687,7 @@ fn commit_rejects_record_key_reserved() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        "export def main [args: record<x: int>]: nothing -> record<out: int> { { out: $args.x, main: 1 } }\n",
+        "export def main [data: record<x: int>]: nothing -> record<out: int> { { out: $data.x, main: 1 } }\n",
     );
     let env = s.commit("sourcetrait/rkeylib");
     assert!(has_error(&env));
@@ -707,7 +708,7 @@ fn commit_rejects_cellpath_member_reserved() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        "export def main [args: record<x: int>]: nothing -> record<out: int> { { out: $args.main } }\n",
+        "export def main [data: record<x: int>]: nothing -> record<out: int> { { out: $data.main } }\n",
     );
     let env = s.commit("sourcetrait/cpathlib");
     assert!(has_error(&env));
@@ -728,7 +729,7 @@ fn commit_accepts_reserved_as_quoted_string_value() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        "export def main [args: record<x: int>]: nothing -> record<out: int> { let note = \"main\"; { out: $args.x } }\n",
+        "export def main [data: record<x: int>]: nothing -> record<out: int> { let note = \"main\"; { out: $data.x } }\n",
     );
     let env = s.commit("sourcetrait/strvallib");
     assert!(
@@ -760,7 +761,7 @@ fn equip_new_and_scaffold_function() {
     assert!(!has_error(&r2), "scaffold function should succeed; got {r2}");
     let fn_src = std::fs::read_to_string(src.join("math").join("double").join("mod.nu")).unwrap();
     assert!(
-        fn_src.contains("export def main [args: record<>]: nothing -> record<>"),
+        fn_src.contains("export def main [data: record<>]: nothing -> record<>"),
         "skeleton missing the single infix-signatured main; got {fn_src:?}"
     );
     assert!(
@@ -828,7 +829,7 @@ fn scaffolded_call_commits_as_wired() {
     let _ = s.scaffold(&["sourcetrait/wiredlib:math:double"]);
     std::fs::write(
         src.join("math").join("double").join("mod.nu"),
-        valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     )
     .unwrap();
     let env = s.commit("sourcetrait/wiredlib");
@@ -836,7 +837,7 @@ fn scaffolded_call_commits_as_wired() {
         !has_error(&env),
         "the scaffolder's own wiring must pass the validator; got {env}"
     );
-    let called = s.call("sourcetrait/wiredlib:math:double", json!({"x": 21}));
+    let called = s.call("sourcetrait/wiredlib:math:double", "{x: 21}");
     assert_eq!(
         called["result"]["out"].as_i64(),
         Some(42),
@@ -880,7 +881,7 @@ fn commit_validates_and_upserts_source() {
     let _ = s.scaffold(&["sourcetrait/clib:math:double"]);
     std::fs::write(
         src.join("math").join("double").join("mod.nu"),
-        valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     )
     .unwrap();
     let env = s.commit("sourcetrait/clib");
@@ -915,6 +916,10 @@ fn commit_rejects_unfleshed_skeleton() {
         has_error(&env),
         "committing an unfleshed skeleton should reject; got {env}"
     );
+    assert!(
+        error_kinds(&env).iter().all(|k| k == "rig::contract"),
+        "the skeleton's open records are the contract's refusals; got {env}",
+    );
 }
 
 #[tested]
@@ -927,7 +932,7 @@ fn commit_rejects_main_in_flat_file() {
     write_source(
         &src,
         "m/impl.nu",
-        &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
+        &valid_function_source("x: int", "out: int", "{ out: $data.x }"),
     );
     let env = s.commit("sourcetrait/flatmainlib");
     assert!(
@@ -947,7 +952,7 @@ fn commit_rejects_call_wired_via_export_module() {
     write_source(
         &src,
         "m/double/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let env = s.commit("sourcetrait/wirelib");
     assert!(
@@ -967,7 +972,7 @@ fn commit_rejects_call_with_submodule() {
     write_source(
         &src,
         "m/call/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
+        &valid_function_source("x: int", "out: int", "{ out: $data.x }"),
     );
     write_source(&src, "m/call/sub/mod.nu", "");
     let env = s.commit("sourcetrait/leaflib");
@@ -988,7 +993,7 @@ fn commit_rejects_orphan_module() {
     write_source(
         &src,
         "m/double/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
+        &valid_function_source("x: int", "out: int", "{ out: $data.x }"),
     );
     write_source(&src, "m/stray/mod.nu", "");
     let env = s.commit("sourcetrait/orphanlib");
@@ -1009,14 +1014,14 @@ fn commit_accepts_nu_cmd_extra_command() {
     write_source(
         &src,
         "m/snake/mod.nu",
-        "export def main [args: record<text: string>]: nothing -> record<out: string> {\n    { out: ($args.text | str snake-case) }\n}\n",
+        "export def main [data: record<text: string>]: nothing -> record<out: string> {\n    { out: ($data.text | str snake-case) }\n}\n",
     );
     let env = s.commit("sourcetrait/extralib");
     assert!(
         !has_error(&env),
         "a call-target using nu-cmd-extra (`str snake-case`) must commit; got {env}"
     );
-    let called = s.call("sourcetrait/extralib:m:snake", json!({"text": "Hello World"}));
+    let called = s.call("sourcetrait/extralib:m:snake", "{text: 'Hello World'}");
     assert_eq!(
         called["result"]["out"].as_str(),
         Some("hello_world"),
@@ -1035,14 +1040,14 @@ fn commit_accepts_call_with_flat_helper() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        "use ./helper.nu *\nexport def main [args: record<x: int>]: nothing -> record<out: int> { { out: (doubler $args.x) } }\n",
+        "use ./helper.nu *\nexport def main [data: record<x: int>]: nothing -> record<out: int> { { out: (doubler $data.x) } }\n",
     );
     let env = s.commit("sourcetrait/callhelperlib");
     assert!(
         !has_error(&env),
         "a call may use a flat helper sibling; got {env}"
     );
-    let called = s.call("sourcetrait/callhelperlib:m:thing", json!({"x": 5}));
+    let called = s.call("sourcetrait/callhelperlib:m:thing", "{x: 5}");
     assert_eq!(
         called["result"]["out"].as_i64(),
         Some(10),

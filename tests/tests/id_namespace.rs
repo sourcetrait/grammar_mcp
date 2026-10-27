@@ -1,4 +1,3 @@
-use serde_json::json;
 use sourcetrait_grammar_tests::*;
 use sourcetrait_common::testing::prelude::*;
 
@@ -102,11 +101,11 @@ fn namespaces_are_disjoint() {
         write_source(
             &src,
             "m/double/mod.nu",
-            &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+            &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
         );
         let committed = ns1.commit("sourcetrait/nslib");
         assert!(!has_error_path(&committed), "ns1 commit failed: {committed}");
-        let called = ns1.call_np("sourcetrait/nslib:m:double", json!({"x": 4}));
+        let called = ns1.call_np("sourcetrait/nslib:m:double", "{x: 4}");
         assert_eq!(envelope(&called)["result"]["out"].as_i64(), Some(8), "ns1 call: {called}");
     }
 
@@ -120,7 +119,7 @@ fn namespaces_are_disjoint() {
         "ns2 must not see ns1's rigs, so its block is empty rather than \
          absent; got {block:?}",
     );
-    let called = ns2.call_np("sourcetrait/nslib:m:double", json!({"x": 4}));
+    let called = ns2.call_np("sourcetrait/nslib:m:double", "{x: 4}");
     assert!(has_error_path(&called), "ns2 call into ns1's rig must fail; got {called}");
 
     assert!(namespace_dir(&t.temp_dir().join("data"), "aid", "ns1").exists());

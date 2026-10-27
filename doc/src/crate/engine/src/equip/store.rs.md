@@ -4,6 +4,17 @@ The equip substrate is a full nu ECOSYSTEM, not merely a `call()` registry. A ri
 targets are the indexed "bins", but EVERY export - a rig's call target or helper, a lib's
 module - is importable from a body and from external nu scripting.
 
+## struct IndexFunction
+The call's contract as typed data, the typedefs `contract_signature` read from `main` at
+commit, so a call holds its data and result to them and the signature block renders them
+without parsing the rig's source again.
+
+## struct IndexSource
+The index's source path alone, which an older build's index carries as this one's does.
+An index an older build wrote, its entries in another shape, fails to decode whole until
+its rig is committed again, and the commit reads the source from it first; this reading
+is what lets that commit happen.
+
 ## const META_FILE
 This file is ALSO the rig-detection marker: an installed equip whose `rig/` carries it HAS a
 rig, and `LIB_META_FILE` marks its lib the same way. Detection keys on the exact filenames.
@@ -69,6 +80,11 @@ behalf.
 PER-REPO configuration only. Nothing here leaks into the user's global git config, and
 `commit.gpgSign` being set locally is what makes every lifecycle commit signed implicitly
 rather than by remembering a flag.
+
+## fn load_rig_source
+Every reader that needs the source alone, the commit, the source check, and the scaffold,
+reads it here rather than through `load_index`, so an index whose entries this build no
+longer reads never blocks the commit that writes them anew.
 
 ## fn registered_equip_names
 The plain sort of the compound `<author>/<name>` gives author-then-name ordering for free,

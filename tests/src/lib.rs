@@ -391,14 +391,20 @@ impl Host {
 
     /// Send a `tools/call` WITHOUT reading its response, returning the request id -
     /// for pipelined / concurrent requests (e.g. kill mid-call). Read the response
-    /// later with `read_id(id)`. Author-prefixes bare rig names (idempotent).
+    /// later with `read_id(id)`. Author-prefixes bare rig names (idempotent), and
+    /// names the `local` host unless the arguments name one.
     pub fn request(&mut self, tool: &str, args: Value) -> u64 {
+        self.request_as_given(tool, author_prefixed(tool, hosted(args)))
+    }
+
+    /// Send a `tools/call` with its arguments exactly as given; the request id.
+    pub fn request_as_given(&mut self, tool: &str, args: Value) -> u64 {
         let id = self.next_id();
         self.send(&json!({
             "jsonrpc": "2.0",
             "id": id,
             "method": "tools/call",
-            "params": {"name": tool, "arguments": author_prefixed(tool, args)}
+            "params": {"name": tool, "arguments": args}
         }));
         id
     }
@@ -415,8 +421,9 @@ impl Host {
         self.call("execute", execute_args(definition, data))
     }
 
-    pub fn call_np(&mut self, namepath: &str, args: Value) -> Value {
-        self.call("call", json!({"namepath": namepath, "args": args}))
+    /// `call` of a committed function on its data's NUON text.
+    pub fn call_np(&mut self, namepath: &str, data: &str) -> Value {
+        self.call("call", json!({"namepath": namepath, "data": data}))
     }
 
     /// One `interface` command, its arguments Nu literals.
@@ -496,6 +503,19 @@ pub fn bundle_plugins(root: &Path, plugins: &[(&str, &str)]) -> PathBuf {
 
 /// The builtins' bare names, which the host resolves itself.
 const BUILTINS: [&str; 2] = ["gram", "grammar"];
+
+/// The host alias every tool call names for the host it runs on.
+pub const LOCAL_HOST: &str = "local";
+
+/// A tool's arguments naming the `local` host, unless they name one already.
+pub fn hosted(mut args: Value) -> Value {
+    if let Some(object) = args.as_object_mut() {
+        object
+            .entry("host")
+            .or_insert_with(|| Value::String(LOCAL_HOST.to_string()));
+    }
+    args
+}
 
 /// Prepend `sourcetrait/` to a bare equip name in a `call`'s namepath.
 /// Idempotent: a value already carrying `/` (an `author/name`) passes through
@@ -646,9 +666,10 @@ pub fn write_source(dir: &Path, rel: &str, contents: &str) {
     std::fs::write(&target, contents).expect("write source");
 }
 
-pub fn valid_function_source(args_schema: &str, result_schema: &str, body: &str) -> String {
+/// A call's `main` on a record of `data_fields`, returning a record of `result_fields`.
+pub fn valid_function_source(data_fields: &str, result_fields: &str, body: &str) -> String {
     format!(
-        "export def main [args: record<{args_schema}>]: nothing -> record<{result_schema}> {{\n{body}\n}}\n",
+        "export def main [data: record<{data_fields}>]: nothing -> record<{result_fields}> {{\n{body}\n}}\n",
     )
 }
 

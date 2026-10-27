@@ -66,7 +66,7 @@ fn commit_inspect_and_call_open_record_arg_field() {
             ("m/mod.nu", "export use tally\n"),
             (
                 "m/tally/mod.nu",
-                "export def main [args: record<x: int, extra: record<>>]: nothing -> record<sum: int, extracols: int> {\n    { sum: $args.x, extracols: ($args.extra | columns | length) }\n}\n",
+                "export def main [data: record<x: int, extra: record<>>]: nothing -> record<sum: int, extracols: int> {\n    { sum: $data.x, extracols: ($data.extra | columns | length) }\n}\n",
             ),
         ],
     );
@@ -81,7 +81,7 @@ fn commit_inspect_and_call_open_record_arg_field() {
          the author's literal arg syntax, not a bare `record`; got {inspected}",
     );
 
-    let called = s.call("sourcetrait/openlib:m:tally", json!({"x": 5, "extra": {"a": 1, "b": 2, "c": 3}}));
+    let called = s.call("sourcetrait/openlib:m:tally", "{x: 5, extra: {a: 1, b: 2, c: 3}}");
     assert_eq!(called["result"]["sum"].as_i64(), Some(5), "got {called}");
     assert_eq!(called["result"]["extracols"].as_i64(), Some(3), "got {called}");
 }

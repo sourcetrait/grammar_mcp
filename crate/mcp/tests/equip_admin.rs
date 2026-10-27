@@ -1,6 +1,5 @@
 use std::os::unix::fs::PermissionsExt;
 
-use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{
     TestServer, equip_source, error_kind, error_kinds, has_error, has_kind, valid_function_source,
     write_source,
@@ -21,7 +20,7 @@ fn author_double_tree(src: &std::path::Path) {
     write_source(
         src,
         "m/double/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
 }
 
@@ -50,7 +49,7 @@ fn install_brings_shipped_source_into_mcp() {
         s.rig_dir("sourcetrait/shiplib").exists(),
         "canonical should exist",
     );
-    let called = s.call("sourcetrait/shiplib:m:double", json!({"x": 6}));
+    let called = s.call("sourcetrait/shiplib:m:double", "{x: 6}");
     assert_eq!(
         called["result"]["out"].as_i64(),
         Some(12),
@@ -68,7 +67,7 @@ fn install_writes_nothing_on_validation_failure() {
     write_source(
         &src,
         "thing/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
+        &valid_function_source("x: int", "out: int", "{ out: $data.x }"),
     );
     let env = s.equip("install", eq.to_str().unwrap());
     assert_eq!(
@@ -96,7 +95,7 @@ fn install_carries_lib_and_rig_together() {
     write_source(
         &rig,
         "m/loud/mod.nu",
-        "use equip/sourcetrait/pairlib/lib/text\nexport def main [args: record<s: string>]: nothing -> record<out: string> {\n    { out: (text shout $args.s) }\n}\n",
+        "use equip/sourcetrait/pairlib/lib/text\nexport def main [data: record<s: string>]: nothing -> record<out: string> {\n    { out: (text shout $data.s) }\n}\n",
     );
     let env = s.equip("install", eq.to_str().unwrap());
     assert!(!has_error(&env), "a rig importing its own lib should install; got {env}");
@@ -108,7 +107,7 @@ fn install_carries_lib_and_rig_together() {
         s.lib_dir("sourcetrait/pairlib").join(".meta/lib.nuon").exists(),
         "the lib carries its own index",
     );
-    let called = s.call("sourcetrait/pairlib:m:loud", json!({"s": "hi"}));
+    let called = s.call("sourcetrait/pairlib:m:loud", "{s: hi}");
     assert_eq!(
         called["result"]["out"].as_str(),
         Some("HI"),
@@ -135,7 +134,7 @@ fn lib_only_equip_installs_and_imports_without_calls() {
         "a definition imports an installed lib by its namespace path; got {used}",
     );
 
-    let called = s.call("sourcetrait/onlylib:text:shout", json!({"s": "x"}));
+    let called = s.call("sourcetrait/onlylib:text:shout", "{s: x}");
     assert_eq!(
         error_kind(&called),
         Some("equip::no_rig"),
@@ -169,7 +168,7 @@ fn a_diamond_shaped_lib_is_no_cycle() {
         write_source(
             &rig,
             &format!("m/{call}/mod.nu"),
-            "use equip/sourcetrait/diamondlib/lib/top\nexport def main [args: nothing]: nothing -> record<out: int> {\n    { out: (top sum) }\n}\n",
+            "use equip/sourcetrait/diamondlib/lib/top\nexport def main [data: nothing]: nothing -> record<out: int> {\n    { out: (top sum) }\n}\n",
         );
     }
     let env = s.equip("install", eq.to_str().unwrap());
@@ -178,7 +177,7 @@ fn a_diamond_shaped_lib_is_no_cycle() {
         "a module shared down two branches registers more than once in a clean parse, \
          and that is no cycle; got {env}",
     );
-    let called = s.call("sourcetrait/diamondlib:m:b", json!({}));
+    let called = s.call("sourcetrait/diamondlib:m:b", "null");
     assert_eq!(called["result"]["out"].as_i64(), Some(5), "got {called}");
 }
 
@@ -322,7 +321,7 @@ fn check_reports_structural_errors() {
     write_source(
         &src,
         "thing/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
+        &valid_function_source("x: int", "out: int", "{ out: $data.x }"),
     );
     let env = s.equip("check", src.parent().unwrap().to_str().unwrap());
     assert!(!has_error(&env), "check itself should not error; got {env}");
@@ -407,7 +406,7 @@ fn a_definition_can_use_a_committed_rig() {
     write_source(
         &src,
         "calc/double/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let committed = s.commit("sourcetrait/uselib");
     assert!(!has_error(&committed), "commit should succeed; got {committed}");

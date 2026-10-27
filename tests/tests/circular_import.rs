@@ -163,7 +163,7 @@ fn a_rig_carrying_a_cycle_fails_validation_and_the_host_lives() {
     write_source(
         &src,
         "m/inner/mod.nu",
-        "use ../mod.nu\n\nexport def main [args: record<x: int>]: nothing -> record<out: int> {\n    { out: $args.x }\n}\n",
+        "use ../mod.nu\n\nexport def main [data: record<x: int>]: nothing -> record<out: int> {\n    { out: $data.x }\n}\n",
     );
 
     let id = host.request_interface(&format!(

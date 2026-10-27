@@ -159,13 +159,13 @@ fn a_rig_passing_a_table_to_grimm_commits_and_runs() {
             ("m/mod.nu", "export use trace\n"),
             (
                 "m/trace/mod.nu",
-                "export def main [args: nothing]: nothing -> record<ok: bool> {\n    grimm dbg [[x, y]; [1, 2]]\n    { ok: true }\n}\n",
+                "export def main [data: nothing]: nothing -> record<ok: bool> {\n    grimm dbg [[x, y]; [1, 2]]\n    { ok: true }\n}\n",
             ),
         ],
     );
     let committed = s.commit("sourcetrait/grimmrig");
     assert!(!has_error(&committed), "got {committed}");
-    let called = s.call("sourcetrait/grimmrig:m:trace", json!({}));
+    let called = s.call("sourcetrait/grimmrig:m:trace", "null");
     assert_eq!(called["result"], json!({"ok": true}), "got {called}");
 }
 

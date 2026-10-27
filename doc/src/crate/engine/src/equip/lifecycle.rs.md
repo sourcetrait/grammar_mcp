@@ -1,5 +1,10 @@
 # lifecycle.rs
 
+## fn skeleton_function_source
+The skeleton is refused at commit as it stands: its `record<>`s are open, and the contract
+holds an open record only nested, so a scaffolded stub cannot commit as if it were
+finished. Its comment names the two ways out, declared fields or `data: nothing`.
+
 ## fn establish_equip
 Writes an establish-time rig index recording `<source_dir>/rig` BEFORE any validation,
 because that recorded path is what every later `commit` re-reads, by its parent, and what
@@ -26,7 +31,8 @@ otherwise named the module twice and its `mod.nu` not at all.
 ## fn registered_source
 The equip's source is the PARENT of either kind's recorded source, the rig's first. A
 registration is the per-kind meta alone, so there is no equip-level record to drift from the
-kinds it describes.
+kinds it describes. The rig's is read by `load_rig_source`, the source alone, so a rig an
+older build committed commits again.
 
 ## fn promote_equip
 VALIDATES, never regenerates - author content and docs survive a commit untouched.

@@ -51,15 +51,15 @@ pub enum CliCmd {
 /// One-shot mirrors of the MCP tools, for an operator with no agent.
 #[derive(clap::Subcommand)]
 pub enum CliTool {
-    /// Invoke a committed rig function.
+    /// Invoke a committed rig function on its data.
     Call {
         /// The function's namepath: rig:module/path:function.
         namepath: String,
-        /// Args as a NUON record (default {}).
-        args: Option<String>,
-        /// Per-call timeout in milliseconds (default 120000).
+        /// The function's data as NUON text; `null` for `data: nothing`.
+        data: String,
+        /// The call's timeout as a Nu duration (default 120sec).
         #[arg(long)]
-        timeout_ms: Option<u64>,
+        timeout: Option<String>,
     },
     /// Execute a Nu definition against NUON data; single-shot, state dies with it.
     Execute {

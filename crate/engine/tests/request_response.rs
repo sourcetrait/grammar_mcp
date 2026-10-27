@@ -117,13 +117,13 @@ impl TestEngine {
         self.rt.block_on(self.engine.request(req)).expect("the engine answers")
     }
 
-    fn call(&self, namepath: &str, args: NuVal) -> ValueAnswer {
+    fn call(&self, namepath: &str, data: &str) -> ValueAnswer {
         let req = CallRequest {
             host: Host::Local,
             nonce: self.nonces.generate(),
             namepath: namepath.to_string(),
-            args,
-            timeout_ms: None,
+            data: data.to_string(),
+            timeout: None,
         };
         self.rt.block_on(self.engine.request(req)).expect("the engine answers")
     }
@@ -260,7 +260,7 @@ fn call_runs_a_committed_rig_function() {
     assert!(matches!(scaffolded, ControlAnswer::Created(_)), "got {scaffolded:?}");
     std::fs::write(
         source.join("rig/math/double/mod.nu"),
-        "# Doubles x\nexport def main [args: record<x: int>]: nothing -> record<out: int> {\n    { out: ($args.x * 2) }\n}\n",
+        "# Doubles x\nexport def main [data: record<x: int>]: nothing -> record<out: int> {\n    { out: ($data.x * 2) }\n}\n",
     )
     .expect("the function's source");
     let committed = e.control(EngineCommand::EquipCommit {
@@ -268,7 +268,7 @@ fn call_runs_a_committed_rig_function() {
     });
     assert!(matches!(committed, ControlAnswer::Committed(_)), "got {committed:?}");
 
-    let answer = e.call("sourcetrait/enginecalc:math:double", record(&[("x", NuVal::Int(7))]));
+    let answer = e.call("sourcetrait/enginecalc:math:double", "{x: 7}");
     assert_eq!(answer.result, Ok(record(&[("out", NuVal::Int(14))])));
 
     let ControlAnswer::Signatures(block) = e.control(EngineCommand::Signatures {
@@ -286,7 +286,7 @@ fn call_runs_a_committed_rig_function() {
 #[test]
 fn a_call_to_an_unregistered_rig_is_refused() {
     let e = TESTING.harness();
-    let answer = e.call("sourcetrait/ghost:m:noop", record(&[]));
+    let answer = e.call("sourcetrait/ghost:m:noop", "null");
     assert!(
         matches!(answer.result, Err(EngineError::EquipNotRegistered { .. })),
         "got {:?}",

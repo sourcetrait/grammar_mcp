@@ -71,7 +71,7 @@ fn uninstall_removes_subtree_keeps_source() {
     write_source(
         &src,
         "m/thing/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let _ = s.commit("sourcetrait/droppable");
     assert!(s.rig_dir("sourcetrait/droppable").exists());

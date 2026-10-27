@@ -48,20 +48,16 @@ fn push_signature_line(
     out.push('\n');
 }
 
-/// A call's `<name> <args> <result>`; `name` is a leaf or a full namepath.
+/// A call's `<name> <data> <result>`; `name` is a leaf or a full namepath.
 pub(crate) fn signature_of(
     name: &str,
     f: &IndexFunction,
 ) -> String {
-    let render = |which: &str, rendered: Result<String, String>| -> String {
-        rendered.unwrap_or_else(|e| {
-            eprintln!("grammar: {which} signature for `{name}` did not render: {e}");
-            "<?>".to_string()
-        })
-    };
-    let args = render("args", args_schema_to_signature(&f.args_schema));
-    let result = render("result", result_schema_to_signature(&f.result_schema));
-    format!("{name} {args} {result}")
+    format!(
+        "{name} {} {}",
+        signature_group(&f.data_type),
+        signature_group(&f.result_type),
+    )
 }
 
 /// Join a parent module path with a leaf name, tolerating an empty parent.

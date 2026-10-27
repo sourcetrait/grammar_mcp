@@ -200,7 +200,7 @@ fn an_open_record_in_the_return_is_refused() {
 fn a_list_return_is_refused() {
     refused_as_definition(
         "def execute [data: nothing]: nothing -> list<int> { [1] }",
-        "typed `record<...>` or `table<...>`",
+        "typed `nothing`, `record<...>`, or `table<...>`",
     );
 }
 
@@ -208,7 +208,7 @@ fn a_list_return_is_refused() {
 fn an_any_return_is_refused() {
     refused_as_definition(
         "def execute [data: nothing]: nothing -> any { 1 }",
-        "typed `record<...>` or `table<...>`",
+        "typed `nothing`, `record<...>`, or `table<...>`",
     );
 }
 

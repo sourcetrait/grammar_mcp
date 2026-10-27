@@ -18,7 +18,7 @@ fn committed_rig_invokable_via_standalone_driver() {
     write_source(
         &src,
         "calc/double/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let committed = host.commit("sourcetrait/drvilib");
     assert!(!has_error_path(&committed), "commit should succeed; got {committed}");

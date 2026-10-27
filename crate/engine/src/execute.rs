@@ -1,4 +1,4 @@
-//! An `execute` call's definition held to its contract before anything runs it.
+//! The contract: an execute definition held to it, the signature check it shares.
 use crate::*;
 
 /// The one name a definition gives its command.
@@ -150,71 +150,10 @@ pub fn analyze_definition(
     };
     let signature = ws.get_decl(decl_id).signature();
     let at = Some(expression.span);
-    let data_type = match signature.required_positional.as_slice() {
-        [data] if data.name == DATA_PARAM => match data_typedef(&data.shape) {
-            Ok(typedef) => Some(typedef),
-            Err(reason) => {
-                violations.push(violation(at, format!("`{DATA_PARAM}`: {reason}")));
-                None
-            }
-        },
-        _ => {
-            violations.push(violation(
-                at,
-                format!("`{EXECUTE}` takes one required parameter, `{DATA_PARAM}`"),
-            ));
-            None
-        }
-    };
-    let takes_timeout = match signature.optional_positional.as_slice() {
-        [] => false,
-        [timeout] if timeout.name == TIMEOUT_PARAM => {
-            if timeout.shape != nu::SyntaxShape::Duration {
-                violations.push(violation(
-                    at,
-                    format!("`{TIMEOUT_PARAM}?` is typed `duration`, not `{}`", timeout.shape),
-                ));
-            }
-            if timeout.default_value.is_some() {
-                violations.push(violation(
-                    at,
-                    format!("`{TIMEOUT_PARAM}?` takes no default; the call's timeout fills it"),
-                ));
-            }
-            true
-        }
-        _ => {
-            violations.push(violation(
-                at,
-                format!(
-                    "`{EXECUTE}`'s one optional parameter is `{TIMEOUT_PARAM}?: duration`",
-                ),
-            ));
-            false
-        }
-    };
-    if signature.rest_positional.is_some() {
-        violations.push(violation(at, format!("`{EXECUTE}` takes no rest parameter")));
-    }
-    if signature.named.iter().any(|flag| flag.long != HELP_FLAG) {
-        violations.push(violation(at, format!("`{EXECUTE}` takes no flags")));
-    }
-    let result_type = match signature.input_output_types.as_slice() {
-        [(nu::Type::Nothing, output)] => match result_typedef(output) {
-            Ok(typedef) => Some(typedef),
-            Err(reason) => {
-                violations.push(violation(at, format!("the return type: {reason}")));
-                None
-            }
-        },
-        _ => {
-            violations.push(violation(
-                at,
-                format!(
-                    "`{EXECUTE}` declares one infix signature, its input `nothing`: \
-                     `: nothing -> record<...>`",
-                ),
-            ));
+    let contract = match contract_signature(&signature, EXECUTE) {
+        Ok(contract) => Some(contract),
+        Err(reasons) => {
+            violations.extend(reasons.into_iter().map(|reason| violation(at, reason)));
             None
         }
     };
@@ -228,13 +167,99 @@ pub fn analyze_definition(
             return Err(findings);
         }
     }
-    match (data_type, result_type) {
-        (Some(data_type), Some(result_type)) => Ok(ExecuteDef {
+    match contract {
+        Some(SignatureContract {
+            data_type,
+            result_type,
+            takes_timeout,
+        }) => Ok(ExecuteDef {
             lane,
             data_type,
             result_type,
             takes_timeout,
         }),
-        _ => Err(vec![violation(at, "the signature did not resolve".to_string())]),
+        None => Err(vec![violation(at, "the signature did not resolve".to_string())]),
+    }
+}
+
+/// What a signature holding to the contract declares: its data, return, timeout.
+#[derive(Debug, Clone)]
+pub struct SignatureContract {
+    pub data_type: NuTypedef,
+    pub result_type: NuTypedef,
+    pub takes_timeout: bool,
+}
+
+/// Hold a command's signature to the contract, each refusal naming `command`.
+pub fn contract_signature(
+    signature: &nu::Signature,
+    command: &str,
+) -> Result<SignatureContract, Vec<String>> {
+    let mut violations: Vec<String> = Vec::new();
+    let data_type = match signature.required_positional.as_slice() {
+        [data] if data.name == DATA_PARAM => match data_typedef(&data.shape) {
+            Ok(typedef) => Some(typedef),
+            Err(reason) => {
+                violations.push(format!("`{DATA_PARAM}`: {reason}"));
+                None
+            }
+        },
+        _ => {
+            violations.push(format!("`{command}` takes one required parameter, `{DATA_PARAM}`"));
+            None
+        }
+    };
+    let takes_timeout = match signature.optional_positional.as_slice() {
+        [] => false,
+        [timeout] if timeout.name == TIMEOUT_PARAM => {
+            if timeout.shape != nu::SyntaxShape::Duration {
+                violations.push(format!(
+                    "`{TIMEOUT_PARAM}?` is typed `duration`, not `{}`",
+                    timeout.shape,
+                ));
+            }
+            if timeout.default_value.is_some() {
+                violations.push(format!(
+                    "`{TIMEOUT_PARAM}?` takes no default; the call's timeout fills it"
+                ));
+            }
+            true
+        }
+        _ => {
+            violations.push(format!(
+                "`{command}`'s one optional parameter is `{TIMEOUT_PARAM}?: duration`"
+            ));
+            false
+        }
+    };
+    if signature.rest_positional.is_some() {
+        violations.push(format!("`{command}` takes no rest parameter"));
+    }
+    if signature.named.iter().any(|flag| flag.long != HELP_FLAG) {
+        violations.push(format!("`{command}` takes no flags"));
+    }
+    let result_type = match signature.input_output_types.as_slice() {
+        [(nu::Type::Nothing, output)] => match result_typedef(output) {
+            Ok(typedef) => Some(typedef),
+            Err(reason) => {
+                violations.push(format!("the return type: {reason}"));
+                None
+            }
+        },
+        _ => {
+            violations.push(format!(
+                "`{command}` declares one infix signature, its input `nothing`: \
+                 `: nothing -> record<...>`"
+            ));
+            None
+        }
+    };
+    match (data_type, result_type) {
+        (Some(data_type), Some(result_type)) if violations.is_empty() => Ok(SignatureContract {
+            data_type,
+            result_type,
+            takes_timeout,
+        }),
+        _ => Err(violations),
     }
 }

@@ -2,7 +2,6 @@
 //! builds a full-shell `ParseEngine` (plugin-registry read off disk), so it rides
 //! the resource caveat. Driven through the `guts` surface.
 
-use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{build_call_source, build_execute_source, parses_clean};
 
 const DEFINITION: &str =
@@ -42,29 +41,36 @@ fn nu_source_keeps_a_multi_line_definition_verbatim() {
 }
 
 #[test]
-fn call_source_typed_args() {
-    let got = build_call_source("sourcetrait/calc", "math", "double", json!({"x": 6}));
+fn call_source_takes_the_data_literal() {
+    let got = build_call_source("sourcetrait/calc", "math", "double", "{x: 6}", None);
     let expected = "overlay use --prefix equip/sourcetrait/calc/rig/math/double as __call\n__call {x: 6}\n";
     assert_eq!(got, expected);
 }
 
 #[test]
 fn call_source_nested_module_path() {
-    let got = build_call_source("sourcetrait/calc", "math/trig", "sin", json!({"x": 1}));
+    let got = build_call_source("sourcetrait/calc", "math/trig", "sin", "{x: 1}", None);
     let expected = "overlay use --prefix equip/sourcetrait/calc/rig/math/trig/sin as __call\n__call {x: 1}\n";
     assert_eq!(got, expected);
 }
 
 #[test]
-fn call_source_void_args() {
-    let got = build_call_source("acme/util", "net", "ping", json!({}));
-    let expected = "overlay use --prefix equip/acme/util/rig/net/ping as __call\n__call null\n";
-    assert_eq!(got, expected);
+fn call_source_keeps_an_empty_record_and_passes_null_as_given() {
+    let empty = build_call_source("acme/util", "net", "ping", "{}", None);
+    assert_eq!(empty, "overlay use --prefix equip/acme/util/rig/net/ping as __call\n__call {}\n");
+    let null = build_call_source("acme/util", "net", "ping", "null", None);
+    assert_eq!(null, "overlay use --prefix equip/acme/util/rig/net/ping as __call\n__call null\n");
+}
+
+#[test]
+fn call_source_passes_the_timeout_to_a_main_that_takes_it() {
+    let got = build_call_source("acme/util", "net", "ping", "null", Some("30sec"));
+    assert_eq!(got, "overlay use --prefix equip/acme/util/rig/net/ping as __call\n__call null 30sec\n");
 }
 
 #[test]
 fn call_source_keyword_named_target_is_aliased() {
-    let got = build_call_source("sourcetrait/demo", "almost/rpg", "run", json!({"x": 6}));
+    let got = build_call_source("sourcetrait/demo", "almost/rpg", "run", "{x: 6}", None);
     let expected = "overlay use --prefix equip/sourcetrait/demo/rig/almost/rpg/run as __call\n__call {x: 6}\n";
     assert_eq!(got, expected);
     assert!(

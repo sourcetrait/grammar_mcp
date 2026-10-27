@@ -13,8 +13,8 @@ The parameters as the agent sent them, the data and the timeout still text: the 
 holds them to the contract, so a host never parses what the engine will check.
 
 ## struct CallRequest
-`args` is a `NuVal`, the record the function takes as `$args`: a host converts from
-whatever its agent sent, and the engine converts once more, into the eval's value.
+As `ExecuteRequest`, the data and the timeout still text: the engine holds them to the
+contract its rig index records for the function's `main`.
 
 ## enum EngineCommand
 Everything a host asks that isn't an eval, so one request type reaches the engine's state:

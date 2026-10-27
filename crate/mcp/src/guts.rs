@@ -83,14 +83,6 @@ impl TestServer {
         Self { rt, nush }
     }
 
-    fn obj(v: json::Value) -> mcp::JsonObject {
-        match v {
-            json::Value::Object(m) => m,
-            json::Value::Null => mcp::JsonObject::new(),
-            other => panic!("expected a JSON object, got {other}"),
-        }
-    }
-
     /// A tool's envelope as JSON, read from its NUON text.
     fn envelope(r: Result<mcp::CallToolResult, mcp::ErrorData>) -> json::Value {
         let ctr = r.unwrap_or_else(|e| panic!("unexpected rmcp-boundary error: {e:?}"));
@@ -116,7 +108,19 @@ impl TestServer {
         data: &str,
         timeout: Option<&str>,
     ) -> json::Value {
+        self.execute_on(LOCAL_HOST, definition, data, timeout)
+    }
+
+    /// `execute` on a host alias.
+    pub fn execute_on(
+        &self,
+        host: &str,
+        definition: &str,
+        data: &str,
+        timeout: Option<&str>,
+    ) -> json::Value {
         let p = ExecuteParams {
+            host: host.to_string(),
             definition: definition.to_string(),
             data: data.to_string(),
             timeout: timeout.map(str::to_string),
@@ -140,7 +144,19 @@ impl TestServer {
         data: &str,
         timeout: Option<&str>,
     ) -> json::Value {
+        self.rerun_on(LOCAL_HOST, nonce, data, timeout)
+    }
+
+    /// `rerun` on a host alias.
+    pub fn rerun_on(
+        &self,
+        host: &str,
+        nonce: &str,
+        data: &str,
+        timeout: Option<&str>,
+    ) -> json::Value {
         let p = RerunParams {
+            host: host.to_string(),
             nonce: nonce.to_string(),
             data: data.to_string(),
             timeout: timeout.map(str::to_string),
@@ -148,11 +164,38 @@ impl TestServer {
         Self::envelope(self.rt.block_on(self.nush.rerun(mcp::Parameters(p))))
     }
 
-    pub fn call(&self, namepath: &str, args: json::Value) -> json::Value {
+    /// `call` of a committed function on its data's NUON text.
+    pub fn call(
+        &self,
+        namepath: &str,
+        data: &str,
+    ) -> json::Value {
+        self.call_timeout(namepath, data, None)
+    }
+
+    /// `call` with a timeout, a Nu duration's text.
+    pub fn call_timeout(
+        &self,
+        namepath: &str,
+        data: &str,
+        timeout: Option<&str>,
+    ) -> json::Value {
+        self.call_on(LOCAL_HOST, namepath, data, timeout)
+    }
+
+    /// `call` on a host alias.
+    pub fn call_on(
+        &self,
+        host: &str,
+        namepath: &str,
+        data: &str,
+        timeout: Option<&str>,
+    ) -> json::Value {
         let p = CallParams {
+            host: host.to_string(),
             namepath: namepath.to_string(),
-            args: Self::obj(args),
-            timeout_ms: None,
+            data: data.to_string(),
+            timeout: timeout.map(str::to_string),
         };
         Self::envelope(self.rt.block_on(self.nush.call(mcp::Parameters(p))))
     }
@@ -164,7 +207,17 @@ impl TestServer {
 
     /// One `interface` command, through the tool's parse and dispatch.
     pub fn interface(&self, command: &str) -> json::Value {
+        self.interface_on(LOCAL_HOST, command)
+    }
+
+    /// One `interface` command on a host alias.
+    pub fn interface_on(
+        &self,
+        host: &str,
+        command: &str,
+    ) -> json::Value {
         let p = InterfaceParams {
+            host: host.to_string(),
             command: command.to_string(),
         };
         Self::envelope(self.rt.block_on(self.nush.interface(mcp::Parameters(p))))
@@ -525,9 +578,10 @@ pub fn write_tree(dir: &std::path::Path, files: &[(&str, &str)]) {
     }
 }
 
-pub fn valid_function_source(args_schema: &str, result_schema: &str, body: &str) -> String {
+/// A call's `main` taking a record of `data_fields`, answering `result_fields`.
+pub fn valid_function_source(data_fields: &str, result_fields: &str, body: &str) -> String {
     format!(
-        "export def main [args: record<{args_schema}>]: nothing -> record<{result_schema}> {{\n{body}\n}}\n",
+        "export def main [data: record<{data_fields}>]: nothing -> record<{result_fields}> {{\n{body}\n}}\n",
     )
 }
 
@@ -592,12 +646,13 @@ pub fn build_execute_source(
     crate::build_execute_source(definition, data_literal, timeout_literal)
 }
 
-/// The synthesized call() source.
+/// The synthesized call() source for a function and its literals.
 pub fn build_call_source(
     rig: &str,
     module_path: &str,
     name: &str,
-    args: json::Value,
+    data_literal: &str,
+    timeout_literal: Option<&str>,
 ) -> String {
-    crate::build_call_source(rig, module_path, name, &json_value_to_nu_value(&args))
+    crate::build_call_source(rig, module_path, name, data_literal, timeout_literal)
 }

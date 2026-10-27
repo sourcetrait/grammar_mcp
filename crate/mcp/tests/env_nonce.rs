@@ -1,4 +1,3 @@
-use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{TestServer, has_error, write_tree};
 use sourcetrait_common::testing::prelude::*;
 
@@ -45,13 +44,13 @@ fn call_target_sees_nonce() {
             ("m/mod.nu", "export use whoami\n"),
             (
                 "m/whoami/mod.nu",
-                "export def main [args: record<noop: int>]: nothing -> record<seen: string> { { seen: $env.NONCE } }\n",
+                "export def main [data: record<noop: int>]: nothing -> record<seen: string> { { seen: $env.NONCE } }\n",
             ),
         ],
     );
     let committed = s.commit("sourcetrait/noncelib");
     assert!(!has_error(&committed), "commit should succeed; got {committed}");
-    let env = s.call("sourcetrait/noncelib:m:whoami", json!({"noop": 0}));
+    let env = s.call("sourcetrait/noncelib:m:whoami", "{noop: 0}");
     let nonce = env["nonce"].as_str().expect("envelope nonce");
     assert_eq!(env["result"]["seen"].as_str(), Some(nonce), "a committed call-target should read $env.NONCE; got {env}");
 }

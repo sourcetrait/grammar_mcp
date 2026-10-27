@@ -123,7 +123,7 @@ fn commit_rig(
     write_source(
         src,
         "m/go/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
+        &valid_function_source("x: int", "out: int", "{ out: $data.x }"),
     );
     let committed = s.commit(name);
     assert!(!has_error(&committed), "commit {name} failed: {committed}");
@@ -520,7 +520,7 @@ fn installing_adds_the_rig_to_default_without_narrowing_the_view(t: &testing::Te
     write_source(
         &src,
         "m/go/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
+        &valid_function_source("x: int", "out: int", "{ out: $data.x }"),
     );
     let installed = s.equip("install", eq.to_str().unwrap());
     assert!(!has_error(&installed), "install failed: {installed}");

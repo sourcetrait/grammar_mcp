@@ -7,7 +7,6 @@
 
 use std::path::Path;
 
-use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{
     TestServer, equip_source, has_error, valid_function_source, write_source,
 };
@@ -54,19 +53,19 @@ fn commit_patlib(
     write_source(
         src,
         "m/here/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
+        &valid_function_source("x: int", "out: int", "{ out: $data.x }"),
     );
     write_source(src, "m/deep/mod.nu", "export module down\nexport use down\n");
     write_source(
         src,
         "m/deep/down/mod.nu",
-        &valid_function_source("y: int", "out: int", "{ out: $args.y }"),
+        &valid_function_source("y: int", "out: int", "{ out: $data.y }"),
     );
     write_source(src, "other/mod.nu", "export module solo\nexport use solo\n");
     write_source(
         src,
         "other/solo/mod.nu",
-        &valid_function_source("n: int", "out: int", "{ out: $args.n }"),
+        &valid_function_source("n: int", "out: int", "{ out: $data.n }"),
     );
     let _ = s.equip("new", source.to_str().unwrap());
     let committed = s.commit("sourcetrait/patlib");
@@ -217,7 +216,7 @@ fn a_pattern_is_never_callable() {
     commit_patlib(s, &t.temp_dir().join("patlib"));
 
     for pattern in ["*", ".", "sourcetrait/", "sourcetrait/patlib:", "sourcetrait/patlib:m:"] {
-        let env = s.call(pattern, json!({"x": 1}));
+        let env = s.call(pattern, "{x: 1}");
         assert!(
             has_error(&env),
             "call({pattern}) must be refused - call takes an exact function \

@@ -126,8 +126,8 @@ pub(crate) use crate::{
             config_channel::ConfigChannelParams,
             equip::EquipParams,
             common::{
-                NuSh, RemoteLinkEntry, answer_value, envelope_text, now_millis, serde_to_nu,
-                success, success_value, success_void, unexpected,
+                LOCAL_HOST, NuSh, RemoteLinkEntry, answer_value, envelope_text, now_millis,
+                resolve_host, serde_to_nu, success, success_value, success_void, unexpected,
             },
             inspect::InspectParams,
             interface::{INTERFACE_TOOL, InterfaceParams, interface_description},
@@ -168,7 +168,7 @@ pub(crate) use sourcetrait_grammar_operator::{
     check_fraction, clear_pins, effective_supervisor, install_child_subreaper, pin,
 };
 
-pub(crate) use nuval::{NuVal, TryFromNu, TryIntoNu};
+pub(crate) use nuval::TryIntoNu;
 
 pub(crate) use std::{
     collections::{HashMap, HashSet},
@@ -223,10 +223,7 @@ pub(crate) mod mcp {
         ErrorData, ServerHandler, ServiceExt,
         handler::server::router::tool::ToolRouter,
         handler::server::wrapper::Parameters,
-        model::{
-            CallToolResult, ContentBlock, Implementation, JsonObject, ServerCapabilities,
-            ServerConfig,
-        },
+        model::{CallToolResult, ContentBlock, Implementation, ServerCapabilities, ServerConfig},
         tool, tool_handler, tool_router,
         transport::stdio,
     };

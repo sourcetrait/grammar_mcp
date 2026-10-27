@@ -32,3 +32,37 @@ fn tools_list_and_execute_round_trip() {
     );
     assert_eq!(env["result"], json!({"out": 6}), "got {env}");
 }
+
+/// Every tool requires `host`: its schema lists it, any alias but `local` is
+/// refused as `host::unknown` before the tool does anything, and a call naming
+/// no host fails to deserialize at rmcp's boundary.
+#[tested]
+fn every_tool_names_its_host() {
+    let t = testing::test!({ .using_temp_dir() });
+    let mut host = Host::spawn(t.temp_dir());
+
+    for tool in host.tools() {
+        let required = tool["inputSchema"]["required"]
+            .as_array()
+            .unwrap_or_else(|| panic!("required parameters; got {tool}"));
+        assert!(required.contains(&json!("host")), "{tool}");
+    }
+
+    for (tool, mut args) in [
+        (
+            "execute",
+            execute_args("def execute [data: nothing]: nothing -> record<ok: bool> { {ok: true} }", "null"),
+        ),
+        ("rerun", json!({"nonce": "NoSuchNonce1", "data": "null"})),
+        ("call", json!({"namepath": "sourcetrait/ghost:m:noop", "data": "null"})),
+        ("interface", json!({"command": "interface info"})),
+    ] {
+        args["host"] = json!("elsewhere");
+        let resp = host.call(tool, args);
+        assert_eq!(envelope_error_kind(&resp).as_deref(), Some("host::unknown"), "{tool}: {resp}");
+    }
+
+    let id = host.request_as_given("interface", json!({"command": "interface info"}));
+    let resp = host.read_id(id);
+    assert!(resp.get("error").is_some(), "a call naming no host fails at the boundary; got {resp}");
+}

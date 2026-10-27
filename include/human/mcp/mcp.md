@@ -5,6 +5,9 @@ text form of:
 - Namepath (`<author>/<name>:<module/path>:<function>`)
 - Nonce (base62 pseudo-random xxh3-64 hash)
 
+MCP tool calls require a `host` (alias) parameter - where the tool is run from.
+Normal operation on localhost uses `local` for its value.
+
 On success, the MCP JSON-RPC `result.content` will be populated with NUON text,
 typed as:
 ```nu

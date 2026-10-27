@@ -30,15 +30,16 @@ pub struct RerunRequest {
     pub timeout: Option<String>,
 }
 
-/// A call: a committed rig function run on its arguments.
+/// A call: a committed rig function run on its data.
 #[cereal::derived(Data)]
 pub struct CallRequest {
     pub host: Host,
     pub nonce: datum::Nonce,
     pub namepath: String,
-    /// The function's `$args`, a record.
-    pub args: NuVal,
-    pub timeout_ms: Option<u64>,
+    /// The function's data as NUON text.
+    pub data: String,
+    /// The call's timeout as a Nu duration's text; the default when absent.
+    pub timeout: Option<String>,
 }
 
 /// A command to the engine itself.

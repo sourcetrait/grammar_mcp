@@ -9,11 +9,13 @@ pub struct RigIndex {
     pub modules: Vec<IndexModule>,
 }
 
+/// A call's index entry: its name and its contract's typedefs.
 #[derive(Debug, Clone, ser::Serialize, ser::Deserialize)]
 pub struct IndexFunction {
     pub name: String,
-    pub args_schema: json::JsonObject,
-    pub result_schema: json::JsonObject,
+    pub data_type: NuTypedef,
+    pub result_type: NuTypedef,
+    pub takes_timeout: bool,
 }
 
 #[derive(Debug, Clone, ser::Serialize, ser::Deserialize)]
@@ -29,6 +31,12 @@ pub struct IndexModule {
 #[derive(Debug, Clone, ser::Serialize, ser::Deserialize)]
 pub struct LibIndex {
     pub source_path: PathBuf,
+}
+
+/// A rig's index read for its source alone, whichever build wrote its entries.
+#[derive(ser::Deserialize)]
+struct IndexSource {
+    source_path: PathBuf,
 }
 
 /// The rig's index, under its kind directory.
@@ -392,6 +400,18 @@ pub fn index_from_nuon(text: &str) -> Result<RigIndex, String> {
 pub fn load_index(rig: &str) -> io::Result<RigIndex> {
     let text = fs::read_to_string(rig_meta_path(rig))?;
     index_from_nuon(&text)
+        .map_err(|e| io::Error::other(format!("decode index for {rig}: {e}")))
+}
+
+/// A rig index's source path, its entries left unread.
+pub(crate) fn index_source_from_nuon(text: &str) -> Result<PathBuf, String> {
+    meta_from_nuon::<IndexSource>(text).map(|index| index.source_path)
+}
+
+/// The source a rig was committed from, whichever build wrote its index.
+pub(crate) fn load_rig_source(rig: &str) -> io::Result<PathBuf> {
+    let text = fs::read_to_string(rig_meta_path(rig))?;
+    index_source_from_nuon(&text)
         .map_err(|e| io::Error::other(format!("decode index for {rig}: {e}")))
 }
 

@@ -5,8 +5,7 @@ what a reader of it could reasonably get wrong.
 
 ## mod schema
 The shim re-exporting `schemars::JsonSchema`, reached only through the
-`schema::JsonSchema` path on a derive. The json/nu typedef converters are the
-engine's, named bare through its re-exports.
+`schema::JsonSchema` path on a derive.
 
 ## use sourcetrait_grammar_engine
 The engine's public face named bare, as mcp's own items are, and the crate

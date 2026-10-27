@@ -9,6 +9,8 @@ const INTERFACE_PRETEXT: &str = include_str!("../../../../../include/human/mcp/i
 /// Parameters for `interface()`.
 #[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
 pub struct InterfaceParams {
+    /// The host alias the tool runs on; `local` for this MCP's own host.
+    pub host: String,
     /// One `interface` command, its arguments literals.
     pub command: String,
 }
@@ -26,6 +28,9 @@ impl NuSh {
         mcp::Parameters(p): mcp::Parameters<InterfaceParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         let nonce = self.mint(INTERFACE_TOOL, &p).to_nonce();
+        if let Err(error) = resolve_host(&p.host) {
+            return error_to_call_result(error, nonce);
+        }
         match parse_command(&self.interface_engine, &p.command) {
             Ok(command) => self.run_interface(nonce, command).await,
             Err(diagnostics) => {

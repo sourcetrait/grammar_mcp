@@ -49,12 +49,12 @@ fn every_command_answers_through_the_interface() {
     write_source(
         &source.join("rig"),
         "m/go/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let committed = s.interface("interface equip commit 'sourcetrait/ifprobe'");
     assert!(result_of(&committed)["added"].is_array(), "got {committed}");
     assert_eq!(result_of(&committed)["warnings"], json!([]), "got {committed}");
-    let called = s.call("sourcetrait/ifprobe:m:go", json!({"x": 21}));
+    let called = s.call("sourcetrait/ifprobe:m:go", "{x: 21}");
     assert_eq!(result_of(&called)["out"], json!(42), "got {called}");
     let checked = s.interface(&format!("interface equip check {source_text}"));
     assert_eq!(result_of(&checked)["summary"]["ok"], json!(true), "got {checked}");

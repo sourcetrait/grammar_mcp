@@ -1,7 +1,7 @@
 use crate::*;
 
 fn skeleton_function_source() -> String {
-    "# one-line summary (<= 80 chars); becomes this function's doc\nexport def main [args: record<>]: nothing -> record<> {\n    # logic here; replace each record<> with real fields (or `nothing` for void)\n    {}\n}\n".to_string()
+    "# one-line summary (<= 80 chars); becomes this function's doc\nexport def main [data: record<>]: nothing -> record<> {\n    # logic here; declare each record<>'s fields, data `nothing` if it takes none\n    {}\n}\n".to_string()
 }
 
 fn additively_wire_modnu(modnu: &std::path::Path, entry: &str) -> io::Result<()> {
@@ -98,8 +98,7 @@ pub fn scaffold_leaf_exists(
     name: Option<&str>,
 ) -> Result<bool, EngineError> {
     require_rig(rig)?;
-    let index = load_index(rig)?;
-    let mut dir = index.source_path.clone();
+    let mut dir = load_rig_source(rig)?;
     for seg in module_path.split('/').filter(|s| !s.is_empty()) {
         dir = dir.join(seg);
     }
@@ -117,8 +116,7 @@ pub fn scaffold_leaf(
 ) -> Result<Vec<String>, EngineError> {
     validate_new_names(rig, module_path, name)?;
     require_rig(rig)?;
-    let index = load_index(rig)?;
-    let sp = index.source_path.clone();
+    let sp = load_rig_source(rig)?;
     let mut created: Vec<String> = Vec::new();
 
     let mut dir = sp.clone();
@@ -276,7 +274,7 @@ fn write_lib_meta(
 /// The source an installed equip was committed from: its kinds' parent.
 fn registered_source(equip: &str) -> Result<PathBuf, EngineError> {
     let kind_source = if rig_meta_path(equip).exists() {
-        load_index(equip)?.source_path
+        load_rig_source(equip)?
     } else if lib_meta_path(equip).exists() {
         load_lib_index(equip)?.source_path
     } else {

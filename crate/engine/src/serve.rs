@@ -81,23 +81,8 @@ fn prepare_execute(
 ) -> EngineResult<PreparedExecute> {
     let def = analyze_definition(engine, definition, lint)
         .map_err(|diagnostics| EngineError::DefinitionViolations { diagnostics })?;
-    let invalid = |reason: String| EngineError::DataInvalid { reason };
-    if data.trim().is_empty() {
-        return Err(invalid(
-            "data is NUON text, `null` for a `data: nothing` definition".to_string(),
-        ));
-    }
-    let value = nu::from_nuon(data, None).map_err(|e| invalid(format!("data is not NUON: {e}")))?;
-    check_value(&value, &def.data_type, "data").map_err(invalid)?;
-    let data_literal = render_nuon(&value).map_err(invalid)?;
-    let (timeout_ms, timeout_value) = parse_timeout(timeout)?;
-    let timeout_literal = if def.takes_timeout {
-        let literal = render_nuon(&timeout_value)
-            .map_err(|reason| EngineError::TimeoutInvalid { reason })?;
-        Some(literal)
-    } else {
-        None
-    };
+    let data_literal = hold_data(data, &def.data_type, "definition")?;
+    let (timeout_ms, timeout_literal) = hold_timeout(timeout, def.takes_timeout)?;
     let source = build_execute_source(definition, &data_literal, timeout_literal.as_deref());
     Ok(PreparedExecute {
         def,
@@ -106,8 +91,38 @@ fn prepare_execute(
     })
 }
 
-/// An `execute` call's or a rerun's arguments as the process list shows them.
-fn execute_args(
+/// A request's data held to its typedef, answered as its source's literal.
+fn hold_data(
+    data: &str,
+    typedef: &NuTypedef,
+    holder: &str,
+) -> EngineResult<String> {
+    let invalid = |reason: String| EngineError::DataInvalid { reason };
+    if data.trim().is_empty() {
+        return Err(invalid(format!(
+            "data is NUON text, `null` for a `data: nothing` {holder}"
+        )));
+    }
+    let value = nu::from_nuon(data, None).map_err(|e| invalid(format!("data is not NUON: {e}")))?;
+    check_value(&value, typedef, "data").map_err(invalid)?;
+    render_nuon(&value).map_err(invalid)
+}
+
+/// A request's timeout in milliseconds, with its literal if the signature takes it.
+fn hold_timeout(
+    timeout: Option<&str>,
+    takes_timeout: bool,
+) -> EngineResult<(u64, Option<String>)> {
+    let (timeout_ms, value) = parse_timeout(timeout)?;
+    if !takes_timeout {
+        return Ok((timeout_ms, None));
+    }
+    let literal = render_nuon(&value).map_err(|reason| EngineError::TimeoutInvalid { reason })?;
+    Ok((timeout_ms, Some(literal)))
+}
+
+/// A request's data and timeout as the process list shows them.
+fn request_args(
     data: &str,
     timeout: Option<&str>,
 ) -> NuVal {
@@ -168,7 +183,7 @@ pub(crate) async fn serve_execute(
     let kind = InFlightKind::Execute {
         lane: prepared.def.lane,
     };
-    let args = execute_args(&req.data, req.timeout.as_deref());
+    let args = request_args(&req.data, req.timeout.as_deref());
     run_prepared(&core, req.nonce, prepared, &req.definition, "execute", kind, args).await
 }
 
@@ -196,11 +211,11 @@ pub(crate) async fn serve_rerun(
         source_nonce: req.source.clone(),
         lane: prepared.def.lane,
     };
-    let args = execute_args(&req.data, req.timeout.as_deref());
+    let args = request_args(&req.data, req.timeout.as_deref());
     run_prepared(&core, req.nonce, prepared, &definition, "rerun", kind, args).await
 }
 
-/// A call's value, taken leniently: nothing, a record, or a table, else `{}`.
+/// A call's value: its data and its result each held to `main`'s contract.
 pub(crate) async fn serve_call(
     core: Arc<EngineCore>,
     req: CallRequest,
@@ -228,51 +243,42 @@ pub(crate) async fn serve_call(
         phase: "call::load_index".to_string(),
         reason: e.to_string(),
     })?;
-    let is_call_target = index_node(&index, &module_path)
-        .map(|(fns, _)| fns.iter().any(|f| f.name == name))
-        .unwrap_or(false);
-    if !is_call_target {
+    let Some(function) = index_node(&index, &module_path)
+        .and_then(|(fns, _)| fns.iter().find(|f| f.name == name).cloned())
+    else {
         return Err(EngineError::FunctionNotDefined {
             rig,
             module_path,
             name,
         });
-    }
-    let args = req.args.clone().try_into_nu(nu::Span::unknown()).map_err(|e| {
-        EngineError::Internal {
-            phase: "call::args".to_string(),
-            reason: e.to_string(),
-        }
-    })?;
-    let source = build_call_source(&rig, &module_path, &name, &args);
+    };
+    let data_literal = hold_data(&req.data, &function.data_type, "call")?;
+    let (timeout_ms, timeout_literal) = hold_timeout(req.timeout.as_deref(), function.takes_timeout)?;
+    let source = build_call_source(
+        &rig,
+        &module_path,
+        &name,
+        &data_literal,
+        timeout_literal.as_deref(),
+    );
     let pair = req.nonce.into_pair();
     let call = Dispatch {
         nonce: &pair,
         source,
         tool: "call",
-        args: req.args,
+        args: request_args(&req.data, req.timeout.as_deref()),
         kind: InFlightKind::Call {
             path: req.namepath.clone(),
         },
         definition: None,
-        timeout_ms: req.timeout_ms,
+        timeout_ms: Some(timeout_ms),
     };
     let value = dispatch_pooled(&core, CacheKind::Calls, call).await?;
-    Ok(NuVal::try_from_nu(lenient_result(value)).unwrap_or_else(|_| NuVal::Record(Vec::new())))
-}
-
-/// A call's value as its result: nothing, a record, or a table as is, else `{}`.
-fn lenient_result(value: nu::Value) -> nu::Value {
-    let kept = match &value {
-        nu::Value::Nothing { .. } | nu::Value::Record { .. } => true,
-        nu::Value::List { vals, .. } => vals.iter().all(|v| matches!(v, nu::Value::Record { .. })),
-        _ => false,
-    };
-    if kept {
-        value
-    } else {
-        nu::Value::record(nu::Record::new(), nu::Span::unknown())
-    }
+    check_value(&value, &function.result_type, "result")
+        .map_err(|reason| EngineError::ResultInvalid { reason })?;
+    NuVal::try_from_nu(value).map_err(|e| EngineError::ResultInvalid {
+        reason: format!("the result: {e}"),
+    })
 }
 
 /// A command's answer.

@@ -4,13 +4,16 @@ Executes the provided Nu language definition against the NUON `$data` provided.
 This contract is aggressively enforced and will error if broken.
 ### General
 - One top-level definition named `execute` that uses a Nu infix type signature
+- The only def-level flag allowed is `--env` (stateful).
 - Only allowed parameters: `data` and `timeout`
   - `data` parameter is mandatory
 - The infix `input` type must always be `nothing`
 - Values must be passed as data (see Lint)
 ### `timeout` Type
+- Typed as `duration`
 - Must be either optional (`timeout?`) or omitted from signature
 - Value is inspected internally for tool timeouts; Default: `120sec`
+- Denies a default value set by signature
 ### `data` Type
 - Typed as:
   - `nothing`
@@ -23,6 +26,7 @@ This contract is aggressively enforced and will error if broken.
 - Denies lists of tables
 ### `return` Type
 - Infix return type typed as:
+  - `nothing`
   - `record<TYPEDEF>` with a strict type definition
   - `table<TYPEDEF>` with a strict type definition
 - Denies untyped `record<>` or `table<>`

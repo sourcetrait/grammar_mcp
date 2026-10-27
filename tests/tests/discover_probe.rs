@@ -82,10 +82,10 @@ fn the_discover_probe_finds_the_modern_era() {
         "tools/call",
         json!({
             "name": "execute",
-            "arguments": execute_args(
+            "arguments": hosted(execute_args(
                 "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x + 1) } }",
                 "{x: 5}",
-            ),
+            )),
         }),
     ));
     let called = reply(&mut host, &json!(3), &log);

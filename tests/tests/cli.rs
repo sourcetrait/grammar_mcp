@@ -65,7 +65,7 @@ fn cli_equip_lifecycle_and_call() {
     write_source(
         &src,
         "m/double/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
 
     let committed = run_output(

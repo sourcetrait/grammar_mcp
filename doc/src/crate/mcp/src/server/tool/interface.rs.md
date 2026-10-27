@@ -1,7 +1,7 @@
 # interface.rs
 
 The `interface` tool: every tool but `execute`, `rerun`, and `call`, folded into one
-`command` string (User's NuNu, `doc/human/NuNu.md`'s `# TOOL: grammar/interface`).
+`command` string (User's `grammar/interface`, its parameters his `doc/human/tools.md`).
 The commands convert those tools as they were: same parameters, same results,
 same refusals.
 
@@ -18,8 +18,10 @@ so the documentation is never a second copy to keep in step.
 ## fn interface
 The nonce is minted FIRST, over the tool's name and the command text, so a
 refusal at the parse carries one exactly as a dispatched command's answer does.
-The dispatched command answers under that same nonce: each command's method
-takes the nonce rather than minting its own.
+The host is resolved before the parse (`resolve_host`, `common.rs`); every command
+runs on this host, `local` the one alias known. The dispatched command answers
+under that same nonce: each command's method takes the nonce rather than minting
+its own.
 
 ## fn run_interface
 One `match`, each arm a command's method. No command dispatches an eval, so

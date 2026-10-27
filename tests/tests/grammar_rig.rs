@@ -54,7 +54,7 @@ fn each_grammar_call_runs_by_its_bare_name() {
 
     let soaked = host.call_np(
         "grammar:soak:dir",
-        json!({"src": &src, "dst": &out, "fill": {"name": "World"}}),
+        &format!("{{src: {}, dst: {}, fill: {{name: World}}}}", json!(src), json!(out)),
     );
     assert!(!has_error_path(&soaked), "soak dir runs; got {soaked}");
     assert_eq!(
@@ -62,12 +62,12 @@ fn each_grammar_call_runs_by_its_bare_name() {
         "Hello, World!",
     );
 
-    let dir = envelope(&host.call_np("grammar:eye:dir", json!({"dir": &work, "ignore": ["tmpl"], "regard": []})));
+    let dir = envelope(&host.call_np("grammar:eye:dir", &format!("{{dir: {}, ignore: [tmpl], regard: []}}", json!(work))));
     let tree = dir["result"]["tree"].as_str().expect("eye dir answers a tree");
     assert!(tree.contains(" a.log 3b"), "eye dir lists the ignored file; got {tree}");
     assert!(!tree.contains("hello.txt.liquid"), "eye dir skips an ignore glob; got {tree}");
 
-    let git = envelope(&host.call_np("grammar:eye:git", json!({"dir": &work})));
+    let git = envelope(&host.call_np("grammar:eye:git", &format!("{{dir: {}}}", json!(work))));
     let tree = git["result"]["tree"].as_str().expect("eye git answers a tree");
     assert!(!tree.contains("a.log"), "eye git skips the ignored file; got {tree}");
     assert!(tree.contains("hello.txt.liquid"), "eye git lists the template; got {tree}");

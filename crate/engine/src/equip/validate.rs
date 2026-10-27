@@ -1272,185 +1272,36 @@ fn validate_function_file_ast(
         return None;
     };
 
-
-    check_args_record_positional(rel, &working_set, main_id, "main", source, source_start, diagnostics);
     let main_line = decl_line(&working_set, main_id, source, source_start);
-    let out_type = check_main_output_type(
-        rel,
-        &working_set,
-        main_id,
-        main_line,
-        &wrapped,
-        wrapped_start,
-        diagnostics,
-    );
-
     let main_sig = working_set.get_decl(main_id).signature();
+    let contract = match contract_signature(&main_sig, "main") {
+        Ok(contract) => contract,
+        Err(reasons) => {
+            for reason in reasons {
+                diagnostics.push(Diagnostic::error(
+                    "rig::contract",
+                    Some(Source {
+                        path: Some(rel.to_string()),
+                        position: [main_line, 0],
+                    }),
+                    reason,
+                ));
+            }
+            return None;
+        }
+    };
     let summary = main_sig.description.clone();
     let details = main_sig.extra_description.clone();
-    let args_str = extract_main_args_text(&working_set, main_id, &wrapped, wrapped_start)?;
-    let result_str = out_type?;
-    let args_schema = nu_to_args_schema(&args_str).ok()?;
-    let result_schema = nu_to_result_schema(&result_str).ok()?;
     Some((
         IndexFunction {
             name: stem.to_string(),
-            args_schema,
-            result_schema,
+            data_type: contract.data_type,
+            result_type: contract.result_type,
+            takes_timeout: contract.takes_timeout,
         },
         summary,
         details,
     ))
-}
-
-fn check_args_record_positional(
-    rel: &str,
-    working_set: &nu::StateWorkingSet,
-    decl_id: nu::DeclId,
-    fn_name: &str,
-    source: &str,
-    source_start: usize,
-    diagnostics: &mut Vec<Diagnostic>,
-) -> Option<nu::VarId> {
-    let decl = working_set.get_decl(decl_id);
-    let sig = decl.signature();
-    let positional = sig.required_positional.first();
-    let (bad, var_id) = match positional {
-        None => (true, None),
-        Some(p) => {
-            let shape_ok = match p.shape.to_type() {
-                nu::Type::Record(fields) => !fields.is_empty(),
-                nu::Type::Nothing => true,
-                _ => false,
-            };
-            ((p.name != "args" || !shape_ok), p.var_id)
-        }
-    };
-    if bad {
-        let line = decl_line(working_set, decl_id, source, source_start);
-        diagnostics.push(Diagnostic::error(
-            "rig::args",
-            Some(Source {
-                path: Some(rel.to_string()),
-                position: [line, 0],
-            }),
-            format!(
-                "{fn_name} must take a typed positional `args: record<...>` with real fields (or `args: nothing` for void); an empty `record<>` is the unfleshed skeleton",
-            ),
-        ));
-    }
-    var_id
-}
-
-fn check_main_output_type(
-    rel: &str,
-    working_set: &nu::StateWorkingSet,
-    decl_id: nu::DeclId,
-    line: usize,
-    wrapped: &str,
-    wrapped_start: usize,
-    diagnostics: &mut Vec<Diagnostic>,
-) -> Option<String> {
-    let sig = working_set.get_decl(decl_id).signature();
-    let output = sig
-        .input_output_types
-        .iter()
-        .find(|(input, _)| matches!(input, nu::Type::Nothing))
-        .map(|(_, out)| out.clone());
-    let Some(output) = output else {
-        diagnostics.push(Diagnostic::error(
-            "rig::output",
-            Some(Source {
-                path: Some(rel.to_string()),
-                position: [line, 0],
-            }),
-            "main must declare a `: nothing -> <record<...>|nothing>` output type",
-        ));
-        return None;
-    };
-    match &output {
-        nu::Type::Nothing => Some("nothing".to_string()),
-        nu::Type::Record(fields) if !fields.is_empty() => {
-            Some(
-                extract_main_output_text(working_set, decl_id, wrapped, wrapped_start)
-                    .unwrap_or_else(|| output.to_string()),
-            )
-        }
-        nu::Type::Record(_) => {
-            diagnostics.push(Diagnostic::error(
-                "rig::skeleton",
-                Some(Source {
-                    path: Some(rel.to_string()),
-                    position: [line, 0],
-                }),
-                "main's output `record<>` is the unfleshed skeleton; give it real fields (or `nothing` for void)",
-            ));
-            None
-        }
-        other => {
-            diagnostics.push(Diagnostic::error(
-                "rig::output",
-                Some(Source {
-                    path: Some(rel.to_string()),
-                    position: [line, 0],
-                }),
-                format!(
-                    "main's output type must be a non-empty `record<...>` or `nothing`; got `{other}`",
-                ),
-            ));
-            None
-        }
-    }
-}
-
-fn extract_main_output_text(
-    working_set: &nu::StateWorkingSet,
-    decl_id: nu::DeclId,
-    wrapped: &str,
-    wrapped_start: usize,
-) -> Option<String> {
-    let block_id = working_set.get_decl(decl_id).block_id()?;
-    let body_start = working_set
-        .get_block(block_id)
-        .span?
-        .start
-        .checked_sub(wrapped_start)?;
-    let before = wrapped.get(..body_start)?;
-    let arrow = before.rfind("->")?;
-    let after = &before[arrow + 2..];
-    let r = after.split('{').next().unwrap_or(after).trim();
-    if r.is_empty() {
-        None
-    } else {
-        Some(r.to_string())
-    }
-}
-
-fn extract_main_args_text(
-    working_set: &nu::StateWorkingSet,
-    decl_id: nu::DeclId,
-    wrapped: &str,
-    wrapped_start: usize,
-) -> Option<String> {
-    let block_id = working_set.get_decl(decl_id).block_id()?;
-    let body_start = working_set
-        .get_block(block_id)
-        .span?
-        .start
-        .checked_sub(wrapped_start)?;
-    let before = wrapped.get(..body_start)?;
-    let arrow = before.rfind("->")?;
-    let head = &before[..arrow];
-    let close = head.rfind(']')?;
-    let open = head[..close].rfind('[')?;
-    let params = &head[open + 1..close];
-    let colon = params.find(':')?;
-    let type_text = params[colon + 1..].trim();
-    if type_text.is_empty() {
-        None
-    } else {
-        Some(type_text.to_string())
-    }
 }
 
 fn decl_line(

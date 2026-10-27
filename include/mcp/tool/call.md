@@ -1,1 +1,1 @@
-Invoke a committed rig function with typed args.
+Invoke a committed rig function on its typed data.

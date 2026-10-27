@@ -89,28 +89,28 @@ fn info_renders_a_committed_rig_as_a_signature_block() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
     let src = s.new_rig(t.temp_dir(), "sourcetrait/treelib");
-    for (module_path, name, args_inner, result_inner, body) in [
-        ("solo", "rootfn", "x: int", "out: int", "{ out: ($args.x + 1) }"),
+    for (module_path, name, data_inner, result_inner, body) in [
+        ("solo", "rootfn", "x: int", "out: int", "{ out: ($data.x + 1) }"),
         (
             "alpha",
             "a1",
             "s: string",
             "len: int",
-            "{ len: ($args.s | str length) }",
+            "{ len: ($data.s | str length) }",
         ),
         (
             "alpha/beta",
             "b1",
             "x: int, t: record<y: string, n: list<int>>",
             "out: record<y: string>",
-            "{ out: { y: $args.t.y } }",
+            "{ out: { y: $data.t.y } }",
         ),
     ] {
         let np = format!("sourcetrait/treelib:{module_path}:{name}");
         let scaffold = s.scaffold(&[np.as_str()]);
         assert!(!has_error(&scaffold), "scaffold {np} failed: {scaffold}");
         let rel = format!("{module_path}/{name}/mod.nu");
-        write_source(&src, &rel, &valid_function_source(args_inner, result_inner, body));
+        write_source(&src, &rel, &valid_function_source(data_inner, result_inner, body));
     }
     let committed = s.commit("sourcetrait/treelib");
     assert!(!has_error(&committed), "commit failed: {committed}");
@@ -138,7 +138,7 @@ fn the_indentation_is_the_hierarchy() {
     write_source(
         &src,
         "math/double/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: ($args.x * 2) }"),
+        &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let committed = s.commit("sourcetrait/implib");
     assert!(!has_error(&committed), "commit failed: {committed}");
@@ -160,7 +160,7 @@ fn summaries_ride_the_line_and_are_omitted_when_absent() {
     write_source(
         &src,
         "m/fn/mod.nu",
-        "# the fn summary\nexport def main [args: record<x: int>]: nothing -> record<out: int> { { out: $args.x } }\n",
+        "# the fn summary\nexport def main [data: record<x: int>]: nothing -> record<out: int> { { out: $data.x } }\n",
     );
     let committed = s.commit("sourcetrait/doctreelib");
     assert!(!has_error(&committed), "commit failed: {committed}");
@@ -173,24 +173,24 @@ fn summaries_ride_the_line_and_are_omitted_when_absent() {
 }
 
 #[tested]
-fn a_void_renders_as_empty_angles() {
+fn nothing_renders_as_its_type() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();
-    let src = s.new_rig(t.temp_dir(), "sourcetrait/voidlib");
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/nothinglib");
     write_source(&src, "mod.nu", "export module m\n");
     write_source(&src, "m/mod.nu", "export use ping\n");
     write_source(
         &src,
         "m/ping/mod.nu",
-        "export def main [args: nothing]: nothing -> nothing { }\n",
+        "export def main [data: nothing]: nothing -> nothing { }\n",
     );
-    let committed = s.commit("sourcetrait/voidlib");
+    let committed = s.commit("sourcetrait/nothinglib");
     assert!(!has_error(&committed), "commit failed: {committed}");
 
     assert_eq!(
-        rig_block(&signatures(s), "voidlib"),
-        " voidlib\n  m\n   ping <> <>\n",
-        "a void arg list and a void result each render `<>`, never `<nothing>`",
+        rig_block(&signatures(s), "nothinglib"),
+        " nothinglib\n  m\n   ping <nothing> <nothing>\n",
+        "`nothing` is a type like any other, its group spelled whole",
     );
 }
 
@@ -207,7 +207,7 @@ fn a_multi_line_summary_is_flattened_onto_its_line() {
     write_source(
         &src,
         "m/go/mod.nu",
-        "# Runs the thing against the other thing,\n# gating each step as it goes.\nexport def main [args: record<x: int>]: nothing -> record<out: int> { { out: $args.x } }\n",
+        "# Runs the thing against the other thing,\n# gating each step as it goes.\nexport def main [data: record<x: int>]: nothing -> record<out: int> { { out: $data.x } }\n",
     );
     let committed = s.commit("sourcetrait/wraplib");
     assert!(!has_error(&committed), "commit failed: {committed}");
@@ -240,13 +240,13 @@ fn a_mixed_module_states_its_own_call_separator() {
     write_source(
         &src,
         "m/here/mod.nu",
-        &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
+        &valid_function_source("x: int", "out: int", "{ out: $data.x }"),
     );
     write_source(&src, "m/deep/mod.nu", "export use down\n");
     write_source(
         &src,
         "m/deep/down/mod.nu",
-        &valid_function_source("y: int", "out: int", "{ out: $args.y }"),
+        &valid_function_source("y: int", "out: int", "{ out: $data.y }"),
     );
     let committed = s.commit("sourcetrait/mixedlib");
     assert!(!has_error(&committed), "commit failed: {committed}");
@@ -272,7 +272,7 @@ fn an_author_heads_its_group_exactly_once() {
         write_source(
             &src,
             "m/go/mod.nu",
-            &valid_function_source("x: int", "out: int", "{ out: $args.x }"),
+            &valid_function_source("x: int", "out: int", "{ out: $data.x }"),
         );
         let committed = s.commit(&name);
         assert!(!has_error(&committed), "commit {name} failed: {committed}");

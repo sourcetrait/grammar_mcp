@@ -114,19 +114,13 @@ admits a form 0.116.1 does not produce at a module's top level.
 runs.
 
 ## fn validate_function_file_ast
-SCHEMAS ARE READ FROM SOURCE TEXT on both sides, and both parsed forms are lossy in
-different ways. `SyntaxShape` Display renders an empty-field record as the bare word
-`record`, which is not valid arg syntax, while the parsed output `Type` collapses path and
-directory to string. Structure is still VALIDATED against the parsed signature -
-positional shape and output Type - so the text is used for the schema and the parse for the
-contract.
+THE CONTRACT IS EXECUTE'S, User's ruling: `main`'s parsed signature is held by
+`contract_signature`, the check an `execute` definition's signature passes, each refusal a
+`rig::contract` row at `main`'s line. A call and a definition therefore take data, a
+timeout, and a return alike, and the typedefs the check answers go into the index as
+they are. The scaffold's `record<>` skeleton falls to the same check, an open record
+standing only nested, which is what stops a stub from committing as if it were finished.
 
-That text is sliced from the wrapped source by the block's span less the file's start in
-the span space (`file_start`), as every reported position here is measured. Measured from
-zero, the slices come back empty once the engine holds files of its own - the standard
-library's - and the call target drops from the index with no diagnostic.
-
-## fn check_args_record_positional
-An empty `record<>` is the UNFLESHED SKELETON and is rejected, which is what stops a
-scaffolded stub from committing as if it were finished. `Type::Nothing` is the legitimate
-void.
+Every position here is measured from the file's start in the span space (`file_start`),
+never from zero: the engine's own files, the standard library's first, sit ahead of this
+one.
