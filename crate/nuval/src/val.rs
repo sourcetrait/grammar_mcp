@@ -38,10 +38,9 @@ pub struct GlobData {
 /// A date and time at a fixed offset, chrono's `DateTime<FixedOffset>`.
 #[cereal::derived(Data)]
 pub struct DateData {
-    pub seconds: u32,
+    pub seconds: i64,
     pub seconds_fraction: u32,
     pub utc_offset_minus: i32,
-    pub date_yof: NonZero<i32>,
 }
 
 /// A range of ints or of floats.
@@ -104,6 +103,29 @@ pub enum CellPathMemberData {
     },
 }
 
+impl CellPathMemberData {
+    /// The member as nushell's, at a span.
+    pub fn into_nu(self, span: nu::Span) -> nu::PathMember {
+        match self {
+            Self::String { value, optional, case_sensitive } => nu::PathMember::String {
+                val: value,
+                span,
+                optional,
+                casing: if case_sensitive {
+                    nu::Casing::Sensitive
+                } else {
+                    nu::Casing::Insensitive
+                },
+            },
+            Self::Int { value, optional } => nu::PathMember::Int {
+                val: value as usize,
+                span,
+                optional,
+            },
+        }
+    }
+}
+
 impl From<nu::PathMember> for CellPathMemberData {
     fn from(v: nu::PathMember) -> Self {
         match v {
@@ -125,19 +147,7 @@ const SPAN: nu::Span = nu::Span::unknown();
 
 impl From<CellPathMemberData> for nu::PathMember {
     fn from(v: CellPathMemberData) -> Self {
-        match v {
-            CellPathMemberData::String { value, optional, case_sensitive } => Self::String {
-                val: value,
-                optional,
-                casing: match case_sensitive { true => nu::Casing::Sensitive, false => nu::Casing::Insensitive },
-                span: SPAN, 
-            },
-            CellPathMemberData::Int { value, optional } => Self::Int {
-                val: value as usize,
-                span: SPAN,
-                optional,
-            },
-        }
+        v.into_nu(SPAN)
     }
 }
 
@@ -147,12 +157,22 @@ impl<T> From<Bound<T>> for Bounded<T> {
             Bound::Included(v) => Bounded::Included(v),
             Bound::Excluded(v) => Bounded::Excluded(v),
             Bound::Unbounded => Bounded::Unbounded,
-        } 
+        }
     }
 }
 
-impl From<nu_protocol::IntRange> for TypedRangeData<i64> {
-    fn from(v: nu_protocol::IntRange) -> Self {
+impl<T> From<Bounded<T>> for Bound<T> {
+    fn from(v: Bounded<T>) -> Self {
+        match v {
+            Bounded::Included(v) => Bound::Included(v),
+            Bounded::Excluded(v) => Bound::Excluded(v),
+            Bounded::Unbounded => Bound::Unbounded,
+        }
+    }
+}
+
+impl From<nu::IntRange> for TypedRangeData<i64> {
+    fn from(v: nu::IntRange) -> Self {
         Self {
             start: v.start(),
             step: v.step(),
@@ -161,209 +181,225 @@ impl From<nu_protocol::IntRange> for TypedRangeData<i64> {
     }
 }
 
-impl From<nu_protocol::FloatRange> for TypedRangeData<f64> {
-    fn from(v: nu_protocol::FloatRange) -> Self {
+impl From<nu::FloatRange> for TypedRangeData<f64> {
+    fn from(v: nu::FloatRange) -> Self {
         Self {
             start: v.start(),
             step: v.step(),
             end: v.end().into(),
+        }
+    }
+}
+
+impl From<nu::Range> for RangeData {
+    fn from(v: nu::Range) -> Self {
+        match v {
+            nu::Range::IntRange(x) => Self::Int(x.into()),
+            nu::Range::FloatRange(x) => Self::Float(x.into()),
+        }
+    }
+}
+
+impl TryFrom<RangeData> for nu::Range {
+    type Error = ConvertError;
+
+    fn try_from(v: RangeData) -> ConvertResult<Self> {
+        match v {
+            RangeData::Int(r) => int_range(r).map(nu::Range::IntRange),
+            RangeData::Float(r) => float_range(r).map(nu::Range::FloatRange),
+        }
+    }
+}
+
+/// An int range from its parts, refused where nushell's constructor refuses.
+fn int_range(r: TypedRangeData<i64>) -> ConvertResult<nu::IntRange> {
+    if r.step == 0 {
+        return RangeSnafu { reason: "its step is zero" }.fail();
+    }
+    let next = r.start.checked_add(r.step).context(RangeSnafu {
+        reason: "its second value overflows",
+    })?;
+    if let Bounded::Included(end) | Bounded::Excluded(end) = r.end
+        && (next < r.start) != (end < r.start)
+    {
+        return RangeSnafu { reason: "its step runs away from its end" }.fail();
+    }
+    range_from_parts(r.start, r.step, Bound::from(r.end))
+}
+
+/// A float range from its parts, refused where nushell's constructor refuses.
+fn float_range(r: TypedRangeData<f64>) -> ConvertResult<nu::FloatRange> {
+    if !r.start.is_finite() {
+        return RangeSnafu { reason: "its start isn't finite" }.fail();
+    }
+    let next = r.start + r.step;
+    if !next.is_finite() || next == r.start {
+        return RangeSnafu { reason: "its step is zero or not finite" }.fail();
+    }
+    let end = match r.end {
+        Bounded::Included(end) | Bounded::Excluded(end) if end.is_nan() => {
+            return RangeSnafu { reason: "its end isn't a number" }.fail();
+        }
+        Bounded::Included(end) | Bounded::Excluded(end) if end.is_infinite() => Bound::Unbounded,
+        bounded => Bound::from(bounded),
+    };
+    if let Bound::Included(end) | Bound::Excluded(end) = end
+        && (next < r.start) != (end < r.start)
+    {
+        return RangeSnafu { reason: "its step runs away from its end" }.fail();
+    }
+    range_from_parts(r.start, r.step, end)
+}
+
+/// A nushell range built exactly from its start, its step, and its end.
+fn range_from_parts<T, R>(start: T, step: T, end: Bound<T>) -> ConvertResult<R>
+where
+    T: serde::Serialize,
+    R: serde::de::DeserializeOwned,
+{
+    let parts = serde_json::json!({ "start": start, "step": step, "end": end });
+    serde_json::from_value(parts).map_err(|e| ConvertError::Range {
+        reason: e.to_string(),
+    })
+}
+
+impl From<chrono::DateTime<chrono::FixedOffset>> for DateData {
+    fn from(v: chrono::DateTime<chrono::FixedOffset>) -> Self {
+        Self {
+            seconds: v.timestamp(),
+            seconds_fraction: v.timestamp_subsec_nanos(),
+            utc_offset_minus: v.offset().local_minus_utc(),
+        }
+    }
+}
+
+impl TryFrom<DateData> for chrono::DateTime<chrono::FixedOffset> {
+    type Error = ConvertError;
+
+    fn try_from(v: DateData) -> ConvertResult<Self> {
+        let DateData {
+            seconds,
+            seconds_fraction,
+            utc_offset_minus,
+        } = v;
+        let utc = chrono::DateTime::from_timestamp(seconds, seconds_fraction);
+        let offset = chrono::FixedOffset::east_opt(utc_offset_minus);
+        match (utc, offset) {
+            (Some(utc), Some(offset)) => Ok(utc.with_timezone(&offset)),
+            _ => DateSnafu {
+                seconds,
+                seconds_fraction,
+                utc_offset_minus,
+            }
+            .fail(),
         }
     }
 }
 
 /// A conversion from a nushell value, refused for what nuval can't carry.
 pub trait TryFromNu<V: Sized>: Sized {
-    fn try_from_nu(value: V) -> Result<Self, ()>;
+    fn try_from_nu(value: V) -> ConvertResult<Self>;
+}
+
+/// A conversion back to a nushell value, every part at one span.
+pub trait TryIntoNu {
+    fn try_into_nu(self, span: nu::Span) -> ConvertResult<nu::Value>;
 }
 
 impl TryFromNu<nu::Value> for NuValResult {
-    fn try_from_nu(value: nu::Value) -> Result<Self, ()> {
-        match value {
-            nu::Value::Error { .. } => Ok(Err(NuValError::Unknown)),
-            _ => Ok(Ok(NuVal::try_from_nu(value)?))
+    fn try_from_nu(value: nu::Value) -> ConvertResult<Self> {
+        match NuVal::try_from_nu(value) {
+            Ok(val) => Ok(Ok(val)),
+            Err(ConvertError::ErrorValue { .. }) => Ok(Err(NuValError::Unknown)),
+            Err(e) => Err(e),
         }
     }
 }
 
 impl TryFromNu<nu::Value> for NuVal {
-    fn try_from_nu(value: nu::Value) -> Result<Self, ()> {
-        match value {
-            nu::Value::Int { val, .. } => Ok(NuVal::Int(val)),
-            nu::Value::Float { val, .. } => Ok(NuVal::Float(val)),
-            nu::Value::Bool { val, .. } => Ok(NuVal::Bool(val)),
-            nu::Value::String { val, .. } => Ok(NuVal::String(val)),
-            nu::Value::Range { val, .. } => Ok(NuVal::Range(match *val {
-                nu::Range::IntRange(x) => RangeData::Int(
-                    TypedRangeData::from(x)
-                ),
-                nu::Range::FloatRange(x) => RangeData::Float(
-                    TypedRangeData::from(x)
-                )
-            })),
-            nu::Value::Record { val, .. } => Ok(NuVal::Record(
-                val.into_owned().drain(..)
-                    .map(|(k,v)| Self::try_from_nu(v).map(|v| (k, v)))
-                    .collect::<Result<Vec<_>, ()>>()?
-            )),
-            nu::Value::List { vals, .. } => Ok(NuVal::List(
+    fn try_from_nu(value: nu::Value) -> ConvertResult<Self> {
+        Ok(match value {
+            nu::Value::Bool { val, .. } => NuVal::Bool(val),
+            nu::Value::Int { val, .. } => NuVal::Int(val),
+            nu::Value::Float { val, .. } => NuVal::Float(val),
+            nu::Value::String { val, .. } => NuVal::String(val),
+            nu::Value::Glob { val, no_expand, .. } => NuVal::Glob(GlobData {
+                glob: val,
+                no_expand,
+            }),
+            nu::Value::Filesize { val, .. } => NuVal::Filesize(val.get()),
+            nu::Value::Duration { val, .. } => NuVal::Duration(val),
+            nu::Value::Date { val, .. } => NuVal::Date(val.into()),
+            nu::Value::Range { val, .. } => NuVal::Range((*val).into()),
+            nu::Value::Record { val, .. } => NuVal::Record(
+                val.into_owned()
+                    .into_iter()
+                    .map(|(k, v)| Self::try_from_nu(v).map(|v| (k, v)))
+                    .collect::<ConvertResult<Vec<_>>>()?,
+            ),
+            nu::Value::List { vals, .. } => NuVal::List(
                 vals.into_iter()
-                    .map(|v| Self::try_from_nu(v))
-                    .collect::<Result<Vec<_>, ()>>()?
-            )),
-            nu::Value::Binary { val, .. } => Ok(NuVal::Binary(val.into_owned())),
-            nu::Value::CellPath { val, .. } => Ok(NuVal::CellPath(
-                val.members.into_iter()
-                    .map(|x| CellPathMemberData::from(x))
-                    .collect()
-            )),
-            nu::Value::Nothing {..} => Ok(NuVal::Nothing),
-            _ => Err(()),
-        }
+                    .map(Self::try_from_nu)
+                    .collect::<ConvertResult<Vec<_>>>()?,
+            ),
+            nu::Value::Binary { val, .. } => NuVal::Binary(val.into_owned()),
+            nu::Value::CellPath { val, .. } => NuVal::CellPath(
+                val.members
+                    .into_iter()
+                    .map(CellPathMemberData::from)
+                    .collect(),
+            ),
+            nu::Value::Nothing { .. } => NuVal::Nothing,
+            nu::Value::Error { error, .. } => return ErrorValueSnafu { error }.fail(),
+            nu::Value::Closure { .. } => {
+                return UnsupportedSnafu { value_type: "closure" }.fail();
+            }
+            nu::Value::Custom { val, .. } => {
+                return UnsupportedSnafu {
+                    value_type: val.type_name(),
+                }
+                .fail();
+            }
+        })
     }
 }
 
-/*
-pub enum Value {
-    #[non_exhaustive]
-    Bool {
-        val: bool,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    Int {
-        val: i64,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    Float {
-        val: f64,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    String {
-        val: String,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    Glob {
-        val: String,
-        no_expand: bool,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    Filesize {
-        val: Filesize,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    Duration {
-        /// The duration in nanoseconds.
-        val: i64,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    Date {
-        val: DateTime<FixedOffset>,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    Range {
-        val: Box<Range>,
-        #[serde(skip)]
-        signals: Option<Signals>,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    Record {
-        val: SharedCow<Record>,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    List {
-        vals: Vec<Value>,
-        #[serde(skip)]
-        signals: Option<Signals>,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    Closure {
-        val: Box<Closure>,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    Error {
-        error: Box<ShellError>,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    Binary {
-        val: Vec<u8>,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    CellPath {
-        val: CellPath,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    Custom {
-        val: Box<dyn CustomValue>,
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
-    #[non_exhaustive]
-    Nothing {
-        /// note: spans are being refactored out of Value
-        /// please use .span() instead of matching this span value
-        #[serde(rename = "span")]
-        internal_span: Span,
-    },
+impl TryIntoNu for NuVal {
+    fn try_into_nu(self, span: nu::Span) -> ConvertResult<nu::Value> {
+        Ok(match self {
+            NuVal::Bool(v) => nu::Value::bool(v, span),
+            NuVal::Int(v) => nu::Value::int(v, span),
+            NuVal::Float(v) => nu::Value::float(v, span),
+            NuVal::String(v) => nu::Value::string(v, span),
+            NuVal::Glob(GlobData { glob, no_expand }) => nu::Value::glob(glob, no_expand, span),
+            NuVal::Filesize(v) => nu::Value::filesize(nu::Filesize::new(v), span),
+            NuVal::Duration(v) => nu::Value::duration(v, span),
+            NuVal::Date(v) => nu::Value::date(v.try_into()?, span),
+            NuVal::Range(v) => nu::Value::range(v.try_into()?, span),
+            NuVal::Record(pairs) => {
+                let mut record = nu::Record::with_capacity(pairs.len());
+                for (column, v) in pairs {
+                    if record.contains(&column) {
+                        return DuplicateColumnSnafu { column }.fail();
+                    }
+                    record.push(column, v.try_into_nu(span)?);
+                }
+                nu::Value::record(record, span)
+            }
+            NuVal::List(vals) => nu::Value::list(
+                vals.into_iter()
+                    .map(|v| v.try_into_nu(span))
+                    .collect::<ConvertResult<Vec<_>>>()?,
+                span,
+            ),
+            NuVal::Binary(v) => nu::Value::binary(v, span),
+            NuVal::CellPath(members) => nu::Value::cell_path(
+                nu::CellPath {
+                    members: members.into_iter().map(|m| m.into_nu(span)).collect(),
+                },
+                span,
+            ),
+            NuVal::Nothing => nu::Value::nothing(span),
+        })
+    }
 }
-*/

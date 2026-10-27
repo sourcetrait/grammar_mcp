@@ -20,6 +20,7 @@ keywords = ["sourcetrait", "grammar"]
 
 [workspace.dependencies]
 bitcode = { version = "0.6" }
+chrono = { version = "0.4.45", default-features = false, features = ["serde", "std", "unstable-locales"] }
 clap = { version = "4", features = ["derive"] }
 directories = { version = "6" }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }

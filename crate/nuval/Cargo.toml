@@ -12,9 +12,12 @@ keywords.workspace   = true
 
 [dependencies]
 bitcode.workspace = true
+chrono.workspace = true
 nu-protocol.workspace = true
 rkyv.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+snafu.workspace = true
 
 sourcetrait_common.workspace = true
 
