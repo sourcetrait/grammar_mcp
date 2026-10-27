@@ -126,6 +126,6 @@ where
         let bytes = bitcode::encode(&item);
         let compressed = zstd::encode_all(bytes.as_slice(), REMOTE_ZSTD_LEVEL)
             .map_err(|e| io::Error::other(format!("remote frame: zstd encode failed: {e}")))?;
-        self.frames.encode(compressed.into(), dst)
+        self.frames.encode(tku::Bytes::from(compressed), dst)
     }
 }

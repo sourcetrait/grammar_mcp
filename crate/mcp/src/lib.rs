@@ -381,7 +381,7 @@ pub(crate) mod tk {
 
 pub(crate) mod tku {
     pub(crate) use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite, LengthDelimitedCodec};
-    pub(crate) use tokio_util::bytes::BytesMut;
+    pub(crate) use tokio_util::bytes::{Bytes, BytesMut};
     pub(crate) use tokio_util::sync::CancellationToken;
 }
 
