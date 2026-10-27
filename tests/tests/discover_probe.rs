@@ -58,7 +58,7 @@ fn reply(host: &mut Host, id: &Value, log: &Path) -> Value {
 }
 
 /// Claude Code's probe is answered with the modern revision, and the host then
-/// serves `tools/list` and a `nu` call in it with no `initialize`.
+/// serves `tools/list` and an `execute` call in it with no `initialize`.
 #[tested]
 fn the_discover_probe_finds_the_modern_era() {
     let t = testing::test!({ .using_temp_dir() });
@@ -81,8 +81,8 @@ fn the_discover_probe_finds_the_modern_era() {
         3,
         "tools/call",
         json!({
-            "name": "nu",
-            "arguments": nu_args(
+            "name": "execute",
+            "arguments": execute_args(
                 "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x + 1) } }",
                 "{x: 5}",
             ),

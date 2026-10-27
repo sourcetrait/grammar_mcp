@@ -291,7 +291,7 @@ impl GrammarMcpError {
                 format!("invalid nonce `{nonce}`: {reason}")
             }
             Self::RerunBodyMissing { nonce } => {
-                format!("no cached definition for the nonce `{nonce}`; rerun takes a nu call's")
+                format!("no cached definition for the nonce `{nonce}`; rerun takes an execute call's")
             }
             Self::ChannelStart { reason } => format!("cannot start the channel hub: {reason}"),
             Self::ChannelNotOpen => {
@@ -302,7 +302,7 @@ impl GrammarMcpError {
                  channel/Open packet, then run `interface channel ready`"
                 .to_string(),
             Self::ChannelPeerGone => "the channel's peer connection is gone; run \
-                 `interface channel closed` then `interface channel open` for a fresh channel"
+                 `interface channel close` then `interface channel open` for a fresh channel"
                 .to_string(),
             Self::RemoteInvalidParams { reason } => {
                 format!("invalid remote link parameters: {reason}")

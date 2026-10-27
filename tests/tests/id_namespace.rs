@@ -137,7 +137,7 @@ fn env_carries_id_namespace_and_work_dir() {
         t.temp_dir(),
         &["--id", "envid", "--namespace", "envns", "--workdir", wd_str],
     );
-    let resp = host.nu(
+    let resp = host.execute(
         "def execute [data: nothing]: nothing -> record<id: string, ns: string, wd: string> {\n    { id: $env.EQUIP_ID, ns: $env.EQUIP_NAMESPACE, wd: $env.EQUIP_WORK_DIR }\n}",
         "null",
     );
@@ -160,7 +160,7 @@ fn workdir_tilde_expands_against_home() {
         &["--id", "tildeid", "--workdir", "~/wd_x"],
         &[("HOME", home_str)],
     );
-    let resp = host.nu(WORK_DIR, "null");
+    let resp = host.execute(WORK_DIR, "null");
     let expected = home.join("wd_x");
     assert_eq!(
         envelope(&resp)["result"]["wd"].as_str(),
@@ -176,7 +176,7 @@ fn workdir_defaults_under_home_proj_equip_id() {
     std::fs::create_dir_all(&home).unwrap();
     let home_str = home.to_str().unwrap();
     let mut host = Host::spawn_full(t.temp_dir(), &["--id", "wdid"], &[("HOME", home_str)]);
-    let resp = host.nu(WORK_DIR, "null");
+    let resp = host.execute(WORK_DIR, "null");
     let expected = home.join("proj").join("equip").join("wdid");
     assert_eq!(
         envelope(&resp)["result"]["wd"].as_str(),

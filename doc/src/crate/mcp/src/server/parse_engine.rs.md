@@ -18,7 +18,7 @@ its config dirs failed a commit.
 
 The `grimm` decls go in too, which each eval registers into its own working set: a
 name the parser cannot resolve reads as an external, so without them a `grimm dbg`
-handed a table literal failed a `nu` definition's contract parse and a rig's
+handed a table literal failed an `execute` definition's contract parse and a rig's
 validation alike, though the same text runs.
 
 ### fn engine_state

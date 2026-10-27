@@ -20,14 +20,14 @@ const PLUS_ONE: &str =
 #[test]
 fn a_data_type_mismatch_surfaces() {
     let s = TESTING.harness();
-    let env = s.nu(PLUS_ONE, "{x: five}");
+    let env = s.execute(PLUS_ONE, "{x: five}");
     assert_eq!(error_kind(&env), Some("data::invalid"), "got {env}");
 }
 
 #[test]
 fn a_result_type_mismatch_surfaces() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x | into string) } }",
         "{x: 5}",
     );
@@ -37,7 +37,7 @@ fn a_result_type_mismatch_surfaces() {
 #[test]
 fn external_command_runs() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<out: string> { { out: (^printf hello | str trim) } }",
         "null",
     );
@@ -47,7 +47,7 @@ fn external_command_runs() {
 #[test]
 fn exit_decl_is_unreachable() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<out: int> {\n    exit 1\n    { out: 0 }\n}",
         "null",
     );
@@ -64,7 +64,7 @@ fn exit_decl_is_unreachable() {
 #[test]
 fn timeout_fires_then_recovers() {
     let s = TESTING.harness();
-    let timed = s.nu_timeout(
+    let timed = s.execute_timeout(
         "def execute [data: nothing]: nothing -> record<out: int> {\n    sleep 5sec\n    { out: 0 }\n}",
         "null",
         Some("200ms"),
@@ -76,7 +76,7 @@ fn timeout_fires_then_recovers() {
     );
     assert!(timed["nonce"].as_str().is_some(), "expected a nonce; got {timed}");
 
-    let env = s.nu(PLUS_ONE, "{x: 7}");
+    let env = s.execute(PLUS_ONE, "{x: 7}");
     assert_eq!(env["result"], json!({"out": 8}), "a fresh call after a timeout should work; got {env}");
 }
 
@@ -108,7 +108,7 @@ fn kill_unknown_nonce_is_silent_ok() {
 #[test]
 fn plugin_path_resolves() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<path: string> { { path: $nu.plugin-path } }",
         "null",
     );
@@ -124,7 +124,7 @@ fn plugin_path_resolves() {
 #[test]
 fn tls_crypto_provider_installed() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<out: string> {\n    { out: (try { http get 'https://127.0.0.1:9' | to text } catch {|e| $e.msg }) }\n}",
         "null",
     );
@@ -140,14 +140,14 @@ fn tls_crypto_provider_installed() {
 fn multi_call_stability_and_scoping() {
     let s = TESTING.harness();
     for i in 0..10i64 {
-        let env = s.nu(PLUS_ONE, &format!("{{x: {i}}}"));
+        let env = s.execute(PLUS_ONE, &format!("{{x: {i}}}"));
         assert_eq!(env["result"]["out"].as_i64(), Some(i + 1), "call {i}: got {env}");
     }
     // `scope commands` reports LOCAL scope as of nushell 0.115 (PR #18684), so an
     // eval always sees its own `execute` and that name cannot witness leakage.
     // Probe with a name only THIS eval defines instead: visible to its own eval,
     // and absent from a later eval unless the shared base was polluted.
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<defined: int> {\n    def __leak_probe [] { 0 }\n    { defined: (scope commands | where name == '__leak_probe' | length) }\n}",
         "null",
     );
@@ -156,7 +156,7 @@ fn multi_call_stability_and_scoping() {
         Some(1),
         "a block-local def is visible to its own eval under 0.115 local scope; got {env}",
     );
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<leaked: int> { { leaked: (scope commands | where name == '__leak_probe' | length) } }",
         "null",
     );

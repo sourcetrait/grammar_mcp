@@ -1,8 +1,8 @@
 use crate::*;
 
-/// Parameters for `nu()`.
+/// Parameters for `execute()`.
 #[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
-pub struct NuParams {
+pub struct ExecuteParams {
     /// One Nu definition: `def execute [data: <type>]: nothing -> <type> { ... }`.
     pub definition: String,
     /// The definition's data as NUON text; `null` for `data: nothing`.
@@ -12,14 +12,14 @@ pub struct NuParams {
     pub timeout: Option<String>,
 }
 
-/// A `nu` call ready to dispatch: its contract, its source, and its timeout.
-pub(crate) struct PreparedNu {
+/// An `execute` call ready to dispatch: its contract, its source, its timeout.
+pub(crate) struct PreparedExecute {
     def: ExecuteDef,
     source: String,
     timeout_ms: u64,
 }
 
-impl PreparedNu {
+impl PreparedExecute {
     /// The lane the call runs on.
     pub(crate) fn lane(&self) -> Lane {
         self.def.lane
@@ -48,13 +48,13 @@ fn parse_timeout(text: Option<&str>) -> Result<(u64, nu::Value), GrammarMcpError
 }
 
 /// Hold a call's definition, data, and timeout to the contract; build its source.
-pub(crate) fn prepare_nu(
+pub(crate) fn prepare_execute(
     engine: &ParseEngine,
     definition: &str,
     data: &str,
     timeout: Option<&str>,
     lint: bool,
-) -> Result<PreparedNu, GrammarMcpError> {
+) -> Result<PreparedExecute, GrammarMcpError> {
     let def = analyze_definition(engine, definition, lint)
         .map_err(|diagnostics| GrammarMcpError::DefinitionViolations { diagnostics })?;
     let invalid = |reason: String| GrammarMcpError::DataInvalid { reason };
@@ -74,8 +74,8 @@ pub(crate) fn prepare_nu(
     } else {
         None
     };
-    let source = build_nu_source(definition, &data_literal, timeout_literal.as_deref());
-    Ok(PreparedNu {
+    let source = build_execute_source(definition, &data_literal, timeout_literal.as_deref());
+    Ok(PreparedExecute {
         def,
         source,
         timeout_ms,
@@ -84,16 +84,16 @@ pub(crate) fn prepare_nu(
 
 impl NuSh {
     /// Dispatch a prepared call on its lane and hold its result to the contract.
-    pub(crate) async fn dispatch_nu(
+    pub(crate) async fn dispatch_execute(
         &self,
         nonce: datum::NoncePair,
-        prepared: PreparedNu,
+        prepared: PreparedExecute,
         definition: &str,
         tool: &'static str,
         kind: InFlightKind,
         args_json: json::Value,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let PreparedNu {
+        let PreparedExecute {
             def,
             source,
             timeout_ms,
@@ -104,7 +104,7 @@ impl NuSh {
                     &self.executor,
                     &self.in_flight,
                     &self.hung_watch,
-                    CacheKind::Nu,
+                    CacheKind::Execute,
                     nonce,
                     source,
                     tool,
@@ -143,27 +143,27 @@ impl NuSh {
     }
 }
 
-#[mcp::tool_router(router = nu_router, vis = "pub(crate)")]
+#[mcp::tool_router(router = execute_router, vis = "pub(crate)")]
 impl NuSh {
     #[allow(clippy::doc_overindented_list_items)]
     #[doc = include_str!("../../../../../include/human/mcp/execute.md")]
-    #[mcp::tool(name = "nu")]
-    pub(crate) async fn nu(
+    #[mcp::tool(name = "execute")]
+    pub(crate) async fn execute(
         &self,
-        mcp::Parameters(p): mcp::Parameters<NuParams>,
+        mcp::Parameters(p): mcp::Parameters<ExecuteParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let nonce = self.mint("nu", &p);
+        let nonce = self.mint("execute", &p);
         let engine = self.lint_engine.current();
         let prepared =
-            match prepare_nu(&engine, &p.definition, &p.data, p.timeout.as_deref(), true) {
+            match prepare_execute(&engine, &p.definition, &p.data, p.timeout.as_deref(), true) {
                 Ok(prepared) => prepared,
                 Err(error) => return error_to_call_result(error, nonce.to_nonce()),
             };
-        let kind = InFlightKind::Nu {
+        let kind = InFlightKind::Execute {
             lane: prepared.lane(),
         };
         let args_json = serde_json::json!({"data": p.data, "timeout": p.timeout});
-        self.dispatch_nu(nonce, prepared, &p.definition, "nu", kind, args_json)
+        self.dispatch_execute(nonce, prepared, &p.definition, "execute", kind, args_json)
             .await
     }
 }

@@ -65,8 +65,7 @@ fn a_builtin_is_reached_by_its_bare_name() {
 
     let configured = s.purview_configure("gram_calls", &["gram:m:"]);
     assert!(!has_error(&configured), "a purview takes a builtin's bare form; got {configured}");
-    let viewed = s.info_as(&["gram_calls"]);
-    assert_eq!(viewed["result"]["signatures"].as_str(), Some(block), "got {viewed}");
+    assert_eq!(configured["result"]["signatures"].as_str(), Some(block), "got {configured}");
 }
 
 #[tested]

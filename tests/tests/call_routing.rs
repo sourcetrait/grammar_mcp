@@ -12,10 +12,10 @@ static TESTING: testing::Module = testing::module!(Integration, { .using_temp_di
 const ID: &str = "routing";
 const NAMESPACE: &str = "default";
 
-/// The clean envelope of a stateful `nu` call running `body`, panicking on an error.
+/// The clean envelope of a stateful `execute` call running `body`, panicking on an error.
 fn stateful(host: &mut Host, body: &str) -> Value {
     let definition = format!("def --env execute [data: nothing]: nothing -> record<ok: bool> {{\n{body}\n}}");
-    let resp = host.nu(&definition, "null");
+    let resp = host.execute(&definition, "null");
     extract_envelope(&resp).unwrap_or_else(|| panic!("the stateful call should succeed; got {resp}"))
 }
 
@@ -23,7 +23,7 @@ fn stateful(host: &mut Host, body: &str) -> Value {
 fn call_log(host: &Host, env: &Value, name: &str) -> String {
     let nonce = env["nonce"].as_str().expect("envelope nonce");
     let log = namespace_dir(host.cache_home(), ID, NAMESPACE)
-        .join("nu")
+        .join("execute")
         .join(nonce)
         .join(name);
     std::fs::read_to_string(&log).unwrap_or_default()

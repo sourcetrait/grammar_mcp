@@ -44,13 +44,13 @@ fn stateful_persistence_is_sequenced() {
 
 fn env_mutation_persists_across_stateful_calls(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
-    let first = s.nu(
+    let first = s.execute(
         "def --env execute [data: record<value: string>]: nothing -> record<wrote: string> {\n    $env.SHOT_DEMO = $data.value\n    { wrote: $data.value }\n}",
         "{value: alpha}",
     );
     assert_eq!(first["result"], json!({"wrote": "alpha"}), "got {first}");
 
-    let second = s.nu(
+    let second = s.execute(
         "def --env execute [data: nothing]: nothing -> record<saw: string> { { saw: $env.SHOT_DEMO } }",
         "null",
     );
@@ -63,12 +63,12 @@ fn env_mutation_persists_across_stateful_calls(_t: &testing::Testable<'_, '_, '_
 
 fn cd_persists_across_stateful_calls(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
-    let first = s.nu(
+    let first = s.execute(
         "def --env execute [data: record<target: string>]: nothing -> record<cwd: string> {\n    cd $data.target\n    { cwd: (pwd) }\n}",
         "{target: /tmp}",
     );
     assert!(!has_error(&first), "got {first}");
-    let second = s.nu(
+    let second = s.execute(
         "def --env execute [data: nothing]: nothing -> record<cwd: string> { { cwd: $env.PWD } }",
         "null",
     );
@@ -80,7 +80,7 @@ fn cd_persists_across_stateful_calls(_t: &testing::Testable<'_, '_, '_>) {
 /// next.
 fn an_inner_def_does_not_persist_across_stateful_calls(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
-    let first = s.nu(
+    let first = s.execute(
         "def --env execute [data: nothing]: nothing -> record<seen: bool> {\n    def stateful_scoped_probe [] { 1 }\n    { seen: ('stateful_scoped_probe' in (scope commands | get name)) }\n}",
         "null",
     );
@@ -90,7 +90,7 @@ fn an_inner_def_does_not_persist_across_stateful_calls(_t: &testing::Testable<'_
         "the def should be visible within the call that made it; got {first}",
     );
 
-    let second = s.nu(
+    let second = s.execute(
         "def --env execute [data: nothing]: nothing -> record<seen: bool> { { seen: ('stateful_scoped_probe' in (scope commands | get name)) } }",
         "null",
     );
@@ -103,12 +103,12 @@ fn an_inner_def_does_not_persist_across_stateful_calls(_t: &testing::Testable<'_
 
 fn stateful_state_does_not_leak_into_the_pool(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
-    let set = s.nu(
+    let set = s.execute(
         "def --env execute [data: nothing]: nothing -> record<ok: bool> {\n    $env.STATEFUL_ONLY = 'kept'\n    { ok: true }\n}",
         "null",
     );
     assert!(!has_error(&set), "got {set}");
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<seen: bool> { { seen: ('STATEFUL_ONLY' in $env) } }",
         "null",
     );
@@ -126,7 +126,7 @@ fn stateful_state_does_not_leak_into_the_pool(_t: &testing::Testable<'_, '_, '_>
 fn a_stateful_cd_does_not_move_the_host_process_cwd(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
     let before = std::fs::read_link("/proc/self/cwd").expect("read /proc/self/cwd");
-    let env = s.nu(
+    let env = s.execute(
         "def --env execute [data: record<dir: string>]: nothing -> record<pwd: string> {\n    cd $data.dir\n    { pwd: $env.PWD }\n}",
         "{dir: /etc}",
     );
@@ -145,7 +145,7 @@ fn a_stateful_cd_does_not_move_the_host_process_cwd(_t: &testing::Testable<'_, '
 
 fn a_multi_line_definition_with_a_command_then_a_record_parses(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def --env execute [data: record<x: int>]: nothing -> record<y: int, slept_ms: int> {\n    sleep 50ms\n    let doubled = ($data.x * 2)\n    { y: $doubled, slept_ms: 50 }\n}",
         "{x: 7}",
     );

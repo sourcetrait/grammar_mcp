@@ -43,7 +43,7 @@ impl NuSh {
         command: InterfaceCommand,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         match command {
-            InterfaceCommand::Info(p) => self.info(nonce, p).await,
+            InterfaceCommand::Info => self.info(nonce).await,
             InterfaceCommand::Help(p) => self.help(nonce, p).await,
             InterfaceCommand::ProcessList => self.process_list(nonce).await,
             InterfaceCommand::ProcessKill(p) => self.process_kill(nonce, p).await,
@@ -53,7 +53,7 @@ impl NuSh {
             InterfaceCommand::PurviewConfigure(p) => self.purview_configure(nonce, p).await,
             InterfaceCommand::ChannelOpen => self.channel_open(nonce).await,
             InterfaceCommand::ChannelReady => self.channel_ready(nonce).await,
-            InterfaceCommand::ChannelClosed => self.channel_closed(nonce).await,
+            InterfaceCommand::ChannelClose => self.channel_close(nonce).await,
             InterfaceCommand::ChannelConfig(p) => self.channel_config(nonce, p).await,
             InterfaceCommand::RemoteOpen(p) => self.remote_open(nonce, p).await,
             InterfaceCommand::RemoteClose(p) => self.remote_close(nonce, p).await,

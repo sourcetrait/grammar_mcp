@@ -2,7 +2,7 @@
 
 ## enum CacheKind
 The variant-to-dir-name mapping lives in ONE place so the per-call trees cannot drift
-apart from the enum that selects them: `nu/` for every `nu` and `rerun` call, either
+apart from the enum that selects them: `execute/` for every `execute` and `rerun` call, either
 lane, and `calls/` for a rig's call.
 
 ## static BASE_DIRS
@@ -33,7 +33,7 @@ the call, and a nonce names one call across all of them.
 
 ## fn definition_file
 Co-locating the definition with that call's stdout and stderr means ONE prune of
-`nu/<nonce>/` reclaims logs and definition together - there is no separate id space
+`execute/<nonce>/` reclaims logs and definition together - there is no separate id space
 to reason about, because the nonce IS the rerun handle. The definition is saved as the
 `.nu` source it is, readable and runnable as written.
 

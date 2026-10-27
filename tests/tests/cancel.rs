@@ -1,5 +1,5 @@
 //! Cooperative cancellation: `interface process kill` actually stops an in-flight
-//! `nu` call. A SYSTEM test - it needs a real client sending the kill WHILE a call
+//! `execute` call. A SYSTEM test - it needs a real client sending the kill WHILE a call
 //! is in flight (pipelined requests over the stdio transport). No test-hooks: nu
 //! `sleep` polls Signals, so it bails on the cancel.
 
@@ -19,12 +19,12 @@ fn in_flight(host: &mut Host) -> Vec<serde_json::Value> {
         .unwrap_or_default()
 }
 
-/// Poll the process list until an in-flight `nu` call appears; return its nonce.
-fn poll_inflight_nu_nonce(host: &mut Host, secs: u64) -> Option<String> {
+/// Poll the process list until an in-flight `execute` call appears; return its nonce.
+fn poll_inflight_execute_nonce(host: &mut Host, secs: u64) -> Option<String> {
     let deadline = Instant::now() + Duration::from_secs(secs);
     loop {
         for e in in_flight(host) {
-            if e.get("tool").and_then(|tl| tl.as_str()) == Some("nu")
+            if e.get("tool").and_then(|tl| tl.as_str()) == Some("execute")
                 && let Some(n) = e.get("nonce").and_then(|n| n.as_str())
             {
                 return Some(n.to_string());
@@ -57,14 +57,14 @@ fn kill_stops_an_in_flight_call() {
     let mut host = Host::spawn(t.temp_dir());
     // Launch a long call without blocking on its response.
     let call_id = host.request(
-        "nu",
-        nu_args(
+        "execute",
+        execute_args(
             "def execute [data: nothing]: nothing -> record<out: int> {\n    sleep 30sec\n    { out: 0 }\n}",
             "null",
         ),
     );
     // It should register as in-flight; grab its nonce.
-    let nonce = poll_inflight_nu_nonce(&mut host, 5).expect("the call should register as in-flight");
+    let nonce = poll_inflight_execute_nonce(&mut host, 5).expect("the call should register as in-flight");
     // Kill it; its own void response is ignored.
     let _ = host.request_interface(&format!("interface process kill {}", nu_literal(&nonce)));
     // Read the call's own response: a killed call bails on the cancel and returns

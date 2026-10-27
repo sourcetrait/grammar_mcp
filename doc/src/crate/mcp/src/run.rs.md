@@ -9,7 +9,7 @@ CONSTRUCTED BY HAND rather than through `#[tokio::main]` for exactly one reason:
 `thread_stack_size`.
 
 Nushell PARSING is deeply recursive, and two parses run inline on a runtime
-worker rather than on an eval thread - a `nu` definition's contract check with
+worker rather than on an eval thread - an `execute` definition's contract check with
 its lint, and the equip validator. A pathological module graph, whose resolution
 recurses until the accumulated path stops resolving, overflows the 2 MB worker
 default and ABORTS the process. A stack overflow is a fatal runtime error rather

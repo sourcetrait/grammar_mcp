@@ -1,4 +1,4 @@
-//! The stateless executor's concurrency bound. Fire N concurrent nu()s (N above
+//! The stateless executor's concurrency bound. Fire N concurrent execute()s (N above
 //! the semaphore cap) over the stdio transport: every one completes (the buffered
 //! multi-read on `Host` collects them all back by id), and `interface process list`
 //! never shows more than the cap (= available_parallelism / 2) in flight - the pool
@@ -35,8 +35,8 @@ fn concurrent_calls_complete_and_hold_the_semaphore_bound() {
     let ids: Vec<(usize, u64)> = (0..n)
         .map(|i| {
             let id = host.request(
-                "nu",
-                nu_args(
+                "execute",
+                execute_args(
                     "def execute [data: record<i: int>]: nothing -> record<out: int> {\n    sleep 1sec\n    { out: $data.i }\n}",
                     &format!("{{i: {i}}}"),
                 ),
@@ -46,7 +46,7 @@ fn concurrent_calls_complete_and_hold_the_semaphore_bound() {
         .collect();
 
     // While the first wave runs, poll the process list and record the max concurrent
-    // `nu` count. 1s definitions + a sub-1s window means the whole first wave is in
+    // `execute` count. 1s definitions + a sub-1s window means the whole first wave is in
     // flight throughout, so the pool sits saturated at the cap (the extra
     // n - cap calls wait on the semaphore and only start as permits free).
     let mut max_in_flight = 0usize;
@@ -57,7 +57,7 @@ fn concurrent_calls_complete_and_hold_the_semaphore_bound() {
             .as_array()
             .map(|a| {
                 a.iter()
-                    .filter(|e| e.get("tool").and_then(|t| t.as_str()) == Some("nu"))
+                    .filter(|e| e.get("tool").and_then(|t| t.as_str()) == Some("execute"))
                     .count()
             })
             .unwrap_or(0);

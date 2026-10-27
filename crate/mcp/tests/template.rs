@@ -3,14 +3,14 @@
 //! the resource caveat. Driven through the `guts` surface.
 
 use serde_json::json;
-use sourcetrait_grammar_mcp::guts::{build_call_source, build_nu_source, parses_clean};
+use sourcetrait_grammar_mcp::guts::{build_call_source, build_execute_source, parses_clean};
 
 const DEFINITION: &str =
     "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x + 1) } }";
 
 #[test]
 fn nu_source_is_the_definition_then_execute_on_the_data() {
-    let got = build_nu_source(DEFINITION, "{x: 5}", None);
+    let got = build_execute_source(DEFINITION, "{x: 5}", None);
     assert_eq!(got, format!("{DEFINITION}\nexecute {{x: 5}}\n"));
     assert!(parses_clean(&got), "a nu source must parse clean:\n{got}");
 }
@@ -18,7 +18,7 @@ fn nu_source_is_the_definition_then_execute_on_the_data() {
 #[test]
 fn nu_source_passes_a_null_for_nothing() {
     let definition = "def execute [data: nothing]: nothing -> record<out: int> { { out: 0 } }";
-    let got = build_nu_source(definition, "null", None);
+    let got = build_execute_source(definition, "null", None);
     assert_eq!(got, format!("{definition}\nexecute null\n"));
     assert!(parses_clean(&got), "a void nu source must parse clean:\n{got}");
 }
@@ -26,7 +26,7 @@ fn nu_source_passes_a_null_for_nothing() {
 #[test]
 fn nu_source_passes_the_timeout_to_a_definition_that_takes_it() {
     let definition = "def execute [data: nothing, timeout?: duration]: nothing -> record<out: int> { { out: 0 } }";
-    let got = build_nu_source(definition, "null", Some("30sec"));
+    let got = build_execute_source(definition, "null", Some("30sec"));
     assert_eq!(got, format!("{definition}\nexecute null 30sec\n"));
     assert!(parses_clean(&got), "a nu source with a timeout must parse clean:\n{got}");
 }
@@ -36,7 +36,7 @@ fn nu_source_keeps_a_multi_line_definition_verbatim() {
     // The definition is spliced VERBATIM: re-indenting it would corrupt a
     // definition carrying a multi-line string literal.
     let definition = "def execute [data: record<x: int>]: nothing -> record<out: int> {\n    let y = ($data.x * 2)\n{ out: $y }\n}";
-    let got = build_nu_source(definition, "{x: 3}", None);
+    let got = build_execute_source(definition, "{x: 3}", None);
     assert_eq!(got, format!("{definition}\nexecute {{x: 3}}\n"));
     assert!(parses_clean(&got), "a multi-line nu source must parse clean:\n{got}");
 }

@@ -53,10 +53,6 @@ fn purview_state_is_sequenced() {
             the_current_view_filters_what_info_reports(t);
             testing::StepState(s, p)
         })
-        .step("blinders_render_another_purview_without_changing_the_current_one", |t, s, p| {
-            blinders_render_another_purview_without_changing_the_current_one(t);
-            testing::StepState(s, p)
-        })
         .step("an_alias_names_the_same_purview_as_a_bare_id", |t, s, p| {
             an_alias_names_the_same_purview_as_a_bare_id(t);
             testing::StepState(s, p)
@@ -303,34 +299,17 @@ fn the_current_view_filters_what_info_reports(t: &testing::Testable<'_, '_, '_>)
     );
 }
 
-fn blinders_render_another_purview_without_changing_the_current_one(t: &testing::Testable<'_, '_, '_>) {
-    let s = TESTING.harness();
-    reset_purviews(s);
-    commit_rig(s, &t.temp_dir().join("pvmine"), "sourcetrait/pvmine");
-    commit_rig(s, &t.temp_dir().join("pvtheirs"), "sourcetrait/pvtheirs");
-
-    let _ = s.purview_configure("default", &["sourcetrait/pvmine:"]);
-    let _ = s.purview_configure("sub/agent", &["sourcetrait/pvtheirs:"]);
-
-    let blinded = s.info_as(&["sub/agent"]);
-    let block = signatures(&blinded);
-    assert!(block.contains("pvtheirs") && !block.contains("pvmine"), "got {blinded}");
-
-    // Blinders are a RENDERING, not a mutation - which is what lets one session
-    // hand a subagent a narrower surface without giving up its own.
-    let mine = s.info();
-    assert!(signatures(&mine).contains("pvmine"), "got {mine}");
-    assert_eq!(mine["result"]["purview"][0][0].as_str(), Some("default"));
-}
-
 fn an_alias_names_the_same_purview_as_a_bare_id(t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
     reset_purviews(s);
     commit_rig(s, &t.temp_dir().join("pvalias"), "sourcetrait/pvalias");
     let _ = s.purview_configure("aliased", &["sourcetrait/pvalias:"]);
 
-    let bare = s.info_as(&["aliased"]);
-    let at = s.info_as(&["@aliased"]);
+    let _ = s.purview(&["aliased"]);
+    let bare = s.info();
+    let _ = s.purview(&["@aliased"]);
+    let at = s.info();
+    let _ = s.purview(&[]);
     assert_eq!(
         signatures(&bare),
         signatures(&at),

@@ -1,4 +1,4 @@
-//! A `nu` definition held to the execute contract before anything runs it.
+//! An `execute` call's definition held to its contract before anything runs it.
 use crate::*;
 
 /// The one name a definition gives its command.

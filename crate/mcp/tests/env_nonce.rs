@@ -13,7 +13,7 @@ static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integrat
 #[test]
 fn a_stateless_body_sees_the_envelope_nonce() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<seen: string> { {seen: $env.NONCE} }",
         "null",
     );
@@ -25,7 +25,7 @@ fn a_stateless_body_sees_the_envelope_nonce() {
 #[test]
 fn a_nested_helper_inherits_the_nonce() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<seen: string> {\n    def grab [] { $env.NONCE }\n    {seen: (grab)}\n}",
         "null",
     );
@@ -59,7 +59,7 @@ fn call_target_sees_nonce() {
 #[test]
 fn a_stateful_body_sees_the_envelope_nonce() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def --env execute [data: nothing]: nothing -> record<seen: string> { {seen: $env.NONCE} }",
         "null",
     );
@@ -70,14 +70,14 @@ fn a_stateful_body_sees_the_envelope_nonce() {
 #[test]
 fn the_stateful_nonce_is_fresh_per_call_and_env_persists() {
     let s = TESTING.harness();
-    let a = s.nu(
+    let a = s.execute(
         "def --env execute [data: nothing]: nothing -> record<seen: string> {\n    $env.KEEP = $env.NONCE\n    {seen: $env.NONCE}\n}",
         "null",
     );
     let nonce_a = a["nonce"].as_str().expect("A nonce").to_string();
     assert_eq!(a["result"]["seen"].as_str(), Some(nonce_a.as_str()), "{a}");
 
-    let b = s.nu(
+    let b = s.execute(
         "def --env execute [data: nothing]: nothing -> record<seen: string, keep: string> {\n    {seen: $env.NONCE, keep: $env.KEEP}\n}",
         "null",
     );

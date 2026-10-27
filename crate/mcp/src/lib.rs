@@ -49,9 +49,9 @@ pub(crate) mod server {
         pub(crate) mod inspect;
         pub(crate) mod interface;
         pub(crate) mod equip;
+        pub(crate) mod execute;
         pub(crate) mod kill;
         pub(crate) mod new;
-        pub(crate) mod nu;
         pub(crate) mod processes;
         pub(crate) mod purview_configure;
         pub(crate) mod purview_extend;
@@ -242,12 +242,11 @@ pub(crate) use crate::{
                 dispatch_pooled, dispatch_stateful, envelope_text, now_millis, serde_to_nu,
                 success, success_value, success_void, teardown_all_in_flight,
             },
-            info::InfoParams,
             inspect::InspectParams,
             interface::{INTERFACE_TOOL, InterfaceParams, interface_description},
             kill::KillParams,
             new::NewParams,
-            nu::{NuParams, prepare_nu},
+            execute::{ExecuteParams, prepare_execute},
             purview_configure::PurviewConfigureParams,
             purview_extend::PurviewExtendParams,
             purview::PurviewParams,
@@ -259,7 +258,7 @@ pub(crate) use crate::{
     run::{
         parse_deniable,
     },
-    template::{build_call_source, build_nu_source, json_value_to_nu_value},
+    template::{build_call_source, build_execute_source, json_value_to_nu_value},
 };
 
 pub(crate) use std::{

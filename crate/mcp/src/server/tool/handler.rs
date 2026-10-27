@@ -7,8 +7,8 @@ impl NuSh {
     pub(crate) fn tool_router() -> mcp::ToolRouter<Self> {
         let deny = &config().deny;
         let mut router = mcp::ToolRouter::new();
-        if !deny.denies(DeniableTool::Nu) {
-            router += Self::nu_router();
+        if !deny.denies(DeniableTool::Execute) {
+            router += Self::execute_router();
         }
         if !deny.denies(DeniableTool::Rerun) {
             router += Self::rerun_router();
@@ -45,9 +45,9 @@ impl mcp::ServerHandler for NuSh {
             .with_instructions(format!(
                 "{MCP_DOC}\n\
                  Evaluation artifacts are cached at \
-                 $XDG_CACHE_HOME/grammar/mcp/{id}/{namespace}/{{nu,calls}}/<nonce>/{{stdout,stderr}}; \
-                 a nu call's definition co-locates at \
-                 $XDG_CACHE_HOME/grammar/mcp/{id}/{namespace}/nu/<nonce>/definition.nu \
+                 $XDG_CACHE_HOME/grammar/mcp/{id}/{namespace}/{{execute,calls}}/<nonce>/{{stdout,stderr}}; \
+                 an execute call's definition co-locates at \
+                 $XDG_CACHE_HOME/grammar/mcp/{id}/{namespace}/execute/<nonce>/definition.nu \
                  (the rerun(nonce) handle). \
                  Installed equips live in a signed git repo at \
                  $XDG_DATA_HOME/grammar/mcp/{id}/{namespace}/equip/; signing keypair at \

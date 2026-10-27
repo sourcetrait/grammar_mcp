@@ -27,7 +27,7 @@ fn lint_engine_does_not_rebuild_when_the_registry_is_unchanged() {
 #[test]
 fn the_stateless_pool_has_extra_and_lacks_plugin() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<bits: bool, snake: bool, plugin: bool, bits_and: int> {\n    let names = (scope commands | get name)\n    { bits: ('bits and' in $names), snake: ('str snake-case' in $names), plugin: ('plugin list' in $names), bits_and: (5 | bits and 3) }\n}",
         "null",
     );
@@ -41,7 +41,7 @@ fn the_stateless_pool_has_extra_and_lacks_plugin() {
 #[test]
 fn the_stateful_lane_has_extra_and_plugin() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def --env execute [data: nothing]: nothing -> record<bits: bool, plugin: bool> {\n    let names = (scope commands | get name)\n    { bits: ('bits and' in $names), plugin: ('plugin list' in $names) }\n}",
         "null",
     );

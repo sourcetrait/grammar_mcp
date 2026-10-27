@@ -873,7 +873,7 @@ fn scalar_n2j(s: NuScalarTypedef) -> JsonScalarTypedef {
 /// Why an open record or table cannot type a definition's `data` at its top.
 const OPEN_AT_TOP: &str = "an open `record<>` or `table<>` stands only nested; declare the fields";
 
-/// A `nu` definition's `data` type: `nothing`, or a record or table with fields.
+/// An `execute` definition's `data` type: `nothing`, or a typed record or table.
 pub(crate) fn data_typedef(shape: &nu::SyntaxShape) -> Result<NuTypedef, String> {
     match shape {
         nu::SyntaxShape::Nothing => Ok(NuTypedef::Nothing),
@@ -940,7 +940,7 @@ fn shape_typedef(shape: &nu::SyntaxShape) -> Result<NuTypedef, String> {
     }
 }
 
-/// A `nu` definition's return type: `nothing`, or a record or table with fields.
+/// An `execute` definition's return type: `nothing`, or a typed record or table.
 pub(crate) fn result_typedef(ty: &nu::Type) -> Result<NuTypedef, String> {
     match ty {
         nu::Type::Nothing => Ok(NuTypedef::Nothing),

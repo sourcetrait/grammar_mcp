@@ -76,8 +76,8 @@ pub(crate) fn build_call_source(
     )
 }
 
-/// A `nu` call's source: its definition, then `execute` on the data's literal.
-pub(crate) fn build_nu_source(
+/// The source of an `execute` call: its definition, then `execute` on its data.
+pub(crate) fn build_execute_source(
     definition: &str,
     data_literal: &str,
     timeout_literal: Option<&str>,

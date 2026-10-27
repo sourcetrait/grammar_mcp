@@ -4,7 +4,7 @@ fn a_hang() -> Emergency {
     Emergency::HungEngineThread(HungEngineThreadEmergency {
         nonce: "abc123".to_string(),
         lane: "stateless".to_string(),
-        tool: "nu".to_string(),
+        tool: "execute".to_string(),
         started_at: 1000,
         cancelled_at: 2000,
         hung_ms: 6000,
@@ -23,7 +23,7 @@ fn to_nuon_line_is_single_line_and_parses() {
     assert_eq!(rec.get("mcp_nom").and_then(|x| x.as_str().ok()), Some("nomAAA"));
     assert_eq!(rec.get("nonce").and_then(|x| x.as_str().ok()), Some("abc123"));
     assert_eq!(rec.get("lane").and_then(|x| x.as_str().ok()), Some("stateless"));
-    assert_eq!(rec.get("tool").and_then(|x| x.as_str().ok()), Some("nu"));
+    assert_eq!(rec.get("tool").and_then(|x| x.as_str().ok()), Some("execute"));
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn all_kinds() -> Vec<Emergency> {
         Emergency::HungEngineThread(HungEngineThreadEmergency {
             nonce: "n".into(),
             lane: "stateful".into(),
-            tool: "nu".into(),
+            tool: "execute".into(),
             started_at: 1,
             cancelled_at: 2,
             hung_ms: 3,

@@ -31,7 +31,7 @@ impl NuSh {
             .map(|(nonce_str, entry)| {
                 let args_obj = entry.args.as_object().cloned().unwrap_or_default();
                 let (source_nonce, path) = match &entry.kind {
-                    InFlightKind::Nu { .. } => (None, None),
+                    InFlightKind::Execute { .. } => (None, None),
                     InFlightKind::Rerun { source_nonce, .. } => (Some(source_nonce.clone()), None),
                     InFlightKind::Call { path } => (None, Some(path.clone())),
                 };

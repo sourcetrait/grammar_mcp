@@ -1,7 +1,7 @@
 # rerun.rs
 
 ## fn rerun
-`nu` again on an earlier call's definition with fresh data: the same parameters as `nu`
+`execute` again on an earlier call's definition with fresh data: the same parameters as `execute`
 less the definition, which the nonce names.
 
 THE `is_base62` GATE IS PATH-TRAVERSAL DEFENSE IN DEPTH. The nonce is joined onto a
@@ -14,7 +14,7 @@ original call already linted it, and the cache is the host's, so a lint could on
 something the host itself wrote.
 
 A FRESH nonce is minted, and the rerun caches the definition again under it, so every
-`nu` call's nonce, a rerun's included, is uniformly a handle, and the calls' logs stay
+`execute` call's nonce, a rerun's included, is uniformly a handle, and the calls' logs stay
 apart.
 
 `InFlightKind::Rerun` carries the SOURCE nonce so `interface process list` can show which

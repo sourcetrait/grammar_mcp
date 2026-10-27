@@ -6,7 +6,7 @@ JSON-RPC error codes for domain failures.
 
 ## struct Source
 `path` is equip-repo-relative (`<equip>/<kind>/<file>`) for a validation diagnostic
-and NULL for a `nu` definition's diagnostic, because that one is located in the
+and NULL for an `execute` definition's diagnostic, because that one is located in the
 definition and there is no file to name. `position` is 1-based, and `[0, 0]` means
 file-level rather than line 0.
 
@@ -56,7 +56,7 @@ it. The validator already emits non-`rig::` kinds, `lint::summary_length` among 
 `mcp/remote/Disconnected {error}` Channel model, which now fires only for a listener's
 post-bind accept failure or an established link's later teardown.
 
-A `nu` call's refusals each name their part of the contract: `definition::invalid` rows,
+An `execute` call's refusals each name their part of the contract: `definition::invalid` rows,
 gathered with the lint's under `DefinitionViolations`, for the definition; `data::invalid`
 for data that isn't NUON or doesn't conform; `timeout::invalid` for a timeout that isn't a
 positive duration; and `result::invalid` for a value the definition's return type refuses.

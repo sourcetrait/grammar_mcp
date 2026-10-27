@@ -125,7 +125,7 @@ fn lib_only_equip_installs_and_imports_without_calls() {
     let env = s.equip("install", eq.to_str().unwrap());
     assert!(!has_error(&env), "a lib alone is an equip; got {env}");
 
-    let used = s.nu(
+    let used = s.execute(
         "def execute [data: nothing]: nothing -> record<out: string> {\n    use equip/sourcetrait/onlylib/lib/text\n    { out: (text shout 'ok') }\n}",
         "null",
     );
@@ -412,7 +412,7 @@ fn a_definition_can_use_a_committed_rig() {
     let committed = s.commit("sourcetrait/uselib");
     assert!(!has_error(&committed), "commit should succeed; got {committed}");
 
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<out: int> {\n    use equip/sourcetrait/uselib/rig/calc\n    let r = (calc double {x: 5})\n    { out: $r.out }\n}",
         "null",
     );

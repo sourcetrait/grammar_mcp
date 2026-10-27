@@ -11,7 +11,7 @@ calls the tool's own logic with the very value the tool used to deserialize.
 
 ## fn parse_command
 nushell's own parser over the interface engine, so the arguments' types are
-checked by the commands' signatures, as any nu call's are, and an error lands
+checked by the commands' signatures, as any Nu call's are, and an error lands
 at the agent's line and column, measured from the command's start in the span
 space (`file_start`), since a working set numbers spans after whatever the
 engine holds.
@@ -41,5 +41,4 @@ here, a refusal naming the flag.
 
 ## fn text / fn texts
 A required argument's absence is the parse's to refuse, so these default rather
-than fail; an absent optional list is empty, which `info`'s parameters read as
-the current view.
+than fail.

@@ -26,7 +26,7 @@ fn a_bundled_plugin_is_registered_listed_and_run() {
     );
 
     assert_eq!(plugin_names(&mut host), vec!["soak".to_string()], "the bundled plugin is listed");
-    let resp = host.nu(
+    let resp = host.execute(
         "def execute [data: nothing]: nothing -> record<rendered: string> { { rendered: ({name: World} | soak str 'Hello, {{ name }}!') } }",
         "null",
     );
@@ -131,7 +131,7 @@ fn the_soak_and_eye_plugins_register_list_and_run() {
     std::fs::create_dir_all(work.join(".git")).expect("mkdir the repository's .git");
     std::fs::write(work.join(".gitignore"), "*.log\n").expect("write the .gitignore");
     std::fs::write(work.join("a.log"), "log").expect("write the ignored file");
-    let resp = host.nu(
+    let resp = host.execute(
         "def execute [data: record<root: string>]: nothing -> record<rendered: string, soaked: string, dir: string, git: string> {\n\
              let src = ($data.root | path join 'tmpl')\n\
              mkdir $src\n\

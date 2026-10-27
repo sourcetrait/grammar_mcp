@@ -1,5 +1,5 @@
 //! The embedded API (`grimm *`) - decls registered per-eval into the working set
-//! `eval_in_process` parses with, so they exist ONLY inside a `nu` definition or a
+//! `eval_in_process` parses with, so they exist ONLY inside an `execute` definition or a
 //! call's body and carry that call's own log dir.
 
 use serde_json::json;
@@ -27,8 +27,8 @@ fn read_back(
     result_type: &str,
     body: &str,
 ) -> serde_json::Value {
-    let path = s.nu_log_dir(nonce).join("debug.nuonl");
-    s.nu(
+    let path = s.execute_log_dir(nonce).join("debug.nuonl");
+    s.execute(
         &format!("def execute [data: record<path: string>]: nothing -> {result_type} {{\n{body}\n}}"),
         &format!("{{path: '{}'}}", path.to_str().expect("utf-8 path")),
     )
@@ -37,7 +37,7 @@ fn read_back(
 #[test]
 fn dbg_appends_one_line_per_call() {
     let s = TESTING.harness();
-    let env = s.nu(&ok_after("grimm dbg {a: 1, b: 'two'}\ngrimm dbg [[x, y]; [1, 2]]"), "null");
+    let env = s.execute(&ok_after("grimm dbg {a: 1, b: 'two'}\ngrimm dbg [[x, y]; [1, 2]]"), "null");
     assert!(!has_error(&env), "the definition should run; got {env}");
     let nonce = env["nonce"].as_str().expect("nonce");
 
@@ -61,7 +61,7 @@ fn dbg_appends_one_line_per_call() {
 #[test]
 fn channel_send_without_a_channel_refuses() {
     let s = TESTING.harness();
-    let env = s.nu(&ok_after("grimm channel send 'foo/bar/Car' {state: 'done'}"), "null");
+    let env = s.execute(&ok_after("grimm channel send 'foo/bar/Car' {state: 'done'}"), "null");
     assert!(has_error(&env), "an unopened channel must refuse; got {env}");
     let text = error_text(&env).to_lowercase();
     assert!(
@@ -77,7 +77,7 @@ fn channel_send_without_a_channel_refuses() {
 #[test]
 fn a_record_with_an_embedded_newline_stays_one_line() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         &ok_after("grimm dbg {msg: ('line one' + (char nl) + 'line two'), tail: 9}"),
         "null",
     );
@@ -115,7 +115,7 @@ fn a_record_with_an_embedded_newline_stays_one_line() {
 fn a_definition_cannot_claim_the_mcp_reservation() {
     let s = TESTING.harness();
     for model in ["mcp/channel/Open", "mcp/supervisor/CpuWarning", "mcp/anything"] {
-        let env = s.nu(&ok_after(&format!("grimm channel send '{model}' {{x: 1}}")), "null");
+        let env = s.execute(&ok_after(&format!("grimm channel send '{model}' {{x: 1}}")), "null");
         assert!(has_error(&env), "`{model}` should be refused; got {env}");
         assert!(
             error_text(&env).contains("reserved"),
@@ -132,7 +132,7 @@ fn a_definition_cannot_claim_the_mcp_reservation() {
 fn a_non_record_is_rejected() {
     let s = TESTING.harness();
     for body in ["grimm dbg 5", "let x = 5\ngrimm dbg $x"] {
-        let env = s.nu(&ok_after(body), "null");
+        let env = s.execute(&ok_after(body), "null");
         assert!(has_error(&env), "`{body}` should be rejected; got {env}");
         let text = error_text(&env).to_lowercase();
         assert!(
@@ -171,7 +171,7 @@ fn a_rig_passing_a_table_to_grimm_commits_and_runs() {
 #[test]
 fn the_api_is_available_to_the_stateful_lane_too() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def --env execute [data: nothing]: nothing -> record<ok: bool> {\n    grimm dbg {lane: 'stateful'}\n    { ok: true }\n}",
         "null",
     );

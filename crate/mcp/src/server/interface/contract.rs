@@ -10,7 +10,7 @@ pub(crate) const KIND_INTERFACE: &str = "interface::invalid";
 /// A parsed command, carrying its tool's parameters as they are.
 #[derive(Debug)]
 pub(crate) enum InterfaceCommand {
-    Info(InfoParams),
+    Info,
     Help(InspectParams),
     ProcessList,
     ProcessKill(KillParams),
@@ -20,7 +20,7 @@ pub(crate) enum InterfaceCommand {
     PurviewConfigure(PurviewConfigureParams),
     ChannelOpen,
     ChannelReady,
-    ChannelClosed,
+    ChannelClose,
     ChannelConfig(ConfigChannelParams),
     RemoteOpen(RemoteChannelOpenParams),
     RemoteClose(RemoteChannelCloseParams),
@@ -279,9 +279,7 @@ fn command(
         source: text(literals, "source"),
     };
     Ok(match kind {
-        CommandKind::Info => InterfaceCommand::Info(InfoParams {
-            purviews: texts(literals, "purviews"),
-        }),
+        CommandKind::Info => InterfaceCommand::Info,
         CommandKind::Help => InterfaceCommand::Help(InspectParams {
             namepath: text(literals, "namepath"),
         }),
@@ -304,7 +302,7 @@ fn command(
         }
         CommandKind::ChannelOpen => InterfaceCommand::ChannelOpen,
         CommandKind::ChannelReady => InterfaceCommand::ChannelReady,
-        CommandKind::ChannelClosed => InterfaceCommand::ChannelClosed,
+        CommandKind::ChannelClose => InterfaceCommand::ChannelClose,
         CommandKind::ChannelConfig => InterfaceCommand::ChannelConfig(ConfigChannelParams {
             spam_warn_window_secs: count(literals, "spam-warn-window-secs")?,
             spam_warn_rate: count(literals, "spam-warn-rate")?,

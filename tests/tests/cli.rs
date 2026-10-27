@@ -94,7 +94,7 @@ fn cli_equip_lifecycle_and_call() {
 }
 
 #[tested]
-fn cli_nu_evaluates_a_definition_against_nuon_data() {
+fn cli_execute_evaluates_a_definition_against_nuon_data() {
     let t = testing::test!({ .using_temp_dir() });
     let out = run_output(
         t.temp_dir(),
@@ -102,14 +102,14 @@ fn cli_nu_evaluates_a_definition_against_nuon_data() {
             "--id",
             "cid",
             "cli",
-            "nu",
+            "execute",
             "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x + 1) } }",
             "{x: 5}",
         ],
     );
     assert!(
         out.status.success(),
-        "cli nu should exit 0; got stdout={:?} stderr={:?}",
+        "cli execute should exit 0; got stdout={:?} stderr={:?}",
         stdout_str(&out),
         String::from_utf8_lossy(&out.stderr),
     );

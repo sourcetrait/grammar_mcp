@@ -508,7 +508,7 @@ fn xdg_data_home(base_spec: &str) -> Option<PathBuf> {
 /// A tool `--deny` withholds, or one interface command by its words.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeniableTool {
-    Nu,
+    Execute,
     Rerun,
     Call,
     Interface,
@@ -518,7 +518,7 @@ pub enum DeniableTool {
 impl DeniableTool {
     pub(crate) fn from_name(s: &str) -> Option<Self> {
         Some(match s.trim() {
-            "nu" => Self::Nu,
+            "execute" => Self::Execute,
             "rerun" => Self::Rerun,
             "call" => Self::Call,
             "interface" => Self::Interface,

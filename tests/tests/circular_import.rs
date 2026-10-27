@@ -58,7 +58,7 @@ fn a_definition_importing_a_cycle_gets_a_diagnostic_and_the_host_lives() {
     write_source(&root, "mod.nu", PARENT);
     write_source(&root, "inner/mod.nu", CHILD);
 
-    let id = host.request("nu", nu_args(&importing(&root, "circtest inner pong"), "null"));
+    let id = host.request("execute", execute_args(&importing(&root, "circtest inner pong"), "null"));
     let resp = expect_alive(&mut host, id, "a definition's circular `use`");
 
     assert!(
@@ -102,7 +102,7 @@ fn the_deepest_reachable_cycle_still_leaves_the_host_alive() {
         "use ../mod.nu\n\nexport def pong []: nothing -> string { \"deep\" }\n",
     );
 
-    let id = host.request("nu", nu_args(&importing(&root, "c i pong"), "null"));
+    let id = host.request("execute", execute_args(&importing(&root, "c i pong"), "null"));
     let resp = expect_alive(&mut host, id, "the deepest reachable cycle");
 
     assert!(
@@ -130,7 +130,7 @@ fn the_one_shot_cli_survives_a_cycle_too() {
     let definition = importing(&root, "circtest inner pong");
     let out = run_output(
         t.temp_dir(),
-        &["--id", "clicirc", "cli", "nu", &definition, "null"],
+        &["--id", "clicirc", "cli", "execute", &definition, "null"],
     );
 
     // `code()` is None when a process is killed by a signal, so this is what tells a

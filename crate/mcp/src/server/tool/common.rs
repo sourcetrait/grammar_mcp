@@ -1,6 +1,6 @@
 use crate::*;
 
-/// Write a `nu` call's definition beside its logs, the handle `rerun` reads.
+/// Write an `execute` call's definition beside its logs, the handle `rerun` reads.
 fn write_definition(
     log_dir: &std::path::Path,
     definition: &str,
@@ -65,7 +65,7 @@ pub(crate) struct InFlightEntry {
 }
 
 pub(crate) enum InFlightKind {
-    Nu { lane: Lane },
+    Execute { lane: Lane },
     Rerun { source_nonce: String, lane: Lane },
     Call { path: String },
 }
@@ -74,7 +74,7 @@ impl InFlightKind {
     /// The lane the call's eval runs on.
     pub(crate) fn lane(&self) -> Lane {
         match self {
-            Self::Nu { lane } | Self::Rerun { lane, .. } => *lane,
+            Self::Execute { lane } | Self::Rerun { lane, .. } => *lane,
             Self::Call { .. } => Lane::Stateless,
         }
     }
@@ -307,7 +307,7 @@ pub(crate) async fn dispatch_stateful(
     definition: Option<&str>,
     timeout_ms: Option<u64>,
 ) -> Result<DispatchOutcome, DispatchError> {
-    let log_dir = cache_dir(CacheKind::Nu, &nonce);
+    let log_dir = cache_dir(CacheKind::Execute, &nonce);
     fs::create_dir_all(&log_dir).map_err(|e| DispatchError {
         error: GrammarMcpError::Internal {
             phase: "dispatch_stateful::create_log_dir".to_string(),

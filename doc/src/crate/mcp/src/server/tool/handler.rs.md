@@ -9,7 +9,7 @@ rmcp routers compose with `+` at runtime, which is what makes conditional assemb
 at all rather than requiring a compile-time feature per tool.
 
 Each of the four tools is deniable on its own, and there is NO implication between tokens -
-denying `nu` does not deny `rerun` - so an operator's config lists exactly what it means. A
+denying `execute` does not deny `rerun` - so an operator's config lists exactly what it means. A
 denied interface COMMAND leaves the tool standing: the command leaves the interface's parse
 and its description instead (`server/interface/grammar.rs`), and denying `interface` removes
 the tool whole.

@@ -410,9 +410,9 @@ impl Host {
         self.read_id(id)
     }
 
-    /// `nu` on a definition and its data's NUON text; JSON text is NUON too.
-    pub fn nu(&mut self, definition: &str, data: &str) -> Value {
-        self.call("nu", nu_args(definition, data))
+    /// `execute` on a definition and its data's NUON text; JSON text is NUON too.
+    pub fn execute(&mut self, definition: &str, data: &str) -> Value {
+        self.call("execute", execute_args(definition, data))
     }
 
     pub fn call_np(&mut self, namepath: &str, args: Value) -> Value {
@@ -562,8 +562,8 @@ pub fn describe_exit(status: &std::process::ExitStatus) -> String {
     }
 }
 
-/// A `nu` call's arguments: its definition and its data's NUON text.
-pub fn nu_args(definition: &str, data: &str) -> Value {
+/// An `execute` call's arguments: its definition and its data's NUON text.
+pub fn execute_args(definition: &str, data: &str) -> Value {
     json!({"definition": definition, "data": data})
 }
 

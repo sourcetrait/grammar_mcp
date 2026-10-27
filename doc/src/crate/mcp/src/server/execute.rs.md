@@ -1,6 +1,6 @@
 # execute.rs
 
-The execute contract, User's `doc/human/NuNu.md`: a `nu` call's definition is exactly
+The execute contract, User's `doc/human/NuNu.md`: an `execute` call's definition is exactly
 one top-level `def execute` with an infix signature, and it is held to that before
 anything is built or dispatched, so a refusal costs one parse and no thread.
 

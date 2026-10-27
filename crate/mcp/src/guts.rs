@@ -100,31 +100,31 @@ impl TestServer {
         }
     }
 
-    /// `nu` on a definition and its data's NUON text.
-    pub fn nu(
+    /// `execute` on a definition and its data's NUON text.
+    pub fn execute(
         &self,
         definition: &str,
         data: &str,
     ) -> json::Value {
-        self.nu_timeout(definition, data, None)
+        self.execute_timeout(definition, data, None)
     }
 
-    /// `nu` with a timeout, a Nu duration's text.
-    pub fn nu_timeout(
+    /// `execute` with a timeout, a Nu duration's text.
+    pub fn execute_timeout(
         &self,
         definition: &str,
         data: &str,
         timeout: Option<&str>,
     ) -> json::Value {
-        let p = NuParams {
+        let p = ExecuteParams {
             definition: definition.to_string(),
             data: data.to_string(),
             timeout: timeout.map(str::to_string),
         };
-        Self::envelope(self.rt.block_on(self.nush.nu(mcp::Parameters(p))))
+        Self::envelope(self.rt.block_on(self.nush.execute(mcp::Parameters(p))))
     }
 
-    /// `rerun` of an earlier `nu` call with fresh data.
+    /// `rerun` of an earlier `execute` call with fresh data.
     pub fn rerun(
         &self,
         nonce: &str,
@@ -223,20 +223,10 @@ impl TestServer {
         Self::envelope(self.rt.block_on(self.nush.help(nonce, p)))
     }
 
+    /// `interface info`, the current view's.
     pub fn info(&self) -> json::Value {
-        self.info_as(&[])
-    }
-
-    /// `interface info` rendered as if the given purviews were in view.
-    pub fn info_as(
-        &self,
-        purviews: &[&str],
-    ) -> json::Value {
-        let p = InfoParams {
-            purviews: purviews.iter().map(|s| s.to_string()).collect(),
-        };
-        let nonce = self.interface_nonce(&p);
-        Self::envelope(self.rt.block_on(self.nush.info(nonce, p)))
+        let nonce = self.interface_nonce(&"info");
+        Self::envelope(self.rt.block_on(self.nush.info(nonce)))
     }
 
     /// `interface purview list`.
@@ -326,10 +316,10 @@ impl TestServer {
         Self::envelope(self.rt.block_on(self.nush.channel_config(nonce, p)))
     }
 
-    /// `interface channel closed`; closing a closed channel succeeds.
+    /// `interface channel close`; closing a closed channel succeeds.
     pub fn channel_close(&self) -> json::Value {
-        let nonce = self.interface_nonce(&"channel closed");
-        Self::envelope(self.rt.block_on(self.nush.channel_closed(nonce)))
+        let nonce = self.interface_nonce(&"channel close");
+        Self::envelope(self.rt.block_on(self.nush.channel_close(nonce)))
     }
 
     /// Each routed tool as `tools/list` carries it.
@@ -354,8 +344,8 @@ impl TestServer {
         crate::equip_root()
     }
 
-    /// The per-call log dir of a `nu` call's nonce.
-    pub fn nu_log_dir(&self, nonce: &str) -> std::path::PathBuf {
+    /// The per-call log dir of an `execute` call's nonce.
+    pub fn execute_log_dir(&self, nonce: &str) -> std::path::PathBuf {
         crate::definition_file(nonce)
             .parent()
             .expect("a definition path always has a parent dir")
@@ -504,7 +494,7 @@ fn to_obj(v: json::Value) -> mcp::JsonObject {
     }
 }
 
-/// Lint a definition as `nu`'s contract does, parse errors aside, as wire JSON.
+/// Lint a definition as `execute`'s contract does, parse errors aside, as JSON.
 pub fn lint_definition(definition: &str) -> Vec<json::Value> {
     ensure_test_config();
     let engine = ParseEngine::new_full();
@@ -556,13 +546,13 @@ pub fn parses_clean(src: &str) -> bool {
     ws.parse_errors.is_empty()
 }
 
-/// The synthesized nu() source for a definition and its literals.
-pub fn build_nu_source(
+/// The synthesized execute() source for a definition and its literals.
+pub fn build_execute_source(
     definition: &str,
     data_literal: &str,
     timeout_literal: Option<&str>,
 ) -> String {
-    crate::build_nu_source(definition, data_literal, timeout_literal)
+    crate::build_execute_source(definition, data_literal, timeout_literal)
 }
 
 /// The synthesized call() source.

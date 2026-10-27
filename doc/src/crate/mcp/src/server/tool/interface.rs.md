@@ -1,6 +1,6 @@
 # interface.rs
 
-The `interface` tool: every tool but `nu`, `rerun`, and `call`, folded into one
+The `interface` tool: every tool but `execute`, `rerun`, and `call`, folded into one
 `command` string (User's NuNu, `doc/human/NuNu.md`'s `# TOOL: grammar/interface`).
 The commands convert those tools as they were: same parameters, same results,
 same refusals.

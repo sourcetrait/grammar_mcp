@@ -77,7 +77,7 @@ verification, a close and a re-arm all stand the timer down. That is also why re
 cannot leave two timers racing one channel.
 
 ### field inbox
-A DELIBERATE `interface channel closed` takes it and prunes it; every OTHER teardown leaves
+A DELIBERATE `interface channel close` takes it and prunes it; every OTHER teardown leaves
 it. The shutdown close, the verify-timer expiry and the unverified-emit teardown are all
 HOST-initiated, so an attachment stays readable by nonce when the channel went away without
 the caller asking for it.

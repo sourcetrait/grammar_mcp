@@ -1,7 +1,7 @@
 //! The lint AST walker's rules, driven directly through `guts::lint_definition`.
 //! Integration (not unit): each call builds a full-shell `ParseEngine` (plugin
 //! registry read off disk), the resource caveat. `tests/body_lint.rs` covers the
-//! same lint at the `nu` tool's boundary.
+//! same lint at the `execute` tool's boundary.
 
 use serde_json::{Value, json};
 use sourcetrait_grammar_mcp::guts::lint_definition;

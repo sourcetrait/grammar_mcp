@@ -27,13 +27,13 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
                     }))
                     .await
             }
-            CliTool::Nu {
+            CliTool::Execute {
                 definition,
                 data,
                 timeout,
             } => {
                 server
-                    .nu(mcp::Parameters(NuParams {
+                    .execute(mcp::Parameters(ExecuteParams {
                         definition,
                         data,
                         timeout,

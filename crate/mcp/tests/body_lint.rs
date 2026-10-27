@@ -15,7 +15,7 @@ static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integrat
 #[test]
 fn a_hardcoded_path_is_refused() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<out: int> {\n    let p = \"/srv/proj/x\"\n    { out: 0 }\n}",
         "null",
     );
@@ -25,7 +25,7 @@ fn a_hardcoded_path_is_refused() {
 #[test]
 fn a_denied_external_is_refused() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<out: int> {\n    let x = (^awk '{print $1}' | str trim)\n    { out: 0 }\n}",
         "null",
     );
@@ -35,7 +35,7 @@ fn a_denied_external_is_refused() {
 #[test]
 fn a_clean_definition_runs() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x + 1) } }",
         "{x: 5}",
     );
@@ -45,7 +45,7 @@ fn a_clean_definition_runs() {
 #[test]
 fn violations_aggregate() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<out: int> {\n    ^awk 'x'\n    cd \"/a/b\"\n    { out: 0 }\n}",
         "null",
     );
@@ -56,12 +56,12 @@ fn violations_aggregate() {
 #[test]
 fn the_stateful_lane_is_linted_too() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def --env execute [data: nothing]: nothing -> record<out: int> {\n    let p = \"/srv/x\"\n    { out: 0 }\n}",
         "null",
     );
     assert!(has_kind(&env, "lint::hardcoded_variable"), "got {env}");
-    let env = s.nu(
+    let env = s.execute(
         "def --env execute [data: nothing]: nothing -> record<out: int> {\n    let x = (^awk 'x' | str trim)\n    { out: 0 }\n}",
         "null",
     );
@@ -71,7 +71,7 @@ fn the_stateful_lane_is_linted_too() {
 #[test]
 fn a_well_known_system_path_passes() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<seen: bool> { { seen: ('/proc/self' | path exists) } }",
         "null",
     );

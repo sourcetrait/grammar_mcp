@@ -1,13 +1,5 @@
 use crate::*;
 
-/// Parameters for `interface info`.
-#[derive(Debug, ser::Deserialize, ser::Serialize)]
-pub struct InfoParams {
-    /// Purview ids to render as if in view; EMPTY means the CURRENT purview.
-    #[serde(default)]
-    pub purviews: Vec<String>,
-}
-
 /// Success result of `interface info`.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct InfoResult {
@@ -33,20 +25,12 @@ impl NuSh {
     pub(crate) async fn info(
         &self,
         nonce: datum::Nonce,
-        p: InfoParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         let rows = match load_purviews() {
             Ok(rows) => rows,
             Err(error) => return error_to_call_result(error, nonce),
         };
-        let ids: Vec<String> = if p.purviews.is_empty() {
-            self.current_purview.ids()
-        } else {
-            p.purviews
-                .iter()
-                .map(|id| purview_ref(id).unwrap_or(id).to_string())
-                .collect()
-        };
+        let ids = self.current_purview.ids();
         let patterns = parse_patterns(&expand_values(
             &resolve_patterns(&ids, rows.as_ref()),
             rows.as_ref(),

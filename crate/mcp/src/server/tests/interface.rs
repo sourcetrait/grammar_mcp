@@ -43,7 +43,7 @@ fn sample(spec: &CommandSpec) -> String {
 
 fn kind_of(command: &InterfaceCommand) -> CommandKind {
     match command {
-        InterfaceCommand::Info(_) => CommandKind::Info,
+        InterfaceCommand::Info => CommandKind::Info,
         InterfaceCommand::Help(_) => CommandKind::Help,
         InterfaceCommand::ProcessList => CommandKind::ProcessList,
         InterfaceCommand::ProcessKill(_) => CommandKind::ProcessKill,
@@ -53,7 +53,7 @@ fn kind_of(command: &InterfaceCommand) -> CommandKind {
         InterfaceCommand::PurviewConfigure(_) => CommandKind::PurviewConfigure,
         InterfaceCommand::ChannelOpen => CommandKind::ChannelOpen,
         InterfaceCommand::ChannelReady => CommandKind::ChannelReady,
-        InterfaceCommand::ChannelClosed => CommandKind::ChannelClosed,
+        InterfaceCommand::ChannelClose => CommandKind::ChannelClose,
         InterfaceCommand::ChannelConfig(_) => CommandKind::ChannelConfig,
         InterfaceCommand::RemoteOpen(_) => CommandKind::RemoteOpen,
         InterfaceCommand::RemoteClose(_) => CommandKind::RemoteClose,
@@ -95,14 +95,11 @@ fn arguments_reach_the_tools_parameters() {
         }
         other => panic!("got {other:?}"),
     }
-    match parse("interface info [default core]") {
-        Ok(InterfaceCommand::Info(p)) => assert_eq!(p.purviews, vec!["default", "core"]),
-        other => panic!("got {other:?}"),
-    }
     match parse("interface info") {
-        Ok(InterfaceCommand::Info(p)) => assert!(p.purviews.is_empty()),
+        Ok(InterfaceCommand::Info) => {}
         other => panic!("got {other:?}"),
     }
+    assert!(!refused("interface info ['default']").is_empty(), "info takes no argument");
     match parse("interface channel config --spam-warn-rate 12 --spam-error-window-secs 30") {
         Ok(InterfaceCommand::ChannelConfig(p)) => {
             assert_eq!(p.spam_warn_rate, Some(12));
@@ -195,24 +192,42 @@ fn a_denied_command_is_unknown_and_undocumented() {
     assert!(rows[0].message.contains("no `interface` command"), "{rows:?}");
     assert!(parse_command(&engine, "interface purview list").is_ok());
     let rendered = render_signatures(&deny);
-    assert!(!rendered.contains("'interface purview configure'"), "{rendered}");
-    assert!(rendered.contains("'interface purview list'"), "{rendered}");
+    assert!(!rendered.contains("`purview configure ["), "{rendered}");
+    assert!(rendered.contains("`purview list ["), "{rendered}");
 }
 
 #[test]
 fn the_signatures_cover_every_command_by_topic() {
     let rendered = render_signatures(&DenySet::default());
-    assert!(rendered.starts_with("## Command Signatures\n### General\n"), "{rendered}");
+    assert!(
+        rendered.starts_with(
+            "## Command Signatures\nNote: Each begins with `interface `\n### General\n"
+        ),
+        "{rendered}",
+    );
     for spec in COMMANDS {
-        assert!(rendered.contains(&format!("- `{}` ", spec.signature_text())), "{}", spec.name);
+        let entry = format!("{}\n`{}`\n", spec.summary, spec.signature_text());
+        assert!(rendered.contains(&entry), "{}", spec.name);
     }
     assert!(rendered.contains(
-        "- `def 'interface purview configure' [purview: string, namepaths: list<string>]: \
-         nothing -> record<signatures: oneof<nothing, string>>` Set a purview's namepath \
-         patterns; an empty list deletes it."
+        "Set a purview's namepath patterns; an empty list deletes it.\n\
+         `purview configure [purview: string, namepaths: list<string>]: nothing -> record`\n"
     ));
     assert!(rendered.contains("--spam-warn-rate: int"), "{rendered}");
-    assert!(rendered.contains("purviews?: list<string>"), "{rendered}");
+    assert!(!rendered.contains("def ") && !rendered.contains("- `"), "{rendered}");
+}
+
+#[test]
+fn every_summary_fits_a_line_and_every_result_is_a_kind() {
+    for spec in COMMANDS {
+        assert!(spec.summary.chars().count() <= 80, "{}: {}", spec.name, spec.summary);
+        assert!(
+            ["record", "table", "nothing"].contains(&spec.result),
+            "{}: {}",
+            spec.name,
+            spec.result,
+        );
+    }
 }
 
 #[test]

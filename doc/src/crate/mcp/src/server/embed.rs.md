@@ -63,7 +63,7 @@ a custom command's callee stack inherits its caller's env, so the definition's b
 `def --env` body included, every module it imports, and a `job spawn` it starts all read
 the one value, and no template has to splice a line into source the agent wrote.
 
-The eval ANSWERS ITS NU VALUE, never JSON: `nu` checks it against the declared type and
+The eval ANSWERS ITS NU VALUE, never JSON: `execute` checks it against the declared type and
 renders it as NUON, and `call` renders it leniently, each in its own handler.
 
 ## fn open_log

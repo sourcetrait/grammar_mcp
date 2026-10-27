@@ -5,7 +5,7 @@ The call a host decl acts for, resolved at RUN time from the stack's
 `$env.NONCE`, which every eval puts on its root stack and every job a call spawns
 inherits, so a long run's packets still land in its launching call's trace. The
 log dir follows from the nonce alone (`call_log_dir`), and the origin with it.
-The nonce is random enough that a `nu` call, a rerun, and a call need no
+The nonce is random enough that an `execute` call, a rerun, and a call need no
 distinguishing prefix.
 
 NOT BOUND AT PARSE TIME, and that is the point. A decl carrying its call's log
@@ -76,7 +76,7 @@ nushell cannot resolve the names at all. That is a stronger trap than a signing
 scheme, because there is no reachable entry point to authenticate. A committed rig
 CAN call them, but only because its call's body runs inside an eval.
 
-The one other caller is `ParseEngine::new_full`, so the contract's parse of a `nu`
+The one other caller is `ParseEngine::new_full`, so the contract's parse of an `execute`
 definition and the rig validator parse a `grimm` call as the eval will. That engine
 parses and never evaluates, and a `grimm` decl is no const command, so the access
 control stands. Without the decls a name the parser cannot resolve reads as an

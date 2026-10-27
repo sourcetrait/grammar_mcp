@@ -42,7 +42,7 @@ fn timed_out_external_is_reaped() {
     let s = TestServer::new();
     // The eval blocks on `^sleep 31337`; the 500ms timeout triggers cancel + a
     // tree-kill of the tracked external, which also unblocks the waiting thread.
-    let env = s.nu_timeout(
+    let env = s.execute_timeout(
         "def execute [data: nothing]: nothing -> record<out: int> {\n    ^sleep 31337\n    { out: 0 }\n}",
         "null",
         Some("500ms"),

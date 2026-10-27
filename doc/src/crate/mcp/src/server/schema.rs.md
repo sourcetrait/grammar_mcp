@@ -70,7 +70,7 @@ self-identifying in the signature block - always two groups, void included - whi
 lets the block state no separator characters at all.
 
 ## fn data_typedef / fn shape_typedef
-A `nu` definition's `data` type, read from its parsed `SyntaxShape` into the same
+An `execute` definition's `data` type, read from its parsed `SyntaxShape` into the same
 `NuTypedef` the JSON side builds. At the top only `nothing`, or a record or table with
 fields; below it the whole grammar, an OPEN record or table among it, empty fields being
 nushell's own spelling of open. `any`, closures, blocks, and the parser's other shapes

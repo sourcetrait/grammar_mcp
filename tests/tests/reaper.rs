@@ -120,7 +120,7 @@ fn reaping_does_not_steal_exit_statuses() {
 
         // An eval whose external exit status must survive: nushell reports a non-zero
         // exit as an error, so a stolen status would surface here.
-        let ran = host.nu(
+        let ran = host.execute(
             "def execute [data: nothing]: nothing -> record<out: string> { { out: (^printf ok | str trim) } }",
             "null",
         );

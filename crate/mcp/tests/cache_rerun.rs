@@ -1,4 +1,4 @@
-//! The definition cache behind `rerun`: written before dispatch, so every `nu`
+//! The definition cache behind `rerun`: written before dispatch, so every `execute`
 //! call's nonce is a handle, a timed-out one's included.
 
 use serde_json::json;
@@ -18,7 +18,7 @@ const TRIPLE: &str =
 #[test]
 fn the_envelope_is_the_nonce_and_the_result_alone() {
     let s = TESTING.harness();
-    let env = s.nu(TRIPLE, "{x: 1}");
+    let env = s.execute(TRIPLE, "{x: 1}");
     assert!(
         env["nonce"].as_str().is_some_and(|n| !n.is_empty()),
         "the envelope carries a non-empty nonce; got {env}",
@@ -30,7 +30,7 @@ fn the_envelope_is_the_nonce_and_the_result_alone() {
 #[test]
 fn timeout_then_rerun_recovers() {
     let s = TESTING.harness();
-    let timed = s.nu_timeout(
+    let timed = s.execute_timeout(
         "def execute [data: record<x: int>]: nothing -> record<out: int> {\n    sleep 400ms\n    { out: ($data.x + 1) }\n}",
         "{x: 5}",
         Some("100ms"),
@@ -47,7 +47,7 @@ fn timeout_then_rerun_recovers() {
 #[test]
 fn rerun_by_nonce_roundtrips_with_new_data() {
     let s = TESTING.harness();
-    let first = s.nu(TRIPLE, "{x: 5}");
+    let first = s.execute(TRIPLE, "{x: 5}");
     assert_eq!(first["result"], json!({"out": 15}), "got {first}");
     let nonce = first["nonce"].as_str().expect("nonce").to_string();
 
@@ -79,7 +79,7 @@ fn rerun_rejects_non_base62_nonce() {
 #[test]
 fn a_stateful_definition_reruns_on_its_lane() {
     let s = TESTING.harness();
-    let first = s.nu(
+    let first = s.execute(
         "def --env execute [data: record<v: string>]: nothing -> record<v: string> {\n    $env.CACHE_RERUN_LANE = $data.v\n    { v: $data.v }\n}",
         "{v: first}",
     );
@@ -88,7 +88,7 @@ fn a_stateful_definition_reruns_on_its_lane() {
     let again = s.rerun(&nonce, "{v: again}");
     assert_eq!(again["result"], json!({"v": "again"}), "got {again}");
 
-    let read = s.nu(
+    let read = s.execute(
         "def --env execute [data: nothing]: nothing -> record<v: string> { { v: $env.CACHE_RERUN_LANE } }",
         "null",
     );

@@ -62,7 +62,7 @@ pub enum CliTool {
         timeout_ms: Option<u64>,
     },
     /// Execute a Nu definition against NUON data; single-shot, state dies with it.
-    Nu {
+    Execute {
         /// One `def execute` definition.
         definition: String,
         /// The definition's data as NUON text; `null` for `data: nothing`.
@@ -71,9 +71,9 @@ pub enum CliTool {
         #[arg(long)]
         timeout: Option<String>,
     },
-    /// Re-evaluate an earlier nu call's definition with fresh data.
+    /// Re-evaluate an earlier execute call's definition with fresh data.
     Rerun {
-        /// The nonce of the earlier nu call.
+        /// The nonce of the earlier execute call.
         nonce: String,
         /// Fresh data as NUON text.
         data: String,

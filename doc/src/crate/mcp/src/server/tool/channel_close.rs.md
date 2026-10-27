@@ -4,7 +4,7 @@
 Sending a REAL close frame is what lets the agent tell a planned teardown from a host that
 simply died, which arrives as a bare 1006.
 
-## fn channel_closed
+## fn channel_close
 IDEMPOTENT, like `interface equip uninstall`: closing what is already closed is the requested
 state rather than a failure.
 

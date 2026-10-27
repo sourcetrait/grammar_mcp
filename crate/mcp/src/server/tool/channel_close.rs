@@ -5,8 +5,8 @@ const CLOSE_PLANNED: u16 = 1000;
 const PLANNED_REASON: &str = "channel closed";
 
 impl NuSh {
-    /// `interface channel closed`: close the packet channel and its inbox.
-    pub(crate) async fn channel_closed(
+    /// `interface channel close`: close the packet channel and its inbox.
+    pub(crate) async fn channel_close(
         &self,
         nonce: datum::Nonce,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {

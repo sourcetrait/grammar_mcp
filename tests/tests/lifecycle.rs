@@ -51,13 +51,13 @@ fn a_panic_in_the_pool_is_caught_and_the_host_survives() {
     let mut host = Host::spawn(t.temp_dir());
     // __test_panic panics the eval thread; catch_unwind catches it -> the call
     // errors, the host is NOT torn down.
-    let env = host.nu(&definition("def", "record<out: int>", "__test_panic\n{ out: 0 }"), "null");
+    let env = host.execute(&definition("def", "record<out: int>", "__test_panic\n{ out: 0 }"), "null");
     assert!(
         has_error_path(&env),
         "a panicking eval should surface as an error, not crash the host; got {env}",
     );
     // The host is alive: a normal call still works.
-    let ok = host.nu(
+    let ok = host.execute(
         "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x + 1) } }",
         "{x: 5}",
     );
@@ -73,17 +73,17 @@ fn a_stateful_panic_resets_the_session_and_keeps_the_host() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn(t.temp_dir());
     // Seed persistent session state.
-    let a = host.nu(
+    let a = host.execute(
         &definition("def --env", "record<ok: bool>", "$env.KEEP = 'before'\n{ ok: true }"),
         "null",
     );
     assert!(!has_error_path(&a), "the seed call should succeed; got {a}");
     // Panic the stateful eval -> caught, the lane rebuilds its engine (session
     // lost), the host survives.
-    let p = host.nu(&definition("def --env", "record<ok: bool>", "__test_panic\n{ ok: true }"), "null");
+    let p = host.execute(&definition("def --env", "record<ok: bool>", "__test_panic\n{ ok: true }"), "null");
     assert!(has_error_path(&p), "a panicking stateful eval should surface as an error; got {p}");
     // Host + lane survive, and the pre-panic session state is GONE (reset).
-    let b = host.nu(
+    let b = host.execute(
         &definition("def --env", "record<keep: string>", "{ keep: ($env.KEEP? | default 'gone') }"),
         "null",
     );
@@ -102,9 +102,9 @@ fn hung_thread_is_confirmed_in_emergency_log() {
     // __test_hang blocks uninterruptibly; a short timeout triggers cancel, but the
     // bare sleep never polls Signals, so the thread outlives its cancel and the
     // watchdog confirms it a hung engine thread (past the 5s grace) and logs it.
-    let mut args = nu_args(&definition("def", "record<out: int>", "__test_hang\n{ out: 0 }"), "null");
+    let mut args = execute_args(&definition("def", "record<out: int>", "__test_hang\n{ out: 0 }"), "null");
     args["timeout"] = json!("500ms");
-    let timed = host.call("nu", args);
+    let timed = host.call("execute", args);
     assert_eq!(envelope_error_kind(&timed).as_deref(), Some("thread::timeout"), "got {timed}");
     let nonce = envelope(&timed)["nonce"]
         .as_str()

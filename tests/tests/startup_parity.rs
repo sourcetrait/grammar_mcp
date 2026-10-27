@@ -1,5 +1,5 @@
 //! The host's startup held to nushell's own on a pinned env: `$nu`'s paths, the
-//! startup env and constants, std, and `print`, through both of `nu`'s lanes and call.
+//! startup env and constants, std, and `print`, through both of `execute`'s lanes and call.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -113,7 +113,7 @@ impl Parity {
     fn eval(&mut self, def: &str, result_type: &str, body: &str) -> Value {
         let definition =
             format!("{def} execute [data: nothing]: nothing -> {result_type} {{\n{body}\n}}");
-        let resp = self.host.nu(&definition, "null");
+        let resp = self.host.execute(&definition, "null");
         extract_envelope(&resp).unwrap_or_else(|| panic!("`{def}` should succeed; got {resp}"))
     }
 
@@ -252,7 +252,7 @@ fn print_lands_in_the_calls_stderr_log() {
     let mut p = Parity::spawn(t.temp_dir());
     let body = "print 'PRINTMARK pool'\n42 | print\nprint --no-newline 'PRINTMARK tail'\n{ ok: true }";
     let env = p.eval("def", "record<ok: bool>", body);
-    assert_eq!(p.call_stderr("nu", &env), "PRINTMARK pool\n42\nPRINTMARK tail", "the call's log");
+    assert_eq!(p.call_stderr("execute", &env), "PRINTMARK pool\n42\nPRINTMARK tail", "the call's log");
     assert!(!p.host_stderr().contains("PRINTMARK"), "the host's stderr: {}", p.host_stderr());
 }
 
@@ -267,7 +267,7 @@ fn the_stateful_lane_sees_the_same_startup() {
     let env = p.eval("def --env", "record<home: string, path: string, config: bool>", body);
     let expected = json!({"home": shown(&p.dirs.home_dir), "path": "list<string>", "config": true});
     assert_eq!(env["result"], expected, "the stateful definition's startup; got {env}");
-    assert_eq!(p.call_stderr("nu", &env), "PRINTMARK stateful\n", "the call's log");
+    assert_eq!(p.call_stderr("execute", &env), "PRINTMARK stateful\n", "the call's log");
 }
 
 /// With the standard library's files ahead of a rig's in the span space, the

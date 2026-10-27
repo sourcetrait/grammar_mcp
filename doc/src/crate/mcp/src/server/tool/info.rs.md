@@ -4,16 +4,6 @@
 agent context by Claude Code. The command surfaces the same facts through `tools/call` -
 including the LIVE callable surface, so no stale skill index is needed.
 
-## struct InfoParams
-
-### field purviews
-THE SUBAGENT BLINDERS. Ids given explicitly render as if those were in view WITHOUT
-changing what actually is, which is what lets one session hand a subagent a narrower
-surface at bootstrap while keeping its own.
-
-EMPTY means CURRENT, never `default`. Those differ the moment a session has extended its
-view, and defaulting to `default` would silently narrow a caller that passed nothing.
-
 ## struct InfoResult
 
 ### field id
@@ -41,8 +31,8 @@ A purviews file that EXISTS but will not decode is an ERROR, never a silently em
 therefore silently total view. The rig index already holds itself to that rule and this
 follows it.
 
-`@mine` and `mine` name the same purview here, so a caller can paste a reference straight out
-of a purview's configuration without stripping the sigil.
+THE CURRENT VIEW ALONE: the command takes no argument, so what it renders is what the
+session has in view, and `interface purview set` is how a view changes (User).
 
 FILTERING EXPANDS `@` references while the reported `purview` field carries the RAW
 configuration - the two go through different functions on purpose, so a report shows what

@@ -1,6 +1,6 @@
 # lint.rs
 
-Two rule classes walk an agent's `nu` definition as a parsed AST. The lint exists to
+Two rule classes walk an agent's `execute` definition as a parsed AST. The lint exists to
 TEACH passing values as data, so violations are agent-fixable rejects before any eval
 dispatch or disk write.
 
@@ -37,7 +37,7 @@ module path from tripping, resolved or not, as it is for `source` and `source-en
 
 ## fn lint_block
 The walker over a block another parse produced, positions measured from that text's
-start: execute.rs lints a `nu` definition on the parse its contract check already made,
+start: execute.rs lints an `execute` definition on the parse its contract check already made,
 the def call's body reached through its positional block like any closure's.
 
 A diagnostic's position is measured from the text's start in the span space

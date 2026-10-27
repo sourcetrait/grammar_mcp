@@ -36,7 +36,7 @@ fn every_result_is_one_nuon_text_led_by_its_nonce() {
     let t = testing::test!({ .using_temp_dir() });
     let mut host = Host::spawn(t.temp_dir());
 
-    let ok = host.nu(
+    let ok = host.execute(
         "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x + 1) } }",
         "{x: 5}",
     );
@@ -44,7 +44,7 @@ fn every_result_is_one_nuon_text_led_by_its_nonce() {
     assert!(text.starts_with("{nonce: "), "the nonce leads; got {text}");
     assert_eq!(nuon_to_json(&text)["result"], json!({"out": 6}), "got {text}");
 
-    let failed = host.nu(
+    let failed = host.execute(
         "def execute [data: nothing]: nothing -> record<x: string> { { x: '/tmp/x' } }",
         "null",
     );

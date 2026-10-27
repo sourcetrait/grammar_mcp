@@ -15,35 +15,35 @@ const EXTRA_COLUMNS: &str = "def execute [data: record<extra: record<>>]: nothin
 #[test]
 fn a_nested_open_record_binds_any_record() {
     let s = TESTING.harness();
-    let env = s.nu(EXTRA_COLUMNS, "{extra: {a: 1, b: x}}");
+    let env = s.execute(EXTRA_COLUMNS, "{extra: {a: 1, b: x}}");
     assert_eq!(env["result"], json!({"cols": 2}), "an open record field takes any record; got {env}");
 }
 
 #[test]
 fn a_nested_open_record_binds_an_empty_record() {
     let s = TESTING.harness();
-    let env = s.nu(EXTRA_COLUMNS, "{extra: {}}");
+    let env = s.execute(EXTRA_COLUMNS, "{extra: {}}");
     assert_eq!(env["result"], json!({"cols": 0}), "got {env}");
 }
 
 #[test]
 fn a_non_record_in_an_open_record_field_is_refused() {
     let s = TESTING.harness();
-    let env = s.nu(EXTRA_COLUMNS, "{extra: 5}");
+    let env = s.execute(EXTRA_COLUMNS, "{extra: 5}");
     assert_eq!(error_kind(&env), Some("data::invalid"), "a non-record `extra` should be refused; got {env}");
 }
 
 #[test]
 fn an_open_record_at_the_data_top_is_refused() {
     let s = TESTING.harness();
-    let env = s.nu("def execute [data: record<>]: nothing -> record<out: int> { { out: 0 } }", "{}");
+    let env = s.execute("def execute [data: record<>]: nothing -> record<out: int> { { out: 0 } }", "{}");
     assert_eq!(error_kind(&env), Some("definition::invalid"), "got {env}");
 }
 
 #[test]
 fn an_open_record_in_the_result_is_refused() {
     let s = TESTING.harness();
-    let env = s.nu(
+    let env = s.execute(
         "def execute [data: nothing]: nothing -> record<extra: record<>> { { extra: {} } }",
         "null",
     );

@@ -1,7 +1,7 @@
 # common.rs
 
 ## fn write_definition
-PRE-DISPATCH and for EVERY `nu` and `rerun` eval - success, error, or timeout alike. That
+PRE-DISPATCH and for EVERY `execute` and `rerun` eval - success, error, or timeout alike. That
 is what leaves a timed-out call rerunnable: its error envelope carries the nonce, and
 `rerun(nonce, data, timeout: bigger)` recovers it.
 
@@ -63,7 +63,7 @@ the text is the result, NUON the agent reads as it reads its own data.
 
 ## fn success
 A tool's own result struct crosses to nu through the serde bridge
-(`json_value_to_nu_value`), the crate's one JSON-to-Value path. `nu` and `rerun` hand
+(`json_value_to_nu_value`), the crate's one JSON-to-Value path. `execute` and `rerun` hand
 their checked value to `success_value` as it is, so a duration stays a duration. A void
 tool answers `{nonce, result: null}`.
 

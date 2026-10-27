@@ -34,7 +34,7 @@ fn consumer_connects_verifies_and_receives_a_packet() {
 
     // A definition's grimm channel send must arrive on the real WSS client, and the
     // record it returns, bound by a `let`, must name the packet that arrived.
-    let resp = c.host.nu(
+    let resp = c.host.execute(
         "def execute [data: nothing]: nothing -> record<event_id: string> {\n    let sent = (grimm channel send 'test/Ping' {msg: 'hello-wss'})\n    {event_id: $sent.event_id}\n}",
         "null",
     );
@@ -243,7 +243,7 @@ fn channel_send_spills_oversized_event() {
     let mut c = Consumer::attach(host, &ch.ca);
     let nom = mcp_nom(&mut c);
 
-    let resp = c.host.nu(
+    let resp = c.host.execute(
         "def execute [data: nothing]: nothing -> record<ok: bool> {\n    grimm channel send 'test/Big' {marker: 'SPILL_MARKER_42', blob: (1..3000 | each { 'x' } | str join)}\n    {ok: true}\n}",
         "null",
     );
@@ -326,7 +326,7 @@ fn remote_send_with_returns_its_event_id() {
 
     let src = root.join("note.txt");
     std::fs::write(&src, "files-1").expect("write the attachment");
-    let resp = a.host.nu(
+    let resp = a.host.execute(
         "def execute [data: record<nom: string, src: string>]: nothing -> record<id: string> {\n    let sent = (grimm remote_channel_send_with $data.nom 'test/Files' {note: 'files-1'} [[src dest]; [$data.src 'note.txt']])\n    {id: $sent.event_id}\n}",
         &json!({"nom": nom_b, "src": src.to_str().expect("utf-8 path")}).to_string(),
     );
@@ -365,7 +365,7 @@ fn remote_send(c: &mut Consumer, peer_nom: &str, model: &str, event_body: &str) 
     let definition = format!(
         "def execute [data: record<nom: string>]: nothing -> record<id: string> {{\n    let sent = (grimm remote channel send $data.nom '{model}' {{{event_body}}})\n    {{id: $sent.event_id}}\n}}",
     );
-    let resp = c.host.nu(&definition, &json!({"nom": peer_nom}).to_string());
+    let resp = c.host.execute(&definition, &json!({"nom": peer_nom}).to_string());
     assert!(!has_error_path(&resp), "the remote channel send failed: {resp}");
     envelope(&resp)["result"]["id"].as_str().expect("send returns a message id").to_string()
 }

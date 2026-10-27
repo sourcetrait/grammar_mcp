@@ -52,7 +52,7 @@ pub(crate) enum CommandKind {
     PurviewConfigure,
     ChannelOpen,
     ChannelReady,
-    ChannelClosed,
+    ChannelClose,
     ChannelConfig,
     RemoteOpen,
     RemoteClose,
@@ -102,7 +102,7 @@ impl CommandSpec {
         signature
     }
 
-    /// The command as one `def` line: its parameters and its result's type.
+    /// The command's signature line: its words, its parameters, its result's kind.
     pub(crate) fn signature_text(&self) -> String {
         let positionals = self.positionals.iter().map(|arg| {
             let optional = if arg.optional { "?" } else { "" };
@@ -114,30 +114,15 @@ impl CommandSpec {
             .map(|flag| format!("--{}: {}", flag.name, flag.shape.text()));
         let parameters: Vec<String> = positionals.chain(flags).collect();
         format!(
-            "def '{}' [{}]: nothing -> {}",
-            self.name,
+            "{} [{}]: nothing -> {}",
+            self.words(),
             parameters.join(", "),
             self.result,
         )
     }
 }
 
-/// A diagnostic row's type, as the refusing commands' warnings carry it.
-macro_rules! diagnostics_type {
-    () => {
-        "table<kind: string, source: oneof<nothing, record<path: oneof<nothing, string>, \
-         position: list<int>>>, message: string>"
-    };
-}
-
 const NO_ARGS: &[ArgSpec] = &[];
-
-const INFO_ARGS: &[ArgSpec] = &[ArgSpec {
-    name: "purviews",
-    shape: ArgShape::Strings,
-    optional: true,
-    summary: "Purview ids to render as if in view; empty means the current view.",
-}];
 
 const HELP_ARGS: &[ArgSpec] = &[ArgSpec {
     name: "namepath",
@@ -250,13 +235,10 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         kind: CommandKind::Info,
         name: "interface info",
         topic: "General",
-        positionals: INFO_ARGS,
+        positionals: NO_ARGS,
         flags: NO_ARGS,
-        result: "record<name: string, version: string, nu_version: string, id: string, \
-                 namespace: string, mcp_nom: string, work_dir: string, \
-                 plugins: list<list<oneof<string, nothing>>>, signatures: string, \
-                 purview: list<list<oneof<string, list<string>>>>>",
-        summary: "Versions, plugins, and every rig's callable signatures.",
+        result: "record",
+        summary: "MCP details, Equipment signatures within current purview",
     },
     CommandSpec {
         kind: CommandKind::Help,
@@ -264,11 +246,8 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "General",
         positionals: HELP_ARGS,
         flags: NO_ARGS,
-        result: "record<doc: oneof<record<srcdir: string, summary: string, details: string>, \
-                 record<src: string, summary: string, details: string>, \
-                 record<src: string, signature: string, details: string>, \
-                 record<signatures: string>>>",
-        summary: "Detailed documentation for rigs, modules, and calls.",
+        result: "record",
+        summary: "Displays equipment documentation",
     },
     CommandSpec {
         kind: CommandKind::ProcessList,
@@ -276,9 +255,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "Process",
         positionals: NO_ARGS,
         flags: NO_ARGS,
-        result: "record<processes: table<nonce: string, tool: string, started_at: int, \
-                 args: record, source_nonce: oneof<nothing, string>, \
-                 path: oneof<nothing, string>>>",
+        result: "record",
         summary: "List in-flight MCP tool usage.",
     },
     CommandSpec {
@@ -296,7 +273,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "Purview",
         positionals: NO_ARGS,
         flags: NO_ARGS,
-        result: "record<purviews: list<list<oneof<string, list<string>>>>, current: list<string>>",
+        result: "record",
         summary: "List every configured purview, and what is currently in view.",
     },
     CommandSpec {
@@ -305,7 +282,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "Purview",
         positionals: SET_ARGS,
         flags: NO_ARGS,
-        result: "record<revealed: oneof<nothing, string>>",
+        result: "record",
         summary: "Set the current view to these purviews.",
     },
     CommandSpec {
@@ -314,7 +291,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "Purview",
         positionals: EXTEND_ARGS,
         flags: NO_ARGS,
-        result: "record<revealed: oneof<nothing, string>, current: list<string>>",
+        result: "record",
         summary: "Bring more purviews into the current view.",
     },
     CommandSpec {
@@ -323,7 +300,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "Purview",
         positionals: CONFIGURE_ARGS,
         flags: NO_ARGS,
-        result: "record<signatures: oneof<nothing, string>>",
+        result: "record",
         summary: "Set a purview's namepath patterns; an empty list deletes it.",
     },
     CommandSpec {
@@ -332,8 +309,8 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "Channel",
         positionals: NO_ARGS,
         flags: NO_ARGS,
-        result: "record<status: string, wss: string, inbox: string>",
-        summary: "Open the host's packet channel and return the endpoint to watch.",
+        result: "record",
+        summary: "Opens the Channel",
     },
     CommandSpec {
         kind: CommandKind::ChannelReady,
@@ -342,16 +319,16 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         positionals: NO_ARGS,
         flags: NO_ARGS,
         result: "nothing",
-        summary: "Confirm the channel/Open packet was seen; ends the verify window.",
+        summary: "Verifies Channel activation and begins normal use.",
     },
     CommandSpec {
-        kind: CommandKind::ChannelClosed,
-        name: "interface channel closed",
+        kind: CommandKind::ChannelClose,
+        name: "interface channel close",
         topic: "Channel",
         positionals: NO_ARGS,
         flags: NO_ARGS,
         result: "nothing",
-        summary: "Close the host's packet channel.",
+        summary: "Closes the Channel",
     },
     CommandSpec {
         kind: CommandKind::ChannelConfig,
@@ -359,8 +336,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "Channel",
         positionals: NO_ARGS,
         flags: CONFIG_FLAGS,
-        result: "record<spam_warn_window_secs: int, spam_warn_rate: int, \
-                 spam_error_window_secs: int, spam_error_rate: int>",
+        result: "record",
         summary: "Read or adjust the channel's send-rate thresholds at runtime.",
     },
     CommandSpec {
@@ -370,10 +346,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         positionals: OPEN_ARGS,
         flags: NO_ARGS,
         result: "nothing",
-        summary: "Open a configured remote link by alias; blocks on bind (listener) or connect \
-                  (connector, 20s) and returns synchronously - null on success, an error \
-                  envelope on failure. A listener then emits mcp/remote/Connected when a peer \
-                  pairs; Disconnected fires on any established-link teardown.",
+        summary: "Open a configured remote link by alias; blocks on bind or connect.",
     },
     CommandSpec {
         kind: CommandKind::RemoteClose,
@@ -390,10 +363,8 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "Remote",
         positionals: NO_ARGS,
         flags: NO_ARGS,
-        result: "record<channels: table<alias: string, remote_mcp_nom: string, address: string>, \
-                 listening: table<remote: string, address: string>>",
-        summary: "List remote grammar-host links: established `channels` plus \
-                  bound-but-unpaired `listening` listeners.",
+        result: "record",
+        summary: "List remote grammar-host links: established `channels` and `listening`.",
     },
     CommandSpec {
         kind: CommandKind::EquipNew,
@@ -401,7 +372,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "Equip",
         positionals: SOURCE_ARGS,
         flags: NO_ARGS,
-        result: "record<summary: record<created: list<string>>>",
+        result: "record",
         summary: "Register a new equip at its source and seed its rig.",
     },
     CommandSpec {
@@ -410,12 +381,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "Equip",
         positionals: SOURCE_ARGS,
         flags: NO_ARGS,
-        result: concat!(
-            "record<summary: record<added: list<string>, modified: list<string>, \
-             removed: list<string>, warnings: ",
-            diagnostics_type!(),
-            ">>"
-        ),
+        result: "record",
         summary: "Validate an equip's whole source and install it.",
     },
     CommandSpec {
@@ -424,13 +390,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "Equip",
         positionals: SOURCE_ARGS,
         flags: NO_ARGS,
-        result: concat!(
-            "record<summary: record<ok: bool, errors: ",
-            diagnostics_type!(),
-            ", warnings: ",
-            diagnostics_type!(),
-            ">>"
-        ),
+        result: "record",
         summary: "Validate an installed equip's source, writing nothing.",
     },
     CommandSpec {
@@ -439,7 +399,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "Equip",
         positionals: SOURCE_ARGS,
         flags: NO_ARGS,
-        result: "record<>",
+        result: "record",
         summary: "Remove an installed equip from the namespace; its source stays.",
     },
     CommandSpec {
@@ -448,7 +408,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "Equip",
         positionals: SCAFFOLD_ARGS,
         flags: NO_ARGS,
-        result: "record<created: list<string>>",
+        result: "record",
         summary: "Scaffold modules / functions (by namepath) into an equip's rig.",
     },
     CommandSpec {
@@ -457,14 +417,8 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         topic: "Equip",
         positionals: COMMIT_ARGS,
         flags: NO_ARGS,
-        result: concat!(
-            "record<added: list<string>, modified: list<string>, removed: list<string>, \
-             warnings: ",
-            diagnostics_type!(),
-            ">"
-        ),
-        summary: "Commit an equip's lib and rig from its source to the MCP's repository for \
-                  live use.",
+        result: "record",
+        summary: "Commit an equip's lib and rig from its source to the MCP's repository.",
     },
 ];
 
@@ -527,14 +481,14 @@ pub(crate) fn interface_engine(deny: &DenySet) -> nu::EngineState {
 
 /// The signatures the deny set leaves, a `###` heading a topic.
 pub(crate) fn render_signatures(deny: &DenySet) -> String {
-    let mut out = String::from("## Command Signatures\n");
+    let mut out = format!("## Command Signatures\nNote: Each begins with `{INTERFACE} `\n");
     let mut topic = "";
     for spec in COMMANDS.iter().filter(|spec| !deny.denies_command(spec.words())) {
         if spec.topic != topic {
             topic = spec.topic;
             out.push_str(&format!("### {topic}\n"));
         }
-        out.push_str(&format!("- `{}` {}\n", spec.signature_text(), spec.summary));
+        out.push_str(&format!("{}\n`{}`\n", spec.summary, spec.signature_text()));
     }
     out
 }

@@ -23,15 +23,15 @@ fn description(s: &TestServer, name: &str) -> String {
 }
 
 #[test]
-fn the_nu_tool_is_described_by_the_execute_contract() {
+fn the_execute_tool_is_described_by_its_contract() {
     let s = TESTING.harness();
-    assert_eq!(description(s, "nu"), EXECUTE_DOC);
+    assert_eq!(description(s, "execute"), EXECUTE_DOC);
 }
 
 #[test]
 fn rerun_names_the_tool_it_reruns() {
     let s = TESTING.harness();
-    assert!(description(s, "rerun").contains("`nu`"));
+    assert!(description(s, "rerun").contains("`execute`"));
 }
 
 #[test]
@@ -39,7 +39,7 @@ fn the_instructions_open_with_the_envelope_schema() {
     let s = TESTING.harness();
     let instructions = s.instructions();
     assert!(instructions.starts_with(MCP_DOC), "{instructions}");
-    assert!(instructions.contains("/nu/<nonce>/definition.nu"), "{instructions}");
+    assert!(instructions.contains("/execute/<nonce>/definition.nu"), "{instructions}");
 }
 
 #[test]
@@ -59,7 +59,7 @@ fn four_tools_are_routed() {
         .map(|tool| tool["name"].as_str().unwrap_or_default().to_string())
         .collect();
     names.sort();
-    assert_eq!(names, vec!["call", "interface", "nu", "rerun"]);
+    assert_eq!(names, vec!["call", "execute", "interface", "rerun"]);
 }
 
 #[test]
@@ -70,16 +70,40 @@ fn the_interface_is_described_by_its_pretext_then_its_command_signatures() {
         .split_once("\n\n## Command Signatures\n")
         .unwrap_or_else(|| panic!("the signatures follow the pretext: {description}"));
     assert_eq!(pretext, INTERFACE_DOC.trim_end(), "{description}");
+    assert!(
+        signatures.starts_with("Note: Each begins with `interface `\n"),
+        "{description}",
+    );
     for topic in ["General", "Process", "Purview", "Channel", "Remote", "Equip"] {
         assert!(signatures.contains(&format!("### {topic}\n")), "{topic}: {description}");
     }
     assert!(
-        signatures.contains("- `def 'interface help' [namepath: string]: nothing -> "),
+        signatures.contains(
+            "Displays equipment documentation\n`help [namepath: string]: nothing -> record`\n"
+        ),
         "{description}",
     );
     assert!(
-        signatures.contains("- `def 'interface channel ready' []: nothing -> nothing` "),
+        signatures.contains(
+            "Verifies Channel activation and begins normal use.\n\
+             `channel ready []: nothing -> nothing`\n"
+        ),
         "{description}",
     );
-    assert_eq!(signatures.matches("- `def 'interface ").count(), 21, "{description}");
+    let lines = signatures.lines().filter(|line| line.starts_with('`')).count();
+    assert_eq!(lines, 21, "{description}");
+}
+
+#[test]
+fn every_description_fits_claude_codes_cap() {
+    let s = TESTING.harness();
+    for tool in s.tools() {
+        let description = tool["description"].as_str().unwrap_or_default();
+        assert!(
+            description.chars().count() <= 4096,
+            "`{}` is {} characters",
+            tool["name"],
+            description.chars().count(),
+        );
+    }
 }

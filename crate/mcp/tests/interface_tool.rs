@@ -91,7 +91,7 @@ fn every_command_answers_through_the_interface() {
     let _ = s.interface("interface channel config --spam-warn-rate 10");
     let ready = s.interface("interface channel ready");
     assert_eq!(error_kind(&ready), Some("channel::not_open"), "got {ready}");
-    let closed = s.interface("interface channel closed");
+    let closed = s.interface("interface channel close");
     assert_eq!(result_of(&closed), &Value::Null, "got {closed}");
 
     let remotes = s.interface("interface remote list");

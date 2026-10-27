@@ -1,6 +1,6 @@
 # template.rs
 
-The two source builders, `nu`'s and `call`'s. Each embeds a NUON literal the host
+The two source builders, `execute`'s and `call`'s. Each embeds a NUON literal the host
 rendered rather than leaving the eval to re-parse JSON, so the parser downstream only
 ever sees well-formed nu. Neither sets `$env.NONCE`: `eval_in_process` puts it on the
 eval's stack, where every command the source reaches finds it.
@@ -44,7 +44,7 @@ own `use equip/...` references bind at THAT file's parse against the const
 The literal is `null` whenever the args are empty, whatever the declared type: a call
 is an authored definition, and its leniency is the author's.
 
-## fn build_nu_source
+## fn build_execute_source
 The definition as the agent wrote it, a newline, then the one call. The newline is
 load-bearing: a definition ending in a comment would otherwise swallow the call. The
 contract has already held the definition to exactly one top-level `def execute`, so the

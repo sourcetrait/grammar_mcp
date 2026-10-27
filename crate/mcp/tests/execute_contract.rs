@@ -1,4 +1,4 @@
-//! The execute contract over `nu` definitions, through `guts::analyze_definition`.
+//! The execute contract over `execute` definitions, through `guts::analyze_definition`.
 
 use serde_json::Value;
 use sourcetrait_grammar_mcp::guts::analyze_definition;
