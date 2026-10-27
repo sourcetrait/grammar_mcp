@@ -421,7 +421,7 @@ fn check_walks_list_items_and_oneof_members() {
         Err("data.xs[1]: expected int, got string".to_string()),
     );
     let refused = checked(shape(), "{xs: [], u: s}").expect_err("a string is neither member");
-    assert!(refused.starts_with("data.u: a string matches none of"), "{refused}");
+    assert!(refused.starts_with("data.u: a value typed string matches none of"), "{refused}");
 }
 
 #[test]

@@ -66,6 +66,11 @@ Each message carries the path or the position, so the agent fixes the one thing 
 verified, before any bind or connect: the link's notices and relays ride the Channel's
 gate and would drop.
 
+### fn message
+An equip is named as every other surface names it, through `display_equip`: a builtin
+by its bare name, `grammar:eye` rather than the `sourcetrait/grammar:eye` the namepath
+resolved to, which no agent spells.
+
 ## fn error_to_call_result
 The failure envelope, `{nonce, error}`: the error's rows as a table of `kind`,
 `source`, and `message`, rendered through the same seam as a success

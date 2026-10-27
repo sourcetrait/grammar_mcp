@@ -232,10 +232,10 @@ impl GrammarMcpError {
     fn message(&self) -> String {
         match self {
             Self::EquipNotRegistered { equip } => {
-                format!("equip `{equip}` is not registered")
+                format!("equip `{}` is not registered", display_equip(equip))
             }
             Self::EquipAlreadyRegistered { equip } => {
-                format!("equip `{equip}` is already registered")
+                format!("equip `{}` is already registered", display_equip(equip))
             }
             Self::EquipInvalidName { equip, reason } => {
                 format!("invalid equip name `{equip}`: {reason}")
@@ -254,12 +254,13 @@ impl GrammarMcpError {
                 passed,
                 registered,
             } => format!(
-                "source_dir mismatch for `{equip}`: passed `{passed}`, registered `{registered}`"
+                "source_dir mismatch for `{}`: passed `{passed}`, registered `{registered}`",
+                display_equip(equip),
             ),
             Self::EquipNoKinds { source_dir } => {
                 format!("equip source `{source_dir}` holds neither a lib/ nor a rig/")
             }
-            Self::EquipNoRig { equip } => format!("equip `{equip}` has no rig"),
+            Self::EquipNoRig { equip } => format!("equip `{}` has no rig", display_equip(equip)),
             Self::EquipInvalidAction { action } => format!("unknown equip action `{action}`"),
             Self::RigInvalidName { name, reason } => {
                 format!("invalid name `{name}`: {reason}")
@@ -272,7 +273,10 @@ impl GrammarMcpError {
                 rig,
                 module_path,
                 name,
-            } => format!("function `{name}` is not defined in `{rig}:{module_path}`"),
+            } => format!(
+                "function `{name}` is not defined in `{}:{module_path}`",
+                display_equip(rig),
+            ),
             Self::DataInvalid { reason }
             | Self::ResultInvalid { reason }
             | Self::TimeoutInvalid { reason } => reason.clone(),

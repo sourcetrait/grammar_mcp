@@ -41,7 +41,7 @@ fn parse_timeout(text: Option<&str>) -> Result<(u64, nu::Value), GrammarMcpError
             Ok(((val as u64).div_ceil(1_000_000), nu::Value::duration(val, span)))
         }
         other => Err(invalid(format!(
-            "`{text}` is a {}, not a positive duration such as 30sec",
+            "`{text}` is typed {}, not a positive duration such as 30sec",
             other.get_type(),
         ))),
     }

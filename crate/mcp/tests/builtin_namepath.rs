@@ -1,5 +1,7 @@
 use serde_json::json;
-use sourcetrait_grammar_mcp::guts::{TestServer, has_error, valid_function_source, write_source};
+use sourcetrait_grammar_mcp::guts::{
+    TestServer, error_kind, error_messages, has_error, valid_function_source, write_source,
+};
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
@@ -52,6 +54,14 @@ fn a_builtin_is_reached_by_its_bare_name() {
 
     let pattern = s.inspect("gram:");
     assert_eq!(pattern["result"]["doc"]["signatures"].as_str(), Some(block), "got {pattern}");
+
+    let missing = s.call("gram:m:nosuch", json!({}));
+    assert_eq!(error_kind(&missing), Some("function::not_defined"), "got {missing}");
+    assert_eq!(
+        error_messages(&missing),
+        vec!["function `nosuch` is not defined in `gram:m`".to_string()],
+        "a refusal names a builtin bare, as every other surface does; got {missing}",
+    );
 
     let configured = s.purview_configure("gram_calls", &["gram:m:"]);
     assert!(!has_error(&configured), "a purview takes a builtin's bare form; got {configured}");

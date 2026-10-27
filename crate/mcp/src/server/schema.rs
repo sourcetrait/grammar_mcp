@@ -1069,7 +1069,7 @@ pub(crate) fn check_value(
                 Ok(())
             } else {
                 Err(format!(
-                    "{at}: a {} matches none of `{}`",
+                    "{at}: a value typed {} matches none of `{}`",
                     value.get_type(),
                     render_nu_typedef(typedef),
                 ))

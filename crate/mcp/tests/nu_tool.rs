@@ -206,6 +206,12 @@ fn a_bad_timeout_is_refused() {
         let env = s.nu_timeout("def execute [data: nothing]: nothing -> nothing { }", "null", Some(timeout));
         assert_eq!(error_kind(&env), Some("timeout::invalid"), "{timeout}: {env}");
     }
+    let five = s.nu_timeout("def execute [data: nothing]: nothing -> nothing { }", "null", Some("5"));
+    assert_eq!(
+        error_messages(&five),
+        vec!["`5` is typed int, not a positive duration such as 30sec".to_string()],
+        "the refusal names the value's type; got {five}",
+    );
 }
 
 #[test]
