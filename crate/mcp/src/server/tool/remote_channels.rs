@@ -52,9 +52,9 @@ impl NuSh {
         let bound = listeners.lock().unwrap_or_else(|e| e.into_inner());
         let mut listening: Vec<ListeningEntry> = bound
             .iter()
-            .map(|(alias, addr)| ListeningEntry {
+            .map(|(alias, listener)| ListeningEntry {
                 remote: alias.clone(),
-                address: addr.to_string(),
+                address: listener.addr.to_string(),
             })
             .collect();
         drop(bound);

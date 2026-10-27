@@ -202,8 +202,8 @@ pub(crate) use crate::{
                 RemoteStream,
             },
             link::{
-                RemoteLinkHandle, bound_listeners, find_link_send, open_remote_blocking,
-                remote_links, safe_dest,
+                RemoteLinkHandle, bound_listeners, close_listener, find_link_send,
+                open_remote_blocking, remote_links, safe_dest,
             },
             verify::PublicKeyVerifier,
         },

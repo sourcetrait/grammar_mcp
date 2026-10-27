@@ -41,17 +41,32 @@ consumer keys on it and branches on field presence (attached?, understood/14): m
 present iff the link established, error present iff it failed - absent when not, never null
 (the_user).
 
-## static BOUND_LISTENERS / fn unlisten
+## static BOUND_LISTENERS / fn close_listener / fn promote_listener / fn unlisten
 The bound-but-unpaired listener registry (RemoteFirstBlood/RemoteChannelListeners),
-parallel to REMOTE_LINKS. open_listener registers the alias -> bind address the moment the
-bind succeeds - the clean registration point ConnectionWoes's synchronous bind created - so
-remote_channels can surface a listener that has bound but not yet paired, which was
-invisible before (remote_links holds only established links, so a bound listener read as
-empty, indistinguishable from down). On pairing the accept-serve task registers the
-established link THEN unlistens (briefly in both sets, never neither); on an accept failure
-it unlistens then emits Disconnected. unlisten is unconditional (no peer-nom guard like
-deregister_if_ours): the synchronous bind serializes opens on one address, so at most one
-accept-serve task owns an alias here.
+parallel to REMOTE_LINKS. open_listener registers a `BoundListener` the moment the bind
+succeeds - the clean registration point ConnectionWoes's synchronous bind created - so
+remote_channels can surface a listener that has bound but not yet paired, and
+remote_channel_close can cancel one.
+
+An entry carries its address, a sequence number, its accept's cancel token, and the
+receiving half of a `released` signal. close_listener removes the entry, cancels the
+token, and awaits `released` up to CLOSE_FRAME_GRACE: the accept task's `select!`
+(biased, the cancel first) drops the accept future, which drops the TcpListener and frees
+the port, and only then sends `released`. So a close returns with the port free, and an
+immediate re-open of the same alias binds rather than meeting "address in use".
+
+A pairing that completes as a close lands is settled under the registry's lock:
+promote_listener moves the link into REMOTE_LINKS only while the alias still holds this
+task's sequence number, so a close that removed the entry first wins, and the paired link
+is cancelled there and then. Promotion registers the link before the entry leaves, so it
+is briefly in both sets, never in neither. The lock order is fixed: the listeners' map,
+then the links' map; remote_channel_close never holds both.
+
+unlisten, on an accept failure, leaves only this task's own entry, by its sequence number,
+since a close followed by a re-open can put a newer listener under the same alias.
+
+A listener closed before it paired emits Disconnected {remote}: no `mcp_nom`, since no link
+established, and no `error`, since nothing failed.
 
 ## fn find_link_send / fn safe_dest
 find_link_send matches on the link's remote_mcp_nom (the id an agent sends to), holds

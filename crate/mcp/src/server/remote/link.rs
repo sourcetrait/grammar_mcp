@@ -38,17 +38,40 @@ pub(crate) fn remote_links() -> Arc<std::sync::Mutex<HashMap<String, RemoteLinkE
     REMOTE_LINKS.clone()
 }
 
-/// Bound-but-unpaired listeners, keyed by alias with their bind address. A
-/// listener registers here once its bind succeeds (ConnectionWoes made bind
-/// synchronous) and leaves - into REMOTE_LINKS when a peer pairs, or dropped when
-/// the accept fails. remote_channels surfaces it as the `listening` set, distinct
-/// from the established `channels`.
-static BOUND_LISTENERS: LazyLock<Arc<std::sync::Mutex<HashMap<String, std::net::SocketAddr>>>> =
+/// A listener bound and awaiting its peer: its address and its accept's cancel.
+pub(crate) struct BoundListener {
+    pub addr: std::net::SocketAddr,
+    seq: u64,
+    cancel: tku::CancellationToken,
+    released: Option<tk::oneshot::Receiver<()>>,
+}
+
+/// Bound-but-unpaired listeners, keyed by alias.
+static BOUND_LISTENERS: LazyLock<Arc<std::sync::Mutex<HashMap<String, BoundListener>>>> =
     LazyLock::new(|| Arc::new(std::sync::Mutex::new(HashMap::new())));
 
+/// Each bound listener's identity, so a task leaves only its own entry.
+static LISTENER_SEQ: AtomicU64 = AtomicU64::new(0);
+
 /// The shared bound-listener registry; remote_channels reads it for `listening`.
-pub(crate) fn bound_listeners() -> Arc<std::sync::Mutex<HashMap<String, std::net::SocketAddr>>> {
+pub(crate) fn bound_listeners() -> Arc<std::sync::Mutex<HashMap<String, BoundListener>>> {
     BOUND_LISTENERS.clone()
+}
+
+/// Cancel a bound listener's accept; false when none is bound under `alias`.
+pub(crate) async fn close_listener(alias: &str) -> bool {
+    let entry = bound_listeners()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(alias);
+    let Some(mut entry) = entry else {
+        return false;
+    };
+    entry.cancel.cancel();
+    if let Some(released) = entry.released.take() {
+        let _ = tk::timeout(CLOSE_FRAME_GRACE, released).await;
+    }
+    true
 }
 
 /// Find the open link to `mcp_nom` and enqueue a send. The lock is held only for
@@ -147,30 +170,51 @@ async fn open_listener(
         .await
         .map_err(|e| format!("bind {bind}: {e}"))?;
     let alias = entry.alias.clone();
-    bound_listeners()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(alias.clone(), bind);
+    let seq = LISTENER_SEQ.fetch_add(1, Ordering::Relaxed);
+    let cancel = tku::CancellationToken::new();
+    let (released_tx, released_rx) = tk::oneshot::channel::<()>();
+    bound_listeners().lock().unwrap_or_else(|e| e.into_inner()).insert(
+        alias.clone(),
+        BoundListener {
+            addr: bind,
+            seq,
+            cancel: cancel.clone(),
+            released: Some(released_rx),
+        },
+    );
     let self_mcp_nom = self_mcp_nom.clone();
     tk::spawn(async move {
-        match accept_and_pair(&self_mcp_nom, listener, acceptor, allow).await {
-            Ok((handle, msg_join, file_join)) => {
+        let accepted = tokio::select! {
+            biased;
+            _ = cancel.cancelled() => None,
+            accepted = accept_and_pair(&self_mcp_nom, listener, acceptor, allow) => Some(accepted),
+        };
+        match accepted {
+            None => {
+                let _ = released_tx.send(());
+                emit_closed(&alias);
+            }
+            Some(Ok((handle, msg_join, file_join))) => {
                 let peer_nom = handle.remote_mcp_nom.clone();
-                // Register the established link before dropping the bound-listener
-                // entry, so the pairing is briefly in both sets, never in neither.
-                remote_links()
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .insert(alias.clone(), RemoteLinkEntry { handle, addr: bind });
-                unlisten(&alias);
+                let link = RemoteLinkEntry { handle, addr: bind };
+                if let Err(link) = promote_listener(&alias, seq, link) {
+                    link.handle.cancel();
+                    let _ = released_tx.send(());
+                    let _ = msg_join.await;
+                    let _ = file_join.await;
+                    emit_closed(&alias);
+                    return;
+                }
+                drop(released_tx);
                 emit_lifecycle(MODEL_CONNECTED, &alias, &peer_nom);
                 let _ = msg_join.await;
                 let _ = file_join.await;
                 deregister_if_ours(&alias, &peer_nom);
                 emit_lifecycle(MODEL_DISCONNECTED, &alias, &peer_nom);
             }
-            Err(e) => {
-                unlisten(&alias);
+            Some(Err(e)) => {
+                unlisten(&alias, seq);
+                drop(released_tx);
                 emit_open_failed(&alias, "listen", &e.to_string());
             }
         }
@@ -178,14 +222,35 @@ async fn open_listener(
     Ok(())
 }
 
-/// Drop the bound-listener entry for `alias` - it paired or its accept failed.
-/// Unconditional (unlike deregister_if_ours): the synchronous bind serializes
-/// opens on one address, so at most one accept-serve task owns an alias here.
-fn unlisten(alias: &str) {
-    bound_listeners()
+/// Move a paired listener's link into the registry, unless it was closed first.
+fn promote_listener(
+    alias: &str,
+    seq: u64,
+    link: RemoteLinkEntry,
+) -> Result<(), RemoteLinkEntry> {
+    let listeners = bound_listeners();
+    let mut bound = listeners.lock().unwrap_or_else(|e| e.into_inner());
+    if bound.get(alias).is_none_or(|entry| entry.seq != seq) {
+        return Err(link);
+    }
+    remote_links()
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .remove(alias);
+        .insert(alias.to_string(), link);
+    bound.remove(alias);
+    Ok(())
+}
+
+/// Drop the bound-listener entry for `alias` if it is still this task's.
+fn unlisten(
+    alias: &str,
+    seq: u64,
+) {
+    let listeners = bound_listeners();
+    let mut bound = listeners.lock().unwrap_or_else(|e| e.into_inner());
+    if bound.get(alias).is_some_and(|entry| entry.seq == seq) {
+        bound.remove(alias);
+    }
 }
 
 /// Drop the link registered under `alias` only if it is still the one this task
@@ -215,6 +280,14 @@ fn emit_lifecycle(
     event.insert("remote", nu::Value::string(remote.to_string(), span));
     event.insert("mcp_nom", nu::Value::string(peer_nom.to_string(), span));
     push_report(model, nu::Value::record(event, span));
+}
+
+/// Emit mcp/remote/Disconnected {remote} for a listener closed before it paired.
+fn emit_closed(alias: &str) {
+    let span = nu::Span::unknown();
+    let mut event = nu::Record::new();
+    event.insert("remote", nu::Value::string(alias.to_string(), span));
+    push_report(MODEL_DISCONNECTED, nu::Value::record(event, span));
 }
 
 /// Emit mcp/remote/Disconnected {remote, error} when a link never established.

@@ -21,11 +21,10 @@ impl NuSh {
             .remove(&p.alias);
         match entry {
             Some(entry) => {
-                // Cancel the drivers; the link's open task observes the end,
-                // deregisters, and emits mcp/remote/Disconnected on the Channel.
                 entry.handle.cancel();
                 Ok(mcp::CallToolResult::default())
             }
+            None if close_listener(&p.alias).await => Ok(mcp::CallToolResult::default()),
             None => Ok(error_to_call_result(
                 GrammarMcpError::RemoteNotOpen { alias: p.alias },
                 None,
