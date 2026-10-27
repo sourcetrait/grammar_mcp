@@ -88,6 +88,24 @@ A list of tables is refused in both directions. nushell treats `table<C>` and
 caught by its inner list of records. The refusal names the fix, a record holding each
 table.
 
+## fn check_value / fn check_fields / fn scalar_conforms
+The strict check NuNu's contract asks for, which nushell's own makes no attempt at: its
+`compare_types` and `is_assignable_to` hold a record OPEN, taking one with an extra field
+as a subtype, so an undeclared field passes at any depth, and it checks no output when a
+command runs at all. This walk holds a value to its declared type itself: each record
+carries exactly its declared fields, each declared one required and an undeclared one
+refused, each table row likewise, a list's every item, and a oneof's first member that
+conforms. An EMPTY field list is an open record or table, and the walk stops there: that
+is the one place any field stands.
+
+A scalar is read by the value's own VARIANT, so `int` refuses a float, `float` refuses an
+int, and `number` takes either, as nushell's types do. `path` and `directory` values are
+strings by then, and a `glob` read back from NUON is a string too, so each takes one.
+
+Every refusal names its PATH from the root the caller gives, `data` or `result`, with a
+`.field` per record and an `[index]` per row or item: what an agent needs to find the one
+wrong value in a large table.
+
 ## fn typedef_text
 `render_nu_typedef` by another name, for messages and the test harness: an open record
 renders `record<>`, where nushell's own Display would print a bare `record`.

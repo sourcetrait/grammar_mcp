@@ -339,3 +339,112 @@ fn args_void_and_validate_result_shape() {
     let nu = result_schema_to_nu(&obj(s)).unwrap();
     assert_eq!(nu_to_result_schema(&nu).unwrap(), obj(s));
 }
+
+fn columns(fields: Vec<(&str, nu::SyntaxShape)>) -> nu::CollectionColumns<nu::SyntaxShape> {
+    fields
+        .into_iter()
+        .map(|(name, shape)| (name.to_string(), shape))
+        .collect()
+}
+
+fn record(fields: Vec<(&str, nu::SyntaxShape)>) -> nu::SyntaxShape {
+    nu::SyntaxShape::Record(columns(fields))
+}
+
+fn table(fields: Vec<(&str, nu::SyntaxShape)>) -> nu::SyntaxShape {
+    nu::SyntaxShape::Table(columns(fields))
+}
+
+fn data(shape: nu::SyntaxShape) -> NuTypedef {
+    data_typedef(&shape).expect("a data type")
+}
+
+fn checked(shape: nu::SyntaxShape, nuon: &str) -> Result<(), String> {
+    let value = nu::from_nuon(nuon, None).expect("NUON");
+    crate::server::schema::check_value(&value, &data(shape), "data")
+}
+
+#[test]
+fn check_holds_a_record_to_its_fields() {
+    let shape = || record(vec![("a", nu::SyntaxShape::Int)]);
+    assert_eq!(checked(shape(), "{a: 1}"), Ok(()));
+    assert_eq!(
+        checked(shape(), "{a: 1, b: 2}"),
+        Err("data.b: an undeclared field".to_string()),
+    );
+    assert_eq!(
+        checked(shape(), "{}"),
+        Err("data.a: a declared field is missing".to_string()),
+    );
+    assert_eq!(
+        checked(shape(), "{a: x}"),
+        Err("data.a: expected int, got string".to_string()),
+    );
+}
+
+#[test]
+fn check_takes_anything_inside_an_open_record() {
+    let shape = record(vec![("fill", nu::SyntaxShape::record())]);
+    assert_eq!(checked(shape, "{fill: {x: 1, y: [2, 3], z: {w: null}}}"), Ok(()));
+}
+
+#[test]
+fn check_holds_each_table_row_to_its_columns() {
+    let shape = || table(vec![("n", nu::SyntaxShape::Int)]);
+    assert_eq!(checked(shape(), "[[n]; [1] [2]]"), Ok(()));
+    assert_eq!(checked(shape(), "[]"), Ok(()));
+    assert_eq!(
+        checked(shape(), "[[n, m]; [1, 2]]"),
+        Err("data[0].m: an undeclared field".to_string()),
+    );
+    assert_eq!(
+        checked(shape(), "[{n: 1}, {n: 2.5}]"),
+        Err("data[1].n: expected int, got float".to_string()),
+    );
+}
+
+#[test]
+fn check_walks_list_items_and_oneof_members() {
+    let shape = || {
+        record(vec![
+            ("xs", nu::SyntaxShape::List(Box::new(nu::SyntaxShape::Int))),
+            (
+                "u",
+                nu::SyntaxShape::OneOf(vec![nu::SyntaxShape::Int, nu::SyntaxShape::Nothing]),
+            ),
+        ])
+    };
+    assert_eq!(checked(shape(), "{xs: [1, 2], u: null}"), Ok(()));
+    assert_eq!(
+        checked(shape(), "{xs: [1, a], u: 1}"),
+        Err("data.xs[1]: expected int, got string".to_string()),
+    );
+    let refused = checked(shape(), "{xs: [], u: s}").expect_err("a string is neither member");
+    assert!(refused.starts_with("data.u: a string matches none of"), "{refused}");
+}
+
+#[test]
+fn check_reads_scalars_by_their_variant() {
+    let shape = || {
+        record(vec![
+            ("p", nu::SyntaxShape::Filepath),
+            ("n", nu::SyntaxShape::Number),
+            ("d", nu::SyntaxShape::Duration),
+        ])
+    };
+    assert_eq!(checked(shape(), "{p: here, n: 1, d: 2sec}"), Ok(()));
+    assert_eq!(checked(shape(), "{p: here, n: 1.5, d: 2sec}"), Ok(()));
+    assert_eq!(
+        checked(shape(), "{p: here, n: 1, d: 2}"),
+        Err("data.d: expected duration, got int".to_string()),
+    );
+}
+
+#[test]
+fn check_holds_nothing_to_null() {
+    assert_eq!(checked(nu::SyntaxShape::Nothing, "null"), Ok(()));
+    assert_eq!(
+        checked(nu::SyntaxShape::Nothing, "{}"),
+        Err("data: expected nothing, got record".to_string()),
+    );
+}

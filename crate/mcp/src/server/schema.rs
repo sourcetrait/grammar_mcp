@@ -1017,6 +1017,136 @@ fn list_typedef(element: NuTypedef) -> Result<NuTypedef, String> {
     }))
 }
 
+/// Hold `value` to `typedef`: each record and table exactly its declared fields.
+pub(crate) fn check_value(
+    value: &nu::Value,
+    typedef: &NuTypedef,
+    at: &str,
+) -> Result<(), String> {
+    match typedef {
+        NuTypedef::Nothing => conform(matches!(value, nu::Value::Nothing { .. }), value, "nothing", at),
+        NuTypedef::Scalar(scalar) => conform(scalar_conforms(value, *scalar), value, scalar.name(), at),
+        NuTypedef::Record(record) => {
+            let Ok(fields) = value.as_record() else {
+                return Err(mismatch(value, "record", at));
+            };
+            let declared: Vec<(&str, &NuTypedef)> = record
+                .fields
+                .iter()
+                .map(|field| (field.name.0.as_str(), &field.typedef))
+                .collect();
+            check_fields(fields, &declared, at)
+        }
+        NuTypedef::Table(table) => {
+            let Ok(rows) = value.as_list() else {
+                return Err(mismatch(value, "table", at));
+            };
+            let declared: Vec<(&str, &NuTypedef)> = table
+                .columns
+                .iter()
+                .map(|column| (column.name.0.as_str(), &column.typedef))
+                .collect();
+            for (index, row) in rows.iter().enumerate() {
+                let row_at = format!("{at}[{index}]");
+                let Ok(fields) = row.as_record() else {
+                    return Err(mismatch(row, "record", &row_at));
+                };
+                check_fields(fields, &declared, &row_at)?;
+            }
+            Ok(())
+        }
+        NuTypedef::List(list) => {
+            let Ok(items) = value.as_list() else {
+                return Err(mismatch(value, "list", at));
+            };
+            for (index, item) in items.iter().enumerate() {
+                check_value(item, &list.element, &format!("{at}[{index}]"))?;
+            }
+            Ok(())
+        }
+        NuTypedef::Oneof(oneof) => {
+            if oneof.members.iter().any(|member| check_value(value, member, at).is_ok()) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "{at}: a {} matches none of `{}`",
+                    value.get_type(),
+                    render_nu_typedef(typedef),
+                ))
+            }
+        }
+    }
+}
+
+/// A record's fields held to the declared ones; none declared is an open record.
+fn check_fields(
+    record: &nu::Record,
+    declared: &[(&str, &NuTypedef)],
+    at: &str,
+) -> Result<(), String> {
+    if declared.is_empty() {
+        return Ok(());
+    }
+    for (key, _) in record.iter() {
+        if !declared.iter().any(|(name, _)| name == key) {
+            return Err(format!("{at}.{key}: an undeclared field"));
+        }
+    }
+    for (name, typedef) in declared {
+        match record.get(*name) {
+            Some(field) => check_value(field, typedef, &format!("{at}.{name}"))?,
+            None => return Err(format!("{at}.{name}: a declared field is missing")),
+        }
+    }
+    Ok(())
+}
+
+/// Whether a value's variant is the scalar's.
+fn scalar_conforms(
+    value: &nu::Value,
+    scalar: NuScalarTypedef,
+) -> bool {
+    use NuScalarTypedef as S;
+    matches!(
+        (scalar, value),
+        (S::Int, nu::Value::Int { .. })
+            | (S::Float, nu::Value::Float { .. })
+            | (S::Number, nu::Value::Int { .. } | nu::Value::Float { .. })
+            | (S::String | S::Path | S::Directory, nu::Value::String { .. })
+            | (S::Glob, nu::Value::Glob { .. } | nu::Value::String { .. })
+            | (S::Bool, nu::Value::Bool { .. })
+            | (S::Datetime, nu::Value::Date { .. })
+            | (S::Duration, nu::Value::Duration { .. })
+            | (S::Filesize, nu::Value::Filesize { .. })
+            | (S::Binary, nu::Value::Binary { .. })
+            | (S::Range, nu::Value::Range { .. })
+            | (S::CellPath, nu::Value::CellPath { .. })
+    )
+}
+
+/// `Ok` when the value conforms, else the mismatch at its path.
+fn conform(
+    conforms: bool,
+    value: &nu::Value,
+    expected: &str,
+    at: &str,
+) -> Result<(), String> {
+    if conforms {
+        Ok(())
+    } else {
+        Err(mismatch(value, expected, at))
+    }
+}
+
+/// A value's type against the one expected at its path.
+fn mismatch(
+    value: &nu::Value,
+    expected: &str,
+    at: &str,
+) -> String {
+    format!("{at}: expected {expected}, got {}", value.get_type())
+}
+
 /// A typedef in nushell's spelling, an open record or table as `record<>`.
 pub(crate) fn typedef_text(typedef: &NuTypedef) -> std::string::String {
     render_nu_typedef(typedef)
