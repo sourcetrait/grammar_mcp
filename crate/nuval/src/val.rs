@@ -1,18 +1,17 @@
 use crate::*;
 
-/// Represents the 1:1 with serializable nu_protocol::Value
-/// Split between "ok" values and nu_protocol::Value::Error
-pub type ValResult = Result<Val, ValError>;
+/// A nushell value's serializable result: its value, or its error.
+pub type NuValResult = Result<NuVal, NuValError>;
 
-/// Represents nu_protocol::Value::Error
+/// The error half of a result, nushell's `Value::Error`.
 #[cereal::derived(Data)]
-pub enum ValError {
+pub enum NuValError {
     Unknown,
 }
 
-/// Represents serializable nu_protocol::Value, with the exception of nu_protocol::Value::Error
+/// A serializable nushell value: every kind but an error, a closure, a custom.
 #[cereal::derived(Data)]
-pub enum Val {
+pub enum NuVal {
     Bool(bool),
     Int(i64),
     Float(f64),
@@ -22,20 +21,21 @@ pub enum Val {
     Duration(i64),
     Date(DateData),
     Range(RangeData),
-    Record(Vec<(String, Val)>),
-    List(Vec<Val>),
+    Record(Vec<(String, NuVal)>),
+    List(Vec<NuVal>),
     Binary(Vec<u8>),
     CellPath(Vec<CellPathMemberData>),
     Nothing,
 }
 
+/// A glob pattern, and whether it is taken literally.
 #[cereal::derived(Data)]
 pub struct GlobData {
     pub glob: String,
     pub no_expand: bool,
 }
 
-/// chrono::DateTime<FixedOffset>
+/// A date and time at a fixed offset, chrono's `DateTime<FixedOffset>`.
 #[cereal::derived(Data)]
 pub struct DateData {
     pub seconds: u32,
@@ -44,12 +44,14 @@ pub struct DateData {
     pub date_yof: NonZero<i32>,
 }
 
+/// A range of ints or of floats.
 #[cereal::derived(Data)]
 pub enum RangeData {
     Int(TypedRangeData<i64>),
     Float(TypedRangeData<f64>),
 }
 
+/// A range's start, its step, and its end.
 #[cereal::derived(Data)]
 #[serde(bound(
     serialize = "T: cereal::DataCopy",
@@ -61,6 +63,7 @@ pub struct TypedRangeData<T> {
     pub end: Bounded<T>,
 }
 
+/// A range's end: included, excluded, or none.
 #[cereal::derived(Data, Copy)]
 #[serde(bound(
     serialize = "T: cereal::DataCopy",
@@ -72,12 +75,14 @@ pub enum Bounded<T> {
     Unbounded,
 }
 
+/// A span's start and end byte offsets.
 #[cereal::derived(Data)]
 pub struct SpanData {
     pub start: u64,
     pub end: u64,
 }
 
+/// An error's code, its message, and its span.
 #[cereal::derived(Data)]
 pub struct ErrorData {
     pub code: String,
@@ -85,6 +90,7 @@ pub struct ErrorData {
     pub span: Option<SpanData>,
 }
 
+/// A cell path member: a column by name or a row by index.
 #[cereal::derived(Data)]
 pub enum CellPathMemberData {
     String {
@@ -114,6 +120,7 @@ impl From<nu::PathMember> for CellPathMemberData {
     }
 }
 
+/// The span a cell path member takes back in nushell.
 const SPAN: nu::Span = nu::Span::unknown();
 
 impl From<CellPathMemberData> for nu::PathMember {
@@ -164,28 +171,28 @@ impl From<nu_protocol::FloatRange> for TypedRangeData<f64> {
     }
 }
 
+/// A conversion from a nushell value, refused for what nuval can't carry.
 pub trait TryFromNu<V: Sized>: Sized {
     fn try_from_nu(value: V) -> Result<Self, ()>;
 }
 
-impl TryFromNu<nu::Value> for ValResult {
+impl TryFromNu<nu::Value> for NuValResult {
     fn try_from_nu(value: nu::Value) -> Result<Self, ()> {
         match value {
-            nu::Value::Error { .. } => Ok(Err(ValError::Unknown)),
-            _ => Ok(Ok(Val::try_from_nu(value)?))
+            nu::Value::Error { .. } => Ok(Err(NuValError::Unknown)),
+            _ => Ok(Ok(NuVal::try_from_nu(value)?))
         }
     }
 }
 
-//impl ValResultTrait for ValResult {
-impl TryFromNu<nu::Value> for Val {
+impl TryFromNu<nu::Value> for NuVal {
     fn try_from_nu(value: nu::Value) -> Result<Self, ()> {
         match value {
-            nu::Value::Int { val, .. } => Ok(Val::Int(val)),
-            nu::Value::Float { val, .. } => Ok(Val::Float(val)),
-            nu::Value::Bool { val, .. } => Ok(Val::Bool(val)),
-            nu::Value::String { val, .. } => Ok(Val::String(val)),
-            nu::Value::Range { val, .. } => Ok(Val::Range(match *val {
+            nu::Value::Int { val, .. } => Ok(NuVal::Int(val)),
+            nu::Value::Float { val, .. } => Ok(NuVal::Float(val)),
+            nu::Value::Bool { val, .. } => Ok(NuVal::Bool(val)),
+            nu::Value::String { val, .. } => Ok(NuVal::String(val)),
+            nu::Value::Range { val, .. } => Ok(NuVal::Range(match *val {
                 nu::Range::IntRange(x) => RangeData::Int(
                     TypedRangeData::from(x)
                 ),
@@ -193,23 +200,23 @@ impl TryFromNu<nu::Value> for Val {
                     TypedRangeData::from(x)
                 )
             })),
-            nu::Value::Record { val, .. } => Ok(Val::Record(
+            nu::Value::Record { val, .. } => Ok(NuVal::Record(
                 val.into_owned().drain(..)
                     .map(|(k,v)| Self::try_from_nu(v).map(|v| (k, v)))
                     .collect::<Result<Vec<_>, ()>>()?
             )),
-            nu::Value::List { vals, .. } => Ok(Val::List(
+            nu::Value::List { vals, .. } => Ok(NuVal::List(
                 vals.into_iter()
                     .map(|v| Self::try_from_nu(v))
                     .collect::<Result<Vec<_>, ()>>()?
             )),
-            nu::Value::Binary { val, .. } => Ok(Val::Binary(val.into_owned())),
-            nu::Value::CellPath { val, .. } => Ok(Val::CellPath(
+            nu::Value::Binary { val, .. } => Ok(NuVal::Binary(val.into_owned())),
+            nu::Value::CellPath { val, .. } => Ok(NuVal::CellPath(
                 val.members.into_iter()
                     .map(|x| CellPathMemberData::from(x))
                     .collect()
             )),
-            nu::Value::Nothing {..} => Ok(Val::Nothing),
+            nu::Value::Nothing {..} => Ok(NuVal::Nothing),
             _ => Err(()),
         }
     }

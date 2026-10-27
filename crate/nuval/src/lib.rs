@@ -1,6 +1,6 @@
 pub(crate) mod val;
 
-pub use crate::val::{TryFromNu, Val, ValError, ValResult};
+pub use crate::val::{NuVal, NuValError, NuValResult, TryFromNu};
 
 pub(crate) use std::{num::NonZero, ops::Bound};
 
