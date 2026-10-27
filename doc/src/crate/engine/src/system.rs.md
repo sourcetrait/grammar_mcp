@@ -32,13 +32,13 @@ A panic in a request's work answers as `internal` on that request rather than en
 system. An eval's own panic never gets this far, its thread catching it; this is for the
 engine's code around the eval, the equip lifecycle's among it.
 
-## struct Unawaited
-The handler for a packet no request waits on. The engine sends nothing but answers, so
-none arrives; one that did would go back unhandled.
-
 ## fn EngineHandle::start
 The system starts on the namespace `init` set, so `init` comes first, and the equip store
 before both (`serve.rs`'s `EngineCore`).
+
+The handler is the host's, so the host hears the system's status and its end, an end
+it didn't ask for among them. The engine sends nothing but answers, so a handler's
+`on_packet` never sees one.
 
 ## fn EngineHandle::request
 Generic over the request types, each naming its answer, so a host gets the answer's own

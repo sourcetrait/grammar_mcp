@@ -36,7 +36,7 @@ impl NuSh {
         nonce: datum::Nonce,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        match self.engine.control(EngineCommand::EquipNew { source: p.source }).await {
+        match self.system.control(EngineCommand::EquipNew { source: p.source }).await {
             Ok(ControlAnswer::Created(created)) => success(
                 nonce,
                 &EquipResult {
@@ -54,7 +54,7 @@ impl NuSh {
         nonce: datum::Nonce,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        match self.engine.control(EngineCommand::EquipInstall { source: p.source }).await {
+        match self.system.control(EngineCommand::EquipInstall { source: p.source }).await {
             Ok(ControlAnswer::Installed { equip, result }) => {
                 if rig_dir(&equip).exists() {
                     purview_add_rig(&equip, &self.current_purview.ids());
@@ -77,7 +77,7 @@ impl NuSh {
         nonce: datum::Nonce,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        match self.engine.control(EngineCommand::EquipCheck { source: p.source }).await {
+        match self.system.control(EngineCommand::EquipCheck { source: p.source }).await {
             Ok(ControlAnswer::Checked(summary)) => success(
                 nonce,
                 &EquipResult {
@@ -95,7 +95,7 @@ impl NuSh {
         nonce: datum::Nonce,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        match self.engine.control(EngineCommand::EquipUninstall { source: p.source }).await {
+        match self.system.control(EngineCommand::EquipUninstall { source: p.source }).await {
             Ok(ControlAnswer::Uninstalled { equip }) => {
                 if let Some(equip) = equip
                     && let Some(rows) = purview_remove_rig(&equip)

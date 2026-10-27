@@ -59,10 +59,12 @@ and the rig validator parse inline on a worker, and a pathological module graph
 overflows the 2 MB default and ABORTS - which in-process would take the TEST
 BINARY down rather than just a host.
 
-A fresh `TestServer` per test builds a fresh `NuSh` on an engine system of its own,
-which is roughly the spawned binary's startup cost MINUS the process spawn. That is what
-makes the in-process tier fast and cleanly isolated - each test gets its own stateful
-engine on its own runtime, with no subprocess.
+A fresh `TestServer` per test builds a fresh `NuSh` on an mcp system of its own, its
+engine alone, which is roughly the spawned binary's startup cost MINUS the process
+spawn. That is what makes the in-process tier fast and cleanly isolated - each test gets
+its own stateful engine on its own runtime, with no subprocess. It leaves the serve
+path's supervision out: an operator would take the namespace's host lock and sample the
+test process.
 
 ### fn interface
 The whole tool, parse and dispatch, for a test of the contract or of a command as an
@@ -87,6 +89,16 @@ test holds a description or the absence of an output schema as a client sees it.
 ### fn rig_index
 Decodes the NUON index into the JSON shape the assertions are written against, so
 a test checking `source_path` does not have to know the on-disk format.
+
+## struct SupervisedSystem
+mcp's system as the serve path starts it, the operator with the engine, for the one
+test of its whole lifecycle; that test is a binary of its own, since the host lock it
+holds is the namespace's.
+
+### fn host_lock_held
+Tried, not read: a non-blocking lock on a fresh open of the file conflicts with the
+operator's even within one process, because a `flock` belongs to the open file
+description, and the attempt releases at once when it succeeds.
 
 ## fn clear_config_pins
 The pin registry is process-global, so a test that pins has to be able to put it

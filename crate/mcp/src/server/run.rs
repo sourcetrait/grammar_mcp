@@ -7,32 +7,21 @@ pub(crate) async fn run_server() -> Result<(), String> {
     ensure_substrate()
         .await
         .map_err(|e| format!("the equip substrate: {e}"))?;
-    let engine = Arc::new(EngineHandle::start().await.map_err(|e| e.to_string())?);
     let nonce_gen = Arc::new(datum::NonceGenerator::new());
-    let server = NuSh::new(nonce_gen, engine.clone(), &config().deny);
-    let (emergency_tx, emergency_rx) = tk::unbounded_channel::<Emergency>();
-    spawn_emergency_responder(emergency_rx, server.mcp_nom.as_str().to_string());
-    server.channel.install_emergency(emergency_tx.clone());
-    let operator = Arc::new(start_operator(server.mcp_nom.as_str(), emergency_tx).await?);
-    spawn_observer(engine.clone(), operator);
-    spawn_signal_sweep(engine.clone());
+    let mcp_nom = datum::Nom::generate(&nonce_gen).into_pair();
+    let system = Arc::new(start_system(&mcp_nom, true).await?);
+    let server = NuSh::new(nonce_gen, mcp_nom, system.clone(), &config().deny);
+    spawn_signal_sweep(system.clone());
     let service = server
         .serve(mcp::stdio())
         .await
         .map_err(|e| format!("serve stdio: {e}"))?;
     let served = service.waiting().await;
     close_channel_for_shutdown().await;
-    teardown(&engine).await;
+    system.shutdown().await;
     served
         .map(|_| ())
         .map_err(|e| format!("the stdio service: {e}"))
-}
-
-/// Cancel every call in flight and reap its tree, the engine's jobs and plugins.
-async fn teardown(engine: &EngineHandle) {
-    if let Err(e) = engine.control(EngineCommand::Teardown).await {
-        eprintln!("grammar: the engine's teardown: {e}");
-    }
 }
 
 /// RFC 6455 "going away" - a server shutting down, which is exactly this.
@@ -50,7 +39,7 @@ async fn close_channel_for_shutdown() {
 }
 
 /// Sweep on TERM / INT / HUP, then exit with the conventional `128 + signo`.
-fn spawn_signal_sweep(engine: Arc<EngineHandle>) {
+fn spawn_signal_sweep(system: Arc<McpHandle>) {
     tk::spawn(async move {
         let mut term = match tk::signal(tk::SignalKind::terminate()) {
             Ok(s) => s,
@@ -79,7 +68,7 @@ fn spawn_signal_sweep(engine: Arc<EngineHandle>) {
             _ = hangup.recv() => nix::sys::signal::Signal::SIGHUP as i32,
         };
         close_channel_for_shutdown().await;
-        teardown(&engine).await;
+        system.shutdown().await;
         process::exit(128 + signo);
     });
 }

@@ -7,15 +7,16 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
             eprintln!("grammar: the equip substrate: {e}");
             return 1;
         }
-        let engine = match EngineHandle::start().await {
-            Ok(engine) => Arc::new(engine),
+        let nonce_gen = Arc::new(datum::NonceGenerator::new());
+        let mcp_nom = datum::Nom::generate(&nonce_gen).into_pair();
+        let system = match start_system(&mcp_nom, false).await {
+            Ok(system) => Arc::new(system),
             Err(e) => {
                 eprintln!("{e}");
                 return 1;
             }
         };
-        let nonce_gen = Arc::new(datum::NonceGenerator::new());
-        let server = NuSh::new(nonce_gen, engine, &DenySet::default());
+        let server = NuSh::new(nonce_gen, mcp_nom, system, &DenySet::default());
         let result = match tool {
             CliTool::Call {
                 namepath,

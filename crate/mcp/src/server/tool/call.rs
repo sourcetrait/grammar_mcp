@@ -35,7 +35,7 @@ impl NuSh {
             }
         };
         let answer = self
-            .engine
+            .system
             .request(CallRequest {
                 host: Host::Local,
                 nonce,

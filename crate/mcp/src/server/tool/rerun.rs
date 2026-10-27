@@ -21,7 +21,7 @@ impl NuSh {
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         let nonce = self.mint("rerun", &p).to_nonce();
         let answer = self
-            .engine
+            .system
             .request(RerunRequest {
                 host: Host::Local,
                 nonce,

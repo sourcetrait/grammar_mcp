@@ -27,7 +27,7 @@ impl NuSh {
                 let command = EngineCommand::Help {
                     namepath: p.namepath,
                 };
-                return match self.engine.control(command).await {
+                return match self.system.control(command).await {
                     Ok(ControlAnswer::Help(doc)) => success(nonce, &InspectResult { doc }),
                     Ok(_) => error_to_call_result(unexpected("help"), nonce),
                     Err(error) => error_to_call_result(error, nonce),

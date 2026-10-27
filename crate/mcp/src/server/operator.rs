@@ -1,32 +1,28 @@
-//! The operator's start, what mcp observes for it, and its emergencies' route.
+//! The operator's handler and observer: its emergencies routed, the engine seen.
 use crate::*;
 
-/// The operator's emergencies, put on the host's emergency lane.
-struct EmergencyRouter {
-    tx: EmergencyTx,
+/// The operator's emergencies onto the lane; its status and end to mcp's loop.
+pub(crate) struct OperatorWatch {
+    pub emergencies: EmergencyTx,
+    pub notices: tk::UnboundedSender<Notice>,
 }
 
-impl subsys::Handler<OperatorSystem> for EmergencyRouter {
+impl subsys::Handler<OperatorSystem> for OperatorWatch {
     fn on_packet(&mut self, pkt: subsys::Packet<FromOperatorSys>) -> impl Future<Output = Option<subsys::Packet<FromOperatorSys>>> + 'static + Send {
         let FromOperatorSys::Emergency(emergency) = pkt.take_msg();
-        let _ = self.tx.send(emergency);
+        let _ = self.emergencies.send(emergency);
         std::future::ready(None)
     }
-}
 
-/// Start the operator on the namespace's homes and the config's lines.
-pub(crate) async fn start_operator(
-    mcp_nom: &str,
-    tx: EmergencyTx,
-) -> Result<OperatorHandle, String> {
-    let cfg = config();
-    let paths = OperatorSysPaths::new(data_base_dir(), cache_base_dir());
-    let params = OperatorSysParams {
-        mcp_nom: mcp_nom.to_string(),
-        test: cfg.test,
-        supervisor: cfg.supervisor,
-    };
-    OperatorHandle::start(paths, params, EmergencyRouter { tx }).await
+    fn on_sub(&mut self, sub: subsys::FromSub) -> impl Future<Output = ()> + Send {
+        notice_status(&self.notices, "operator", sub);
+        std::future::ready(())
+    }
+
+    fn on_closed(&mut self) -> impl Future<Output = ()> + Send {
+        let _ = self.notices.send(Notice::Closed { component: "operator" });
+        std::future::ready(())
+    }
 }
 
 /// The engine's health as the operator reads it.
@@ -65,7 +61,7 @@ async fn engine_health(engine: &EngineHandle) -> Option<EngineHealth> {
 pub(crate) fn spawn_observer(
     engine: Arc<EngineHandle>,
     operator: Arc<OperatorHandle>,
-) {
+) -> tk::JoinHandle<()> {
     tk::spawn(async move {
         loop {
             tk::sleep(SAMPLE_INTERVAL).await;
@@ -80,5 +76,5 @@ pub(crate) fn spawn_observer(
                 return;
             }
         }
-    });
+    })
 }

@@ -1,10 +1,11 @@
 # oneshot.rs
 
 ## fn run_oneshot
-Builds the SAME substrate the serve path builds, starts an engine of its own on it, and
-dispatches ONE invocation straight to the `pub(crate)` handler methods on `NuSh` - no rmcp
-transport anywhere. That is what makes this the operator's no-agent contribution loop
-rather than a parallel implementation to keep in step.
+Builds the SAME substrate the serve path builds, starts mcp's system of its own on it,
+its engine alone, without the serve path's supervision, and dispatches ONE invocation
+straight to the `pub(crate)` handler methods on `NuSh` - no rmcp transport anywhere.
+That is what makes this the operator's no-agent contribution loop rather than a
+parallel implementation to keep in step.
 
 DENY DOES NOT APPLY on this path. It gates agent REGISTRATION at router assembly, and
 this bypasses the router entirely, so the operator always has the whole tool set; the

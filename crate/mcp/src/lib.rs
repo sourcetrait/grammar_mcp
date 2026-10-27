@@ -21,6 +21,7 @@ pub(crate) mod server {
         pub(crate) mod verify;
     }
     pub(crate) mod run;
+    pub(crate) mod system;
     pub(crate) mod tool {
         pub(crate) mod call;
         pub(crate) mod channel_close;
@@ -98,7 +99,7 @@ pub(crate) use crate::{
             },
         },
         oneshot::run_oneshot,
-        operator::{spawn_observer, start_operator},
+        operator::{OperatorWatch, spawn_observer},
         purview::{
             CurrentPurview, PURVIEW_ALL, PURVIEW_CORE, PURVIEW_DEFAULT, PURVIEW_REF, PurviewRow,
             PurviewView, is_derived_purview, is_rig_pattern, is_valid_purview_id, load_purviews,
@@ -118,6 +119,7 @@ pub(crate) use crate::{
             verify::PublicKeyVerifier,
         },
         run::run_server,
+        system::{McpHandle, Notice, notice_status, start_system},
         tool::{
             call::CallParams,
             commit::CommitParams,
@@ -147,10 +149,12 @@ pub(crate) use crate::{
 
 pub(crate) use sourcetrait_grammar_engine::{
     self as engine, CallRequest, ChannelSend, CheckSummary, CommitResult, ControlAnswer,
-    Diagnostic, EVAL_STACK_SIZE, EngineCommand, EngineError, EngineHandle,
-    EngineHealth, EngineHost, EngineParams, EngineResult, ExecuteRequest, Host, InspectDoc, LINT_VIOLATION_CAP, Lane, LintEngine, NU_VERSION, NamepathPattern,
-    NamepathStr, ParseEngine, PluginInfo, RemoteSend, RerunRequest, SignaturesDoc, Source,
-    ValueAnswer, analyze_definition, build_call_source, build_execute_source, builtin_equip,
+    ControlRequest, Diagnostic, EVAL_STACK_SIZE, EngineCommand, EngineError, EngineHandle,
+    EngineHealth, EngineHost, EngineParams, EngineResult, EngineSystem, ExecuteRequest,
+    FromEngineSys, Host, InspectDoc, LINT_VIOLATION_CAP, Lane, LintEngine, NU_VERSION,
+    NamepathPattern, NamepathStr, ParseEngine, PluginInfo, RemoteSend, RerunRequest,
+    SignaturesDoc, Source, ToEngineSys, ValueAnswer, analyze_definition, build_call_source,
+    build_execute_source, builtin_equip,
     builtin_name, definition_file, ensure_equip_store, ensure_plugin_registry, equip_repo_lock,
     equip_root, file_start, index_from_nuon, install_builtins, json_value_to_nu_value, lib_dir,
     lint_block, list_registered_plugins, registered_rig_names, rig_dir, rig_meta_path,
@@ -204,7 +208,7 @@ pub(crate) mod nu {
     pub(crate) use nuon::{ToNuonConfig, from_nuon, to_nuon};
 }
 
-pub(crate) use sourcetrait_common::{datum, subsys};
+pub(crate) use sourcetrait_common::{agnostic, cereal, datum, subsys};
 
 pub(crate) mod ser {
     pub(crate) use ::serde::{Deserialize, Serialize};
@@ -255,7 +259,7 @@ pub(crate) use tokio_rustls::rustls::pki_types::pem::PemObject;
 
 pub(crate) mod tk {
     pub(crate) use tokio::{
-        spawn,
+        select, spawn,
         io::{ReadHalf, WriteHalf, split},
         net::{TcpListener, TcpStream},
         signal::unix::{SignalKind, signal},

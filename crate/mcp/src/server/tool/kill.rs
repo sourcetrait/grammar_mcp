@@ -14,7 +14,7 @@ impl NuSh {
         nonce: datum::Nonce,
         p: KillParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        match self.engine.control(EngineCommand::Kill { nonce: p.nonce }).await {
+        match self.system.control(EngineCommand::Kill { nonce: p.nonce }).await {
             Ok(_) => success_void(nonce),
             Err(error) => error_to_call_result(error, nonce),
         }

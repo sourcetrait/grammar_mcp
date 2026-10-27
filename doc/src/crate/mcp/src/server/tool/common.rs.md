@@ -4,10 +4,11 @@
 One instance per process. The rmcp `#[tool_handler]` dispatches off `self.tool_router`,
 which is assembled deny-filtered at construction.
 
-### field engine
+### field system
 Every eval, every equip action, and every signature block is the engine's answer to a
-request (the engine's `system.rs`). The handle is shared, so the watchdog's health samples
-and the shutdown's teardown reach the same engine the tools do.
+request that goes through mcp's system (`server/system.rs`), the same system that
+observes the engine for the operator and shuts both down; the handle is shared with
+the signal sweep.
 
 ### field interface_engine
 Built once, from the deny set `NuSh::new` is handed, so a denied command is unknown to the
@@ -32,6 +33,9 @@ kind for opposite reasons, which is worth not "simplifying".
 The deny set is a PARAMETER rather than read from the config, because the one-shot CLI
 builds its interface with none: deny gates an agent's surface, and the operator's path
 keeps every command.
+
+The `mcp_nom` is the caller's, minted before mcp's system starts, since the system's
+operator and emergency log are keyed by it too.
 
 ## fn NuSh::mint
 EVERY TOOL MINTS ITS NONCE FIRST, before any check, from its name and its parameters,

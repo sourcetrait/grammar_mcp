@@ -17,7 +17,7 @@ impl NuSh {
         let command = EngineCommand::EquipCommit {
             namepath: p.namepath,
         };
-        match self.engine.control(command).await {
+        match self.system.control(command).await {
             Ok(ControlAnswer::Committed(result)) => success(nonce, &result),
             Ok(_) => error_to_call_result(unexpected("equip_commit"), nonce),
             Err(error) => error_to_call_result(error, nonce),

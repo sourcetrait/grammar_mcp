@@ -23,7 +23,7 @@ impl NuSh {
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         let nonce = self.mint("execute", &p).to_nonce();
         let answer = self
-            .engine
+            .system
             .request(ExecuteRequest {
                 host: Host::Local,
                 nonce,

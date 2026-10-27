@@ -1,8 +1,8 @@
 use crate::*;
 
 pub struct NuSh {
-    /// The engine, a system answering this host's requests.
-    pub(crate) engine: Arc<EngineHandle>,
+    /// mcp's system, which the engine's requests go through.
+    pub(crate) system: Arc<McpHandle>,
     pub(crate) nonce_gen: Arc<datum::NonceGenerator>,
     /// This host process's identity, minted once at construction.
     pub(crate) mcp_nom: datum::NomPair,
@@ -28,12 +28,12 @@ pub(crate) struct RemoteLinkEntry {
 impl NuSh {
     pub(crate) fn new(
         nonce_gen: Arc<datum::NonceGenerator>,
-        engine: Arc<EngineHandle>,
+        mcp_nom: datum::NomPair,
+        system: Arc<McpHandle>,
         deny: &DenySet,
     ) -> Self {
-        let mcp_nom = datum::Nom::generate(&nonce_gen).into_pair();
         Self {
-            engine,
+            system,
             nonce_gen,
             mcp_nom,
             interface_engine: Arc::new(interface_engine(deny)),
@@ -59,7 +59,7 @@ impl NuSh {
 
     /// The signature block within pattern strings, as the engine renders it.
     pub(crate) async fn signatures(&self, patterns: Vec<String>) -> GrammarMcpResult<String> {
-        match self.engine.control(EngineCommand::Signatures { patterns }).await? {
+        match self.system.control(EngineCommand::Signatures { patterns }).await? {
             ControlAnswer::Signatures(block) => Ok(block),
             _ => Err(unexpected("signatures")),
         }

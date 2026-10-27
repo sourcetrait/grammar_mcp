@@ -74,12 +74,12 @@ impl TestServer {
             .build()
             .expect("tokio runtime");
         rt.block_on(ensure_substrate()).expect("ensure_substrate");
-        let engine = rt.block_on(EngineHandle::start()).expect("the engine starts");
-        let nush = NuSh::new(
-            Arc::new(datum::NonceGenerator::new()),
-            Arc::new(engine),
-            &config().deny,
-        );
+        let nonce_gen = Arc::new(datum::NonceGenerator::new());
+        let mcp_nom = datum::Nom::generate(&nonce_gen).into_pair();
+        let system = rt
+            .block_on(start_system(&mcp_nom, false))
+            .expect("mcp's system starts");
+        let nush = NuSh::new(nonce_gen, mcp_nom, Arc::new(system), &config().deny);
         Self { rt, nush }
     }
 
@@ -370,6 +370,51 @@ impl TestServer {
         let index = crate::index_from_nuon(&text)
             .unwrap_or_else(|e| panic!("decode index {}: {e}", path.display()));
         json::to_value(&index).expect("index serializes")
+    }
+}
+
+/// mcp's system on the test namespace with both its components, the operator too.
+pub struct SupervisedSystem {
+    rt: tokio::runtime::Runtime,
+    system: McpHandle,
+}
+
+impl SupervisedSystem {
+    pub fn start() -> Self {
+        ensure_test_config();
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_stack_size(EVAL_STACK_SIZE)
+            .build()
+            .expect("tokio runtime");
+        rt.block_on(ensure_substrate()).expect("ensure_substrate");
+        let nonce_gen = datum::NonceGenerator::new();
+        let mcp_nom = datum::Nom::generate(&nonce_gen).into_pair();
+        let system = rt
+            .block_on(start_system(&mcp_nom, true))
+            .expect("mcp's system starts");
+        Self { rt, system }
+    }
+
+    /// Whether the engine answers a process list through mcp's system.
+    pub fn engine_answers(&self) -> bool {
+        matches!(
+            self.rt.block_on(self.system.control(EngineCommand::Processes)),
+            Ok(ControlAnswer::Processes(_)),
+        )
+    }
+
+    /// Whether the namespace's host lock is held, tried without blocking.
+    pub fn host_lock_held(&self) -> bool {
+        let Ok(file) = fs::File::open(data_base_dir().join("host.lock")) else {
+            return false;
+        };
+        nix::fcntl::Flock::lock(file, nix::fcntl::FlockArg::LockExclusiveNonblock).is_err()
+    }
+
+    /// The components stopped in order.
+    pub fn shutdown(&self) {
+        self.rt.block_on(self.system.shutdown());
     }
 }
 

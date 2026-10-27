@@ -167,28 +167,19 @@ async fn contained<T: Send + 'static>(
     }
 }
 
-/// A packet no request waits on, which the engine never sends.
-struct Unawaited;
-
-impl subsys::Handler<EngineSystem> for Unawaited {
-    fn on_packet(&mut self, pkt: subsys::Packet<FromEngineSys>) -> impl Future<Output = Option<subsys::Packet<FromEngineSys>>> + 'static + Send {
-        std::future::ready(Some(pkt))
-    }
-}
-
 /// The engine's running system, and the handle its host requests through.
 pub struct EngineHandle {
     control: subsys::SystemControl<EngineSystem>,
 }
 
 impl EngineHandle {
-    /// Starts the engine's system on the namespace `init` gave the engine.
-    pub async fn start() -> EngineResult<Self> {
+    /// Starts the engine's system on `init`'s namespace, `handler` hearing its end.
+    pub async fn start(handler: impl subsys::Handler<EngineSystem>) -> EngineResult<Self> {
         let control = subsys::SystemControl::start(
             EngineSysPaths::of(started()),
             EngineSysConfig,
             EngineSysParams,
-            Unawaited,
+            handler,
         )
         .await
         .map_err(|e| EngineError::Init {

@@ -1,18 +1,14 @@
 # operator.rs
 
-mcp as the operator's manager until mcp is a subsys of its own: the operator started on
-the namespace, the engine and the Channel observed for it, and its emergencies put on
-the host's lane.
+The operator's side of mcp's system (`system.rs`): its handler, which routes its
+emergencies and hears its end, and its observer, which feeds it the engine and the
+Channel.
 
-## struct EmergencyRouter
+## struct OperatorWatch
 The operator's emergencies arrive as packets no request waits on, so the control task
 hands each to this handler, which puts it on the emergency lane beside the Channel's
-spam pair; the one responder logs and announces both.
-
-## fn start_operator
-The operator's parameters are the config's: its lines, the `--test` flag, and the
-process's `mcp_nom`, which its host lock carries. Its paths are the namespace's homes,
-the lock under the data home, where it always was.
+spam pair; the one responder logs and announces both. Its status changes and its end go
+to mcp's loop.
 
 ## fn engine_reading
 The engine and the operator know nothing of each other, so the engine's health is
@@ -27,4 +23,4 @@ active conditions across an absent reading.
 One observation an interval, the operator's own cadence. The Channel's phase rides with
 it because the Channel is mcp's: a `--test` host's operator samples only while it is
 open. A send that fails means the operator's system is gone, and the observer ends with
-it.
+it. Its handle is mcp's system's, which aborts it first when it shuts down.

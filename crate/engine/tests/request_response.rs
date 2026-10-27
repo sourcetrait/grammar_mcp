@@ -6,12 +6,13 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use nuval::NuVal;
-use sourcetrait_common::datum;
 use sourcetrait_common::testing::prelude::*;
+use sourcetrait_common::{datum, subsys};
 use sourcetrait_grammar_engine::{
     CallRequest, ChannelSend, ControlAnswer, ControlRequest, EVAL_STACK_SIZE, EngineCommand,
-    EngineError, EngineHandle, EngineHost, EngineParams, ExecuteRequest, Host, ProcessRow,
-    RemoteSend, RerunRequest, ValueAnswer, ensure_equip_store, init,
+    EngineError, EngineHandle, EngineHost, EngineParams, EngineSystem, ExecuteRequest,
+    FromEngineSys, Host, ProcessRow, RemoteSend, RerunRequest, ValueAnswer, ensure_equip_store,
+    init,
 };
 
 static TESTING: testing::ModuleWith<TestEngine> = testing::module_with!(Integration, {
@@ -45,6 +46,15 @@ impl EngineHost for TestHost {
     }
 }
 
+/// The engine's own packets, which it never sends unasked, handed back.
+struct Unwatched;
+
+impl subsys::Handler<EngineSystem> for Unwatched {
+    fn on_packet(&mut self, pkt: subsys::Packet<FromEngineSys>) -> impl Future<Output = Option<subsys::Packet<FromEngineSys>>> + 'static + Send {
+        std::future::ready(Some(pkt))
+    }
+}
+
 /// The binary's engine, its runtime, and the root its homes sit under.
 struct TestEngine {
     rt: tokio::runtime::Runtime,
@@ -72,7 +82,7 @@ impl TestEngine {
             .thread_stack_size(EVAL_STACK_SIZE)
             .build()
             .expect("a runtime");
-        let engine = rt.block_on(EngineHandle::start()).expect("the engine's system");
+        let engine = rt.block_on(EngineHandle::start(Unwatched)).expect("the engine's system");
         Self {
             rt,
             engine: Arc::new(engine),
@@ -331,7 +341,7 @@ fn health_reports_the_eval_permits() {
 #[test]
 fn a_second_system_starts_and_stops() {
     let e = TESTING.harness();
-    let second = e.rt.block_on(EngineHandle::start()).expect("a second system");
+    let second = e.rt.block_on(EngineHandle::start(Unwatched)).expect("a second system");
     let answer = e.rt.block_on(second.control(EngineCommand::Processes));
     assert!(matches!(answer, Ok(ControlAnswer::Processes(_))), "got {answer:?}");
     e.rt.block_on(second.stop()).expect("the system stops");
