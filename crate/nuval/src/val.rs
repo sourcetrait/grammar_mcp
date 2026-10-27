@@ -3,12 +3,6 @@ use crate::*;
 /// A nushell value's serializable result: its value, or its error.
 pub type NuValResult = Result<NuVal, NuValError>;
 
-/// The error half of a result, nushell's `Value::Error`.
-#[cereal::derived(Data)]
-pub enum NuValError {
-    Unknown,
-}
-
 /// A serializable nushell value: every kind but an error, a closure, a custom.
 #[cereal::derived(Data)]
 pub enum NuVal {
@@ -79,14 +73,6 @@ pub enum Bounded<T> {
 pub struct SpanData {
     pub start: u64,
     pub end: u64,
-}
-
-/// An error's code, its message, and its span.
-#[cereal::derived(Data)]
-pub struct ErrorData {
-    pub code: String,
-    pub msg: String,
-    pub span: Option<SpanData>,
 }
 
 /// A cell path member: a column by name or a row by index.
@@ -310,8 +296,17 @@ impl TryFromNu<nu::Value> for NuValResult {
     fn try_from_nu(value: nu::Value) -> ConvertResult<Self> {
         match NuVal::try_from_nu(value) {
             Ok(val) => Ok(Ok(val)),
-            Err(ConvertError::ErrorValue { .. }) => Ok(Err(NuValError::Unknown)),
+            Err(ConvertError::ErrorValue { error }) => Ok(Err(NuValError::from(error.as_ref()))),
             Err(e) => Err(e),
+        }
+    }
+}
+
+impl TryIntoNu for NuValResult {
+    fn try_into_nu(self, span: nu::Span) -> ConvertResult<nu::Value> {
+        match self {
+            Ok(val) => val.try_into_nu(span),
+            Err(error) => Ok(nu::Value::error(error.into(), span)),
         }
     }
 }

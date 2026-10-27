@@ -30,10 +30,9 @@ two seconds' worth of nanoseconds, chrono's form of a leap second, and comes
 back unchanged.
 
 ## struct SpanData
-A span as data, for the error model's labels.
-
-## struct ErrorData
-The prototype's first error model, kept until the error model replaces it.
+A span as data, the error model's labels' spans. The prototype's first error
+model, `ErrorData`, a code, a message, and one span, gave way to the struct in
+`val_error.rs`.
 
 ## fn int_range
 nushell's `IntRange` and `FloatRange` keep their fields crate-private, so a
@@ -56,6 +55,13 @@ back to nushell takes the unknown span unless a caller gives one.
 ## trait TryIntoNu
 Every part of a value converted back takes the one span the caller gives,
 usually the call that produced it, since the data kept none of its own.
+
+## impl TryFromNu for NuValResult
+A value that is an error, at the top or nested, makes the result that error,
+converted by its own type.
+
+## impl TryIntoNu for NuValResult
+An error result becomes nushell's error value, its error a `LabeledError`.
 
 ## impl TryIntoNu for NuVal
 A record naming a column twice is refused rather than collapsed: nushell's
