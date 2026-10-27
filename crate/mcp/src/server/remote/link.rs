@@ -811,6 +811,15 @@ fn relay_to_channel(
     info: &DeliverInfo,
     has_files: bool,
 ) -> Result<(), (String, String)> {
+    if info.model.starts_with(MCP_RESERVED_PREFIX) {
+        return Err((
+            "reserved_model".to_string(),
+            format!(
+                "model `{}` lies under the host's `{MCP_RESERVED_PREFIX}` reservation",
+                info.model,
+            ),
+        ));
+    }
     let event = nu::from_nuon(&info.event_nuon, None)
         .map_err(|e| ("event_unparseable".to_string(), e.to_string()))?;
     // CapNoCap: a spilled-event pointer arrives with a dest-relative path; rewrite

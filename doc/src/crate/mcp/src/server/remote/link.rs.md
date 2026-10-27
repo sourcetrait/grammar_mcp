@@ -95,6 +95,11 @@ slot-map is what makes the files EXIST on disk before the agent observes the emi
 same inbox the Channel's own attachments use, so a relayed packet's `attached` ref
 resolves for the local agent.
 
+relay_to_channel refuses a model under `mcp/` first, `reserved_model`, as the sending
+grimm commands do (`reject_reserved_model`): the reservation is what lets an agent take
+a model's path as proof of the host's origin, and a peer is not the local host. Its
+files have landed by then and stay, as for any refused relay.
+
 rewrite_spill_pointer (CapNoCap): a sender spills an oversized event to the reserved
 EVENT_SPILL_DEST file with a dest-relative pointer; relay_to_channel rewrites that path to
 <peer_nom>/<id>/<dest> before emitting, so the agent resolves it as
