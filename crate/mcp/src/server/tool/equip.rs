@@ -52,7 +52,7 @@ impl NuSh {
         let lock = match self.rig_locks.register(&equip).await {
             Ok(l) => l,
             Err(_) => {
-                return error_to_call_result(GrammarMcpError::EquipAlreadyRegistered { equip }, nonce);
+                return error_to_call_result(EngineError::EquipAlreadyRegistered { equip }, nonce);
             }
         };
         let _guard = lock.write().await;
@@ -84,7 +84,7 @@ impl NuSh {
         let lock = match self.rig_locks.register(&equip).await {
             Ok(l) => l,
             Err(_) => {
-                return error_to_call_result(GrammarMcpError::EquipAlreadyRegistered { equip }, nonce);
+                return error_to_call_result(EngineError::EquipAlreadyRegistered { equip }, nonce);
             }
         };
         let _guard = lock.write().await;
@@ -120,7 +120,7 @@ impl NuSh {
             Err(e) => return error_to_call_result(e, nonce),
         };
         let Some(lock) = self.rig_locks.lookup(&equip).await else {
-            return error_to_call_result(GrammarMcpError::EquipNotRegistered { equip }, nonce);
+            return error_to_call_result(EngineError::EquipNotRegistered { equip }, nonce);
         };
         let _guard = lock.read().await;
         if let Err(e) = check_source_dir(&equip, source_dir) {

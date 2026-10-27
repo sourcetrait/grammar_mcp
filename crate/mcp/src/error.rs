@@ -4,53 +4,8 @@ pub type GrammarMcpResult<T> = Result<T, GrammarMcpError>;
 
 #[derive(Debug, Clone)]
 pub enum GrammarMcpError {
-    EquipNotRegistered {
-        equip: String,
-    },
-    EquipAlreadyRegistered {
-        equip: String,
-    },
-    EquipInvalidName {
-        equip: String,
-        reason: String,
-    },
-    EquipNameDenied {
-        equip: String,
-    },
-    EquipInvalidSource {
-        source_dir: String,
-        reason: String,
-    },
-    EquipSourceMissing {
-        path: String,
-    },
-    EquipSourcePathMismatch {
-        equip: String,
-        passed: String,
-        registered: String,
-    },
-    EquipNoKinds {
-        source_dir: String,
-    },
-    EquipNoRig {
-        equip: String,
-    },
-    EquipViolations {
-        diagnostics: Vec<Diagnostic>,
-    },
-    RigInvalidName {
-        name: String,
-        reason: String,
-    },
-    RigInvalidModulePath {
-        module_path: String,
-        reason: String,
-    },
-    FunctionNotDefined {
-        rig: String,
-        module_path: String,
-        name: String,
-    },
+    /// What the engine refused or failed at, its kinds and messages its own.
+    Engine(EngineError),
     DefinitionViolations {
         diagnostics: Vec<Diagnostic>,
     },
@@ -67,10 +22,6 @@ pub enum GrammarMcpError {
         reason: String,
     },
     SchemaInvalid {
-        reason: String,
-    },
-    NamepathInvalid {
-        namepath: String,
         reason: String,
     },
     PurviewInvalidId {
@@ -110,12 +61,6 @@ pub enum GrammarMcpError {
     ThreadTimeout {
         timeout_ms: u64,
     },
-    ThreadReturnedError {
-        reason: String,
-    },
-    ModuleCircularImport {
-        files: String,
-    },
     Internal {
         phase: String,
         reason: String,
@@ -125,23 +70,11 @@ pub enum GrammarMcpError {
 impl GrammarMcpError {
     fn kind_str(&self) -> &'static str {
         match self {
-            Self::EquipNotRegistered { .. } => "equip::not_registered",
-            Self::EquipAlreadyRegistered { .. } => "equip::already_registered",
-            Self::EquipInvalidName { .. } => "equip::invalid_name",
-            Self::EquipNameDenied { .. } => "equip::name_denied",
-            Self::EquipInvalidSource { .. } => "equip::invalid_source",
-            Self::EquipSourceMissing { .. } => "equip::source_missing",
-            Self::EquipSourcePathMismatch { .. } => "equip::source_path_mismatch",
-            Self::EquipNoKinds { .. } => "equip::no_kinds",
-            Self::EquipNoRig { .. } => "equip::no_rig",
-            Self::RigInvalidName { .. } => "rig::invalid_name",
-            Self::RigInvalidModulePath { .. } => "rig::invalid_module_path",
-            Self::FunctionNotDefined { .. } => "function::not_defined",
+            Self::Engine(error) => error.kind(),
             Self::DataInvalid { .. } => "data::invalid",
             Self::ResultInvalid { .. } => "result::invalid",
             Self::TimeoutInvalid { .. } => "timeout::invalid",
             Self::SchemaInvalid { .. } => "schema::invalid",
-            Self::NamepathInvalid { .. } => "namepath::invalid",
             Self::PurviewInvalidId { .. } => "purview::invalid_id",
             Self::RerunInvalidNonce { .. } => "rerun::invalid_nonce",
             Self::RerunBodyMissing { .. } => "rerun::body_missing",
@@ -156,12 +89,8 @@ impl GrammarMcpError {
             Self::RemoteChannelUnverified => "remote::channel_unverified",
             Self::ThreadDispatch { .. } => "thread::dispatch",
             Self::ThreadTimeout { .. } => "thread::timeout",
-            Self::ThreadReturnedError { .. } => "thread::returned_error",
-            Self::ModuleCircularImport { .. } => "module::circular_import",
             Self::Internal { .. } => "internal",
-            Self::EquipViolations { .. }
-            | Self::DefinitionViolations { .. }
-            | Self::InterfaceViolations { .. } => {
+            Self::DefinitionViolations { .. } | Self::InterfaceViolations { .. } => {
                 unreachable!("violation variants render via bucket, not kind_str")
             }
         }
@@ -169,58 +98,11 @@ impl GrammarMcpError {
 
     fn message(&self) -> String {
         match self {
-            Self::EquipNotRegistered { equip } => {
-                format!("equip `{}` is not registered", display_equip(equip))
-            }
-            Self::EquipAlreadyRegistered { equip } => {
-                format!("equip `{}` is already registered", display_equip(equip))
-            }
-            Self::EquipInvalidName { equip, reason } => {
-                format!("invalid equip name `{equip}`: {reason}")
-            }
-            Self::EquipNameDenied { equip } => {
-                format!("equip name `{equip}` is reserved and cannot be used")
-            }
-            Self::EquipInvalidSource { source_dir, reason } => {
-                format!("invalid equip source `{source_dir}`: {reason}")
-            }
-            Self::EquipSourceMissing { path } => {
-                format!("equip source path is missing or not a directory: {path}")
-            }
-            Self::EquipSourcePathMismatch {
-                equip,
-                passed,
-                registered,
-            } => format!(
-                "source_dir mismatch for `{}`: passed `{passed}`, registered `{registered}`",
-                display_equip(equip),
-            ),
-            Self::EquipNoKinds { source_dir } => {
-                format!("equip source `{source_dir}` holds neither a lib/ nor a rig/")
-            }
-            Self::EquipNoRig { equip } => format!("equip `{}` has no rig", display_equip(equip)),
-            Self::RigInvalidName { name, reason } => {
-                format!("invalid name `{name}`: {reason}")
-            }
-            Self::RigInvalidModulePath {
-                module_path,
-                reason,
-            } => format!("invalid module path `{module_path}`: {reason}"),
-            Self::FunctionNotDefined {
-                rig,
-                module_path,
-                name,
-            } => format!(
-                "function `{name}` is not defined in `{}:{module_path}`",
-                display_equip(rig),
-            ),
+            Self::Engine(error) => error.message(),
             Self::DataInvalid { reason }
             | Self::ResultInvalid { reason }
             | Self::TimeoutInvalid { reason } => reason.clone(),
             Self::SchemaInvalid { reason } => format!("invalid schema: {reason}"),
-            Self::NamepathInvalid { namepath, reason } => {
-                format!("invalid namepath `{namepath}`: {reason}")
-            }
             Self::PurviewInvalidId { id, reason } => {
                 format!("invalid purview id `{id}`: {reason}")
             }
@@ -254,12 +136,8 @@ impl GrammarMcpError {
                 .to_string(),
             Self::ThreadDispatch { reason } => format!("eval dispatch failed: {reason}"),
             Self::ThreadTimeout { timeout_ms } => format!("eval timed out after {timeout_ms} ms"),
-            Self::ThreadReturnedError { reason } => reason.clone(),
-            Self::ModuleCircularImport { files } => files.clone(),
             Self::Internal { phase, reason } => format!("internal error [{phase}]: {reason}"),
-            Self::EquipViolations { .. }
-            | Self::DefinitionViolations { .. }
-            | Self::InterfaceViolations { .. } => {
+            Self::DefinitionViolations { .. } | Self::InterfaceViolations { .. } => {
                 unreachable!("violation variants render via bucket, not message")
             }
         }
@@ -277,25 +155,18 @@ impl From<io::Error> for GrammarMcpError {
 
 impl From<EngineError> for GrammarMcpError {
     fn from(e: EngineError) -> Self {
-        match e {
-            EngineError::Eval { reason } => GrammarMcpError::ThreadReturnedError { reason },
-            EngineError::CircularImport { files } => GrammarMcpError::ModuleCircularImport { files },
-            EngineError::Init { reason } => GrammarMcpError::Internal {
-                phase: "engine".to_string(),
-                reason,
-            },
-        }
+        GrammarMcpError::Engine(e)
     }
 }
 
 /// A failure, `{nonce, error}`: the error's rows, its warnings dropped.
 pub(crate) fn error_to_call_result(
-    error: GrammarMcpError,
+    error: impl Into<GrammarMcpError>,
     nonce: datum::Nonce,
 ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-    let rows = match error {
-        GrammarMcpError::EquipViolations { diagnostics }
-        | GrammarMcpError::DefinitionViolations { diagnostics }
+    let rows = match error.into() {
+        GrammarMcpError::Engine(error) => error.rows(),
+        GrammarMcpError::DefinitionViolations { diagnostics }
         | GrammarMcpError::InterfaceViolations { diagnostics } => {
             Diagnostic::bucket(diagnostics).0
         }

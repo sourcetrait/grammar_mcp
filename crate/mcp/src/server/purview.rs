@@ -181,6 +181,27 @@ pub(crate) fn seed_builtin(
     }
 }
 
+/// Seed the purviews of each builtin a new namespace installed.
+pub(crate) fn seed_builtin_purviews(installed: &[&str]) {
+    if installed.is_empty() {
+        return;
+    }
+    let _repo = equip_repo_lock();
+    let mut rows = match load_purviews() {
+        Ok(rows) => rows.unwrap_or_default(),
+        Err(e) => {
+            eprintln!("grammar: builtin purviews not seeded: {e:?}");
+            return;
+        }
+    };
+    for name in installed {
+        seed_builtin(&mut rows, name);
+    }
+    if let Err(e) = save_purviews(&rows) {
+        eprintln!("grammar: builtin purviews not seeded: {e:?}");
+    }
+}
+
 /// The namepath patterns a set of ids puts in view, in order and deduplicated.
 pub(crate) fn resolve_patterns(
     ids: &[String],

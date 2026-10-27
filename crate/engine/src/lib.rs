@@ -4,6 +4,12 @@ pub(crate) mod config_dirs;
 pub(crate) mod cycle;
 pub(crate) mod embed;
 pub(crate) mod engine;
+pub(crate) mod equip {
+    pub(crate) mod lifecycle;
+    pub(crate) mod signature;
+    pub(crate) mod store;
+    pub(crate) mod validate;
+}
 pub(crate) mod error;
 pub(crate) mod execute;
 pub(crate) mod executor;
@@ -28,6 +34,7 @@ pub(crate) mod nuapi {
     }
     pub(crate) mod print;
 }
+pub(crate) mod namepath;
 pub(crate) mod nuin;
 pub(crate) mod params;
 pub(crate) mod parse_engine;
@@ -38,6 +45,8 @@ pub(crate) mod template;
 pub(crate) mod test_hooks;
 #[cfg(test)]
 mod tests {
+    mod equip;
+    mod namepath;
     mod schema;
 }
 
@@ -47,6 +56,14 @@ pub(crate) use crate::{
     config_dirs::{config_dirs, init_config_dirs},
     embed::{eval_in_process, merge_env_no_chdir},
     engine::startup,
+    equip::{
+        store::{
+            EQUIP_DIR, EQUIP_KINDS, KIND_LIB, KIND_RIG, META_FILE, check_equip_name, equip_dir,
+            index_to_nuon, is_valid_equip, is_valid_ident, is_valid_module_path, lib_meta_path,
+            load_lib_index, meta_to_nuon, rig_docs_dir, run_git,
+        },
+        validate::{NAME_DENYLIST, is_reserved_term, validate_equip_source},
+    },
     execute::EXECUTE,
     host::{host, set_host},
     mode::Mode,
@@ -80,9 +97,10 @@ pub(crate) use std::{
     os::unix::fs::MetadataExt,
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
+    process,
     sync::{
         Arc, OnceLock,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -97,13 +115,15 @@ pub(crate) mod nu {
     pub(crate) use nu_engine::eval_block;
     pub(crate) use nu_engine::CallExt;
     pub(crate) use nu_engine::command_prelude::Call;
+    pub(crate) use nu_json::Value as JsonValue;
     pub(crate) use nu_parser::parse;
+    pub(crate) use nu_parser::{FlatShape, flatten_block};
     pub(crate) use nu_plugin_engine::load_plugin_file;
     pub(crate) use nu_protocol::{
-        ByteStreamSource, ByteStreamType, Category, CollectionColumns, Config, IntoValue,
-        PipelineData, PluginRegistryFile, Example,
+        BlockId, ByteStreamSource, ByteStreamType, Category, CollectionColumns, Config, DeclId,
+        FromValue, IntoValue, Module, PipelineData, PluginRegistryFile, Example,
         PluginRegistryItemData, Record, ShellError, Signals, Signature, Span, SyntaxShape, Type,
-        Value, record, write_all_and_flush,
+        Value, VarId, record, write_all_and_flush,
         ast::{
             Argument, Block, Comparison, Expr, Expression, ExternalArgument, ListItem,
             Operator, Pattern, RecordItem,
@@ -114,26 +134,26 @@ pub(crate) mod nu {
     pub(crate) use nu_protocol::ast::Call as AstCall;
     pub(crate) use nu_protocol::shell_error::generic::GenericError;
     pub(crate) use nu_std::load_standard_library;
-    pub(crate) use nuon::{ToNuonConfig, to_nuon};
+    pub(crate) use nuon::{ToNuonConfig, from_nuon, to_nuon};
 }
 
-pub(crate) use nu::{CallExt, IntoValue};
+pub(crate) use nu::{CallExt, FromValue, IntoValue};
 
 pub(crate) use sourcetrait_common::{cereal, datum};
 
 pub(crate) mod ser {
-    pub(crate) use ::serde::Serialize;
+    pub(crate) use ::serde::{Deserialize, Serialize, de::DeserializeOwned};
 }
 
 pub(crate) mod tk {
     pub(crate) use tokio::sync::{
-        OwnedSemaphorePermit, Semaphore, oneshot,
+        Mutex as AsyncMutex, OwnedSemaphorePermit, RwLock as AsyncRwLock, Semaphore, oneshot,
         mpsc::{UnboundedSender, unbounded_channel},
     };
 }
 
 pub(crate) mod json {
-    pub(crate) use serde_json::Value;
+    pub(crate) use serde_json::{Value, from_value, to_value};
 
     /// A JSON object, as a tool's arguments and schemas carry one.
     pub(crate) type JsonObject = serde_json::Map<String, Value>;
@@ -144,11 +164,32 @@ pub use crate::{
     cycle::detect_import_cycle,
     embed::{EVAL_STACK_SIZE, Lane, StatefulEngine, eval_stateless},
     engine::NU_VERSION,
+    equip::{
+        lifecycle::{
+            CommitResult, check_equip, check_source_dir, commit_equip, establish_equip,
+            install_equip, scaffold_leaf, scaffold_leaf_exists, uninstall_equip,
+        },
+        signature::{
+            CallDoc, InspectDoc, ModuleDoc, RigDoc, SignaturesDoc, index_node, inspect_impl,
+            render_signatures_within,
+        },
+        store::{
+            AlreadyRegistered, IndexFunction, IndexModule, LibIndex, RigIndex, RigLocks,
+            ensure_equip_store, equip_namepath_of, equip_repo_lock, equip_root,
+            index_from_nuon, install_builtins, lib_dir, load_index, registered_rig_names,
+            require_rig, rig_dir, rig_meta_path,
+        },
+        validate::{DocEntry, ValidationResult},
+    },
     error::{Diagnostic, EngineError, EngineResult, Severity, Source},
     execute::{ExecuteDef, analyze_definition},
     executor::{Executor, eval_concurrency_cap},
     host::{ChannelSend, EngineHost, RemoteSend},
     lint::{LINT_VIOLATION_CAP, lint_block},
+    namepath::{
+        BUILTINS, Namepath, NamepathPattern, NamepathRef, NamepathStr, PATTERN_ALL,
+        PATTERN_CURRENT, builtin_equip, builtin_name, display_equip, resolve_builtin,
+    },
     params::{EngineParams, init},
     parse_engine::{
         LintEngine, ParseEngine, file_start, span_text, span_to_line_col, wrap_as_module,

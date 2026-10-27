@@ -24,6 +24,7 @@ nu-cmd-plugin.workspace = true
 nu-command.workspace = true
 nu-config.workspace = true
 nu-engine.workspace = true
+nu-json.workspace = true
 nu-parser.workspace = true
 nu-plugin-engine.workspace = true
 nu-protocol.workspace = true

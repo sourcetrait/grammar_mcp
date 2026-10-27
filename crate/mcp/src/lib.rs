@@ -12,9 +12,7 @@ pub(crate) mod server {
         pub(crate) mod contract;
         pub(crate) mod grammar;
     }
-    pub(crate) mod rig;
     pub(crate) mod liveness;
-    pub(crate) mod namepath;
     pub(crate) mod oneshot;
     pub(crate) mod pin;
     pub(crate) mod purview;
@@ -58,9 +56,8 @@ pub(crate) mod server {
         mod emergency;
         mod interface;
         mod remote;
-        mod rig;
-        mod namepath;
         mod pin;
+        mod purview;
         mod teardown;
         mod watchdog;
     }
@@ -103,7 +100,7 @@ pub(crate) use crate::{
             DiskWarningEmergency, Emergency, EmergencyTx, HungEngineThreadEmergency,
             RamWarningEmergency, VramWarningEmergency, spawn_emergency_responder,
         },
-        host::init_engine,
+        host::{ensure_substrate, init_engine},
         interface::{
             contract::{InterfaceCommand, parse_command},
             grammar::{
@@ -111,20 +108,7 @@ pub(crate) use crate::{
                 command_spec, interface_engine, render_signatures,
             },
         },
-        rig::{
-            CommitResult, RigLocks, ValidationResult, check_equip,
-            check_source_dir, commit_equip, ensure_substrate, establish_equip,
-            render_signatures_within, SignaturesDoc,
-            InspectDoc, equip_namepath_of, equip_repo_lock, equip_root, index_node, inspect_impl,
-            install_equip, is_reserved_term, is_valid_equip, is_valid_ident,
-            is_valid_module_path, lib_dir, load_index, registered_rig_names, require_rig, rig_dir,
-            scaffold_leaf, scaffold_leaf_exists, uninstall_equip,
-        },
         liveness::acquire as acquire_host_lock,
-        namepath::{
-            BUILTINS, Namepath, NamepathPattern, NamepathRef, NamepathStr, builtin_equip,
-            builtin_name, display_equip, resolve_builtin,
-        },
         oneshot::run_oneshot,
         pin::{clear_pins, effective_supervisor, pin, reap_pins},
         purview::{
@@ -132,7 +116,7 @@ pub(crate) use crate::{
             PurviewView, is_derived_purview, is_rig_pattern, is_valid_purview_id, load_purviews,
             ensure_default_purview, expand_values, is_nameable_purview, is_valid_purview_ref,
             parse_patterns, pattern_delta, prune_dangling, purview_ref, purview_views,
-            purviews_path, resolve_patterns, save_purviews, seed_builtin,
+            purviews_path, resolve_patterns, save_purviews, seed_builtin, seed_builtin_purviews,
         },
         remote::{
             codec::{
@@ -182,15 +166,19 @@ pub(crate) use crate::{
 };
 
 pub(crate) use sourcetrait_grammar_engine::{
-    self as engine, CacheKind, ChannelSend, DEFINITION_FILE, Diagnostic, EVAL_STACK_SIZE,
-    EngineError, EngineHost, EngineParams, ExecuteDef, Executor, LINT_VIOLATION_CAP, Lane,
-    LintEngine, NU_VERSION, ParseEngine, PluginInfo, RemoteSend, Severity, Source,
-    StatefulEngine, analyze_definition, args_schema_to_signature, build_call_source,
-    build_execute_source, cache_dir, check_value, definition_file, detect_import_cycle,
-    ensure_plugin_registry, eval_concurrency_cap, eval_stateless, file_start,
-    json_value_to_nu_value, lint_block, list_registered_plugins, nu_to_args_schema,
-    nu_to_result_schema, result_schema_to_signature, span_text, span_to_line_col,
-    typedef_text, wrap_as_module,
+    self as engine, CacheKind, ChannelSend, CommitResult, DEFINITION_FILE, Diagnostic,
+    EVAL_STACK_SIZE, EngineError, EngineHost, EngineParams, ExecuteDef, Executor, InspectDoc,
+    LINT_VIOLATION_CAP, Lane, LintEngine, NU_VERSION, Namepath, NamepathPattern, NamepathRef,
+    NamepathStr, ParseEngine, PluginInfo, RemoteSend, RigLocks, SignaturesDoc, Source,
+    StatefulEngine, ValidationResult, analyze_definition, build_call_source,
+    build_execute_source, builtin_equip, builtin_name, cache_dir, check_equip,
+    check_source_dir, check_value, commit_equip, definition_file, ensure_equip_store,
+    ensure_plugin_registry, equip_namepath_of, equip_repo_lock, equip_root, establish_equip,
+    eval_concurrency_cap, eval_stateless, file_start, index_from_nuon, index_node,
+    inspect_impl, install_builtins, install_equip, json_value_to_nu_value, lib_dir,
+    lint_block, list_registered_plugins, load_index, registered_rig_names,
+    render_signatures_within, require_rig, resolve_builtin, rig_dir, rig_meta_path,
+    scaffold_leaf, scaffold_leaf_exists, span_to_line_col, typedef_text, uninstall_equip,
 };
 
 pub(crate) use std::{
@@ -223,10 +211,9 @@ pub(crate) mod nu {
     pub(crate) use nu_engine::command_prelude::Call;
     pub(crate) use nu_json::Value as JsonValue;
     pub(crate) use nu_parser::parse;
-    pub(crate) use nu_parser::{FlatShape, flatten_block};
     pub(crate) use nu_protocol::{
-        BlockId, Category, DeclId, FromValue, Module, PipelineData, Record,
-        ShellError, Signals, Signature, Span, SyntaxShape, Type, Value, VarId,
+        Category, FromValue, PipelineData, Record, ShellError, Signals, Signature, Span,
+        SyntaxShape, Type, Value,
         ast::{Argument, Block, Expr, Expression, ListItem},
         engine::{Command, EngineState, Job, Jobs, Mail, Stack, StateWorkingSet, ThreadJob},
     };
@@ -240,7 +227,7 @@ pub(crate) use sourcetrait_common::{
 };
 
 pub(crate) mod ser {
-    pub(crate) use ::serde::{Deserialize, Serialize, de::DeserializeOwned};
+    pub(crate) use ::serde::{Deserialize, Serialize};
 }
 
 pub(crate) mod schema {
@@ -294,7 +281,7 @@ pub(crate) mod tk {
         signal::unix::{SignalKind, signal},
         task::{JoinHandle, spawn_blocking},
         sync::{
-            Mutex as AsyncMutex, RwLock as AsyncRwLock, Semaphore, oneshot,
+            Mutex as AsyncMutex, Semaphore, oneshot,
             mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
         },
         time::{Duration as TkDuration, sleep, timeout},

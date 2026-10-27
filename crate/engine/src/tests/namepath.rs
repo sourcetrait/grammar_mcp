@@ -1,7 +1,7 @@
 
 use crate::*;
 
-fn validate(s: &str) -> Result<NamepathRef, GrammarMcpError> {
+fn validate(s: &str) -> Result<NamepathRef, EngineError> {
     Namepath(s.to_string()).validate()
 }
 
@@ -391,15 +391,6 @@ fn a_builtin_is_shown_by_its_bare_name() {
     assert_eq!(display_equip("sourcetrait/grammar"), "grammar");
     assert_eq!(display_equip("acme/gram"), "acme/gram");
     assert_eq!(display_equip("sourcetrait/two"), "sourcetrait/two");
-}
-
-#[test]
-fn a_rig_pattern_is_found_in_either_spelling() {
-    assert!(is_rig_pattern("gram:", "sourcetrait/gram"));
-    assert!(is_rig_pattern("sourcetrait/gram:", "sourcetrait/gram"));
-    assert!(!is_rig_pattern("gram:log:", "sourcetrait/gram"));
-    assert!(!is_rig_pattern("acme/gram:", "sourcetrait/gram"));
-    assert!(!is_rig_pattern("@gram", "sourcetrait/gram"));
 }
 
 #[test]

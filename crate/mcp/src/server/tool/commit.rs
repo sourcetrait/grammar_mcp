@@ -19,7 +19,7 @@ impl NuSh {
             Some(l) => l,
             None => {
                 return error_to_call_result(
-                    GrammarMcpError::EquipNotRegistered {
+                    EngineError::EquipNotRegistered {
                         equip: p.namepath.clone(),
                     },
                     nonce,

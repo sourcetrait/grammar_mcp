@@ -6,28 +6,21 @@ JSON-RPC error codes for domain failures.
 
 ## enum GrammarMcpError
 Stays the ergonomic typed value the impls build and bubble with `?`; it is not
-serde-tagged on the wire. Three variants carry already-unified rows, and the rest are
+serde-tagged on the wire. Two variants carry already-unified rows, `Engine` carries the
+engine's error whole, its own violations' rows among them, and the rest are
 single-condition. The rows are the engine's `Diagnostic`s (the engine's `error.rs`).
 
-`From<io::Error>` blanket-converts to `Internal { phase: "io" }` so the equip impls can
+`From<io::Error>` blanket-converts to `Internal { phase: "io" }` so the tool impls can
 use `?` freely rather than mapping at every filesystem call.
 
-`From<EngineError>` keeps the engine's failures in the kinds the wire has always carried:
-an eval's `thread::returned_error`, a cycle's `module::circular_import`, and the engine's
-start, never met past startup, `internal`.
+`From<EngineError>` wraps the engine's error whole: its kinds and messages are the
+engine's, the equips' refusals and an eval's failure among them, as the wire has always
+carried them.
 
 ### fn kind_str
-The three violation variants `unreachable!()` here deliberately: they render through
-`bucket`, and reaching this arm would mean a caller bypassed that path.
-
-REGISTRATION is `equip::*`, because the unit installed, committed, and addressed by a
-source path is the equip; a rig's tree rules keep `rig::*` and a lib's are `lib::*`.
-`equip::no_rig` stays apart from `equip::not_registered`: the one is an installed equip
-asked for calls it does not have, the other a name nothing answers to.
-
-`module::circular_import` is a TOP-LEVEL namespace rather than a `rig::` kind, because
-a resolution cycle is not a rig-structure rule even when the validator is what finds
-it. The validator already emits non-`rig::` kinds, `lint::summary_length` among them.
+The two violation variants `unreachable!()` here deliberately: they render through
+`bucket`, and reaching this arm would mean a caller bypassed that path. `Engine` takes
+the engine's kind.
 
 `remote::open_failed` is the SYNCHRONOUS bind/connect failure of a blocking
 `interface remote open` (ConnectionWoes): distinct from the async
@@ -48,16 +41,14 @@ refuses with its own kinds, as its tool did.
 verified, before any bind or connect: the link's notices and relays ride the Channel's
 gate and would drop.
 
-### fn message
-An equip is named as every other surface names it, through `display_equip`: a builtin
-by its bare name, `grammar:eye` rather than the `sourcetrait/grammar:eye` the namepath
-resolved to, which no agent spells.
-
 ## fn error_to_call_result
 The failure envelope, `{nonce, error}`: the error's rows as a table of `kind`,
 `source`, and `message`, rendered through the same seam as a success
 (`envelope_text`, `server/tool/common.rs`). A violations error carries its error rows
 alone and drops its warnings: a refusal's table holds what refused it.
+
+It takes anything that becomes a `GrammarMcpError`, so an engine refusal reaches the
+envelope with no wrap at the call.
 
 WHY SUCCESS-SHAPE ERRORS: in the Claude Code CLI every `is_error = true` result and
 every JSON-RPC error renders a red bullet with NO body, so a failure flagged as one is a

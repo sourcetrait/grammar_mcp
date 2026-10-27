@@ -30,7 +30,7 @@ impl NuSh {
             }) => (rig, module_path, name),
             Ok(_) => {
                 return error_to_call_result(
-                    GrammarMcpError::NamepathInvalid {
+                    EngineError::NamepathInvalid {
                         namepath: p.namepath.clone(),
                         reason: "call requires a function namepath: rig:module/path:function"
                             .to_string(),
@@ -44,7 +44,7 @@ impl NuSh {
             Some(l) => l,
             None => {
                 return error_to_call_result(
-                    GrammarMcpError::EquipNotRegistered {
+                    EngineError::EquipNotRegistered {
                         equip: rig.clone(),
                     },
                     nonce,
@@ -72,7 +72,7 @@ impl NuSh {
             .unwrap_or(false);
         if !is_call_target {
             return error_to_call_result(
-                GrammarMcpError::FunctionNotDefined {
+                EngineError::FunctionNotDefined {
                     rig: rig.clone(),
                     module_path: module_path.clone(),
                     name: name.clone(),

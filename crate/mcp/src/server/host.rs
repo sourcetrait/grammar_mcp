@@ -1,4 +1,4 @@
-//! The engine's host: what an eval asks of mcp, answered on the eval's thread.
+//! The engine's start and its host: what an eval asks of mcp, on its thread.
 use crate::*;
 
 /// RFC 6455 policy violation - the peer was emitted to before verifying.
@@ -16,6 +16,21 @@ pub(crate) fn init_engine() -> Result<(), String> {
         cache_home: cache_base_dir(),
     };
     engine::init(params, Box::new(McpHost)).map_err(|e| e.to_string())
+}
+
+/// The substrate: the equip store, the default purview, the registry, builtins.
+pub(crate) async fn ensure_substrate() -> io::Result<Arc<RigLocks>> {
+    let fresh = ensure_equip_store()?;
+    if let Err(e) = ensure_default_purview() {
+        eprintln!("grammar: default purview not materialized: {e:?}");
+    }
+    ensure_plugin_registry();
+    if fresh {
+        seed_builtin_purviews(&install_builtins());
+    }
+    let locks = Arc::new(RigLocks::new());
+    locks.hydrate_from_disk().await?;
+    Ok(locks)
 }
 
 /// The engine's host: the Channel, the remote links, the config, and the pins.

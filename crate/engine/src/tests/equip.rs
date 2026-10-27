@@ -1,9 +1,9 @@
 use crate::*;
-use crate::server::rig::{
+use crate::equip::store::{
     IndexFunction, IndexModule, RigIndex, index_from_nuon, index_to_nuon,
 };
 
-fn obj(s: &str) -> mcp::JsonObject {
+fn obj(s: &str) -> json::JsonObject {
     match serde_json::from_str::<json::Value>(s).unwrap() {
         json::Value::Object(m) => m,
         _ => panic!("not an object"),

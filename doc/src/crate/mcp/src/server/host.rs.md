@@ -6,6 +6,23 @@ The engine's start: its parameters from the config, its homes the namespace's
 the one-shot CLI start it first (`run.rs`), and the test harness once a process
 (`guts.rs`).
 
+## fn ensure_substrate
+The engine's equip store first, then mcp's purview bookkeeping, the plugin registry,
+and the builtins, each where the next needs it. A NEW namespace gets the builtins and
+their purviews; an existing one is never touched, so a builtin a user uninstalled stays
+uninstalled, and nothing installs again on their behalf.
+
+`ensure_default_purview` is non-fatal: purview bookkeeping must not stop the host from
+serving.
+
+`ensure_plugin_registry` is non-fatal for the same reason, and runs BEFORE the builtins,
+since grammar's rig calls plugin commands its validation must know. It belongs to the
+substrate because every engine base loads the registry it writes, so it must land before
+the first base is built, on every entry point: the server, the one-shot CLI, and the test
+server.
+
+The locks hydrate LAST, so they hold the builtins installed a moment before.
+
 ## struct McpHost
 What an eval asks of mcp runs here, on the eval's thread, inside the `grimm`
 command that asked: the Channel, the remote links, the config, and the pins are

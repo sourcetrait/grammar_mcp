@@ -364,10 +364,10 @@ impl TestServer {
 
     /// A rig's committed index, decoded into the JSON shape assertions use.
     pub fn rig_index(&self, name: &str) -> json::Value {
-        let path = crate::server::rig::rig_meta_path(name);
+        let path = crate::rig_meta_path(name);
         let text = fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("read index {}: {e}", path.display()));
-        let index = crate::server::rig::index_from_nuon(&text)
+        let index = crate::index_from_nuon(&text)
             .unwrap_or_else(|e| panic!("decode index {}: {e}", path.display()));
         json::to_value(&index).expect("index serializes")
     }

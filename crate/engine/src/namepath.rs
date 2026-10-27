@@ -1,9 +1,9 @@
 use crate::*;
 
-pub(crate) struct Namepath(pub String);
+pub struct Namepath(pub String);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum NamepathRef {
+pub enum NamepathRef {
     Rig {
         rig: String,
     },
@@ -19,13 +19,13 @@ pub(crate) enum NamepathRef {
 }
 
 /// The builtins: equips central to the MCP, each called by its bare name.
-pub(crate) const BUILTINS: [(&str, &str); 2] = [
+pub const BUILTINS: [(&str, &str); 2] = [
     ("gram", "sourcetrait"),
     ("grammar", "sourcetrait"),
 ];
 
 /// The `<author>/<name>` a builtin's bare name stands for.
-pub(crate) fn builtin_equip(name: &str) -> Option<String> {
+pub fn builtin_equip(name: &str) -> Option<String> {
     BUILTINS
         .iter()
         .find(|(builtin, _)| *builtin == name)
@@ -33,7 +33,7 @@ pub(crate) fn builtin_equip(name: &str) -> Option<String> {
 }
 
 /// The bare name an equip goes by when it is a builtin.
-pub(crate) fn builtin_name(equip: &str) -> Option<&'static str> {
+pub fn builtin_name(equip: &str) -> Option<&'static str> {
     BUILTINS
         .iter()
         .find(|(name, author)| equip.split_once('/') == Some((*author, *name)))
@@ -41,12 +41,12 @@ pub(crate) fn builtin_name(equip: &str) -> Option<&'static str> {
 }
 
 /// What an equip is shown and called by: a builtin's bare name, else itself.
-pub(crate) fn display_equip(equip: &str) -> &str {
+pub fn display_equip(equip: &str) -> &str {
     builtin_name(equip).unwrap_or(equip)
 }
 
 /// `raw` with a head that is a builtin's bare name resolved to its equip.
-pub(crate) fn resolve_builtin(raw: &str) -> String {
+pub fn resolve_builtin(raw: &str) -> String {
     let (head, rest) = match raw.split_once(':') {
         Some((head, rest)) => (head, Some(rest)),
         None => (raw, None),
@@ -59,20 +59,20 @@ pub(crate) fn resolve_builtin(raw: &str) -> String {
 }
 
 /// The whole-namespace pattern.
-pub(crate) const PATTERN_ALL: &str = "*";
+pub const PATTERN_ALL: &str = "*";
 
 /// The current-purview pattern.
-pub(crate) const PATTERN_CURRENT: &str = ".";
+pub const PATTERN_CURRENT: &str = ".";
 
 /// A raw namepath string classified by SHAPE: a pattern, or an exact namepath.
-pub(crate) enum NamepathStr {
+pub enum NamepathStr {
     Namepath(Namepath),
     Pattern(NamepathPattern),
 }
 
 /// A set of namepaths, addressed by the trailing hierarchy character.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum NamepathPattern {
+pub enum NamepathPattern {
     /// `<author>/` - everything that author published.
     Author { author: String },
     /// `<author>/<name>:` - everything in that rig.
@@ -94,7 +94,7 @@ pub(crate) enum NamepathPattern {
 }
 
 impl NamepathStr {
-    pub(crate) fn parse(raw: &str) -> Result<Self, GrammarMcpError> {
+    pub fn parse(raw: &str) -> Result<Self, EngineError> {
         if is_pattern_shaped(raw) {
             Ok(Self::Pattern(NamepathPattern::parse(raw)?))
         } else {
@@ -105,7 +105,7 @@ impl NamepathStr {
 
 impl NamepathStr {
     /// Does this put `namepath` in view?
-    pub(crate) fn covers(
+    pub fn covers(
         &self,
         namepath: &NamepathRef,
     ) -> bool {
@@ -122,7 +122,7 @@ fn is_pattern_shaped(raw: &str) -> bool {
 
 impl NamepathRef {
     /// The compound `<author>/<name>` every namepath carries.
-    pub(crate) fn rig(&self) -> &str {
+    pub fn rig(&self) -> &str {
         match self {
             Self::Rig { rig }
             | Self::Module { rig, .. }
@@ -132,9 +132,9 @@ impl NamepathRef {
 }
 
 impl Namepath {
-    pub(crate) fn validate(&self) -> Result<NamepathRef, GrammarMcpError> {
-        fn bad(raw: &str, reason: &str) -> GrammarMcpError {
-            GrammarMcpError::NamepathInvalid {
+    pub fn validate(&self) -> Result<NamepathRef, EngineError> {
+        fn bad(raw: &str, reason: &str) -> EngineError {
+            EngineError::NamepathInvalid {
                 namepath: raw.to_string(),
                 reason: reason.to_string(),
             }
@@ -208,12 +208,12 @@ fn check_module_path(module_path: &str) -> Result<(), &'static str> {
 }
 
 impl NamepathPattern {
-    pub(crate) fn parse(raw: &str) -> Result<Self, GrammarMcpError> {
+    pub fn parse(raw: &str) -> Result<Self, EngineError> {
         fn bad(
             raw: &str,
             reason: &str,
-        ) -> GrammarMcpError {
-            GrammarMcpError::NamepathInvalid {
+        ) -> EngineError {
+            EngineError::NamepathInvalid {
                 namepath: raw.to_string(),
                 reason: reason.to_string(),
             }
@@ -283,7 +283,7 @@ impl NamepathPattern {
     }
 
     /// Does `namepath` fall within this pattern?
-    pub(crate) fn matches(
+    pub fn matches(
         &self,
         namepath: &NamepathRef,
     ) -> bool {

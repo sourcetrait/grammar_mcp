@@ -16,6 +16,11 @@ purview takes it out of `core` with no edit to `core` itself.
 Seeds only what is ABSENT: a row a user wrote keeps what it holds, so installing a builtin
 again never undoes their configuration.
 
+## fn seed_builtin_purviews
+Runs once, for the builtins a new namespace installed: each one's own purview and its
+reference in `core`, under the equip repository's lock the purview table rides. `default`
+keeps the `['*']` a new namespace starts with.
+
 ## struct PurviewRow
 `namepath_patterns` is the DESIGN's own column name, so the persisted table reads as it
 was specified rather than as an implementation happened to name it.

@@ -34,7 +34,7 @@ impl NuSh {
                 }) => targets.push((rig, module_path, Some(name))),
                 Ok(NamepathRef::Rig { .. }) => {
                     return error_to_call_result(
-                        GrammarMcpError::NamepathInvalid {
+                        EngineError::NamepathInvalid {
                             namepath: np.clone(),
                             reason: "scaffold needs a module or function namepath; use \
                                      `interface equip new` to create an equip"
@@ -56,7 +56,7 @@ impl NuSh {
                 Some(l) => locks.push(l),
                 None => {
                     return error_to_call_result(
-                        GrammarMcpError::EquipNotRegistered {
+                        EngineError::EquipNotRegistered {
                             equip: lib.clone(),
                         },
                         nonce,
@@ -73,7 +73,7 @@ impl NuSh {
             match scaffold_leaf_exists(rig, module_path, name.as_deref()) {
                 Ok(true) => {
                     return error_to_call_result(
-                        GrammarMcpError::RigInvalidName {
+                        EngineError::RigInvalidName {
                             name: module_path.clone(),
                             reason: format!(
                                 "`{}` already exists; edit it instead of scaffolding over it",
