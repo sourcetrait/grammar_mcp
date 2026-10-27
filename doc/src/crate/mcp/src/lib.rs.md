@@ -4,11 +4,13 @@ The manifest carries no prose of its own by convention, so what follows is only
 what a reader of it could reasonably get wrong.
 
 ## mod schema
-There are TWO modules named `schema` and they never collide. `crate::schema` is
-the shim re-exporting `schemars::JsonSchema`, reached only through the
-`schema::JsonSchema` path on a derive; `crate::server::schema` is the json/nu
-typedef converter pair, reached only through the bare re-exports in the
-crate-internal `use` block. Neither is ever named the other's way.
+The shim re-exporting `schemars::JsonSchema`, reached only through the
+`schema::JsonSchema` path on a derive. The json/nu typedef converters are the
+engine's, named bare through its re-exports.
+
+## use sourcetrait_grammar_engine
+The engine's public face named bare, as mcp's own items are, and the crate
+itself as `engine`, the path its `init` is called by.
 
 ## use futures_util
 `SinkExt` and `StreamExt`, and `PemObject` beside them, ride at CRATE ROOT
@@ -24,6 +26,6 @@ has to be public to be reachable at all; `guts` is the convention's name for
 that, chosen to signal both its internal-only status and the bravery of anyone
 outside the workspace reaching for it.
 
-## use crate::cli::host_main
-The whole public surface. Everything else is crate-internal, which is why the
-`pub use` block at the end of the manifest is one line.
+## pub use
+The whole public surface: the CLI's parse, the deniable tools, the error, and the
+two entries, `run_main` and `run_with`. Everything else is crate-internal.

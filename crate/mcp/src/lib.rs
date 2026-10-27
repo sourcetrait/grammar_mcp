@@ -1,28 +1,21 @@
 pub(crate) mod error;
 pub(crate) mod run;
 pub(crate) mod server {
-    pub(crate) mod blocked;
-    pub(crate) mod cache;
     pub(crate) mod cert;
     pub(crate) mod channel {
         pub(crate) mod hub;
         pub(crate) mod state;
     }
-    pub(crate) mod cycle;
-    pub(crate) mod embed;
     pub(crate) mod emergency;
-    pub(crate) mod execute;
-    pub(crate) mod executor;
+    pub(crate) mod host;
     pub(crate) mod interface {
         pub(crate) mod contract;
         pub(crate) mod grammar;
     }
     pub(crate) mod rig;
-    pub(crate) mod lint;
     pub(crate) mod liveness;
     pub(crate) mod namepath;
     pub(crate) mod oneshot;
-    pub(crate) mod parse_engine;
     pub(crate) mod pin;
     pub(crate) mod purview;
     pub(crate) mod remote {
@@ -31,11 +24,8 @@ pub(crate) mod server {
         pub(crate) mod verify;
     }
     pub(crate) mod run;
-    pub(crate) mod schema;
     pub(crate) mod teardown;
     pub(crate) mod watchdog;
-    #[cfg(feature = "test-hooks")]
-    pub(crate) mod test_hooks;
     pub(crate) mod tool {
         pub(crate) mod call;
         pub(crate) mod channel_close;
@@ -71,28 +61,9 @@ pub(crate) mod server {
         mod rig;
         mod namepath;
         mod pin;
-        mod schema;
         mod teardown;
         mod watchdog;
     }
-}
-pub(crate) mod nuapi {
-    pub(crate) mod grimm {
-        pub(crate) mod category;
-        pub(crate) mod channel {
-            pub(crate) mod send;
-        }
-        pub(crate) mod common;
-        pub(crate) mod config;
-        pub(crate) mod dbg;
-        pub(crate) mod def;
-        pub(crate) mod remote {
-            pub(crate) mod channel {
-                pub(crate) mod send;
-            }
-        }
-    }
-    pub(crate) mod print;
 }
 #[cfg(test)]
 mod tests {
@@ -100,55 +71,21 @@ mod tests {
 }
 pub(crate) mod cli;
 pub(crate) mod config;
-pub(crate) mod config_dirs;
 pub(crate) mod consts;
-pub(crate) mod engine;
-pub(crate) mod mode;
-pub(crate) mod nuin;
-pub(crate) mod plugins;
-pub(crate) mod template;
+pub(crate) mod home;
 pub mod guts;
 
 pub(crate) use crate::{
-    nuapi::grimm::{
-        category::*,
-        channel::{
-            send::GrimmChannelSend,
-        },
-        common::{
-            NuapiCall, STDERR_FILE, STDOUT_FILE, data_shape, event_id_record, event_id_type,
-            register_nuapi, require_record_or_table,
-        },
-        config::{GrimmGetConfig, GrimmGetConfigAll, GrimmPinConfig},
-        dbg::GrimmDbg,
-        remote::channel::{
-            send::{GrimmRemoteChannelSend, GrimmRemoteChannelSendWith},
-        },
-    },
-    nuapi::print::HostPrint,
     config::{
         CONFIG, Config, ConfigToml, DEFAULT_NAMESPACE, DenySet, RemoteConfig,
         RemoteRole, SpamThresholds, SupervisorConfig, TEST_NAMESPACE, config, default_id,
         default_work_dir, expand_path, fraction_field,
     },
-    config_dirs::{config_dirs, init_config_dirs},
-    engine::startup,
+    home::{base_dirs, cache_base_dir, check_base_dirs, data_base_dir},
     mcp::ServiceExt,
-    mode::Mode,
-    nu::CallExt,
     nu::FromValue,
-    nu::IntoValue,
-    plugins::{
-        ensure_plugin_registry, list_registered_plugins, load_plugin_decls, registry_mtime,
-        registry_path,
-    },
-    error::{Diagnostic, Severity, Source, error_to_call_result},
+    error::error_to_call_result,
     server::{
-        blocked::shadow_host_fatal_decls,
-        cache::{
-            CacheKind, DEFINITION_FILE, base_dirs, cache_base_dir, cache_dir, call_log_dir,
-            check_base_dirs, data_base_dir, definition_file,
-        },
         cert::ensure_cert_profile,
         channel::{
             hub::{FROM_MCP, open_packet, start as start_channel_hub},
@@ -160,20 +97,13 @@ pub(crate) use crate::{
                 render_nuon, render_packet,
             },
         },
-        cycle::detect_import_cycle,
-        embed::{
-            EVAL_STACK_SIZE, EvalFailure, StatefulEngine, eval_in_process, eval_stateless,
-            merge_env_no_chdir,
-        },
         emergency::{
             BackgroundJobsWarningEmergency, ChannelSpamErrorEmergency,
             ChannelSpamWarningEmergency, CpuWarningEmergency, CriticalEmergency,
             DiskWarningEmergency, Emergency, EmergencyTx, HungEngineThreadEmergency,
-            RamWarningEmergency, VramWarningEmergency, append_line,
-            spawn_emergency_responder,
+            RamWarningEmergency, VramWarningEmergency, spawn_emergency_responder,
         },
-        execute::{EXECUTE, ExecuteDef, analyze_definition},
-        executor::Executor,
+        host::init_engine,
         interface::{
             contract::{InterfaceCommand, parse_command},
             grammar::{
@@ -190,17 +120,12 @@ pub(crate) use crate::{
             is_valid_module_path, lib_dir, load_index, registered_rig_names, require_rig, rig_dir,
             scaffold_leaf, scaffold_leaf_exists, uninstall_equip,
         },
-        lint::{LINT_VIOLATION_CAP, lint_block},
         liveness::acquire as acquire_host_lock,
         namepath::{
             BUILTINS, Namepath, NamepathPattern, NamepathRef, NamepathStr, builtin_equip,
             builtin_name, display_equip, resolve_builtin,
         },
         oneshot::run_oneshot,
-        parse_engine::{
-            LIB_DIRS_CONST, LintEngine, PLUGIN_DIRS_CONST, ParseEngine, dirs_value, file_start,
-            set_dirs_const, span_text, span_to_line_col, wrap_as_module,
-        },
         pin::{clear_pins, effective_supervisor, pin, reap_pins},
         purview::{
             CurrentPurview, PURVIEW_ALL, PURVIEW_CORE, PURVIEW_DEFAULT, PURVIEW_REF, PurviewRow,
@@ -220,17 +145,13 @@ pub(crate) use crate::{
             },
             verify::PublicKeyVerifier,
         },
-        run::{eval_concurrency_cap, run_server},
-        schema::{
-            NuTypedef, args_schema_to_signature, check_value, data_typedef, nu_to_args_schema,
-            nu_to_result_schema, result_schema_to_signature, result_typedef, typedef_text,
-        },
+        run::run_server,
         teardown::{
             OrphanReaper, install_child_subreaper, kill_plugin_subprocesses, make_tracker,
             process_start_time, tree_kill,
         },
         watchdog::{
-            HungRegistry, HungWatch, Lane, WatchdogDeps, register_hung, spawn_watchdog,
+            HungRegistry, HungWatch, WatchdogDeps, register_hung, spawn_watchdog,
         },
         tool::{
             call::CallParams,
@@ -258,7 +179,18 @@ pub(crate) use crate::{
     run::{
         parse_deniable,
     },
-    template::{build_call_source, build_execute_source, json_value_to_nu_value},
+};
+
+pub(crate) use sourcetrait_grammar_engine::{
+    self as engine, CacheKind, ChannelSend, DEFINITION_FILE, Diagnostic, EVAL_STACK_SIZE,
+    EngineError, EngineHost, EngineParams, ExecuteDef, Executor, LINT_VIOLATION_CAP, Lane,
+    LintEngine, NU_VERSION, ParseEngine, PluginInfo, RemoteSend, Severity, Source,
+    StatefulEngine, analyze_definition, args_schema_to_signature, build_call_source,
+    build_execute_source, cache_dir, check_value, definition_file, detect_import_cycle,
+    ensure_plugin_registry, eval_concurrency_cap, eval_stateless, file_start,
+    json_value_to_nu_value, lint_block, list_registered_plugins, nu_to_args_schema,
+    nu_to_result_schema, result_schema_to_signature, span_text, span_to_line_col,
+    typedef_text, wrap_as_module,
 };
 
 pub(crate) use std::{
@@ -268,16 +200,14 @@ pub(crate) use std::{
     io::{self, Write},
     hash::{Hash},
     marker::PhantomData,
-    os::unix::fs::{MetadataExt, OpenOptionsExt},
-    ops::ControlFlow,
-    panic::{AssertUnwindSafe, catch_unwind},
+    os::unix::fs::OpenOptionsExt,
     path::{PathBuf,Path},
     process,
     sync::{
         Arc, LazyLock, OnceLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 pub(crate) use clap::Parser;
@@ -289,36 +219,18 @@ pub(crate) mod dirs {
 }
 
 pub(crate) mod nu {
-    pub(crate) use nu_cmd_lang::create_default_context;
-    pub(crate) use nu_cmd_extra::add_extra_command_context;
-    pub(crate) use nu_cmd_plugin::add_plugin_command_context;
-    pub(crate) use nu_command::add_shell_command_context;
     pub(crate) use nu_command::tls::CRYPTO_PROVIDER;
-    pub(crate) use nu_config::{CliOverrides, EnvAccess, NushellConfigDirs, SystemEnv, resolve_paths};
-    pub(crate) use nu_engine::convert_env_values;
-    pub(crate) use nu_engine::eval_block;
-    pub(crate) use nu_engine::CallExt;
     pub(crate) use nu_engine::command_prelude::Call;
     pub(crate) use nu_json::Value as JsonValue;
     pub(crate) use nu_parser::parse;
     pub(crate) use nu_parser::{FlatShape, flatten_block};
-    pub(crate) use nu_plugin_engine::load_plugin_file;
     pub(crate) use nu_protocol::{
-        BlockId, ByteStreamSource, ByteStreamType, Category, CollectionColumns, Config, DeclId,
-        FromValue, IntoValue, Module, PipelineData,
-        PluginRegistryFile, Example,
-        PluginRegistryItemData, Record, ShellError, Signals, Signature, Span, SyntaxShape, Type,
-        Value, VarId, record, write_all_and_flush,
-        ast::{
-            Argument, Block, Comparison, Expr, Expression, ExternalArgument, ListItem,
-            Operator, Pattern, RecordItem,
-        },
-        debugger::WithoutDebug,
+        BlockId, Category, DeclId, FromValue, Module, PipelineData, Record,
+        ShellError, Signals, Signature, Span, SyntaxShape, Type, Value, VarId,
+        ast::{Argument, Block, Expr, Expression, ListItem},
         engine::{Command, EngineState, Job, Jobs, Mail, Stack, StateWorkingSet, ThreadJob},
     };
-    pub(crate) use nu_protocol::ast::Call as AstCall;
     pub(crate) use nu_protocol::shell_error::generic::GenericError;
-    pub(crate) use nu_std::load_standard_library;
     pub(crate) use nuon::{ToNuonConfig, from_nuon, to_nuon};
 }
 
@@ -326,7 +238,6 @@ pub(crate) use sourcetrait_common::{
     cereal,
     datum,
 };
-pub(crate) use crate::nuin::{SignatureParameterTrait, SignatureTrait};
 
 pub(crate) mod ser {
     pub(crate) use ::serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -383,7 +294,7 @@ pub(crate) mod tk {
         signal::unix::{SignalKind, signal},
         task::{JoinHandle, spawn_blocking},
         sync::{
-            Mutex as AsyncMutex, OwnedSemaphorePermit, RwLock as AsyncRwLock, Semaphore, oneshot,
+            Mutex as AsyncMutex, RwLock as AsyncRwLock, Semaphore, oneshot,
             mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
         },
         time::{Duration as TkDuration, sleep, timeout},

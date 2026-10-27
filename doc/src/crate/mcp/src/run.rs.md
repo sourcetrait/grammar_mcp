@@ -37,15 +37,16 @@ stderr.
 ## fn serve_or_oneshot
 The home directory is checked first, before the config reads it for the default
 work dir, and its absence exits 2. This is `BASE_DIRS`'s first touch, after
-`set_cli_env`'s overrides have landed (`server/cache.rs`).
+`set_cli_env`'s overrides have landed (`home.rs`).
 
 `CONFIG` is set before serve or one-shot dispatch, and before any reader, because
 `config()` panics when read early - a startup-order bug rather than a runtime
 condition.
 
-nushell's config dirs are resolved between the config and either surface, the
-server and the one-shot CLI alike, because both build engines and every engine
-reads them (`config_dirs.rs`). A failure there exits 2, as a bad config does.
+The engine starts between the config and either surface, the server and the
+one-shot CLI alike, because both build engines: its params from the config, mcp
+its host, and nushell's config dirs, which every engine reads, resolved
+(`server/host.rs`). A failure there exits 2, as a bad config does.
 
 Exit code 2 is the operator-input code the one-shot CLI already uses, so a
 rejected config and an unparseable argument report the same way. A serve that

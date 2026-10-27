@@ -52,8 +52,3 @@ It is also what makes the handler OBSERVABLE. A swept host reports
 `code() == Some(128 + signo)`, while a host that merely took the signal's default
 action reports `code() == None` and `signal() == Some(signo)`. Only the former proves
 the sweep ran, which is what the system test measures.
-
-## fn eval_concurrency_cap
-Halved rather than the full parallelism because eval runs on a dedicated blocking
-thread and the host itself needs cores for the async runtime and the supervisor. Eval is
-in-process, so there is no separate eval or reaper process to reserve cores for.

@@ -267,7 +267,7 @@ pub(crate) async fn dispatch_pooled(
             value,
         }),
         Ok(Err(failure)) => Err(DispatchError {
-            error: failure.into_error(),
+            error: failure.into(),
             nonce: nonce.to_nonce(),
         }),
         Err(_) => {
@@ -364,7 +364,7 @@ pub(crate) async fn dispatch_stateful(
             value,
         }),
         Ok(Err(failure)) => Err(DispatchError {
-            error: failure.into_error(),
+            error: failure.into(),
             nonce: nonce.to_nonce(),
         }),
         Err(_) => {

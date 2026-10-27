@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "crate/nuval",
+  "crate/engine",
   "crate/plugin/eye",
   "crate/plugin/soak",
   "crate/mcp",
@@ -64,6 +65,7 @@ nu-protocol = { version = "0.116.1" }
 nu-std = { version = "0.116.1" }
 nuon = { version = "0.116.1" }
 nuval = { path = "crate/nuval" }
+sourcetrait_grammar_engine = { path = "crate/engine" }
 
 sourcetrait_common = {
     path = "../common/crates/sourcetrait_common",

@@ -13,7 +13,7 @@ pub(crate) struct InfoResult {
     pub mcp_nom: String,
     /// The agent working directory, exported as $env.EQUIP_WORK_DIR.
     pub work_dir: String,
-    pub plugins: Vec<crate::plugins::PluginInfo>,
+    pub plugins: Vec<PluginInfo>,
     /// The callable surface within the reported purview, as one block.
     pub signatures: String,
     /// The purview `signatures` was rendered for.
@@ -40,7 +40,7 @@ impl NuSh {
             &InfoResult {
                 name: consts::GRAMMAR.to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
-                nu_version: env!("NU_VERSION").to_string(),
+                nu_version: NU_VERSION.to_string(),
                 id: config().id.clone(),
                 namespace: config().namespace.clone(),
                 mcp_nom: self.mcp_nom.as_str().to_string(),

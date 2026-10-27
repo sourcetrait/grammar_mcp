@@ -93,10 +93,3 @@ fn spawn_signal_sweep(
         process::exit(128 + signo);
     });
 }
-
-/// Max concurrent in-process evals: available parallelism halved, min 1.
-pub(crate) fn eval_concurrency_cap() -> usize {
-    std::thread::available_parallelism()
-        .map(|n| (n.get() / 2).max(1))
-        .unwrap_or(1)
-}

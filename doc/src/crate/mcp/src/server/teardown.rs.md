@@ -1,7 +1,8 @@
 # teardown.rs
 
 nushell 0.116.1 runs each external of an `is_mcp` engine in its own session, `setsid`
-before exec, so the external leads a process group of its own (`engine.rs`). A
+before exec, so the external leads a process group of its own (the engine's
+`engine.rs`). A
 `ThreadJob` tracks only that direct child's pid, and a descendant that starts its own
 session or group leaves the external's, so neither the tracked pid nor a killpg reaches
 the whole tree: a plain SIGKILL of the child orphans its grandchild.

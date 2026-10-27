@@ -1,0 +1,124 @@
+use crate::*;
+
+/// `grimm remote channel send <mcp_nom> <model> <event>` - a message, no files.
+#[derive(Clone)]
+pub(crate) struct GrimmRemoteChannelSend;
+
+/// `grimm remote_channel_send_with <mcp_nom> <model> <event> <attached>`.
+///
+/// A message plus files: `attached` is the files table, each local `src` beside
+/// the `dest` the receiver lands it under.
+#[derive(Clone)]
+pub(crate) struct GrimmRemoteChannelSendWith;
+
+impl GrimmRemoteChannelSend {
+    pub(crate) const DEF_MCP_NOM: nuin::ParameterDef = nuin::ParameterDef {
+        name: "mcp_nom",
+        description: "Remote MCP",
+    };
+    pub(crate) const DEF_MODEL: nuin::ParameterDef = nuin::ParameterDef {
+        name: "model",
+        description: "Namepath of the event data type",
+    };
+    pub(crate) const DEF_EVENT: nuin::ParameterDef = nuin::ParameterDef {
+        name: "event",
+        description: "Notification data",
+    };
+}
+
+impl nu::Command for GrimmRemoteChannelSend {
+    fn name(&self) -> &str { Self::DEF.name }
+
+    fn signature(&self) -> nu::Signature {
+        nu::Signature::build(Self::DEF.name)
+            .vocab(&Self::DEF)
+            .vocab_required(&Self::DEF_MCP_NOM, nu::SyntaxShape::String)
+            .vocab_required(&Self::DEF_MODEL, nu::SyntaxShape::String)
+            .vocab_required(&Self::DEF_EVENT, data_shape())
+            .input_output_types(vec![(nu::Type::Nothing, event_id_type())])
+    }
+
+    fn description(&self) -> &str { Self::DEF.description }
+
+    fn run(
+        &self,
+        engine_state: &nu::EngineState,
+        stack: &mut nu::Stack,
+        call: &nu::Call<'_>,
+        _input: nu::PipelineData,
+    ) -> Result<nu::PipelineData, nu::ShellError> {
+        let mcp_nom: String = call.req(engine_state, stack, 0)?;
+        let model: String = call.req(engine_state, stack, 1)?;
+        let event: nu::Value = call.req(engine_state, stack, 2)?;
+        require_record_or_table(&event, call.head)?;
+        let id = host()
+            .remote_send(RemoteSend {
+                mcp_nom,
+                model,
+                event,
+                attached: None,
+            })
+            .map_err(|message| shell_error(&message, call.head))?;
+        Ok(nu::PipelineData::Value(event_id_record(id, call.head), None))
+    }
+}
+
+impl nu::Command for GrimmRemoteChannelSendWith {
+    fn name(&self) -> &str {
+        "grimm remote_channel_send_with"
+    }
+
+    fn signature(&self) -> nu::Signature {
+        nu::Signature::build("grimm remote_channel_send_with")
+            .required("mcp_nom", nu::SyntaxShape::String, "the linked peer host's McpNom")
+            .required("model", nu::SyntaxShape::String, "the shape the event carries")
+            .required("event", data_shape(), "the state summary to deliver")
+            .required(
+                "attached",
+                nu::SyntaxShape::Table(nu::CollectionColumns::from(vec![])),
+                "the files table<src: path, dest: path>: local src -> receiver dest name",
+            )
+            .input_output_types(vec![(nu::Type::Nothing, event_id_type())])
+            .category(nu::Category::Custom("grimm".to_string()))
+    }
+
+    fn description(&self) -> &str {
+        "Deliver a message plus files to a linked remote host's agent; returns the message id."
+    }
+
+    fn run(
+        &self,
+        engine_state: &nu::EngineState,
+        stack: &mut nu::Stack,
+        call: &nu::Call<'_>,
+        _input: nu::PipelineData,
+    ) -> Result<nu::PipelineData, nu::ShellError> {
+        let mcp_nom: String = call.req(engine_state, stack, 0)?;
+        let model: String = call.req(engine_state, stack, 1)?;
+        let event: nu::Value = call.req(engine_state, stack, 2)?;
+        require_record_or_table(&event, call.head)?;
+        let attached: nu::Value = call.req(engine_state, stack, 3)?;
+        let id = host()
+            .remote_send(RemoteSend {
+                mcp_nom,
+                model,
+                event,
+                attached: Some(attached),
+            })
+            .map_err(|message| shell_error(&message, call.head))?;
+        Ok(nu::PipelineData::Value(event_id_record(id, call.head), None))
+    }
+}
+
+/// The reason goes in the title; only the title reaches the envelope message.
+fn shell_error(
+    message: &str,
+    span: nu::Span,
+) -> nu::ShellError {
+    nu::GenericError::new(
+        format!("grimm remote channel send: {message}"),
+        message.to_string(),
+        span,
+    )
+    .into()
+}

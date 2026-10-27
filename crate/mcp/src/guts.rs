@@ -49,7 +49,7 @@ fn ensure_test_config() {
         config.namespace = "default".to_string();
         config.work_dir = root.join("work");
         let _ = CONFIG.set(config);
-        init_config_dirs().expect("nushell's config dirs resolve for the tests");
+        init_engine().expect("the engine starts for the tests");
     });
 }
 

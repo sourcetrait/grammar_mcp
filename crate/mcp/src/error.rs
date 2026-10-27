@@ -1,68 +1,5 @@
 use crate::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Severity {
-    Error,
-    Warning,
-}
-
-/// A diagnostic's location; `path` is equip-repo-relative, or null in a body.
-#[derive(Debug, Clone, ser::Serialize)]
-pub struct Source {
-    pub path: Option<String>,
-    pub position: [usize; 2],
-}
-
-/// One agent-facing diagnostic row.
-#[derive(Debug, Clone, ser::Serialize)]
-pub struct Diagnostic {
-    pub kind: String,
-    #[serde(skip)]
-    pub severity: Severity,
-    pub source: Option<Source>,
-    pub message: String,
-}
-
-impl Diagnostic {
-    pub(crate) fn error(
-        kind: impl Into<String>,
-        source: Option<Source>,
-        message: impl Into<String>,
-    ) -> Self {
-        Self {
-            kind: kind.into(),
-            severity: Severity::Error,
-            source,
-            message: message.into(),
-        }
-    }
-
-    pub(crate) fn warning(
-        kind: impl Into<String>,
-        source: Option<Source>,
-        message: impl Into<String>,
-    ) -> Self {
-        Self {
-            kind: kind.into(),
-            severity: Severity::Warning,
-            source,
-            message: message.into(),
-        }
-    }
-
-    pub(crate) fn bucket(diagnostics: Vec<Diagnostic>) -> (Vec<Diagnostic>, Vec<Diagnostic>) {
-        let mut errors = Vec::new();
-        let mut warnings = Vec::new();
-        for d in diagnostics {
-            match d.severity {
-                Severity::Error => errors.push(d),
-                Severity::Warning => warnings.push(d),
-            }
-        }
-        (errors, warnings)
-    }
-}
-
 pub type GrammarMcpResult<T> = Result<T, GrammarMcpError>;
 
 #[derive(Debug, Clone)]
@@ -334,6 +271,19 @@ impl From<io::Error> for GrammarMcpError {
         GrammarMcpError::Internal {
             phase: "io".to_string(),
             reason: e.to_string(),
+        }
+    }
+}
+
+impl From<EngineError> for GrammarMcpError {
+    fn from(e: EngineError) -> Self {
+        match e {
+            EngineError::Eval { reason } => GrammarMcpError::ThreadReturnedError { reason },
+            EngineError::CircularImport { files } => GrammarMcpError::ModuleCircularImport { files },
+            EngineError::Init { reason } => GrammarMcpError::Internal {
+                phase: "engine".to_string(),
+                reason,
+            },
         }
     }
 }

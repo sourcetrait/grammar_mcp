@@ -17,27 +17,19 @@ path = "src/main.rs"
 [features]
 # Test-only engine decls (__test_hang / __test_panic) for the lifecycle system
 # tests; never enabled in a shipped build.
-test-hooks = []
+test-hooks = ["sourcetrait_grammar_engine/test-hooks"]
 
 [dependencies]
 bitcode.workspace = true
 clap.workspace = true
 directories.workspace = true
 futures-util.workspace = true
-indoc.workspace = true
 nix.workspace = true
-nu-cmd-extra.workspace = true
-nu-cmd-lang.workspace = true
-nu-cmd-plugin.workspace = true
 nu-command.workspace = true
-nu-config.workspace = true
 nu-engine.workspace = true
 nu-json.workspace = true
 nu-parser.workspace = true
-nu-path.workspace = true
-nu-plugin-engine.workspace = true
 nu-protocol.workspace = true
-nu-std.workspace = true
 nuon.workspace = true
 nuval.workspace = true
 rmcp.workspace = true
@@ -54,11 +46,9 @@ toml.workspace = true
 zstd.workspace = true
 
 sourcetrait_common.workspace = true
+sourcetrait_grammar_engine.workspace = true
 
 sourcetrait_cert_lib.workspace    = true
-
-[build-dependencies]
-toml.workspace = true
 
 [package.metadata]
 rein = "ai"

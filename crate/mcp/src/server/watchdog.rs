@@ -1,22 +1,6 @@
 //! The watchdog: sample the host, classify trouble, emit it edge-triggered.
 use crate::*;
 
-/// Which eval substrate a hung engine thread belongs to.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Lane {
-    Stateless,
-    Stateful,
-}
-
-impl Lane {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Stateless => "stateless",
-            Self::Stateful => "stateful",
-        }
-    }
-}
-
 /// A cancelled engine thread the watchdog watches for a hang.
 #[derive(Clone)]
 pub(crate) struct HungWatch {

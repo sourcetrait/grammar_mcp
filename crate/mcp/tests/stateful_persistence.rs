@@ -121,7 +121,7 @@ fn stateful_state_does_not_leak_into_the_pool(_t: &testing::Testable<'_, '_, '_>
 
 /// nushell's `EngineState::merge_env` ends by chdir'ing the process to `$env.PWD`.
 /// In-process that would move the whole grammar host for the rest of its life, so the
-/// stateful lane merges env WITHOUT that sync (server/embed.rs merge_env_no_chdir) and
+/// stateful lane merges env WITHOUT that sync (the engine's merge_env_no_chdir) and
 /// `cd` stays engine state. Linux-only, like the rest of the /proc-based checks.
 fn a_stateful_cd_does_not_move_the_host_process_cwd(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
