@@ -308,6 +308,23 @@ impl TestServer {
         )
     }
 
+    /// Each routed tool as `tools/list` carries it.
+    pub fn tools(&self) -> Vec<json::Value> {
+        self.nush
+            .tool_router
+            .list_all()
+            .into_iter()
+            .map(|tool| json::to_value(&tool).expect("a tool serializes"))
+            .collect()
+    }
+
+    /// The server's instructions, as `initialize` carries them.
+    pub fn instructions(&self) -> String {
+        mcp::ServerHandler::get_info(&self.nush)
+            .instructions
+            .unwrap_or_default()
+    }
+
     /// The in-process equip git repo dir.
     pub fn equip_root(&self) -> std::path::PathBuf {
         crate::equip_root()

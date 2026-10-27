@@ -1,5 +1,8 @@
 use crate::*;
 
+/// User's envelope schema, heading the server's instructions.
+const MCP_DOC: &str = include_str!("../../../../../include/human/mcp/mcp.md");
+
 impl NuSh {
     pub(crate) fn tool_router() -> mcp::ToolRouter<Self> {
         let deny = &config().deny;
@@ -78,7 +81,8 @@ impl mcp::ServerHandler for NuSh {
                     .with_title(title),
             )
             .with_instructions(format!(
-                "Evaluation artifacts are cached at \
+                "{MCP_DOC}\n\
+                 Evaluation artifacts are cached at \
                  $XDG_CACHE_HOME/grammar/mcp/{id}/{namespace}/{{nu,calls}}/<nonce>/{{stdout,stderr}}; \
                  a nu call's definition co-locates at \
                  $XDG_CACHE_HOME/grammar/mcp/{id}/{namespace}/nu/<nonce>/definition.nu \

@@ -9,8 +9,13 @@ rmcp routers compose with `+` at runtime, which is what makes conditional assemb
 at all rather than requiring a compile-time feature per tool.
 
 The four core tools are added unconditionally and are not deniable. There is NO implication
-between tokens either - denying `run` does not deny `rerun` - so an operator's config lists
+between tokens either - denying `nu` does not deny `rerun` - so an operator's config lists
 exactly what it means.
+
+## const MCP_DOC
+User's `include/human/mcp/mcp.md`, verbatim: the envelope every tool answers, which he
+keeps as the contract's own text, so the instructions an agent reads are his schema
+rather than a restatement of it.
 
 ## fn get_info
 `ServerCapabilities::builder().enable_tools()` is REQUIRED. `default()` advertises no tool
@@ -23,9 +28,10 @@ from elsewhere.
 The TITLE suffixes a non-default namespace so co-running namespace variants stay
 tellable-apart in the client's own listing.
 
-`instructions` renders the cache-path surface LIVE from the resolved config rather than as a
-static string, so what it names is what this host actually uses. The agent-facing operational
-craft beyond those paths lives in the `/nu` skill, not here.
+`instructions` opens with `MCP_DOC`, then renders the cache-path surface LIVE from the
+resolved config rather than as a static string, so what it names is what this host actually
+uses. The agent-facing operational craft beyond the envelope and those paths lives in the
+skills, not here.
 
 The same config answers `server/discover` in the 2026-07-28 era, rmcp building the
 DiscoverResult from it, so a client that never sends `initialize` still gets the title and

@@ -145,10 +145,9 @@ impl NuSh {
 
 #[mcp::tool_router(router = nu_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(
-        name = "nu",
-        description = "Executes the provided Nu language definition against the NUON data provided."
-    )]
+    #[allow(clippy::doc_overindented_list_items)]
+    #[doc = include_str!("../../../../../include/human/mcp/execute.md")]
+    #[mcp::tool(name = "nu")]
     pub(crate) async fn nu(
         &self,
         mcp::Parameters(p): mcp::Parameters<NuParams>,
