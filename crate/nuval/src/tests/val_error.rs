@@ -361,8 +361,35 @@ fn short_puts_an_error_on_one_line() {
     ));
     assert_eq!(
         nested.short(),
-        "Outer: here; Division by zero: division by zero"
+        "Outer: here; Division by zero."
     );
+}
+
+#[test]
+fn short_drops_a_label_its_message_repeats() {
+    let not_found = NuValError::from(&nu::ShellError::Io(
+        nu_protocol::shell_error::io::IoError::new(
+            nu::IoKind::FileNotFound,
+            span(0, 4),
+            std::path::PathBuf::from("/x"),
+        ),
+    ));
+    assert_eq!(not_found.short(), "File not found ('/x' does not exist)");
+    let variable = NuValError::from(&nu::ParseError::VariableNotFound(
+        nu_protocol::DidYouMean::new(&[], b""),
+        span(0, 2),
+    ));
+    assert_eq!(variable.short(), "Variable not found.");
+    let expected = NuValError::from(&nu::ParseError::Expected("block, closure or record", span(0, 2)));
+    let text = expected.short();
+    assert!(text.starts_with("Parse mismatch: expected block, closure or record. ("), "{text}");
+    assert_eq!(text.matches("expected block, closure or record").count(), 1, "{text}");
+    let extra = NuValError::from(&nu::ParseError::ExtraPositional("f".into(), span(0, 2)));
+    assert_eq!(extra.short().matches("xtra positional argument").count(), 1, "{}", extra.short());
+    let kept = NuValError::from(&nu::ShellError::Generic(
+        nu_protocol::shell_error::generic::GenericError::new("Type mismatch", "expected int", span(0, 1)),
+    ));
+    assert_eq!(kept.short(), "Type mismatch: expected int");
 }
 
 #[test]

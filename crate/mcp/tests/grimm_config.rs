@@ -176,9 +176,10 @@ fn an_unknown_key_errors_and_names_the_valid_ones(_t: &testing::Testable<'_, '_,
     assert!(has_error(&env), "an unknown key must error; got {env}");
     let text = error_text(&env);
     assert!(text.contains("not a config key"), "got {text}");
-    assert!(
-        text.contains("supervisor.vram_warn_headroom_mib"),
-        "the error should carry the vocabulary; got {text}",
+    assert_eq!(
+        text.matches("supervisor.vram_warn_headroom_mib").count(),
+        1,
+        "the error should carry the vocabulary, once; got {text}",
     );
 }
 
@@ -329,9 +330,10 @@ fn a_pin_against_a_dead_process_is_refused(_t: &testing::Testable<'_, '_, '_>) {
         "null",
     );
     assert!(has_error(&env), "got {env}");
-    assert!(
-        error_text(&env).contains("not running"),
-        "the refusal should say why; got {}",
+    assert_eq!(
+        error_text(&env).matches("not running").count(),
+        1,
+        "the refusal should say why, once; got {}",
         error_text(&env),
     );
     let after = s.execute(

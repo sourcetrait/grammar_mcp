@@ -64,9 +64,10 @@ fn channel_send_without_a_channel_refuses() {
     let env = s.execute(&ok_after("grimm channel send 'foo/bar/Car' {state: 'done'}"), "null");
     assert!(has_error(&env), "an unopened channel must refuse; got {env}");
     let text = error_text(&env).to_lowercase();
-    assert!(
-        text.contains("channel is not open"),
-        "the refusal should name the cause; got {}",
+    assert_eq!(
+        text.matches("channel is not open").count(),
+        1,
+        "the refusal should name the cause, once; got {}",
         error_text(&env),
     );
 }

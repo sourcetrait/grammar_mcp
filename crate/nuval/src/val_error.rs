@@ -156,7 +156,7 @@ impl NuValError {
             .iter()
             .filter_map(|label| label.text.as_deref())
             .map(one_line)
-            .filter(|text| !text.is_empty())
+            .filter(|text| !text.is_empty() && !repeats(&msg, text))
             .collect();
         let mut out = if labels.is_empty() {
             msg
@@ -195,6 +195,15 @@ impl NuValError {
 /// Text on one line, each run of whitespace one space, trimmed.
 fn one_line(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Whether a message already ends with a label's text, case and a period aside.
+fn repeats(
+    msg: &str,
+    label: &str,
+) -> bool {
+    let fold = |text: &str| text.trim_end_matches('.').to_lowercase();
+    fold(msg).ends_with(&fold(label))
 }
 
 /// Shell errors as data, in order.

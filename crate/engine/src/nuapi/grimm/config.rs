@@ -35,14 +35,14 @@ fn lookup(key: &str) -> Option<nu::Value> {
     Some(current)
 }
 
-/// The unknown-key error, listing the valid keys in its title.
+/// The unknown-key error, its label listing the valid keys.
 fn unknown_key(
     key: &str,
     span: nu::Span,
 ) -> nu::ShellError {
     let keys = config_keys().join(", ");
     nu::GenericError::new(
-        format!("grimm get_config: `{key}` is not a config key; valid keys: {keys}"),
+        format!("grimm get_config: `{key}` is not a config key"),
         format!("valid keys: {keys}"),
         span,
     )
@@ -186,11 +186,7 @@ impl nu::Command for GrimmPinConfig {
             )
         })?;
         host().pin_config(&key, pid, value).map_err(|reason| {
-            nu::GenericError::new(
-                format!("grimm pin_config: {reason}"),
-                reason.clone(),
-                call.head,
-            )
+            nu::GenericError::new("grimm pin_config failed", reason, call.head)
         })?;
         Ok(nu::PipelineData::Empty)
     }

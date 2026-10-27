@@ -25,6 +25,12 @@ labels' colon, the cause follows a dash, and each inner error follows a
 semicolon. Whitespace runs collapse, so a help written over lines stays on
 one.
 
+A label its message already ends with is dropped, case and a trailing period
+aside: nushell labels many errors with their own words, "File not found" over
+"File not found" and "Parse mismatch: expected record." over "expected record",
+which one line would read twice. A label adding words, a did-you-mean among
+them, stays.
+
 ## enum NuValErrorKind
 One family per nushell error type, the variant's kind inside it, so a kind
 names the type and the variant it was. A shell error wrapping another type

@@ -18,12 +18,10 @@ Derived from the record rather than restated beside it, so the vocabulary an err
 message needs cannot drift from the vocabulary the record actually has.
 
 ## fn unknown_key
-THE VOCABULARY GOES IN THE TITLE, NOT ONLY THE LABEL. `GenericError` renders its
-title through Display, and that is all the eval envelope's `message` carries - a
-label reaches a human reading a rendered diagnostic and never reaches the agent.
-Listing the valid keys IS the entire value of this error, so keeping them only in the
-label would name a problem and withhold the answer. A test asserts the list reaches
-the message.
+The title names the problem and the label the vocabulary, nushell's split.
+`NuValError::short` carries both into the envelope's message, so the keys in the
+title as well read twice. Listing the valid keys is the value of this error, and a
+test asserts the list reaches the message once.
 
 ## fn value_type
 Spelled as a union rather than `any`, because the set is CLOSED and naming it lets
@@ -47,3 +45,6 @@ Only the `[supervisor]` warning lines are pinnable. `[channel]` is excluded so
 `interface channel config` stays the sole mutator there - a value with two mutators
 is one whose effective setting depends on which surface you happen to ask.
 Everything else in the config is not a runtime value at all.
+
+A pin the host turns down is titled `grimm pin_config failed`, its reason the
+label, as the sends' refusals are.

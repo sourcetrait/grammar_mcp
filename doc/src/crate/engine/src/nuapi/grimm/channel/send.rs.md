@@ -21,10 +21,10 @@ gives its reasons for. The engine keeps the one act on its own state, stopping
 the offender, which the host calls back for through `stop`.
 
 ## fn shell_error
-`GenericError` renders its TITLE through Display, and the title is all the eval
-envelope's `message` carries - so a bare command name there reaches the agent with
-the cause stripped off. That is the opaque-error failure this crate already knows
-well, and it recurs because the label looks like the natural home for detail.
+nushell's split: the title names the command and that it failed, and the label
+carries the host's reason. `NuValError::short` renders both on the envelope's one
+line, so a reason in each read twice. A body catching the error reads the title as
+`$e.msg`, the reason in its rendered labels.
 
 ## fn stop_offender
 The host calls it through `stop` when a send crosses the hard threshold, and the

@@ -15,3 +15,6 @@ Two decls, not one with an optional attachment, because for a REMOTE send the
 transferred FILES are the "attached" - _send_with's whole job - so a bare send has no
 files at all (unlike channel send's optional `attached`). The host refuses the mcp/
 reservation, host-origin only, as it does for a channel send.
+
+## fn shell_error
+As channel send's: the command titles a refusal, and the host's reason labels it.

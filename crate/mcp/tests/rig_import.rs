@@ -790,6 +790,37 @@ fn equip_new_and_scaffold_function() {
 }
 
 #[tested]
+fn scaffold_names_only_the_files_it_wrote() {
+    let t = testing::test!({ .using_temp_dir() });
+    let s = TESTING.harness();
+    let src = s.new_rig(t.temp_dir(), "sourcetrait/namedlib");
+    let first = s.scaffold(&["sourcetrait/namedlib:util", "sourcetrait/namedlib:util:echo"]);
+    assert!(!has_error(&first), "got {first}");
+    assert_eq!(
+        created(&first),
+        vec![src.join("util").join("mod.nu"), src.join("util").join("echo").join("mod.nu")],
+        "a new module's mod.nu and a call's, each once; got {first}",
+    );
+    let second = s.scaffold(&["sourcetrait/namedlib:util:other"]);
+    assert!(!has_error(&second), "got {second}");
+    assert_eq!(
+        created(&second),
+        vec![src.join("util").join("other").join("mod.nu")],
+        "a module walked through is no creation; got {second}",
+    );
+}
+
+/// A scaffold's answer, its created paths.
+fn created(env: &serde_json::Value) -> Vec<std::path::PathBuf> {
+    env["result"]["created"]
+        .as_array()
+        .expect("a created list")
+        .iter()
+        .map(|path| std::path::PathBuf::from(path.as_str().expect("a path")))
+        .collect()
+}
+
+#[tested]
 fn scaffolded_call_commits_as_wired() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();

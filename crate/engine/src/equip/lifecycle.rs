@@ -139,9 +139,9 @@ pub fn scaffold_leaf(
             let child_modnu = child.join("mod.nu");
             if !child_modnu.exists() {
                 fs::write(&child_modnu, b"")?;
+                created.push(child_modnu.to_string_lossy().into_owned());
             }
             additively_wire_modnu(&parent_modnu, &format!("export module {seg}"))?;
-            created.push(child.to_string_lossy().into_owned());
             dir = child;
         }
     }

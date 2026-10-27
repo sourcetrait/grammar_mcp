@@ -19,6 +19,10 @@ Verified against 0.114.1: with the inline `export module sub` alone, `use foo` t
 The LEAF-GUARD refuses an existing terminal namepath, so scaffolding can never write over
 authored work. Intermediate module dirs are additively wired and may already exist.
 
+Its answer names the files it wrote, a new module's `mod.nu` and a call's, never a
+directory it walked through: a batch scaffolding a module and a call under it
+otherwise named the module twice and its `mod.nu` not at all.
+
 ## fn registered_source
 The equip's source is the PARENT of either kind's recorded source, the rig's first. A
 registration is the per-kind meta alone, so there is no equip-level record to drift from the

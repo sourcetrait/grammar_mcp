@@ -58,7 +58,7 @@ impl nu::Command for GrimmRemoteChannelSend {
                 event,
                 attached: None,
             })
-            .map_err(|message| shell_error(&message, call.head))?;
+            .map_err(|message| shell_error(nu::Command::name(self), &message, call.head))?;
         Ok(nu::PipelineData::Value(event_id_record(id, call.head), None))
     }
 }
@@ -105,18 +105,19 @@ impl nu::Command for GrimmRemoteChannelSendWith {
                 event,
                 attached: Some(attached),
             })
-            .map_err(|message| shell_error(&message, call.head))?;
+            .map_err(|message| shell_error(nu::Command::name(self), &message, call.head))?;
         Ok(nu::PipelineData::Value(event_id_record(id, call.head), None))
     }
 }
 
-/// The reason goes in the title; only the title reaches the envelope message.
+/// A refused send: the command titles it, and the host's reason labels it.
 fn shell_error(
+    command: &str,
     message: &str,
     span: nu::Span,
 ) -> nu::ShellError {
     nu::GenericError::new(
-        format!("grimm remote channel send: {message}"),
+        format!("{command} failed"),
         message.to_string(),
         span,
     )
