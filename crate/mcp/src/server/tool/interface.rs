@@ -3,8 +3,8 @@ use crate::*;
 /// The tool's name on the grammar server.
 pub(crate) const INTERFACE_TOOL: &str = "interface";
 
-/// The pretext the description opens with: the summary line, until User's lands.
-const INTERFACE_PRETEXT: &str = "Interfaces directly with the Grammar MCP.";
+/// User's pretext, verbatim, opening the tool's description.
+const INTERFACE_PRETEXT: &str = include_str!("../../../../../include/human/mcp/interface.md");
 
 /// Parameters for `interface()`.
 #[derive(Debug, ser::Deserialize, ser::Serialize, schema::JsonSchema)]
@@ -15,7 +15,7 @@ pub struct InterfaceParams {
 
 /// The tool's description: the pretext, then the commands the deny set leaves.
 pub(crate) fn interface_description(deny: &DenySet) -> String {
-    format!("{INTERFACE_PRETEXT}\n\n{}", render_signatures(deny))
+    format!("{}\n\n{}", INTERFACE_PRETEXT.trim_end(), render_signatures(deny))
 }
 
 #[mcp::tool_router(router = interface_router, vis = "pub(crate)")]

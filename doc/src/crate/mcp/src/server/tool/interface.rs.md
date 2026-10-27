@@ -6,14 +6,14 @@ The commands convert those tools as they were: same parameters, same results,
 same refusals.
 
 ## const INTERFACE_PRETEXT
-User's `include/human/mcp/interface.md` carries his pretext and nothing else;
-until it lands, the tool's summary line stands in, and the switch is one
-`include_str!`.
+User's `include/human/mcp/interface.md`, verbatim by `include_str!`: his pretext
+and nothing else, the signatures being the code's to render.
 
 ## fn interface_description
-His pretext, then the command signatures for the deny set, rendered from the
-table the parse registers (`server/interface/grammar.rs`), so the
-documentation is never a second copy to keep in step.
+His pretext, its trailing whitespace trimmed so one blank line parts it from the
+signatures whatever his file ends with, then the command signatures for the deny
+set, rendered from the table the parse registers (`server/interface/grammar.rs`),
+so the documentation is never a second copy to keep in step.
 
 ## fn interface
 The nonce is minted FIRST, over the tool's name and the command text, so a

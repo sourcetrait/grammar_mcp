@@ -1,4 +1,4 @@
-//! The tool surface's documentation: User's two schemas, verbatim, and no tool
+//! The tool surface's documentation: User's three texts, verbatim, and no tool
 //! declaring an output schema.
 
 use sourcetrait_common::testing::prelude::*;
@@ -11,6 +11,7 @@ static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integrat
 
 const EXECUTE_DOC: &str = include_str!("../../../include/human/mcp/execute.md");
 const MCP_DOC: &str = include_str!("../../../include/human/mcp/mcp.md");
+const INTERFACE_DOC: &str = include_str!("../../../include/human/mcp/interface.md");
 
 fn description(s: &TestServer, name: &str) -> String {
     let tools = s.tools();
@@ -68,7 +69,7 @@ fn the_interface_is_described_by_its_pretext_then_its_command_signatures() {
     let (pretext, signatures) = description
         .split_once("\n\n## Command Signatures\n")
         .unwrap_or_else(|| panic!("the signatures follow the pretext: {description}"));
-    assert!(!pretext.trim().is_empty(), "{description}");
+    assert_eq!(pretext, INTERFACE_DOC.trim_end(), "{description}");
     for topic in ["General", "Process", "Purview", "Channel", "Remote", "Equip"] {
         assert!(signatures.contains(&format!("### {topic}\n")), "{topic}: {description}");
     }
