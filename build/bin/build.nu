@@ -6,7 +6,9 @@
 # `grammar-mcp_<semver>_<os>_<arch>.opt.tar.zst`; its path is the last line.
 # It is signed by the repository's gpg commit key, or by `gpg.signingkey`, a
 # full fingerprint, with `gpg.homedir` the GnuPG home. gram's repository must
-# sit beside this one, as `gram`: the package carries its equip.
+# sit beside this one, as `gram`: the package carries its equip. Each build
+# tallies the dependencies' licenses into `LICENSES-EXTERNAL.txt` by
+# cargo-license, `cargo license`, which must be installed.
 
 const MOD_DIR = (path self | path expand | path dirname | path dirname | path join 'mod')
 const BUNDLE = ($MOD_DIR | path join 'bundle')
@@ -30,6 +32,8 @@ def main [
     let semver: string = (bundle package_semver $ROOT $profile)
     let file: string = (optzip file_name $NAME $semver $target.os $target.arch)
     print $"building ($NAME) ($semver) for ($target.os) ($target.arch)"
+    print "tallying the dependencies' licenses"
+    bundle licenses $ROOT
     bundle compile $ROOT $profile
     print 'installing nushell and its core plugins'
     let nu_root: path = (bundle nushell $ROOT $profile)

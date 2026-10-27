@@ -35,6 +35,12 @@ export def require_gram [root: path]: nothing -> nothing {
     }
 }
 
+# Tally every dependency's license into `LICENSES-EXTERNAL.txt` at the root, by cargo-license.
+export def licenses [root: path]: nothing -> nothing {
+    (^cargo license --color never --manifest-path ($root | path join 'Cargo.toml')
+        | save --force ($root | path join 'LICENSES-EXTERNAL.txt'))
+}
+
 # Build the MCP and its plugins in cargo's `release` or `debug` profile.
 export def compile [root: path, profile: string]: nothing -> nothing {
     let flags: list<string> = (profile_flags $profile '--release')
