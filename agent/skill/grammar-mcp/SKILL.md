@@ -7,9 +7,10 @@ What the tool and server schemas leave out. The Nu language is in the nu
 skill; equip authoring is in grammar-mcp-dev.
 
 ## In a definition
-- `$env.NONCE`: this call's nonce. `$env.EQUIP_ID`, `EQUIP_NAMESPACE`, and
-  `EQUIP_WORK_DIR`: the host's. `$env.EQUIP_TMP`: its bulk scratch directory;
-  `$env.EQUIP_TRANSIENT`: its directory for small runtime files.
+- `$env.NONCE`: this call's nonce. `$env.EQUIP_ID`, `EQUIP_NAMESPACE`,
+  `EQUIP_WORK_DIR`, and `EQUIP_MCP_NOM`: the host's. `$env.EQUIP_TMP`: its bulk
+  scratch directory; `$env.EQUIP_TRANSIENT`: its directory for small runtime
+  files.
 - Import a lib's or a rig's module by its path, never an equip's root:
   `use equip/<author>/<name>/lib/<module>`, then `<module> <export> ...`.
 - A check reports at most three errors at a time; fix them and resubmit.

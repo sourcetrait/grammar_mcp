@@ -96,7 +96,7 @@ pub(crate) use crate::{
             },
         },
         emergency::{EmergencyTx, spawn_emergency_responder},
-        host::{ensure_substrate, init_engine},
+        host::{ensure_substrate, init_engine, process_identity},
         interface::{
             contract::{InterfaceCommand, parse_command},
             grammar::{

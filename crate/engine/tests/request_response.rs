@@ -73,6 +73,7 @@ impl TestEngine {
             work_dir: root.join("work"),
             tmp_dir: root.join("tmp"),
             transient_dir: root.join("transient"),
+            mcp_nom: "testnom".to_string(),
             data_home: root.join("data"),
             cache_home: root.join("cache"),
         };

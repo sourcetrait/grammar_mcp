@@ -9,7 +9,15 @@ process (`guts.rs`).
 The scratch directories are made here, before the engine, because parameters
 carry them: every definition reads them as `$env.EQUIP_TMP` and
 `$env.EQUIP_TRANSIENT` (`scratch.rs`). A directory that cannot be made fails the
-start, as any other parameter would.
+start, as any other parameter would. The process's nom rides the parameters the
+same way, a definition's `$env.EQUIP_MCP_NOM`.
+
+## fn process_identity
+One nom a process, drawn at the first ask. The engine's start needs it before
+the server or the one-shot builds its system, so both take this one rather than
+minting their own, as does every `TestServer` in a test binary, whose engine is
+the process's too. The generator rides with it: the nonces a host mints come
+from the generator that drew its nom, as they did when the server minted both.
 
 ## fn ensure_substrate
 The engine's equip store first, then mcp's purview bookkeeping, the plugin

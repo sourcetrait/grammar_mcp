@@ -76,8 +76,7 @@ impl TestServer {
             .build()
             .expect("tokio runtime");
         rt.block_on(ensure_substrate()).expect("ensure_substrate");
-        let nonce_gen = Arc::new(datum::NonceGenerator::new());
-        let mcp_nom = datum::Nom::generate(&nonce_gen).into_pair();
+        let (nonce_gen, mcp_nom) = process_identity();
         let system = rt
             .block_on(start_system(&mcp_nom, false))
             .expect("mcp's system starts");
@@ -443,8 +442,7 @@ impl SupervisedSystem {
             .build()
             .expect("tokio runtime");
         rt.block_on(ensure_substrate()).expect("ensure_substrate");
-        let nonce_gen = datum::NonceGenerator::new();
-        let mcp_nom = datum::Nom::generate(&nonce_gen).into_pair();
+        let (_, mcp_nom) = process_identity();
         let system = rt
             .block_on(start_system(&mcp_nom, true))
             .expect("mcp's system starts");

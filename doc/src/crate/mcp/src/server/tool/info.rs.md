@@ -12,9 +12,11 @@ The agent's self-confirmation channel for which namespace it is talking to. The
 same pair is readable ambiently inside a definition as `$env.EQUIP_ID` /
 `$env.EQUIP_NAMESPACE`, so this is the outside view of the same fact.
 
-### field mcp_nom
+### field nom
 A changed value across two calls is how an agent learns the server restarted. A
-pid cannot serve that, because pids are reused.
+pid cannot serve that, because pids are reused. It is `nom` here, the host's own
+id in the host's own answer, and `mcp_nom` everywhere it names the host from
+outside: a packet, the host lock, a definition's `$env.EQUIP_MCP_NOM` (User).
 
 ### field tmp
 The outside view of `$env.EQUIP_TMP`, as `id` is of `$env.EQUIP_ID`: where the

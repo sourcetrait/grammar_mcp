@@ -7,8 +7,7 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
             eprintln!("grammar: the equip substrate: {e}");
             return 1;
         }
-        let nonce_gen = Arc::new(datum::NonceGenerator::new());
-        let mcp_nom = datum::Nom::generate(&nonce_gen).into_pair();
+        let (nonce_gen, mcp_nom) = process_identity();
         let system = match start_system(&mcp_nom, false).await {
             Ok(system) => Arc::new(system),
             Err(e) => {

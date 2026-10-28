@@ -10,8 +10,9 @@ Mcp's system starts after the substrate: its engine hydrates the equips' locks
 from the store the substrate makes, builtins included, so an engine started first
 would answer a call to a builtin `equip::not_registered`. It brings up the
 emergency lane, the operator, which takes the namespace's host lock, and the
-observer with the engine (`server/system.rs`). The `mcp_nom` is minted before
-it, since the system's operator and emergency log and `NuSh` all carry it.
+observer with the engine (`server/system.rs`). The `mcp_nom` is the process's,
+drawn for the engine's start (`process_identity`, `server/host.rs`), and the
+system's operator and emergency log and `NuSh` all carry it.
 
 The signal sweep is installed before serving. Without it a signalled host drops
 its eval children and its background jobs onto the box unreaped, because the

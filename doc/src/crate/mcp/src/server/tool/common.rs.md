@@ -34,8 +34,8 @@ The deny set is a PARAMETER rather than read from the config, because the one-sh
 builds its interface with none: deny gates an agent's surface, and the operator's path
 keeps every command.
 
-The `mcp_nom` is the caller's, minted before mcp's system starts, since the system's
-operator and emergency log are keyed by it too.
+The `mcp_nom` is the caller's, the process's one (`process_identity`), since the
+system's operator and emergency log are keyed by it too.
 
 ## fn NuSh::mint
 EVERY TOOL MINTS ITS NONCE FIRST, before any check, from its name and its parameters,

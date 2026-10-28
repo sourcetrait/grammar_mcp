@@ -8,7 +8,8 @@ integration tests exercise the handlers without spawning the binary.
 THE PROCESS-GLOBAL CONSTRAINT is the thing to hold before writing a test here.
 `CONFIG` is a `OnceLock` and the homes `LazyLock`s that read the environment at first
 access, so every `TestServer` in ONE test binary shares ONE namespace: one id and
-namespace, one data home, one equip git repo. Per-FILE isolation is therefore free
+namespace, one data home, one equip git repo, and one host nom, the process's
+(`process_identity`), which its engine exports. Per-FILE isolation is therefore free
 (each `tests/*.rs` is its own process) while WITHIN a file tests must use unique
 equip names and must not rely on a pristine namespace. A test that genuinely needs
 an empty namespace belongs in its own binary or in the system crate.

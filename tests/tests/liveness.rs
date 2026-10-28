@@ -36,9 +36,9 @@ fn the_host_lock_is_held_while_alive_and_dropped_on_sigkill() {
 
     // Identity is in the CONTENTS, for a reader that wants to know which host holds it.
     let info = host.info();
-    let mcp_nom = envelope(&info)["result"]["mcp_nom"]
+    let mcp_nom = envelope(&info)["result"]["nom"]
         .as_str()
-        .expect("info carries mcp_nom")
+        .expect("info carries the host's nom")
         .to_string();
     let pid = host.pid();
     let contents = std::fs::read_to_string(namespace.join("host.lock")).expect("read host.lock");

@@ -9,8 +9,8 @@ pub(crate) struct InfoResult {
     /// The `--id` this server was configured with.
     pub id: String,
     pub namespace: String,
-    /// This host process's id, stable for its lifetime.
-    pub mcp_nom: String,
+    /// This host process's nom, stable for its life: $env.EQUIP_MCP_NOM.
+    pub nom: String,
     /// The agent working directory, exported as $env.EQUIP_WORK_DIR.
     pub work_dir: String,
     /// The host's bulk scratch directory, exported as $env.EQUIP_TMP.
@@ -48,7 +48,7 @@ impl NuSh {
                 nu_version: NU_VERSION.to_string(),
                 id: config().id.clone(),
                 namespace: config().namespace.clone(),
-                mcp_nom: self.mcp_nom.as_str().to_string(),
+                nom: self.mcp_nom.as_str().to_string(),
                 work_dir: config().work_dir.display().to_string(),
                 tmp: tmp_dir().map(|dir| dir.display().to_string()).unwrap_or_default(),
                 transient: transient_dir().map(|dir| dir.display().to_string()).unwrap_or_default(),

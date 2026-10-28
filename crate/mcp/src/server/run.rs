@@ -7,8 +7,7 @@ pub(crate) async fn run_server() -> Result<(), String> {
     ensure_substrate()
         .await
         .map_err(|e| format!("the equip substrate: {e}"))?;
-    let nonce_gen = Arc::new(datum::NonceGenerator::new());
-    let mcp_nom = datum::Nom::generate(&nonce_gen).into_pair();
+    let (nonce_gen, mcp_nom) = process_identity();
     let system = Arc::new(start_system(&mcp_nom, true).await?);
     let server = NuSh::new(nonce_gen, mcp_nom, system.clone(), &config().deny);
     spawn_signal_sweep(system.clone());

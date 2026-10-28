@@ -391,9 +391,9 @@ fn remote_send_with_returns_its_event_id() {
 // ---- helpers ----
 
 fn mcp_nom(c: &mut Consumer) -> String {
-    envelope(&c.host.info())["result"]["mcp_nom"]
+    envelope(&c.host.info())["result"]["nom"]
         .as_str()
-        .expect("info carries mcp_nom")
+        .expect("info carries the host's nom")
         .to_string()
 }
 

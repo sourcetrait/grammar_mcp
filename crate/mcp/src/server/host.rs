@@ -5,18 +5,33 @@ use crate::*;
 const CLOSE_UNVERIFIED_EMIT: u16 = 1008;
 const UNVERIFIED_EMIT_REASON: &str = "emit before verification";
 
+/// This process's nonce generator and the nom drawn from it, minted once.
+static PROCESS_IDENTITY: OnceLock<(Arc<datum::NonceGenerator>, datum::NomPair)> = OnceLock::new();
+
+/// The process's nonce generator and its nom, the host's id for its life.
+pub(crate) fn process_identity() -> (Arc<datum::NonceGenerator>, datum::NomPair) {
+    let (nonce_gen, mcp_nom) = PROCESS_IDENTITY.get_or_init(|| {
+        let nonce_gen = Arc::new(datum::NonceGenerator::new());
+        let mcp_nom = datum::Nom::generate(&nonce_gen).into_pair();
+        (nonce_gen, mcp_nom)
+    });
+    (nonce_gen.clone(), mcp_nom.clone())
+}
+
 /// Start the engine on the config's id, namespace, and homes, mcp its host.
 ///
 /// Its scratch directories are made first, since parameters carry them.
 pub(crate) fn init_engine() -> Result<(), String> {
     let cfg = config();
     let scratch = make_scratch_dirs()?;
+    let (_, mcp_nom) = process_identity();
     let params = EngineParams {
         id: cfg.id.clone(),
         namespace: cfg.namespace.clone(),
         work_dir: cfg.work_dir.clone(),
         tmp_dir: scratch.tmp,
         transient_dir: scratch.transient,
+        mcp_nom: mcp_nom.as_str().to_string(),
         data_home: data_base_dir(),
         cache_home: cache_base_dir(),
     };

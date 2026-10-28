@@ -167,7 +167,7 @@ fn env_carries_id_namespace_and_work_dir() {
         &["--id", "envid", "--namespace", "envns", "--workdir", wd_str],
     );
     let resp = host.execute(
-        "def execute [data: nothing]: nothing -> record<id: string, ns: string, wd: string> {\n    { id: $env.EQUIP_ID, ns: $env.EQUIP_NAMESPACE, wd: $env.EQUIP_WORK_DIR }\n}",
+        "def execute [data: nothing]: nothing -> record<id: string, ns: string, wd: string, nom: string> {\n    { id: $env.EQUIP_ID, ns: $env.EQUIP_NAMESPACE, wd: $env.EQUIP_WORK_DIR, nom: $env.EQUIP_MCP_NOM }\n}",
         "null",
     );
     let env = envelope(&resp);
@@ -176,6 +176,13 @@ fn env_carries_id_namespace_and_work_dir() {
     assert_eq!(env["result"]["wd"].as_str(), Some(wd_str), "EQUIP_WORK_DIR; got {resp}");
     let info = host.info();
     assert_eq!(envelope(&info)["result"]["work_dir"].as_str(), Some(wd_str), "info work_dir; got {info}");
+    let nom = envelope(&info)["result"]["nom"].as_str().map(str::to_string);
+    assert!(nom.is_some(), "info carries the host's nom; got {info}");
+    assert_eq!(
+        env["result"]["nom"].as_str(),
+        nom.as_deref(),
+        "a definition reads the host's nom as EQUIP_MCP_NOM; got {resp}",
+    );
 }
 
 #[tested]
