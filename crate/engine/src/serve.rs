@@ -51,8 +51,12 @@ fn parse_timeout(text: Option<&str>) -> EngineResult<(u64, nu::Value)> {
         return Ok((DEFAULT_TIMEOUT_MS, nu::Value::duration(nanos, span)));
     };
     let invalid = |reason: String| EngineError::TimeoutInvalid { reason };
-    let value = nu::from_nuon(text, None)
-        .map_err(|e| invalid(format!("`{text}` is not a Nu duration: {e}")))?;
+    let value = nu::from_nuon(text, None).map_err(|e| {
+        invalid(format!(
+            "`{text}` is not a Nu duration: {}",
+            nuval::NuValError::from(&e).short()
+        ))
+    })?;
     match value {
         nu::Value::Duration { val, .. } if val > 0 => {
             Ok(((val as u64).div_ceil(1_000_000), nu::Value::duration(val, span)))
@@ -103,7 +107,9 @@ fn hold_data(
             "data is NUON text, `null` for a `data: nothing` {holder}"
         )));
     }
-    let value = nu::from_nuon(data, None).map_err(|e| invalid(format!("data is not NUON: {e}")))?;
+    let value = nu::from_nuon(data, None).map_err(|e| {
+        invalid(format!("data is not NUON: {}", nuval::NuValError::from(&e).short()))
+    })?;
     check_value(&value, typedef, "data").map_err(invalid)?;
     render_nuon(&value).map_err(invalid)
 }

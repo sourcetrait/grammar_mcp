@@ -40,9 +40,13 @@ One reading of the data for `execute`, a rerun, and a call alike. The text is pa
 declared type by the strict check, then rendered back by `to_nuon` as the source's
 literal. The literal is therefore the engine's own render of a plain value, never the
 agent's text: nothing the agent wrote reaches an `execute` source but the definition,
-which the contract has already held to one def, and nothing at all reaches a call's. An
-empty text is refused rather than read as null, since a `data: nothing` signature takes
-`null` and the field is never optional.
+which the contract has already held to one def, and nothing at all reaches a call's.
+
+A text that doesn't parse is refused in the parse error's own words: the nuon crate's
+error is a generic line, "error when parsing nuon text", with the parse error inside it,
+so it is rendered by nuval's `short`, which carries the inner error, as `parse_timeout`
+renders a timeout's. An empty text is refused rather than read as null, since a
+`data: nothing` signature takes `null` and the field is never optional.
 
 ## fn hold_timeout
 The timeout always bounds the eval; its literal goes into the source only when the
