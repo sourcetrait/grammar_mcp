@@ -25,6 +25,36 @@ fn default_id_is_user_env() {
     );
 }
 
+/// The namespace's homes come from the UENV variables before the XDG ones.
+#[tested]
+fn the_uenv_homes_come_before_the_xdg_ones() {
+    let t = testing::test!({ .using_temp_dir() });
+    let data = t.temp_dir().join("uenv-data");
+    let cache = t.temp_dir().join("uenv-cache");
+    let mut host = Host::spawn_full(
+        t.temp_dir(),
+        &["--id", "uenvid"],
+        &[
+            ("UENV_USR_DATA", data.to_str().expect("a UTF-8 path")),
+            ("UENV_USR_CACHE", cache.to_str().expect("a UTF-8 path")),
+        ],
+    );
+    let resp = host.execute(WORK_DIR, "null");
+    assert!(!has_error_path(&resp), "the call runs; got {resp}");
+    assert!(
+        namespace_dir(&data, "uenvid", "default").join("equip").exists(),
+        "the namespace's equips land under UENV_USR_DATA",
+    );
+    assert!(
+        namespace_dir(&cache, "uenvid", "default").join("execute").exists(),
+        "and its calls' logs under UENV_USR_CACHE",
+    );
+    assert!(
+        !namespace_dir(&t.temp_dir().join("data"), "uenvid", "default").exists(),
+        "nothing lands under XDG_DATA_HOME",
+    );
+}
+
 #[tested]
 fn explicit_id_and_namespace_select_their_own_dirs() {
     let t = testing::test!({ .using_temp_dir() });

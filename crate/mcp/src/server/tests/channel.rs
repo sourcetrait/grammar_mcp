@@ -315,7 +315,7 @@ fn a_deliberate_close_takes_the_inbox_to_prune_it() {
         handle.take_inbox().is_none(),
         "a channel that never opened wrote nothing, so there is nothing to prune",
     );
-    let dir = PathBuf::from("/dev/shm/box/mcp/nom/inbox");
+    let dir = PathBuf::from("/tmp/grammar-mcp.x/inbox");
     handle.set_inbox(dir.clone());
     assert_eq!(handle.inbox(), Some(dir.clone()), "open records where attachments go");
     assert_eq!(

@@ -1,9 +1,13 @@
 use crate::*;
 
+/// Set a home from its flag, under its UENV name too, so the flag wins.
 fn set_cli_env_path(k: &'static str, v: &Option<PathBuf>) -> Result<(), String> {
     let Some(v) = v else { return Ok(()) };
     let v = expand_path(v)?;
-    unsafe { std::env::set_var(k, v) }
+    unsafe { std::env::set_var(k, &v) }
+    if let Some(uenv) = uenv_partner(k) {
+        unsafe { std::env::set_var(uenv, &v) }
+    }
     Ok(())
 }
 

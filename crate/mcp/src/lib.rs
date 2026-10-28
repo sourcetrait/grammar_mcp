@@ -75,7 +75,10 @@ pub(crate) use crate::{
         RemoteRole, SpamThresholds, TEST_NAMESPACE, config, default_id, default_work_dir,
         expand_path,
     },
-    home::{base_dirs, cache_base_dir, check_base_dirs, data_base_dir},
+    home::{
+        TMP_DEFAULT, base_dirs, cache_base_dir, check_base_dirs, data_base_dir, env_dir,
+        home_var, uenv_partner, uenv_standard,
+    },
     scratch::{make_scratch_dirs, remove_scratch_dirs, tmp_dir, transient_dir},
     mcp::ServiceExt,
     nu::FromValue,

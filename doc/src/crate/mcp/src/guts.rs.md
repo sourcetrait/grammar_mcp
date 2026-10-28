@@ -6,9 +6,9 @@ envelope parsed from the NUON text the wire carries into a serde_json Value, so 
 integration tests exercise the handlers without spawning the binary.
 
 THE PROCESS-GLOBAL CONSTRAINT is the thing to hold before writing a test here.
-`CONFIG` is a `OnceLock` and `BASE_DIRS` a `LazyLock` that reads XDG at first
+`CONFIG` is a `OnceLock` and the homes `LazyLock`s that read the environment at first
 access, so every `TestServer` in ONE test binary shares ONE namespace: one id and
-namespace, one XDG root, one equip git repo. Per-FILE isolation is therefore free
+namespace, one data home, one equip git repo. Per-FILE isolation is therefore free
 (each `tests/*.rs` is its own process) while WITHIN a file tests must use unique
 equip names and must not rely on a pristine namespace. A test that genuinely needs
 an empty namespace belongs in its own binary or in the system crate.
@@ -37,10 +37,14 @@ test. Pid reuse only defers a removal by one round.
 
 ## fn ensure_test_config
 The `unsafe` block is sound because the `Once` serializes it AND it runs before
-the first `BASE_DIRS` read - `BASE_DIRS` is only touched inside
-`ensure_substrate` and the cache paths, all of which are reached through a
-`TestServer` constructed after this. That ordering is the entire safety argument,
-so a future caller reaching `BASE_DIRS` earlier would break it.
+the first read of the homes - they are only touched inside `ensure_substrate`
+and the cache paths, all of which are reached through a `TestServer` constructed
+after this. That ordering is the entire safety argument, so a future caller
+reaching a home earlier would break it.
+
+The UENV homes are set beside the XDG ones because the host reads a home's UENV
+variable first (`home.rs`): a runner whose login sets the UENV tree would
+otherwise put every in-process test's state in the user's real data home.
 
 The config is built from `Config::default()` rather than field-by-field so the
 harness picks up every embedded default, `[channel]` included, without restating

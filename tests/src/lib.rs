@@ -32,7 +32,7 @@ pub fn grammar_mcp_bin() -> PathBuf {
     dir.join("grammar-mcp")
 }
 
-/// Run the binary once as a subprocess, its XDG state under `scratch`.
+/// Run the binary once as a subprocess, its homes under `scratch`.
 ///
 /// For the `cli` surface or a check of a failed start; the output is captured,
 /// the `cli` surface printing its envelope's NUON text.
@@ -50,6 +50,8 @@ pub fn run_output_env(scratch: &Path, args: &[&str], envs: &[(&str, &str)]) -> O
         .args(args)
         .env("XDG_DATA_HOME", &data)
         .env("XDG_CACHE_HOME", &cache)
+        .env("UENV_USR_DATA", &data)
+        .env("UENV_USR_CACHE", &cache)
         .envs(envs.iter().copied())
         .output()
         .expect("run grammar-mcp")
@@ -87,7 +89,7 @@ impl Drop for Host {
 }
 
 impl Host {
-    /// Spawn with XDG state under `scratch/{data,cache}` and no extra CLI args.
+    /// Spawn with its homes under `scratch/{data,cache}` and no extra CLI args.
     pub fn spawn(scratch: &Path) -> Self {
         Self::spawn_full(scratch, &[], &[])
     }
@@ -161,6 +163,8 @@ impl Host {
         cmd.args(args)
             .env("XDG_DATA_HOME", &data_home)
             .env("XDG_CACHE_HOME", &cache_home)
+            .env("UENV_USR_DATA", &data_home)
+            .env("UENV_USR_CACHE", &cache_home)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(stderr);
@@ -192,12 +196,12 @@ impl Host {
         self.child.id()
     }
 
-    /// The XDG_DATA_HOME the child was spawned with (root of its namespace subtree).
+    /// The data home the child was spawned with, the root of its namespace's tree.
     pub fn data_home(&self) -> &Path {
         &self.data_home
     }
 
-    /// The XDG_CACHE_HOME the child was spawned with.
+    /// The cache home the child was spawned with.
     pub fn cache_home(&self) -> &Path {
         &self.cache_home
     }

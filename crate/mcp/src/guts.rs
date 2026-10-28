@@ -32,7 +32,7 @@ fn sweep_dead_test_namespaces(temp: &std::path::Path) {
 #[cfg(not(target_os = "linux"))]
 fn sweep_dead_test_namespaces(_temp: &std::path::Path) {}
 
-/// Point the XDG roots at a per-binary temp dir and seed CONFIG, once.
+/// Point the homes at a per-binary temp dir and seed CONFIG, once.
 fn ensure_test_config() {
     TEST_CONFIG.call_once(|| {
         let temp = std::env::temp_dir();
@@ -43,6 +43,8 @@ fn ensure_test_config() {
         unsafe {
             std::env::set_var("XDG_DATA_HOME", root.join("data"));
             std::env::set_var("XDG_CACHE_HOME", root.join("cache"));
+            std::env::set_var("UENV_USR_DATA", root.join("data"));
+            std::env::set_var("UENV_USR_CACHE", root.join("cache"));
         }
         let mut config = Config::default();
         config.id = "test".to_string();

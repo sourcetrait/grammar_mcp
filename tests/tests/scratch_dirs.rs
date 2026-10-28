@@ -13,16 +13,17 @@ use sourcetrait_common::testing::prelude::*;
 
 static TESTING: testing::Module = testing::module!(Integration, { .using_temp_dir() });
 
-/// A test's own temporary and runtime directories, private as the platform's are.
+/// A test's own directory, private as the platform's are.
+fn private_dir(dir: PathBuf) -> PathBuf {
+    std::fs::create_dir_all(&dir).expect("a base directory");
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))
+        .expect("the base's mode");
+    dir
+}
+
+/// A test's own temporary and runtime directories.
 fn bases(root: &Path) -> (PathBuf, PathBuf) {
-    let tmp = root.join("tmp");
-    let run = root.join("run");
-    for dir in [&tmp, &run] {
-        std::fs::create_dir_all(dir).expect("a base directory");
-        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
-            .expect("the base's mode");
-    }
-    (tmp, run)
+    (private_dir(root.join("tmp")), private_dir(root.join("run")))
 }
 
 /// A path as the env a host is spawned with takes it.
@@ -30,12 +31,19 @@ fn text(path: &Path) -> &str {
     path.to_str().expect("a UTF-8 path")
 }
 
-/// A host whose `TMPDIR` and `XDG_RUNTIME_DIR` name `tmp` and `run`.
+/// A host whose UENV homes name `tmp` and `run`, the standard ones decoys.
 fn spawn_on(scratch: &Path, id: &str, tmp: &Path, run: &Path) -> Host {
+    let decoy_tmp = private_dir(scratch.join("decoy").join("tmp"));
+    let decoy_run = private_dir(scratch.join("decoy").join("run"));
     Host::spawn_full(
         scratch,
         &["--id", id],
-        &[("TMPDIR", text(tmp)), ("XDG_RUNTIME_DIR", text(run))],
+        &[
+            ("UENV_USR_TMP", text(tmp)),
+            ("UENV_USR_TRANSIENT", text(run)),
+            ("TMPDIR", text(&decoy_tmp)),
+            ("XDG_RUNTIME_DIR", text(&decoy_run)),
+        ],
     )
 }
 
@@ -50,6 +58,15 @@ fn scratch_dirs(host: &mut Host) -> (PathBuf, PathBuf) {
         )
     };
     (field("tmp"), field("transient"))
+}
+
+/// The scratch directories `base` holds.
+fn scratch_in(base: &Path) -> usize {
+    std::fs::read_dir(base)
+        .expect("the base reads")
+        .flatten()
+        .filter(|entry| entry.file_name().to_string_lossy().starts_with("grammar-mcp."))
+        .count()
 }
 
 /// A private directory in `base`, under the sweep's prefix, marked by its host.
@@ -76,14 +93,20 @@ fn assert_scratch(dir: &Path, base: &Path, pid: u32) {
     assert_eq!(owner.split_whitespace().count(), 2, "got {owner:?}");
 }
 
+/// The UENV homes come first, so the standard variables' decoys stay empty.
 #[tested]
 fn both_directories_are_private_marked_and_exported() {
     let t = testing::test!({ .using_temp_dir() });
     let (tmp, run) = bases(t.temp_dir());
-    let mut host = spawn_on(&t.temp_dir().join("host"), "scratchown", &tmp, &run);
+    let scratch = t.temp_dir().join("host");
+    let mut host = spawn_on(&scratch, "scratchown", &tmp, &run);
     let (tmp_dir, transient_dir) = scratch_dirs(&mut host);
     assert_scratch(&tmp_dir, &tmp, host.pid());
     assert_scratch(&transient_dir, &run, host.pid());
+    for decoy in ["tmp", "run"] {
+        let decoy = scratch.join("decoy").join(decoy);
+        assert_eq!(scratch_in(&decoy), 0, "nothing in {}", decoy.display());
+    }
 
     let resp = host.execute(
         "def execute [data: nothing]: nothing -> record<tmp: string, transient: string> { \
@@ -103,7 +126,27 @@ fn both_directories_are_private_marked_and_exported() {
     );
 }
 
-/// With no `XDG_RUNTIME_DIR`, transient files go under the temporary directory.
+/// With no UENV homes, `TMPDIR` and `XDG_RUNTIME_DIR` name the bases.
+#[tested]
+fn the_standard_variables_stand_behind_the_uenv_ones() {
+    let t = testing::test!({ .using_temp_dir() });
+    let (tmp, run) = bases(t.temp_dir());
+    let mut host = Host::spawn_full(
+        &t.temp_dir().join("host"),
+        &["--id", "scratchstd"],
+        &[
+            ("UENV_USR_TMP", ""),
+            ("UENV_USR_TRANSIENT", ""),
+            ("TMPDIR", text(&tmp)),
+            ("XDG_RUNTIME_DIR", text(&run)),
+        ],
+    );
+    let (tmp_dir, transient_dir) = scratch_dirs(&mut host);
+    assert_scratch(&tmp_dir, &tmp, host.pid());
+    assert_scratch(&transient_dir, &run, host.pid());
+}
+
+/// With no runtime directory, transient files go under the temporary one.
 ///
 /// The host warns of it, as the XDG spec asks.
 #[tested]
@@ -114,7 +157,11 @@ fn transient_files_fall_back_to_the_temporary_directory() {
     let mut host = Host::spawn_logged(
         &t.temp_dir().join("host"),
         &["--id", "scratchfall"],
-        &[("TMPDIR", text(&tmp)), ("XDG_RUNTIME_DIR", "")],
+        &[
+            ("UENV_USR_TMP", text(&tmp)),
+            ("UENV_USR_TRANSIENT", ""),
+            ("XDG_RUNTIME_DIR", ""),
+        ],
         &log,
     );
     let (tmp_dir, transient_dir) = scratch_dirs(&mut host);
@@ -125,7 +172,7 @@ fn transient_files_fall_back_to_the_temporary_directory() {
     assert!(stderr.contains("XDG_RUNTIME_DIR"), "the fallback is warned of; got {stderr:?}");
 }
 
-/// A `TMPDIR` naming no directory fails the start.
+/// A temporary directory that doesn't exist fails the start.
 ///
 /// The platform's directory is checked, never made.
 #[tested]
@@ -135,7 +182,7 @@ fn a_missing_temporary_directory_fails_the_start() {
     let out = run_output_env(
         &t.temp_dir().join("host"),
         &["--id", "scratchmiss", "cli", "interface", "interface info"],
-        &[("TMPDIR", text(&missing))],
+        &[("UENV_USR_TMP", text(&missing))],
     );
     assert_eq!(out.status.code(), Some(2), "the start fails; got {out:?}");
     let stderr = String::from_utf8_lossy(&out.stderr);

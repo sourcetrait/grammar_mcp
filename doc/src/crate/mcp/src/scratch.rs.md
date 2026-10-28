@@ -10,10 +10,6 @@ inside it to keep two hosts apart. The split follows the XDG Base Directory
 spec, which keeps larger files out of `XDG_RUNTIME_DIR`, since it may sit in
 memory that cannot be swapped out.
 
-## const TMP_DEFAULT
-Where the temporary directory sits when `TMPDIR` names none, as Rust's own
-`temp_dir` has it.
-
 ## const SCRATCH_PREFIX
 The sweep's match: a directory not carrying it is never a scratch directory, so
 the sweep cannot touch anything else in a shared base.
@@ -32,12 +28,14 @@ The bulk directory beside the transient one. Both always exist, so a definition
 reads either without asking which the host could make.
 
 ## fn make_scratch_dirs
-The bulk directory goes in the temporary directory, `TMPDIR` or `/tmp`; the
-transient one in `XDG_RUNTIME_DIR`, or, where that names no directory, beside
-the bulk one with a warning, the fallback the XDG spec asks for. Each base is
-swept first, so a host's start is what cleans after a host killed outright,
-which runs no exit hook; a base the two share is swept once. A base that does
-not exist fails the start: a platform's directory is checked, never made.
+The bulk directory goes in the temporary directory, `UENV_USR_TMP`, `TMPDIR`,
+or `/tmp`; the transient one in the runtime directory, `UENV_USR_TRANSIENT` or
+`XDG_RUNTIME_DIR`, or, where neither names one, beside the bulk one with a
+warning, the fallback the XDG spec asks for. Both are read as every home is
+(`home.rs`). Each base is swept first, so a host's start is what cleans after a
+host killed outright, which runs no exit hook; a base the two share is swept
+once. A base that does not exist fails the start: a platform's directory is
+checked, never made.
 
 A transient directory that cannot be made takes the bulk one with it, so a
 failed start leaves neither.
@@ -52,11 +50,6 @@ directory.
 ## fn remove_scratch_dirs
 Every ordinary end calls it, the server's, the one-shot's, a failed start's, and
 a signal's (`run.rs`, `server/run.rs`). A directory already gone is no error.
-
-## fn env_dir
-The XDG spec has a relative path in its variables ignored, and `TMPDIR` is held
-to the same. An empty value reads as unset, and a relative one is reported as
-ignored, so a misconfiguration shows rather than quietly moving the files.
 
 ## fn make_dir
 `tempfile`'s builder, as `mkdtemp` makes one: the name unguessable and the mode

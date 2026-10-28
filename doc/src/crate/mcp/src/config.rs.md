@@ -171,15 +171,17 @@ error naming the variable, rather than a puzzle at first use much later.
 The expansion is `shellexpand::full_with_context` behind sourcetrait_common's
 guard idiom (see agnostic's `XdgDir::homed`); the dependency's version spec
 mirrors common's (`"3"`, no features). The context hits the real environment
-first and only then falls back to `spec_default`, so a set variable always wins
+first and only then falls back to `var_default`, so a set variable always wins
 and the box environment simply overrides the defaults - the same relationship
 XDG itself defines. A file naming `$XDG_DATA_HOME` therefore loads on a machine
-that leaves it unset.
+that leaves it unset, and one naming `$UENV_USR_DATA` on a machine without the
+UENV tree. An empty variable reads as unset, as the XDG spec has it for its
+own, rather than expanding a path onto the root.
 
 An unknown variable returns `Err`, never `Ok(None)`: shellexpand leaves an
 `Ok(None)` reference literally unexpanded in the output, which would pass a
 `$VAR` path through as a literal. The function invents no value for a variable
-outside the XDG four.
+outside the homes.
 
 ## fn home_dir
 `$HOME` read per call rather than through `BASE_DIRS`: `BaseDirs` snapshots
@@ -187,11 +189,16 @@ its environment at first construction, and `expand_path` runs inside
 `set_cli_env_path` before the CliEnv overrides land, so touching the LazyLock
 here would freeze pre-override state into every later path.
 
+## fn var_default
+A UENV home stands in for itself with the standard variable behind it, then
+with that variable's default, the order the host reads every home in
+(`home.rs`).
+
 ## fn spec_default
 The four homes the XDG base directory spec defines, each at its default under
-`$HOME`, and nothing beyond them. Hardcoded in the mcp for now: the expansion
-eventually lives in sourcetrait_agnostic, whose `XdgDir` keeps its default
-constants private (ExpandOntoAgnostic).
+`$HOME`, and `TMPDIR` at `/tmp`, and nothing beyond them. Hardcoded in the mcp
+for now: the expansion eventually lives in sourcetrait_agnostic, whose `XdgDir`
+keeps its default constants private (ExpandOntoAgnostic).
 
 ## enum DeniableTool
 The four tools, and an interface command by its words: `--deny 'purview

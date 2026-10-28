@@ -8,16 +8,17 @@ skill; equip authoring is in grammar-mcp-dev.
 
 ## In a definition
 - `$env.NONCE`: this call's nonce. `$env.EQUIP_ID`, `EQUIP_NAMESPACE`, and
-  `EQUIP_WORK_DIR`: the host's. `$env.EQUIP_SHM_DIR`: its scratch directory.
+  `EQUIP_WORK_DIR`: the host's. `$env.EQUIP_TMP`: its bulk scratch directory;
+  `$env.EQUIP_TRANSIENT`: its directory for small runtime files.
 - Import a lib's or a rig's module by its path, never an equip's root:
   `use equip/<author>/<name>/lib/<module>`, then `<module> <export> ...`.
 - A check reports at most three errors at a time; fix them and resubmit.
 - `thread::dispatch`: the eval pool was busy; retry.
 
 ## Bulk
-A result carries a summary. Bulk goes to a file under `$env.EQUIP_SHM_DIR`,
-its path relative to it in a field named `*_shm`. The directory is the
-host's own, gone when the host ends; `interface info`'s `shm_dir` names it.
+A result carries a summary. Bulk goes to a file under `$env.EQUIP_TMP`, its
+path relative to it in a field named `*_tmp`. The directory is the host's
+own, gone when the host ends; `interface info`'s `tmp` names it.
 
 ## grimm
 The commands a definition reaches the host with:

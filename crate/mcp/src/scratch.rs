@@ -2,9 +2,6 @@
 use crate::*;
 use std::os::unix::fs::PermissionsExt;
 
-/// The temporary directory where `TMPDIR` names none.
-const TMP_DEFAULT: &str = "/tmp";
-
 /// A scratch directory's name prefix, which the sweep matches.
 const SCRATCH_PREFIX: &str = "grammar-mcp.";
 
@@ -22,7 +19,7 @@ static SCRATCH: OnceLock<ScratchDirs> = OnceLock::new();
 pub(crate) struct ScratchDirs {
     /// Bulk, under the temporary directory: a definition's `$env.EQUIP_TMP`.
     pub(crate) tmp: PathBuf,
-    /// Small runtime files, under `XDG_RUNTIME_DIR`: `$env.EQUIP_TRANSIENT`.
+    /// Small runtime files, under the runtime directory: `$env.EQUIP_TRANSIENT`.
     pub(crate) transient: PathBuf,
 }
 
@@ -34,7 +31,8 @@ pub(crate) fn make_scratch_dirs() -> Result<ScratchDirs, String> {
     let tmp_base = tmp_base();
     let transient_base = runtime_base().unwrap_or_else(|| {
         eprintln!(
-            "grammar: XDG_RUNTIME_DIR names no directory; transient files go under {}",
+            "grammar: neither UENV_USR_TRANSIENT nor XDG_RUNTIME_DIR names a directory; \
+             transient files go under {}",
             tmp_base.display(),
         );
         tmp_base.clone()
@@ -74,27 +72,14 @@ pub(crate) fn remove_scratch_dirs() {
     }
 }
 
-/// The temporary directory: `TMPDIR` where it names one, else `/tmp`.
+/// The temporary directory: `UENV_USR_TMP`, else `TMPDIR`, else `/tmp`.
 fn tmp_base() -> PathBuf {
-    env_dir("TMPDIR").unwrap_or_else(|| PathBuf::from(TMP_DEFAULT))
+    home_var("UENV_USR_TMP").unwrap_or_else(|| PathBuf::from(TMP_DEFAULT))
 }
 
-/// `XDG_RUNTIME_DIR` where it names a directory.
+/// The runtime directory: `UENV_USR_TRANSIENT`, else `XDG_RUNTIME_DIR`.
 fn runtime_base() -> Option<PathBuf> {
-    env_dir("XDG_RUNTIME_DIR")
-}
-
-/// The absolute path a variable holds; an empty or a relative one is ignored.
-fn env_dir(name: &str) -> Option<PathBuf> {
-    let value = std::env::var_os(name)?;
-    let dir = PathBuf::from(&value);
-    if dir.is_absolute() {
-        return Some(dir);
-    }
-    if !value.is_empty() {
-        eprintln!("grammar: {name} is ignored, not an absolute path: {}", dir.display());
-    }
-    None
+    home_var("UENV_USR_TRANSIENT")
 }
 
 /// One scratch directory in `base`, mode 0700 from creation, its owner marked.

@@ -423,12 +423,14 @@ pub(crate) fn expand_path(raw: &Path) -> Result<PathBuf, String> {
         return Ok(raw.to_path_buf());
     }
     shellexpand::full_with_context(lossy.as_ref(), home_dir, |var: &str| {
-        if let Ok(value) = std::env::var(var) {
+        if let Ok(value) = std::env::var(var)
+            && !value.is_empty()
+        {
             return Ok(Some(value));
         }
-        match spec_default(var) {
+        match var_default(var) {
             Some(default) => Ok(Some(default.to_string_lossy().into_owned())),
-            None => Err("environment variable not found".to_string()),
+            None => Err("environment variable unset or empty".to_string()),
         }
     })
     .map(|expanded| PathBuf::from(expanded.as_ref()))
@@ -440,9 +442,18 @@ fn home_dir() -> Option<String> {
     std::env::var("HOME").ok()
 }
 
-/// The XDG base directory spec's default for an unset variable of its own.
+/// An unset variable's stand-in: a UENV home's standard variable, else a default.
+pub(crate) fn var_default(var: &str) -> Option<PathBuf> {
+    match uenv_standard(var) {
+        Some(standard) => env_dir(standard).or_else(|| spec_default(standard)),
+        None => spec_default(var),
+    }
+}
+
+/// The default for an unset standard home: the XDG spec's, and `TMPDIR`'s `/tmp`.
 pub(crate) fn spec_default(var: &str) -> Option<PathBuf> {
     let home_relative = match var {
+        "TMPDIR" => return Some(PathBuf::from(TMP_DEFAULT)),
         "XDG_CACHE_HOME" => ".cache",
         "XDG_CONFIG_HOME" => ".config",
         "XDG_DATA_HOME" => ".local/share",

@@ -1,5 +1,10 @@
 # run.rs
 
+## fn set_cli_env_path
+The flag's value goes to the UENV variable in front of its home as well: the
+host reads a home's UENV variable first (`home.rs`), so a flag that set the
+standard variable alone would lose to a UENV tree in the environment.
+
 ## fn set_cli_env
 A `--xdg-*` value that does not expand is the operator's error: it comes back as
 an `Err` and the host exits 2 before anything reads the environment.

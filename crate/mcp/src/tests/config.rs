@@ -134,8 +134,9 @@ fn an_identity_missing_a_file_is_rejected() {
 #[test]
 fn an_unset_variable_fails_the_load() {
     // Expansion happens at the boundary, so an unresolvable path is a config error
-    // rather than something that surfaces much later at first use. Only an XDG home
-    // falls back to its spec default; any other unset variable is unresolvable.
+    // rather than something that surfaces much later at first use. Only a home, a
+    // UENV one or a standard one, falls back; any other unset variable is
+    // unresolvable.
     let err = from_text(
         "[identity]\ncert_file = \"$GRAMMAR_TEST_UNSET_VAR/self.pem\"\nkey_file = \"/k\"\n",
     )
@@ -145,8 +146,8 @@ fn an_unset_variable_fails_the_load() {
 
 #[test]
 fn the_xdg_homes_carry_spec_defaults() {
-    // The expansion context falls back to these when a variable is unset; every other
-    // variable has none and stays a load error.
+    // The expansion context falls back to these when a variable is unset or empty;
+    // every other variable has none and stays a load error.
     let home = PathBuf::from(std::env::var("HOME").expect("HOME set"));
     for (var, home_relative) in [
         ("XDG_CACHE_HOME", ".cache"),
@@ -167,6 +168,35 @@ fn the_xdg_homes_carry_spec_defaults() {
             "{var} has no default and stays a load error",
         );
     }
+}
+
+#[test]
+fn a_uenv_home_stands_in_front_of_its_standard_variable() {
+    for (uenv, standard) in [
+        ("UENV_USR_CACHE", "XDG_CACHE_HOME"),
+        ("UENV_USR_CONFIG", "XDG_CONFIG_HOME"),
+        ("UENV_USR_DATA", "XDG_DATA_HOME"),
+        ("UENV_USR_STATE", "XDG_STATE_HOME"),
+        ("UENV_USR_TMP", "TMPDIR"),
+        ("UENV_USR_TRANSIENT", "XDG_RUNTIME_DIR"),
+    ] {
+        assert_eq!(
+            crate::home::uenv_standard(uenv),
+            Some(standard),
+            "{uenv} stands in front of {standard}",
+        );
+        assert_eq!(crate::home::uenv_partner(standard), Some(uenv), "and {standard} behind {uenv}");
+    }
+    assert_eq!(
+        crate::home::uenv_standard("UENV_USR_SECRET"),
+        None,
+        "a UENV tree with no standard variable stands alone",
+    );
+    assert_eq!(
+        crate::config::spec_default("TMPDIR"),
+        Some(PathBuf::from("/tmp")),
+        "TMPDIR defaults to /tmp",
+    );
 }
 
 #[test]

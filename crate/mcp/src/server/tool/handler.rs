@@ -45,14 +45,16 @@ impl mcp::ServerHandler for NuSh {
             .with_instructions(format!(
                 "{MCP_DOC}\n\
                  Evaluation artifacts are cached at \
-                 $XDG_CACHE_HOME/grammar/mcp/{id}/{namespace}/{{execute,calls}}/<nonce>/{{stdout,stderr}}; \
+                 {cache}/{{execute,calls}}/<nonce>/{{stdout,stderr}}; \
                  an execute call's definition co-locates at \
-                 $XDG_CACHE_HOME/grammar/mcp/{id}/{namespace}/execute/<nonce>/definition.nu \
+                 {cache}/execute/<nonce>/definition.nu \
                  (the rerun(nonce) handle). \
                  Installed equips live in a signed git repo at \
-                 $XDG_DATA_HOME/grammar/mcp/{id}/{namespace}/equip/; signing keypair at \
-                 $XDG_DATA_HOME/grammar/mcp/{id}/{namespace}/keypair/. \
+                 {data}/equip/; signing keypair at \
+                 {data}/keypair/. \
                  This server's namespace: id `{id}`, namespace `{namespace}`.",
+                cache = cache_base_dir().display(),
+                data = data_base_dir().display(),
             ))
     }
 }
