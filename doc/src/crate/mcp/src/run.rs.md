@@ -48,9 +48,9 @@ one-shot CLI alike, because both build engines: its params from the config, mcp
 its host, and nushell's config dirs, which every engine reads, resolved
 (`server/host.rs`). A failure there exits 2, as a bad config does.
 
-The engine's start makes the scratch directory (`shm.rs`), so every end after
-it removes the directory again: a failed start, the server's end and the
-one-shot's alike. A signal's end removes it in its own sweep
+The engine's start makes the scratch directories (`scratch.rs`), so every end
+after it removes them again: a failed start, the server's end and the
+one-shot's alike. A signal's end removes them in its own sweep
 (`server/run.rs`).
 
 Exit code 2 is the operator-input code the one-shot CLI already uses, so a

@@ -9,8 +9,10 @@ pub struct EngineParams {
     pub namespace: String,
     /// The host's work dir, a definition's `$env.EQUIP_WORK_DIR`.
     pub work_dir: PathBuf,
-    /// The host's private scratch directory, a definition's `$env.EQUIP_SHM_DIR`.
-    pub shm_dir: PathBuf,
+    /// The host's bulk scratch directory, a definition's `$env.EQUIP_TMP`.
+    pub tmp_dir: PathBuf,
+    /// The host's transient scratch directory, a definition's `$env.EQUIP_TRANSIENT`.
+    pub transient_dir: PathBuf,
     /// The namespace's data home: the lib dirs and the plugin registry.
     pub data_home: PathBuf,
     /// The namespace's cache home: the call logs and the cached definitions.

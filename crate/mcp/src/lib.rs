@@ -66,7 +66,7 @@ pub(crate) mod cli;
 pub(crate) mod config;
 pub(crate) mod consts;
 pub(crate) mod home;
-pub(crate) mod shm;
+pub(crate) mod scratch;
 pub mod guts;
 
 pub(crate) use crate::{
@@ -76,7 +76,7 @@ pub(crate) use crate::{
         expand_path,
     },
     home::{base_dirs, cache_base_dir, check_base_dirs, data_base_dir},
-    shm::{make_shm_dir, remove_shm_dir, shm_dir},
+    scratch::{make_scratch_dirs, remove_scratch_dirs, tmp_dir, transient_dir},
     mcp::ServiceExt,
     nu::FromValue,
     error::error_to_call_result,

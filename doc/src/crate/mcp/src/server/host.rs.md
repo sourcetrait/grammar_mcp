@@ -6,9 +6,10 @@ The engine's start: its parameters from the config, its homes the namespace's
 and the one-shot CLI start it first (`run.rs`), and the test harness once a
 process (`guts.rs`).
 
-The scratch directory is made here, before the engine, because a parameter
-carries it: every definition reads it as `$env.EQUIP_SHM_DIR` (`shm.rs`). A
-directory that cannot be made fails the start, as any other parameter would.
+The scratch directories are made here, before the engine, because parameters
+carry them: every definition reads them as `$env.EQUIP_TMP` and
+`$env.EQUIP_TRANSIENT` (`scratch.rs`). A directory that cannot be made fails the
+start, as any other parameter would.
 
 ## fn ensure_substrate
 The engine's equip store first, then mcp's purview bookkeeping, the plugin

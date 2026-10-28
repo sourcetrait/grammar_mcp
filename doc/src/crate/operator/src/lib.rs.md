@@ -14,5 +14,5 @@ What a manager names: the system, its handle, and its parameters and paths; the
 protocol, the observation it passes and the emergency it gets back, with every
 emergency's struct; the supervisor lines and their range check; the pins, which the
 host's evals pin through; a process's start time, the identity the pins and the host's
-scratch directory share; the subreaper; and the interval the manager observes at.
+scratch directories share; the subreaper; and the interval the manager observes at.
 Everything else is the crate's own.

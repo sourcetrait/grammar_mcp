@@ -17,7 +17,7 @@ The signal sweep is installed before serving. Without it a signalled host drops
 its eval children and its background jobs onto the box unreaped, because the
 stdio path only ever learns about a clean client disconnect. None of it reaches
 SIGKILL - that is what the host lock is for, and the next host's sweep of the
-scratch directories (`shm.rs`).
+scratch directories (`scratch.rs`).
 
 Nothing from outside panics it. The substrate, mcp's system and its components,
 the stdio handshake, and the service's join each come back as an `Err` naming
@@ -53,6 +53,6 @@ It is also what makes the handler observable. A swept host reports
 default action reports `code() == None` and `signal() == Some(signo)`. Only the
 former proves the sweep ran, which is what the system test measures.
 
-The scratch directory goes last, after the components that write into it have
+The scratch directories go last, after the components that write into them have
 stopped: `process::exit` never returns to `serve_or_oneshot`, whose ordinary end
-would remove it otherwise.
+would remove them otherwise.

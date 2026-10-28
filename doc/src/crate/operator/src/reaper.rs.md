@@ -36,10 +36,11 @@ process that has already gone.
 Same last-')' counting as above, so field 22 is index 19.
 
 ## fn process_start_time
-Public because mcp marks its scratch directory with the same identity: a host's
-start sweeps a directory only when its marker's pair no longer names a live
-process (mcp's `shm.rs`). Off Linux it is None, so a pin is never proven live
-and a scratch directory carries no marker, which the sweep leaves alone.
+Public because mcp marks its scratch directories with the same identity: a
+host's start sweeps a directory only when its marker's pair no longer names a
+live process (mcp's `scratch.rs`). Off Linux it is None, so a pin is never
+proven live and a scratch directory carries no marker, which the sweep leaves
+alone.
 
 ## struct OrphanReaper
 The subreaper is taken for its attachment property, but the same syscall

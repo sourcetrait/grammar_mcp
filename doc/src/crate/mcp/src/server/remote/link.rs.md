@@ -126,7 +126,7 @@ relay (an unverified Channel among the causes) is logged on the receiver alone,
 never reported to the sender as Unsent. The slot-map is what makes the files
 exist on disk before the agent observes the emission. land_file_chunk appends
 under <inbox>/<peer_nom>/<id>/<dest> - the same inbox the Channel's own
-attachments use, in the host's scratch directory, so a relayed packet's
+attachments use, in the host's bulk scratch directory, so a relayed packet's
 `attached` ref resolves for the local agent.
 
 relay_to_channel refuses a model under `mcp/` first, `reserved_model`, as the

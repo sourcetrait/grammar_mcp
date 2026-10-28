@@ -74,7 +74,7 @@ async fn serve_or_oneshot(cli: Cli) -> process::ExitCode {
     CONFIG.set(config).expect("CONFIG set once at startup");
     if let Err(reason) = init_engine() {
         eprintln!("{reason}");
-        remove_shm_dir();
+        remove_scratch_dirs();
         return process::ExitCode::from(2);
     }
     let code = match command {
@@ -87,7 +87,7 @@ async fn serve_or_oneshot(cli: Cli) -> process::ExitCode {
         },
         Some(CliCmd::Cli { tool }) => run_oneshot(tool).await,
     };
-    remove_shm_dir();
+    remove_scratch_dirs();
     code
 }
 

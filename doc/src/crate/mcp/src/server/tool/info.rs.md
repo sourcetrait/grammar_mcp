@@ -16,9 +16,13 @@ same pair is readable ambiently inside a definition as `$env.EQUIP_ID` /
 A changed value across two calls is how an agent learns the server restarted. A
 pid cannot serve that, because pids are reused.
 
-### field shm_dir
-The outside view of `$env.EQUIP_SHM_DIR`, as `id` is of `$env.EQUIP_ID`: where
-the agent itself reads what a definition left in the scratch directory.
+### field tmp
+The outside view of `$env.EQUIP_TMP`, as `id` is of `$env.EQUIP_ID`: where the
+agent itself reads the bulk a definition left in the scratch directory.
+
+### field transient
+The outside view of `$env.EQUIP_TRANSIENT`, the host's directory for small
+runtime files.
 
 ### field nu_version
 Baked by `build.rs` from the workspace lockfile's `nu-protocol` pin, so it

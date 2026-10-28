@@ -71,7 +71,7 @@ fn spawn_signal_sweep(system: Arc<McpHandle>) {
         };
         close_channel_for_shutdown().await;
         system.shutdown().await;
-        remove_shm_dir();
+        remove_scratch_dirs();
         process::exit(128 + signo);
     });
 }

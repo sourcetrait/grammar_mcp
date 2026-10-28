@@ -16,8 +16,8 @@ blame. Above the cap the frame is dropped whole and the watch closes.
 ## fn inbox_dir
 The one composition point both producers share: a channel's attachments and a
 remote link's landed files meet here, so a relayed packet's refs resolve for
-the local agent. It sits in the host's own scratch directory (`shm.rs`), which
-is private to the process, so the path needs no host id to keep two hosts
+the local agent. It sits in the host's bulk scratch directory (`scratch.rs`),
+which is private to the process, so the path needs no host id to keep two hosts
 apart, and it goes with the directory when the host ends.
 
 ## the auto-spill primitives (NOTIFICATION_CAP, event_overflows, event_spill_pointer)

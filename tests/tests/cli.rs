@@ -20,17 +20,19 @@ fn cli_info_prints_its_envelope() {
 }
 
 #[tested]
-fn cli_removes_its_scratch_directory_at_the_end() {
+fn cli_removes_its_scratch_directories_at_the_end() {
     let t = testing::test!({ .using_temp_dir() });
     let out = run_output(t.temp_dir(), &["--id", "cid", "cli", "interface", "interface info"]);
     assert!(out.status.success(), "cli interface info should exit 0; got {out:?}");
     let v = stdout_envelope(&out);
-    let shm_dir = v["result"]["shm_dir"].as_str().unwrap_or_default();
-    assert!(!shm_dir.is_empty(), "a one-shot run makes its scratch directory too; got {v}");
-    assert!(
-        !std::path::Path::new(shm_dir).exists(),
-        "a one-shot run removes its scratch directory as it ends; {shm_dir} remains",
-    );
+    for field in ["tmp", "transient"] {
+        let dir = v["result"][field].as_str().unwrap_or_default();
+        assert!(!dir.is_empty(), "a one-shot run makes its {field} directory too; got {v}");
+        assert!(
+            !std::path::Path::new(dir).exists(),
+            "a one-shot run removes its {field} directory as it ends; {dir} remains",
+        );
+    }
 }
 
 #[tested]
@@ -160,8 +162,10 @@ fn cli_interface_refusal_exits_one() {
     assert!(v["nonce"].as_str().is_some(), "the refusal carries its nonce; got {v}");
 }
 
-/// Deny gates an agent's host: the operator's one-shot path keeps the whole
-/// interface, a denied command and a denied tool alike.
+/// Deny gates an agent's host, never the operator's one-shot path.
+///
+/// The one-shot path keeps the whole interface, a denied command and a denied
+/// tool alike.
 #[tested]
 fn cli_deny_does_not_reach_the_one_shot_path() {
     let t = testing::test!({ .using_temp_dir() });

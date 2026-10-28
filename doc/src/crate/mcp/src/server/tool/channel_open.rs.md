@@ -10,8 +10,8 @@ three teardowns - refused 1013, planned 1000, unverified 1008 - stay tellable
 apart.
 
 ## fn ensure_inbox
-The inbox is the scratch directory's (`state.rs`'s `inbox_dir`). Handing its
-path to the channel is what lets the emit path write an attachment without
+The inbox is the bulk scratch directory's (`state.rs`'s `inbox_dir`). Handing
+its path to the channel is what lets the emit path write an attachment without
 composing it again, and the open's result reports it, so the agent learns where
 a spill lands from the same call that gave it the endpoint.
 

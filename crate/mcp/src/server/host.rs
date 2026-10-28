@@ -7,14 +7,16 @@ const UNVERIFIED_EMIT_REASON: &str = "emit before verification";
 
 /// Start the engine on the config's id, namespace, and homes, mcp its host.
 ///
-/// Its scratch directory is made first, since a parameter carries it.
+/// Its scratch directories are made first, since parameters carry them.
 pub(crate) fn init_engine() -> Result<(), String> {
     let cfg = config();
+    let scratch = make_scratch_dirs()?;
     let params = EngineParams {
         id: cfg.id.clone(),
         namespace: cfg.namespace.clone(),
         work_dir: cfg.work_dir.clone(),
-        shm_dir: make_shm_dir()?,
+        tmp_dir: scratch.tmp,
+        transient_dir: scratch.transient,
         data_home: data_base_dir(),
         cache_home: cache_base_dir(),
     };

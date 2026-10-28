@@ -1,5 +1,7 @@
-//! The engine's public face: started on a host of its own, each request answered
-//! through its system. One engine serves the binary, since `init` holds once.
+//! The engine's public face, started on a host of its own.
+//!
+//! Each request is answered through its system. One engine serves the binary,
+//! since `init` holds once.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -69,11 +71,18 @@ impl TestEngine {
             id: "test".to_string(),
             namespace: "engine".to_string(),
             work_dir: root.join("work"),
-            shm_dir: root.join("shm"),
+            tmp_dir: root.join("tmp"),
+            transient_dir: root.join("transient"),
             data_home: root.join("data"),
             cache_home: root.join("cache"),
         };
-        for dir in [&params.work_dir, &params.shm_dir, &params.data_home, &params.cache_home] {
+        for dir in [
+            &params.work_dir,
+            &params.tmp_dir,
+            &params.transient_dir,
+            &params.data_home,
+            &params.cache_home,
+        ] {
             std::fs::create_dir_all(dir).expect("a home for the engine");
         }
         init(params, Box::new(TestHost)).expect("the engine's init");

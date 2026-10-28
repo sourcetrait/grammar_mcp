@@ -19,21 +19,29 @@ use serde_json::{Value, json};
 pub mod remote;
 pub use remote::*;
 
-/// The `grammar-mcp` host binary, resolved as the workspace-bin sibling of the
-/// running test binary's `deps/` dir.
+/// The `grammar-mcp` host binary, beside the running test binary's `deps/`.
+///
+/// The test binary's own path with its file name and `deps/` popped: the
+/// profile's directory, where the binary is built.
 pub fn grammar_mcp_bin() -> PathBuf {
     let mut dir = std::env::current_exe().expect("current_exe");
-    dir.pop(); // drop the test binary file name -> .../deps
+    dir.pop();
     if dir.ends_with("deps") {
-        dir.pop(); // -> .../<profile>
+        dir.pop();
     }
     dir.join("grammar-mcp")
 }
 
-/// Run the binary as a one-shot subprocess (the `cli` surface, or a
-/// startup-failure check), isolating XDG state under `scratch/{data,cache}`.
-/// Returns the captured Output (the `cli` surface prints its envelope's NUON text).
+/// Run the binary once as a subprocess, its XDG state under `scratch`.
+///
+/// For the `cli` surface or a check of a failed start; the output is captured,
+/// the `cli` surface printing its envelope's NUON text.
 pub fn run_output(scratch: &Path, args: &[&str]) -> Output {
+    run_output_env(scratch, args, &[])
+}
+
+/// `run_output` with extra env vars, for a start its environment decides.
+pub fn run_output_env(scratch: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
     let data = scratch.join("data");
     let cache = scratch.join("cache");
     std::fs::create_dir_all(&data).expect("mkdir data");
@@ -42,6 +50,7 @@ pub fn run_output(scratch: &Path, args: &[&str]) -> Output {
         .args(args)
         .env("XDG_DATA_HOME", &data)
         .env("XDG_CACHE_HOME", &cache)
+        .envs(envs.iter().copied())
         .output()
         .expect("run grammar-mcp")
 }
@@ -55,8 +64,7 @@ pub fn stdout_envelope(out: &Output) -> Value {
     nuon_to_json(stdout_str(out).trim())
 }
 
-/// A spawned `grammar-mcp` server child, driven over JSON-RPC stdio. Killed on
-/// Drop.
+/// A `grammar-mcp` server child driven over JSON-RPC stdio, killed on drop.
 pub struct Host {
     child: Child,
     stdin: std::process::ChildStdin,
@@ -64,9 +72,10 @@ pub struct Host {
     next_id: u64,
     data_home: PathBuf,
     cache_home: PathBuf,
-    /// Responses read while waiting for a different id, kept by id so a caller can
-    /// fire N concurrent requests and read all N back (read_id would otherwise
-    /// discard any response whose id it is not currently waiting for).
+    /// Responses read while waiting for another id, kept by id.
+    ///
+    /// A caller can send several requests at once and read each back; `read_id`
+    /// would otherwise drop a response whose id it is not waiting for.
     pending: HashMap<u64, Value>,
 }
 
@@ -88,7 +97,7 @@ impl Host {
         Self::spawn_full(scratch, args, &[])
     }
 
-    /// Spawn with extra CLI args AND extra env vars (e.g. `USER`, `HOME`).
+    /// Spawn with extra CLI args and extra env vars, such as `USER` or `HOME`.
     pub fn spawn_full(scratch: &Path, args: &[&str], envs: &[(&str, &str)]) -> Self {
         Self::spawn_core(scratch, args, envs, None, None)
     }
@@ -103,14 +112,18 @@ impl Host {
         Self::spawn_core(scratch, args, envs, None, Some(stderr_log))
     }
 
-    /// Spawn with extra CLI args AND a working directory - for a host whose
-    /// `<cwd>/.grammar/config.toml` (its identity and remotes) must resolve.
+    /// Spawn with extra CLI args in a working directory.
+    ///
+    /// For a host whose `<cwd>/.grammar/config.toml`, its identity and remotes,
+    /// must resolve.
     pub fn spawn_in(scratch: &Path, args: &[&str], cwd: &Path) -> Self {
         Self::spawn_core(scratch, args, &[], Some(cwd), None)
     }
 
-    /// A host with its stderr in `stderr_log` and nothing sent: the test owns
-    /// the first message, as a client probing before `initialize` does.
+    /// A host with its stderr in `stderr_log` and nothing sent.
+    ///
+    /// The test owns the first message, as a client probing before `initialize`
+    /// does.
     pub fn spawn_uninitialized(scratch: &Path, stderr_log: &Path) -> Self {
         Self::start(scratch, &[], &[], None, Some(stderr_log))
     }
@@ -171,8 +184,10 @@ impl Host {
         }
     }
 
-    /// The spawned host's pid - for tests that inspect its process tree from /proc
-    /// (e.g. that it reaps the orphans the subreaper adopts).
+    /// The spawned host's pid.
+    ///
+    /// For a test that inspects its process tree from `/proc`, such as that it
+    /// reaps the orphans the subreaper adopts.
     pub fn pid(&self) -> u32 {
         self.child.id()
     }
@@ -189,9 +204,9 @@ impl Host {
 
     /// Signal the host and wait for it to exit, returning its status.
     ///
-    /// The distinction this exists to measure: a host whose handler RAN exits on its
+    /// The distinction this exists to measure: a host whose handler ran exits on its
     /// own terms (`code() == Some(128 + signo)`), while one that merely took the
-    /// signal's default action is reported as killed BY the signal (`code() == None`,
+    /// signal's default action is reported as killed by the signal (`code() == None`,
     /// `signal() == Some(signo)`). Only the former proves the shutdown sweep ran.
     pub fn signal_and_wait(
         &mut self,
@@ -210,13 +225,14 @@ impl Host {
         }
     }
 
-    /// `read_id`, but tolerant of the host DYING mid-request.
+    /// `read_id`, but tolerant of the host dying mid-request.
     ///
     /// `read_id` panics on EOF, which is the right default for a test whose host is
-    /// expected to answer. A test asserting that some input does NOT kill the host
-    /// needs the other behaviour: EOF is the OBSERVATION, and panicking on it throws
+    /// expected to answer. A test asserting that some input does not kill the host
+    /// needs the other behaviour: EOF, the host's stdout closed, is what a dead host
+    /// looks like from here, the observation itself, and panicking on it throws
     /// away the chance to report what actually happened. Pair it with
-    /// `wait_for_exit` + `describe_exit` to name the death mode.
+    /// `wait_for_exit` and `describe_exit` to name the death mode.
     pub fn try_read_id(
         &mut self,
         expected_id: u64,
@@ -231,8 +247,6 @@ impl Host {
             }
             let mut line = String::new();
             match self.stdout.read_line(&mut line) {
-                // EOF: the host's stdout closed, which from here is what a dead host
-                // looks like.
                 Ok(0) | Err(_) => return None,
                 Ok(_) => {}
             }
@@ -253,8 +267,9 @@ impl Host {
         }
     }
 
-    /// `try_read_id` for any JSON-RPC id, a string one included, as Claude
-    /// Code's `server-discover-probe-1`.
+    /// `try_read_id` for any JSON-RPC id, a string one included.
+    ///
+    /// Such as Claude Code's `server-discover-probe-1`.
     pub fn try_read_value_id(
         &mut self,
         expected: &Value,
@@ -318,6 +333,11 @@ impl Host {
         self.stdin.flush().expect("flush");
     }
 
+    /// The response to `expected_id`, waited for up to 15 seconds.
+    ///
+    /// A response to another request in flight is kept by id for a later
+    /// `read_id` rather than dropped; a notification, which carries no id, is
+    /// skipped.
     pub fn read_id(&mut self, expected_id: u64) -> Value {
         if let Some(msg) = self.pending.remove(&expected_id) {
             return msg;
@@ -340,13 +360,9 @@ impl Host {
                 .unwrap_or_else(|e| panic!("parse JSON: {e} from {trimmed:?}"));
             match msg.get("id").and_then(|v| v.as_u64()) {
                 Some(id) if id == expected_id => return msg,
-                // A response for another in-flight request (pipelined / concurrent
-                // reads): buffer it by id rather than drop it, so a later
-                // read_id(that_id) finds it.
                 Some(id) => {
                     self.pending.insert(id, msg);
                 }
-                // A notification carries no id; none arrive post-init - skip.
                 None => {}
             }
         }
@@ -372,10 +388,11 @@ impl Host {
         }));
     }
 
-    /// Send a `tools/call` WITHOUT reading its response, returning the request id -
-    /// for pipelined / concurrent requests (e.g. kill mid-call). Read the response
-    /// later with `read_id(id)`. Author-prefixes bare rig names (idempotent), and
-    /// names the `local` host unless the arguments name one.
+    /// Send a `tools/call` without reading its response; the request id.
+    ///
+    /// For requests in flight together, such as a kill mid-call; `read_id(id)`
+    /// reads the response later. A bare rig name is author-prefixed, and the
+    /// `local` host named unless the arguments name one.
     pub fn request(&mut self, tool: &str, args: Value) -> u64 {
         self.request_as_given(tool, author_prefixed(tool, hosted(args)))
     }
@@ -392,8 +409,9 @@ impl Host {
         id
     }
 
-    /// A `tools/call`, author-prefixing bare rig names (idempotent for
-    /// values already carrying an `author/name`).
+    /// A `tools/call`, a bare rig name author-prefixed.
+    ///
+    /// A value already carrying an `author/name` passes unchanged.
     pub fn call(&mut self, tool: &str, args: Value) -> Value {
         let id = self.request(tool, args);
         self.read_id(id)
@@ -415,7 +433,7 @@ impl Host {
         self.read_id(id)
     }
 
-    /// Send an `interface` command WITHOUT reading its response; the request id.
+    /// Send an `interface` command without reading its response; the request id.
     pub fn request_interface(&mut self, command: &str) -> u64 {
         self.request("interface", json!({"command": command}))
     }
@@ -430,8 +448,9 @@ impl Host {
         self.interface(&format!("interface equip {action} {}", nu_literal(source_dir)))
     }
 
-    /// `interface equip new` for `name` under `root`, author-prefixing a bare name;
-    /// the response and the equip's rig source.
+    /// `interface equip new` for `name` under `root`, a bare name author-prefixed.
+    ///
+    /// Returns the response and the equip's rig source.
     pub fn equip_new(&mut self, name: &str, root: &Path) -> (Value, PathBuf) {
         let name = if name.contains('/') {
             name.to_string()
@@ -470,7 +489,7 @@ pub fn equip_source(root: &Path, name: &str) -> PathBuf {
     root.join("equip").join(name)
 }
 
-/// A plugin directory under `root` holding each built plugin under its kind's directory.
+/// A plugin directory under `root`, each built plugin under its kind's directory.
 pub fn bundle_plugins(root: &Path, plugins: &[(&str, &str)]) -> PathBuf {
     let dir = root.join("plugin");
     for (kind, name) in plugins {
@@ -501,7 +520,8 @@ pub fn hosted(mut args: Value) -> Value {
 }
 
 /// Prepend `sourcetrait/` to a bare equip name in a `call`'s namepath.
-/// Idempotent: a value already carrying `/` (an `author/name`) passes through
+///
+/// Idempotent: a value already carrying `/`, an `author/name`, passes through
 /// unchanged, as does a builtin's bare name.
 pub fn author_prefixed(tool: &str, mut args: Value) -> Value {
     if tool == "call"
@@ -531,8 +551,9 @@ pub fn prefixed_namepath(namepath: &str) -> String {
     }
 }
 
-/// A string as a Nu literal in an interface command: single-quoted, or raw
-/// when it holds a quote.
+/// A string as a Nu literal in an interface command.
+///
+/// Single-quoted, or raw when it holds a quote.
 pub fn nu_literal(text: &str) -> String {
     if text.contains('\'') {
         assert!(!text.contains("'#"), "no raw string holds {text:?}");
@@ -544,8 +565,8 @@ pub fn nu_literal(text: &str) -> String {
 
 /// How a child ended, in a form a failure message can carry.
 ///
-/// The distinction is the whole point: a host that EXITED chose to, and its code says
-/// why; a host reported as killed BY a signal was taken down by the kernel, and the
+/// The distinction is the whole point: a host that exited chose to, and its code says
+/// why; a host reported as killed by a signal was taken down by the kernel, and the
 /// signal names the mechanism (SIGSEGV = a memory fault, which for a parser means a
 /// stack overflow far more often than anything else).
 pub fn describe_exit(status: &std::process::ExitStatus) -> String {
@@ -570,10 +591,9 @@ pub fn execute_args(definition: &str, data: &str) -> Value {
     json!({"definition": definition, "data": data})
 }
 
-// ---- envelope / error helpers ----
-
-/// A NUON text as JSON, through the converter `to json` uses; None when it is not
-/// NUON.
+/// A NUON text as JSON, through the converter `to json` uses.
+///
+/// `None` when the text is not NUON.
 pub fn try_nuon_to_json(text: &str) -> Option<Value> {
     let value = nuon::from_nuon(text, None).ok()?;
     let converted = <nu_json::Value as nu_protocol::FromValue>::from_value(value).ok()?;
@@ -585,8 +605,9 @@ pub fn nuon_to_json(text: &str) -> Value {
     try_nuon_to_json(text).unwrap_or_else(|| panic!("not NUON that converts to JSON: {text:?}"))
 }
 
-/// A `tools/call` response's envelope, read from its one NUON text content; null
-/// when it carries none, as a JSON-RPC error does.
+/// A `tools/call` response's envelope, read from its one NUON text content.
+///
+/// Null when it carries none, as a JSON-RPC error does.
 pub fn envelope(resp: &Value) -> Value {
     resp["result"]["content"][0]["text"]
         .as_str()
@@ -639,8 +660,6 @@ pub fn extract_envelope(resp: &Value) -> Option<Value> {
     Some(envelope)
 }
 
-// ---- source-tree fixtures (written into the per-test scratch) ----
-
 pub fn write_source(dir: &Path, rel: &str, contents: &str) {
     let target = dir.join(rel);
     if let Some(parent) = target.parent() {
@@ -649,7 +668,7 @@ pub fn write_source(dir: &Path, rel: &str, contents: &str) {
     std::fs::write(&target, contents).expect("write source");
 }
 
-/// A call's `main` on a record of `data_fields`, returning a record of `result_fields`.
+/// A call's `main` from a record of `data_fields` to one of `result_fields`.
 pub fn valid_function_source(data_fields: &str, result_fields: &str, body: &str) -> String {
     format!(
         "export def main [data: record<{data_fields}>]: nothing -> record<{result_fields}> {{\n{body}\n}}\n",
