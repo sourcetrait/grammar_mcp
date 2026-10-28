@@ -261,12 +261,17 @@ pub(crate) async fn serve_call(
     let data_literal = hold_data(&req.data, &function.data_type, "call")?;
     let (timeout_ms, timeout_literal) = hold_timeout(req.timeout.as_deref(), function.takes_timeout)?;
     let source = build_call_source(
+        &equip_root(),
         &rig,
         &module_path,
         &name,
         &data_literal,
         timeout_literal.as_deref(),
-    );
+    )
+    .map_err(|reason| EngineError::Internal {
+        phase: "call::source".to_string(),
+        reason,
+    })?;
     let pair = req.nonce.into_pair();
     let call = Dispatch {
         nonce: &pair,

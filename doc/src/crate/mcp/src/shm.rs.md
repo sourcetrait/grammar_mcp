@@ -19,13 +19,18 @@ the sweep cannot touch anything else in a shared base.
 The owner's pid and its start time, the identity the operator's pins use
 (`process_start_time`): a pid alone is recycled, and the pair is not.
 
+## const SHM_MODE
+Asked of `tempfile` outright: its directories default to 0777 less the umask,
+which left one 0755 under a 022 umask, though 0700 under the 077 one this was
+first built under. The umask can only narrow the mode asked for, never widen it.
+
 ## fn make_shm_dir
-`mkdtemp`, through `tempfile`, so the name is unguessable and the mode 0700 from
-creation: no other user can enter it, and no other process can claim its name
-first. The sweep runs before it, so a host's start is what cleans after a host
-killed outright, which runs no exit hook. The marker is written after the
-directory exists; a sweep meeting a directory between the two finds no marker
-and leaves it.
+`tempfile`'s builder, as `mkdtemp` makes one: the name unguessable and the mode
+`SHM_MODE` from creation, so no other user can enter it, and no other process
+can claim its name first. The sweep runs before it, so a host's start is what
+cleans after a host killed outright, which runs no exit hook. The marker is
+written after the directory exists; a sweep meeting a directory between the
+two finds no marker and leaves it.
 
 Once a process: a second call returns the first directory, so a second start,
 which the engine refuses, leaves no second directory behind.

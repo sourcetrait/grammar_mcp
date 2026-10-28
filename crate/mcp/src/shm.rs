@@ -1,5 +1,6 @@
 //! The host's own scratch directory: one private directory a process.
 use crate::*;
+use std::os::unix::fs::PermissionsExt;
 
 /// Where a scratch directory is made, memory-backed where the host has it.
 const SHM_BASE: &str = "/dev/shm";
@@ -9,6 +10,9 @@ const SHM_PREFIX: &str = "grammar-mcp.";
 
 /// The marker naming a scratch directory's owner: its pid and its start time.
 const OWNER_FILE: &str = "owner";
+
+/// A scratch directory's mode: its owner's alone.
+const SHM_MODE: u32 = 0o700;
 
 /// This process's scratch directory, made once at startup.
 static SHM_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -22,6 +26,7 @@ pub(crate) fn make_shm_dir() -> Result<PathBuf, String> {
     sweep_stale(&base);
     let dir = tempfile::Builder::new()
         .prefix(SHM_PREFIX)
+        .permissions(fs::Permissions::from_mode(SHM_MODE))
         .tempdir_in(&base)
         .map_err(|e| format!("make a scratch directory in {}: {e}", base.display()))?
         .keep();

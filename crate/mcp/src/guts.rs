@@ -648,11 +648,12 @@ pub fn build_execute_source(
 
 /// The synthesized call() source for a function and its literals.
 pub fn build_call_source(
+    equip_root: &std::path::Path,
     rig: &str,
     module_path: &str,
     name: &str,
     data_literal: &str,
     timeout_literal: Option<&str>,
-) -> String {
-    crate::build_call_source(rig, module_path, name, data_literal, timeout_literal)
+) -> Result<String, String> {
+    crate::build_call_source(equip_root, rig, module_path, name, data_literal, timeout_literal)
 }
