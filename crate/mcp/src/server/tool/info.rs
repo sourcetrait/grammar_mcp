@@ -13,6 +13,8 @@ pub(crate) struct InfoResult {
     pub mcp_nom: String,
     /// The agent working directory, exported as $env.EQUIP_WORK_DIR.
     pub work_dir: String,
+    /// The host's private scratch directory, exported as $env.EQUIP_SHM_DIR.
+    pub shm_dir: String,
     pub plugins: Vec<PluginInfo>,
     /// The callable surface within the reported purview, as one block.
     pub signatures: String,
@@ -46,6 +48,7 @@ impl NuSh {
                 namespace: config().namespace.clone(),
                 mcp_nom: self.mcp_nom.as_str().to_string(),
                 work_dir: config().work_dir.display().to_string(),
+                shm_dir: shm_dir().map(|dir| dir.display().to_string()).unwrap_or_default(),
                 plugins: list_registered_plugins(),
                 signatures,
                 purview: purview_views(&ids, rows.as_ref()),

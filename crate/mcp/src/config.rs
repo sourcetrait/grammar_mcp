@@ -13,12 +13,30 @@ pub(crate) const TEST_NAMESPACE: &str = "test";
 /// Lowest port the channel hub may be pinned to.
 const MIN_CHANNEL_PORT: u16 = 1024;
 
-/// The file shape.
+/// The agent's config file, under the directory the host starts in.
+pub(crate) const AGENT_CONFIG_FILE: &str = ".grammar/config.toml";
+
+/// The file shape: the embedded base, and the agent's own file over it.
 #[derive(Debug, Clone, Default, ser::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ConfigToml {
     pub channel: Option<ChannelConfigToml>,
     pub supervisor: Option<SupervisorConfigToml>,
+    pub identity: Option<IdentityConfigToml>,
+    #[serde(default)]
+    pub remote: Vec<RemoteToml>,
+}
+
+/// The `[identity]` table (file layer): the host's own key pair.
+///
+/// The Channel presents it, and so does every `[[remote]]` link.
+#[derive(Debug, Clone, Default, ser::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct IdentityConfigToml {
+    /// The host's certificate, PEM.
+    pub cert_file: Option<String>,
+    /// The private key paired with `cert_file`, PEM.
+    pub key_file: Option<String>,
 }
 
 /// One `[[remote]]` entry (file layer): a peer to link with, by its alias.
@@ -34,22 +52,8 @@ pub(crate) struct RemoteToml {
     pub listen: Option<String>,
     /// A connector's peer `ip:port`, required; a listener's optional bare source IP.
     pub address: Option<String>,
-    /// This host's own public key it presents.
-    pub self_public_key_file: Option<String>,
-    /// The private key paired with `self_public_key_file`.
-    pub self_private_key_file: Option<String>,
     /// The peer's known public key to match; `remote_` is implied by the entry.
     pub public_key_file: Option<String>,
-}
-
-/// The `.grammar/mcp/remotes.toml` file (file layer): its `[[remote]]` entries.
-///
-/// Optional: an absent file means no RemoteChannel.
-#[derive(Debug, Clone, Default, ser::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct RemotesConfigToml {
-    #[serde(default)]
-    pub remote: Vec<RemoteToml>,
 }
 
 /// The `[supervisor]` table: when a resource level is worth one warning.
@@ -66,13 +70,12 @@ pub(crate) struct SupervisorConfigToml {
     pub disk_warn_fraction: Option<f64>,
 }
 
-/// The `[channel]` table: the wss port, the cert dir, and the spam policy.
+/// The `[channel]` table: the wss port and the spam policy.
 #[derive(Debug, Clone, Default, ser::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ChannelConfigToml {
     /// Omit for a kernel-assigned port, which is the default.
     pub port: Option<u16>,
-    pub cert_dir: Option<String>,
     /// Windows are whole seconds here and on `interface channel config`.
     pub spam_warn_window_secs: Option<u64>,
     pub spam_warn_rate: Option<u32>,
@@ -90,11 +93,17 @@ pub(crate) struct Config {
     pub test: bool,
     pub channel: ChannelConfig,
     pub supervisor: SupervisorConfig,
-    /// Configured remote peers (from `.grammar/mcp/remotes.toml`).
+    /// The host's own key pair, from `[identity]`; none when the file names none.
+    pub identity: Option<IdentityConfig>,
+    /// Configured remote peers, from the file's `[[remote]]` entries.
     pub remotes: RemotesConfig,
-    /// The process's cwd at startup, which `.grammar/mcp/remotes.toml` resolves from.
-    #[allow(dead_code)]
-    pub startup_cwd: PathBuf,
+}
+
+/// The host's own key pair (model layer), each path expanded.
+#[derive(Debug, Clone)]
+pub(crate) struct IdentityConfig {
+    pub cert_file: PathBuf,
+    pub key_file: PathBuf,
 }
 
 /// A resolved remote peer (model layer): its role and its mTLS key files.
@@ -102,9 +111,9 @@ pub(crate) struct Config {
 pub(crate) struct RemoteConfig {
     pub alias: String,
     pub role: RemoteRole,
-    /// This host's own public key it presents.
+    /// This host's own public key it presents, `[identity]`'s certificate.
     pub self_public_key_file: PathBuf,
-    /// The private key paired with `self_public_key_file`.
+    /// The private key paired with `self_public_key_file`, `[identity]`'s key.
     pub self_private_key_file: PathBuf,
     /// The peer's known public key, matched byte-for-byte.
     pub peer_public_key_file: PathBuf,
@@ -133,8 +142,6 @@ pub(crate) enum RemoteRole {
 pub(crate) struct ChannelConfig {
     /// None means kernel-assigned, which is the default.
     pub port: Option<u16>,
-    /// Fully expanded at load, like every other path.
-    pub cert_dir: PathBuf,
     /// The starting spam policy.
     pub spam: SpamThresholds,
 }
@@ -159,17 +166,6 @@ impl SpamThresholds {
     }
 }
 
-impl ChannelConfig {
-    /// The leaf the hub presents, and its key.
-    pub(crate) fn cert_paths(&self) -> (PathBuf, PathBuf) {
-        let name = consts::GRAMMAR;
-        (
-            self.cert_dir.join(format!("entity_{name}.pem")),
-            self.cert_dir.join(format!("entity_{name}.key.pem")),
-        )
-    }
-}
-
 /// Merge one `[channel]` table over the embedded base, then the code defaults.
 fn merged_channel(
     user: Option<ChannelConfigToml>,
@@ -177,9 +173,6 @@ fn merged_channel(
 ) -> Result<ChannelConfig, String> {
     let user = user.unwrap_or_default();
     let base = base.unwrap_or_default();
-    let Some(cert_dir) = user.cert_dir.or(base.cert_dir) else {
-        return Err("the embedded defaults carry no channel.cert_dir".to_string());
-    };
     let port = user.port.or(base.port);
     if let Some(port) = port
         && port < MIN_CHANNEL_PORT
@@ -195,11 +188,21 @@ fn merged_channel(
         error_window: secs_field("spam_error_window_secs", user.spam_error_window_secs, base.spam_error_window_secs)?,
         error_rate: rate_field("spam_error_rate", user.spam_error_rate, base.spam_error_rate)?,
     };
-    Ok(ChannelConfig {
-        port,
-        cert_dir: expand_path(Path::new(&cert_dir))?,
-        spam,
-    })
+    Ok(ChannelConfig { port, spam })
+}
+
+/// The `[identity]` table resolved, both its files required and expanded.
+fn resolved_identity(file: Option<IdentityConfigToml>) -> Result<Option<IdentityConfig>, String> {
+    let Some(file) = file else {
+        return Ok(None);
+    };
+    let missing = |field: &str| format!("[identity] is missing `{field}`");
+    let cert_file = file.cert_file.ok_or_else(|| missing("cert_file"))?;
+    let key_file = file.key_file.ok_or_else(|| missing("key_file"))?;
+    Ok(Some(IdentityConfig {
+        cert_file: expand_path(Path::new(&cert_file))?,
+        key_file: expand_path(Path::new(&key_file))?,
+    }))
 }
 
 fn merged_supervisor(
@@ -228,44 +231,20 @@ fn merged_supervisor(
     })
 }
 
-/// Load `.grammar/mcp/remotes.toml` under the startup cwd, if present.
-///
-/// An absent file is an empty peer set: no RemoteChannel.
-fn load_remotes(startup_cwd: &std::path::Path) -> Result<RemotesConfig, String> {
-    let path = startup_cwd
-        .join(".grammar")
-        .join("mcp")
-        .join("remotes.toml");
-    let text = match fs::read_to_string(&path) {
-        Ok(t) => t,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(RemotesConfig::default()),
-        Err(e) => return Err(format!("read {}: {e}", path.display())),
-    };
-    let file: RemotesConfigToml =
-        toml::from_str(&text).map_err(|e| format!("parse {}: {e}", path.display()))?;
-    RemotesConfig::try_from(file)
-}
-
-impl TryFrom<RemoteToml> for RemoteConfig {
-    type Error = String;
-
-    /// Resolve one `[[remote]]` entry into a peer, its key paths expanded.
+impl RemoteConfig {
+    /// Resolve one `[[remote]]` entry into a peer, its own key pair the identity's.
     ///
-    /// Its role is the presence of `listen`; its three key paths are required.
-    fn try_from(entry: RemoteToml) -> Result<Self, String> {
+    /// Its role is the presence of `listen`; the peer's public key is required.
+    fn resolve(
+        entry: RemoteToml,
+        identity: &IdentityConfig,
+    ) -> Result<Self, String> {
         let alias = entry
             .alias
             .ok_or_else(|| "a [[remote]] entry is missing `alias`".to_string())?;
-        let missing = |field: &str| format!("[[remote]] `{alias}` is missing `{field}`");
-        let self_public = entry
-            .self_public_key_file
-            .ok_or_else(|| missing("self_public_key_file"))?;
-        let self_private = entry
-            .self_private_key_file
-            .ok_or_else(|| missing("self_private_key_file"))?;
         let peer_public = entry
             .public_key_file
-            .ok_or_else(|| missing("public_key_file"))?;
+            .ok_or_else(|| format!("[[remote]] `{alias}` is missing `public_key_file`"))?;
         let role = match entry.listen {
             Some(listen) => {
                 let bind = listen.parse::<std::net::SocketAddr>().map_err(|e| {
@@ -296,21 +275,32 @@ impl TryFrom<RemoteToml> for RemoteConfig {
         Ok(RemoteConfig {
             alias,
             role,
-            self_public_key_file: expand_path(Path::new(&self_public))?,
-            self_private_key_file: expand_path(Path::new(&self_private))?,
+            self_public_key_file: identity.cert_file.clone(),
+            self_private_key_file: identity.key_file.clone(),
             peer_public_key_file: expand_path(Path::new(&peer_public))?,
         })
     }
 }
 
-impl TryFrom<RemotesConfigToml> for RemotesConfig {
-    type Error = String;
-
-    /// Resolve every `[[remote]]` entry by alias; a duplicate alias fails the load.
-    fn try_from(file: RemotesConfigToml) -> Result<Self, String> {
+impl RemotesConfig {
+    /// Resolve every `[[remote]]` entry by alias, the identity each presents.
+    ///
+    /// A duplicate alias fails the load, and so does any entry with no identity.
+    pub(crate) fn resolve(
+        entries: Vec<RemoteToml>,
+        identity: Option<&IdentityConfig>,
+    ) -> Result<Self, String> {
         let mut by_alias = HashMap::new();
-        for entry in file.remote {
-            let resolved = RemoteConfig::try_from(entry)?;
+        if entries.is_empty() {
+            return Ok(RemotesConfig { by_alias });
+        }
+        let identity = identity.ok_or_else(|| {
+            "a [[remote]] link presents the host's [identity]; name its `cert_file` and \
+             `key_file`"
+                .to_string()
+        })?;
+        for entry in entries {
+            let resolved = RemoteConfig::resolve(entry, identity)?;
             if by_alias.contains_key(&resolved.alias) {
                 return Err(format!("duplicate [[remote]] alias `{}`", resolved.alias));
             }
@@ -369,9 +359,8 @@ impl Config {
             .map_err(|e| format!("the embedded defaults do not parse: {e}"))?;
         let channel = merged_channel(user.channel, base.channel)?;
         let supervisor = merged_supervisor(user.supervisor, base.supervisor)?;
-        let startup_cwd =
-            std::env::current_dir().map_err(|e| format!("cannot read the startup cwd: {e}"))?;
-        let remotes = load_remotes(&startup_cwd)?;
+        let identity = resolved_identity(user.identity)?;
+        let remotes = RemotesConfig::resolve(user.remote, identity.as_ref())?;
         Ok(Self {
             id,
             namespace,
@@ -380,8 +369,8 @@ impl Config {
             test,
             channel,
             supervisor,
+            identity,
             remotes,
-            startup_cwd,
         })
     }
 
@@ -390,6 +379,15 @@ impl Config {
         let text = fs::read_to_string(path)
             .map_err(|e| format!("read config {}: {e}", path.display()))?;
         toml::from_str(&text).map_err(|e| format!("parse config {}: {e}", path.display()))
+    }
+
+    /// Read the agent's `.grammar/config.toml` under `dir`; an absent one is none.
+    pub(crate) fn read_agent_toml(dir: &std::path::Path) -> Result<ConfigToml, String> {
+        let path = dir.join(AGENT_CONFIG_FILE);
+        if !path.exists() {
+            return Ok(ConfigToml::default());
+        }
+        Self::read_toml(&path)
     }
 }
 
@@ -442,56 +440,16 @@ fn home_dir() -> Option<String> {
     std::env::var("HOME").ok()
 }
 
-/// The XDGX base spec in force: the env value, else its default `xdg`.
-fn xdgx_base_spec() -> String {
-    std::env::var("XDGX_BASE_SPEC").unwrap_or_else(|_| "xdg".to_string())
-}
-
-/// The XDG basedir / SourceTrait XDGX spec default for an unset variable.
+/// The XDG base directory spec's default for an unset variable of its own.
 pub(crate) fn spec_default(var: &str) -> Option<PathBuf> {
-    spec_default_for(var, &xdgx_base_spec())
-}
-
-/// The spec default under an explicit base spec; the pure, testable core.
-pub(crate) fn spec_default_for(
-    var: &str,
-    base_spec: &str,
-) -> Option<PathBuf> {
-    if var == "XDGX_BASE_SPEC" {
-        return Some(PathBuf::from(base_spec));
-    }
-    if var == "XDGX_SHM_DIR" {
-        return Some(PathBuf::from("/dev/shm").join(default_id()));
-    }
-    let dotsys = base_spec == "dotsys";
-    if var == "XDGX_SECRET_DATA_HOME" {
-        return if dotsys {
-            home_dir().map(|home| PathBuf::from(home).join(".sys/.xdg/secret/data"))
-        } else {
-            xdg_data_home(base_spec).map(|data| data.join("secret"))
-        };
-    }
     let home_relative = match var {
         "XDG_CACHE_HOME" => ".cache",
         "XDG_CONFIG_HOME" => ".config",
         "XDG_DATA_HOME" => ".local/share",
         "XDG_STATE_HOME" => ".local/state",
-        "XDGX_ASSET_HOME" => if dotsys { ".sys/local/share" } else { ".local/share" },
-        "XDGX_EXECUTE_HOME" => if dotsys { ".sys/local/bin" } else { ".local/bin" },
-        "XDGX_LIBRARY_HOME" => if dotsys { ".sys/local/lib" } else { ".local/lib" },
-        "XDGX_PACKAGE_HOME" => if dotsys { ".sys/local/pkg" } else { ".local/pkg" },
-        "XDGX_TMP_HOME" => "tmp",
         _ => return None,
     };
     home_dir().map(|home| PathBuf::from(home).join(home_relative))
-}
-
-/// XDG_DATA_HOME as the expansion resolves it: the env value, else its default.
-fn xdg_data_home(base_spec: &str) -> Option<PathBuf> {
-    std::env::var("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .ok()
-        .or_else(|| spec_default_for("XDG_DATA_HOME", base_spec))
 }
 
 /// A tool `--deny` withholds, or one interface command by its words.

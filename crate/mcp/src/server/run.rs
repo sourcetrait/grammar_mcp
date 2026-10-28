@@ -39,6 +39,8 @@ async fn close_channel_for_shutdown() {
 }
 
 /// Sweep on TERM / INT / HUP, then exit with the conventional `128 + signo`.
+///
+/// The scratch directory goes last: the exit skips the ordinary end's removal.
 fn spawn_signal_sweep(system: Arc<McpHandle>) {
     tk::spawn(async move {
         let mut term = match tk::signal(tk::SignalKind::terminate()) {
@@ -69,6 +71,7 @@ fn spawn_signal_sweep(system: Arc<McpHandle>) {
         };
         close_channel_for_shutdown().await;
         system.shutdown().await;
+        remove_shm_dir();
         process::exit(128 + signo);
     });
 }

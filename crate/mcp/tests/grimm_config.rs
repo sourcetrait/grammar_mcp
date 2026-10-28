@@ -99,24 +99,30 @@ fn get_config_all_mirrors_the_toml_tables(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
     let env = s.execute(
         &reading(
-            "record<tables: list<string>, channel_keys: list<string>, supervisor_keys: list<string>>",
+            "record<tables: list<string>, channel_keys: list<string>, supervisor_keys: list<string>, \
+             identity_absent: bool>",
             "let cfg = (grimm get_config_all)\n\
              { tables: ($cfg | columns), channel_keys: ($cfg.channel | columns), \
-               supervisor_keys: ($cfg.supervisor | columns) }",
+               supervisor_keys: ($cfg.supervisor | columns), \
+               identity_absent: ($cfg.identity == null) }",
         ),
         "null",
     );
     assert!(!has_error(&env), "get_config_all should run; got {env}");
     assert_eq!(
         env["result"]["tables"],
-        json!(["channel", "supervisor"]),
-        "the record mirrors the TOML's two tables; got {env}",
+        json!(["channel", "supervisor", "identity"]),
+        "the record mirrors the TOML's tables but [[remote]]; got {env}",
+    );
+    assert_eq!(
+        env["result"]["identity_absent"].as_bool(),
+        Some(true),
+        "a host whose file names no [identity] reads it as null; got {env}",
     );
     assert_eq!(
         env["result"]["channel_keys"],
         json!([
             "port",
-            "cert_dir",
             "spam_warn_window_secs",
             "spam_warn_rate",
             "spam_error_window_secs",
@@ -275,9 +281,10 @@ fn last_write_wins_across_calls(_t: &testing::Testable<'_, '_, '_>) {
 fn only_the_supervisor_lines_are_pinnable(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
     clear_config_pins();
-    // config_channel stays the sole mutator of the channel settings; a value with
-    // two mutators is one whose effective setting depends on which you ask.
-    for key in ["channel.spam_warn_rate", "channel.port", "channel.cert_dir"] {
+    // `interface channel config` stays the sole mutator of the channel settings; a
+    // value with two mutators is one whose effective setting depends on which you
+    // ask. The identity is the file's alone.
+    for key in ["channel.spam_warn_rate", "channel.port", "identity.cert_file"] {
         let env = s.execute(
             &pinning(
                 "record<out: int>",
@@ -359,7 +366,7 @@ fn the_config_decls_reach_the_stateful_lane_too(_t: &testing::Testable<'_, '_, '
     );
     assert_eq!(
         env["result"]["tables"].as_i64(),
-        Some(2),
+        Some(3),
         "the whole grimm family registers per eval, on both lanes; got {env}",
     );
 }

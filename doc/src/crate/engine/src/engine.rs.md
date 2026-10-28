@@ -66,9 +66,11 @@ The whole OS env goes in because externals need `$env.PATH`.
 seeded below - the namespace is the sole controlled lib path, and letting the
 environment win would let a body reach outside the namespace.
 
-The EQUIP trio is set directly from the engine's params rather than inherited:
-eval is in-process with no spawn-env to carry them, and they are not in the
-host's own environment, so the engine seeds them from what the host gave it.
+The four EQUIP values are set directly from the engine's params rather than
+inherited: eval is in-process with no spawn-env to carry them, and they are not
+in the host's own environment, so the engine seeds them from what the host gave
+it. They are set after the process env, so a parent's variable of the same name
+never stands in for the host's own value.
 
 ## fn convert_env
 nushell's own conversion: with no `ENV_CONVERSIONS` entries it changes nothing

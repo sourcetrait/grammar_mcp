@@ -4,7 +4,7 @@ use crate::*;
 #[derive(Default, clap::Parser)]
 #[command(version, about = "Grammar MCP")]
 pub struct Cli {
-    /// Path to a grammar_mcp.toml carrying the non-argument settings.
+    /// The config file; defaults to `.grammar/config.toml` under the start directory.
     #[arg(long)]
     pub config: Option<PathBuf>,
     /// Agent identity owning the state namespace; defaults to the invoking user.
@@ -16,7 +16,7 @@ pub struct Cli {
     /// Test channel: the namespace defaults to test; the watchdog follows the channel.
     #[arg(long)]
     pub test: bool,
-    /// Agent working directory, exported to bodies as $env.EQUIP_WORK_DIR.
+    /// Agent working directory, exported to definitions as $env.EQUIP_WORK_DIR.
     #[arg(long)]
     pub workdir: Option<PathBuf>,
     /// Comma-separated tools, or interface commands by their words, to withhold.

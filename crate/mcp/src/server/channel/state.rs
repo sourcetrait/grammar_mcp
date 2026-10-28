@@ -6,15 +6,11 @@ pub(crate) const MCP_RESERVED_PREFIX: &str = "mcp/";
 /// The usable frame maximum.
 pub(crate) const MAX_FRAME_BYTES: usize = 1_048_575;
 
-/// The env var naming the tmpfs IPC root the inbox lives under.
-pub(crate) const SHM_ROOT_VAR: &str = "$XDGX_SHM_DIR";
-
-/// `<shm>/mcp/<mcp_nom>/inbox`, where attachments and a link's landed files meet.
-pub(crate) fn inbox_dir(mcp_nom: &datum::NomPair) -> Result<PathBuf, String> {
-    Ok(expand_path(Path::new(SHM_ROOT_VAR))?
-        .join("mcp")
-        .join(mcp_nom.as_str())
-        .join("inbox"))
+/// `<shm>/inbox`, where attachments and a link's landed files meet.
+pub(crate) fn inbox_dir() -> Result<PathBuf, String> {
+    shm_dir()
+        .map(|dir| dir.join("inbox"))
+        .ok_or_else(|| "the host has no scratch directory".to_string())
 }
 
 /// What an emit is allowed to do right now.

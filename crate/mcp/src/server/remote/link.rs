@@ -418,7 +418,6 @@ async fn connect_link(
         connect_conn(&connector, addr, self_mcp_nom, RemoteStream::File).await?;
     pair_check(&remote_msg, &remote_file)?;
     Ok(spawn_initiator_drivers(
-        self_mcp_nom,
         remote_msg,
         (msg_read, msg_write),
         (file_read, file_write),
@@ -471,7 +470,6 @@ async fn accept_and_pair(
     let (remote_file, file_read, file_write) = file.expect("file half present");
     pair_check(&remote_msg, &remote_file)?;
     Ok(spawn_acceptor_drivers(
-        self_mcp_nom,
         remote_msg,
         (msg_read, msg_write),
         (file_read, file_write),
@@ -480,7 +478,6 @@ async fn accept_and_pair(
 
 /// Turn two handshaked initiator connections into a running link + its joins.
 fn spawn_initiator_drivers(
-    self_mcp_nom: &datum::NomPair,
     remote_mcp_nom: String,
     message: (InitFramedRead, InitFramedWrite),
     file: (InitFramedRead, InitFramedWrite),
@@ -488,7 +485,7 @@ fn spawn_initiator_drivers(
     let cancel = tku::CancellationToken::new();
     let (msg_out_tx, msg_out_rx) = tk::unbounded_channel::<MsgFrame>();
     let (file_out_tx, file_out_rx) = tk::unbounded_channel::<FileFrame>();
-    let recv = RecvContext::new(self_mcp_nom, &remote_mcp_nom);
+    let recv = RecvContext::new(&remote_mcp_nom);
     let send = SendTracker::new(&remote_mcp_nom);
     let message_join = tk::spawn(run_initiator_message(
         cancel.clone(),
@@ -521,7 +518,6 @@ fn spawn_initiator_drivers(
 
 /// Turn two handshaked acceptor connections into a running link + its joins.
 fn spawn_acceptor_drivers(
-    self_mcp_nom: &datum::NomPair,
     remote_mcp_nom: String,
     message: (AcceptFramedRead, AcceptFramedWrite),
     file: (AcceptFramedRead, AcceptFramedWrite),
@@ -529,7 +525,7 @@ fn spawn_acceptor_drivers(
     let cancel = tku::CancellationToken::new();
     let (msg_out_tx, msg_out_rx) = tk::unbounded_channel::<MsgFrame>();
     let (file_out_tx, file_out_rx) = tk::unbounded_channel::<FileFrame>();
-    let recv = RecvContext::new(self_mcp_nom, &remote_mcp_nom);
+    let recv = RecvContext::new(&remote_mcp_nom);
     let send = SendTracker::new(&remote_mcp_nom);
     let message_join = tk::spawn(run_acceptor_message(
         cancel.clone(),
@@ -598,16 +594,13 @@ struct RecvContext {
     slots: Arc<std::sync::Mutex<HashMap<String, DeliverSlot>>>,
     /// The peer's McpNom - the `from = mcp/remote/<nom>` a relayed packet gets.
     peer_nom: String,
-    /// `<shm>/mcp/<self_nom>/inbox` - where landed files + the Channel inbox meet.
+    /// The scratch directory's `inbox` - where landed files + the Channel inbox meet.
     inbox_root: PathBuf,
 }
 
 impl RecvContext {
-    fn new(
-        self_mcp_nom: &datum::NomPair,
-        peer_nom: &str,
-    ) -> Self {
-        let inbox_root = inbox_dir(self_mcp_nom).unwrap_or_else(|e| {
+    fn new(peer_nom: &str) -> Self {
+        let inbox_root = inbox_dir().unwrap_or_else(|e| {
             eprintln!("grammar: remote inbox root unresolved ({e}); files will not land");
             PathBuf::from("/nonexistent")
         });

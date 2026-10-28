@@ -30,12 +30,9 @@ const VERIFY_WINDOW: tk::TkDuration = tk::TkDuration::from_secs(300);
 const CLOSE_UNVERIFIED: u16 = 1008;
 const UNVERIFIED_REASON: &str = "verification window expired";
 
-/// `$XDGX_SHM_DIR/mcp/<mcp_nom>/inbox`, created here.
-fn ensure_inbox(
-    channel: &ChannelHandle,
-    mcp_nom: &datum::NomPair,
-) -> Result<String, GrammarMcpError> {
-    let dir = inbox_dir(mcp_nom).map_err(|reason| GrammarMcpError::ChannelStart { reason })?;
+/// The scratch directory's `inbox`, created here.
+fn ensure_inbox(channel: &ChannelHandle) -> Result<String, GrammarMcpError> {
+    let dir = inbox_dir().map_err(|reason| GrammarMcpError::ChannelStart { reason })?;
     fs::create_dir_all(&dir)?;
     channel.set_inbox(dir.clone());
     Ok(dir.display().to_string())
@@ -86,7 +83,7 @@ impl NuSh {
         nonce: datum::Nonce,
         p: ChannelOpenParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let inbox = match ensure_inbox(&self.channel, &self.mcp_nom) {
+        let inbox = match ensure_inbox(&self.channel) {
             Ok(path) => path,
             Err(error) => return error_to_call_result(error, nonce),
         };

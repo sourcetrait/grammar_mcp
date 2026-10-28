@@ -6,12 +6,15 @@ const CLOSE_UNVERIFIED_EMIT: u16 = 1008;
 const UNVERIFIED_EMIT_REASON: &str = "emit before verification";
 
 /// Start the engine on the config's id, namespace, and homes, mcp its host.
+///
+/// Its scratch directory is made first, since a parameter carries it.
 pub(crate) fn init_engine() -> Result<(), String> {
     let cfg = config();
     let params = EngineParams {
         id: cfg.id.clone(),
         namespace: cfg.namespace.clone(),
         work_dir: cfg.work_dir.clone(),
+        shm_dir: make_shm_dir()?,
         data_home: data_base_dir(),
         cache_home: cache_base_dir(),
     };
@@ -243,7 +246,7 @@ fn spill_remote_event(
     Ok((pointer_nuon, payloads))
 }
 
-/// The whole config as a nu record, mirroring the TOML's two tables.
+/// The whole config as a nu record, mirroring the TOML's tables but `[[remote]]`.
 fn config_record() -> nu::Value {
     let span = nu::Span::unknown();
     let cfg = config();
@@ -257,10 +260,6 @@ fn config_record() -> nu::Value {
             Some(port) => nu::Value::int(port as i64, span),
             None => nu::Value::nothing(span),
         },
-    );
-    channel.insert(
-        "cert_dir",
-        nu::Value::string(cfg.channel.cert_dir.to_string_lossy().into_owned(), span),
     );
     channel.insert(
         "spam_warn_window_secs",
@@ -294,8 +293,20 @@ fn config_record() -> nu::Value {
         nu::Value::float(supervisor.disk_warn_fraction, span),
     );
 
+    let identity = match &cfg.identity {
+        Some(identity) => {
+            let path = |file: &Path| nu::Value::string(file.to_string_lossy().into_owned(), span);
+            let mut record = nu::Record::new();
+            record.insert("cert_file", path(&identity.cert_file));
+            record.insert("key_file", path(&identity.key_file));
+            nu::Value::record(record, span)
+        }
+        None => nu::Value::nothing(span),
+    };
+
     let mut root = nu::Record::new();
     root.insert("channel", nu::Value::record(channel, span));
     root.insert("supervisor", nu::Value::record(sup, span));
+    root.insert("identity", identity);
     nu::Value::record(root, span)
 }

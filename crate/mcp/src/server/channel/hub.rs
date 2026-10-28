@@ -27,13 +27,25 @@ pub(crate) fn open_packet(
     render_packet(id, FROM_MCP, MODEL_OPEN, &event, None)
 }
 
+/// The hub's TLS: the host's `[identity]` certificate and key, which it presents.
 fn server_config() -> Result<Arc<tls::ServerConfig>, GrammarMcpError> {
-    let (leaf_path, key_path) = config().channel.cert_paths();
-    let leaf = tls::CertificateDer::from_pem_file(&leaf_path).map_err(|e| GrammarMcpError::ChannelStart {
-        reason: format!("read {}: {e}", leaf_path.display()),
+    let Some(identity) = config().identity.as_ref() else {
+        return Err(GrammarMcpError::ChannelStart {
+            reason: format!(
+                "the Channel presents the host's [identity]; name its `cert_file` and \
+                 `key_file` in {AGENT_CONFIG_FILE}"
+            ),
+        });
+    };
+    let leaf = tls::CertificateDer::from_pem_file(&identity.cert_file).map_err(|e| {
+        GrammarMcpError::ChannelStart {
+            reason: format!("read {}: {e}", identity.cert_file.display()),
+        }
     })?;
-    let key = tls::PrivateKeyDer::from_pem_file(&key_path).map_err(|e| GrammarMcpError::ChannelStart {
-        reason: format!("read {}: {e}", key_path.display()),
+    let key = tls::PrivateKeyDer::from_pem_file(&identity.key_file).map_err(|e| {
+        GrammarMcpError::ChannelStart {
+            reason: format!("read {}: {e}", identity.key_file.display()),
+        }
     })?;
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let config = tls::ServerConfig::builder_with_provider(provider)

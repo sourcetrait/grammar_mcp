@@ -69,10 +69,11 @@ impl TestEngine {
             id: "test".to_string(),
             namespace: "engine".to_string(),
             work_dir: root.join("work"),
+            shm_dir: root.join("shm"),
             data_home: root.join("data"),
             cache_home: root.join("cache"),
         };
-        for dir in [&params.work_dir, &params.data_home, &params.cache_home] {
+        for dir in [&params.work_dir, &params.shm_dir, &params.data_home, &params.cache_home] {
             std::fs::create_dir_all(dir).expect("a home for the engine");
         }
         init(params, Box::new(TestHost)).expect("the engine's init");

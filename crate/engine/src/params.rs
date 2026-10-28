@@ -3,12 +3,14 @@ use crate::*;
 /// What the engine takes from its host when it starts.
 #[derive(Debug, Clone)]
 pub struct EngineParams {
-    /// The host's id, a body's `$env.EQUIP_ID`.
+    /// The host's id, a definition's `$env.EQUIP_ID`.
     pub id: String,
-    /// The host's namespace, a body's `$env.EQUIP_NAMESPACE`.
+    /// The host's namespace, a definition's `$env.EQUIP_NAMESPACE`.
     pub namespace: String,
-    /// The host's work dir, a body's `$env.EQUIP_WORK_DIR`.
+    /// The host's work dir, a definition's `$env.EQUIP_WORK_DIR`.
     pub work_dir: PathBuf,
+    /// The host's private scratch directory, a definition's `$env.EQUIP_SHM_DIR`.
+    pub shm_dir: PathBuf,
     /// The namespace's data home: the lib dirs and the plugin registry.
     pub data_home: PathBuf,
     /// The namespace's cache home: the call logs and the cached definitions.

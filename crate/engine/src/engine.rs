@@ -67,7 +67,7 @@ fn seed_config(engine_state: &mut nu::EngineState) {
     );
 }
 
-/// Seed the process env into `$env`, plus the ambient EQUIP trio.
+/// Seed the process env into `$env`, plus the ambient EQUIP four.
 fn seed_env(engine_state: &mut nu::EngineState) {
     if let Ok(cwd) = std::env::current_dir() {
         engine_state.add_env_var(
@@ -91,6 +91,10 @@ fn seed_env(engine_state: &mut nu::EngineState) {
     engine_state.add_env_var(
         "EQUIP_WORK_DIR".to_string(),
         nu::Value::string(params.work_dir.to_string_lossy().into_owned(), span),
+    );
+    engine_state.add_env_var(
+        "EQUIP_SHM_DIR".to_string(),
+        nu::Value::string(params.shm_dir.to_string_lossy().into_owned(), span),
     );
 }
 

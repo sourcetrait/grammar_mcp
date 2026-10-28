@@ -206,7 +206,7 @@ const OPEN_ARGS: &[ArgSpec] = &[ArgSpec {
     name: "alias",
     shape: ArgShape::String,
     optional: false,
-    summary: "The `[[remote]]` alias to open, from `.grammar/mcp/remotes.toml`.",
+    summary: "The `[[remote]]` alias to open, from `.grammar/config.toml`.",
 }];
 
 const CLOSE_ARGS: &[ArgSpec] = &[ArgSpec {

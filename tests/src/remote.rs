@@ -1,6 +1,6 @@
 //! RemoteChannel test harness: a reusable simulated rmcp consumer - the existing
 //! stdio `Host` plus a REAL WSS Channel client that trusts a one-off test CA - and
-//! the one-off key + config plumbing two linked hosts need.
+//! the one-off keys and the `.grammar/config.toml` two linked hosts need.
 //!
 //! No test seam: the consumer connects to a host's Channel exactly as
 //! claude-code's Monitor does (a real TLS + WebSocket client), so it settles the
@@ -29,11 +29,9 @@ use crate::{Host, envelope, has_error_path, try_nuon_to_json};
 
 /// The key material a `generate` run leaves under `<dir>/certs`.
 pub struct GeneratedKeys {
-    /// `<dir>/certs` - the directory a host's `[channel].cert_dir` points at.
-    pub dir: PathBuf,
     /// The self-signed CA public key a WSS client trusts as its sole root.
     pub ca: PathBuf,
-    /// This host's own public key (the channel key, or a remote peer's known key).
+    /// A host's own public key, its `[identity]` certificate and a peer's known key.
     pub public_key: PathBuf,
     /// The matching private key.
     pub private_key: PathBuf,
@@ -60,73 +58,48 @@ fn key_config(name: &str) -> lib_cert::config::CertGenConfig {
 }
 
 /// Mint a fresh self-signed CA + public/private key pair named `name` into
-/// `<dir>/certs`. The channel key MUST use `name = "grammar"` (the hub loads the
-/// public key named for it) with a 127.0.0.1 SAN; a remote link's keys take any
-/// distinct name and are cross-known by byte match.
+/// `<dir>/certs`, its entity SANs loopback, so one pair serves a host's Channel
+/// and its remote links alike; a peer knows it by byte match.
 pub fn generate_keys(name: &str, dir: &Path) -> GeneratedKeys {
     let files = lib_cert::generate(&key_config(name), dir).expect("generate keys");
     GeneratedKeys {
-        dir: lib_cert::certs_dir(dir),
         ca: files.authority_public,
         public_key: files.entity_public,
         private_key: files.entity_private,
     }
 }
 
-// ---- host config + remotes.toml plumbing ----
+// ---- the host's config file ----
 
-/// Write a `grammar_mcp.toml` overriding `[channel].cert_dir` to the test's own
-/// channel keys, into `host_dir` (created). Returns the path for `--config`.
-pub fn write_host_config(host_dir: &Path, channel_key_dir: &Path) -> PathBuf {
-    std::fs::create_dir_all(host_dir).expect("mkdir host dir");
-    let toml = format!("[channel]\ncert_dir = \"{}\"\n", channel_key_dir.display());
-    let path = host_dir.join("grammar_mcp.toml");
-    std::fs::write(&path, toml).expect("write grammar_mcp.toml");
+/// Write `<cwd>/.grammar/config.toml`: `identity` as its `[identity]`, then
+/// `remote`, a `[[remote]]` entry or nothing. Returns the file's path.
+pub fn write_host_config(cwd: &Path, identity: &GeneratedKeys, remote: &str) -> PathBuf {
+    let dir = cwd.join(".grammar");
+    std::fs::create_dir_all(&dir).expect("mkdir .grammar");
+    let toml = format!(
+        "[identity]\ncert_file = \"{cert}\"\nkey_file = \"{key}\"\n{remote}",
+        cert = identity.public_key.display(),
+        key = identity.private_key.display(),
+    );
+    let path = dir.join("config.toml");
+    std::fs::write(&path, toml).expect("write .grammar/config.toml");
     path
 }
 
-fn write_remotes(cwd: &Path, body: &str) {
-    let dir = cwd.join(".grammar").join("mcp");
-    std::fs::create_dir_all(&dir).expect("mkdir .grammar/mcp");
-    std::fs::write(dir.join("remotes.toml"), body).expect("write remotes.toml");
+/// A connector `[[remote]]` entry, `peer`, dialing `peer_addr`.
+pub fn remote_connector(peer_addr: &str, peer_public: &Path) -> String {
+    format!(
+        "\n[[remote]]\nalias = \"peer\"\naddress = \"{peer_addr}\"\npublic_key_file = \"{pk}\"\n",
+        pk = peer_public.display(),
+    )
 }
 
-/// A connector `[[remote]]` (dials `peer_addr`) at `<cwd>/.grammar/mcp/remotes.toml`.
-pub fn write_remotes_connector(
-    cwd: &Path,
-    peer_addr: &str,
-    self_keys: &GeneratedKeys,
-    peer_public: &Path,
-) {
-    let body = format!(
-        "[[remote]]\nalias = \"peer\"\naddress = \"{addr}\"\n\
-         self_public_key_file = \"{sp}\"\nself_private_key_file = \"{sk}\"\n\
-         public_key_file = \"{pk}\"\n",
-        addr = peer_addr,
-        sp = self_keys.public_key.display(),
-        sk = self_keys.private_key.display(),
+/// A listener `[[remote]]` entry, `peer`, binding `listen`.
+pub fn remote_listener(listen: &str, peer_public: &Path) -> String {
+    format!(
+        "\n[[remote]]\nalias = \"peer\"\nlisten = \"{listen}\"\npublic_key_file = \"{pk}\"\n",
         pk = peer_public.display(),
-    );
-    write_remotes(cwd, &body);
-}
-
-/// A listener `[[remote]]` (binds `listen`) at `<cwd>/.grammar/mcp/remotes.toml`.
-pub fn write_remotes_listener(
-    cwd: &Path,
-    listen: &str,
-    self_keys: &GeneratedKeys,
-    peer_public: &Path,
-) {
-    let body = format!(
-        "[[remote]]\nalias = \"peer\"\nlisten = \"{listen}\"\n\
-         self_public_key_file = \"{sp}\"\nself_private_key_file = \"{sk}\"\n\
-         public_key_file = \"{pk}\"\n",
-        listen = listen,
-        sp = self_keys.public_key.display(),
-        sk = self_keys.private_key.display(),
-        pk = peer_public.display(),
-    );
-    write_remotes(cwd, &body);
+    )
 }
 
 /// A free loopback TCP port (bind :0, read it back, release). The tiny race is
@@ -237,6 +210,8 @@ fn spawn_ws_reader(wss: String, ca_pem: PathBuf, tx: Sender<String>) -> JoinHand
 /// A simulated rmcp consumer: the stdio `Host` plus a live WSS Channel client.
 pub struct Consumer {
     pub host: Host,
+    /// The Channel's inbox, as the open reported it.
+    pub inbox: PathBuf,
     rx: Receiver<String>,
     _reader: JoinHandle<()>,
 }
@@ -246,10 +221,16 @@ impl Consumer {
     /// the `mcp/channel/Open` packet, then verify - the claude-code handshake.
     pub fn attach(mut host: Host, ca_pem: &Path) -> Self {
         let open = host.interface("interface channel open async");
-        let wss = envelope(&open)["result"]["wss"]
+        let result = &envelope(&open)["result"];
+        let wss = result["wss"]
             .as_str()
             .expect("`interface channel open async` returns a wss url")
             .to_string();
+        let inbox = PathBuf::from(
+            result["inbox"]
+                .as_str()
+                .expect("`interface channel open async` returns its inbox"),
+        );
         let (tx, rx) = mpsc::channel();
         let reader = spawn_ws_reader(wss, ca_pem.to_path_buf(), tx);
         let first_raw = rx
@@ -265,7 +246,14 @@ impl Consumer {
             !has_error_path(&verified),
             "`interface channel ready` should succeed once claimed; got {verified}",
         );
-        Self { host, rx, _reader: reader }
+        Self { host, inbox, rx, _reader: reader }
+    }
+
+    /// Read a file the Channel left in its inbox, by its inbox-relative path.
+    pub fn read_inbox(&self, rel: &str) -> String {
+        let path = self.inbox.join(rel);
+        std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("read inbox file {}: {e}", path.display()))
     }
 
     /// Block until a packet matching `pred` arrives, or `timeout` elapses. Each

@@ -73,12 +73,11 @@ fn every_pinnable_key_round_trips_its_name() {
 
 #[tested]
 fn a_channel_key_is_not_pinnable() {
-    // config_channel is the sole mutator of the channel settings. A value with two
-    // mutators is a value whose setting depends on which surface you ask. A refused
-    // key never reaches the registry, so this stays a parallel test.
+    // `interface channel config` is the sole mutator of the channel settings. A value
+    // with two mutators is a value whose setting depends on which surface you ask. A
+    // refused key never reaches the registry, so this stays a parallel test.
     for key in [
         "channel.port",
-        "channel.cert_dir",
         "channel.spam_warn_rate",
         "channel.spam_error_window_secs",
     ] {

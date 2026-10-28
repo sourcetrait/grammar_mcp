@@ -66,15 +66,17 @@ pub(crate) mod cli;
 pub(crate) mod config;
 pub(crate) mod consts;
 pub(crate) mod home;
+pub(crate) mod shm;
 pub mod guts;
 
 pub(crate) use crate::{
     config::{
-        CONFIG, Config, ConfigToml, DEFAULT_NAMESPACE, DenySet, RemoteConfig,
-        RemoteRole, SpamThresholds, TEST_NAMESPACE, config, default_id,
-        default_work_dir, expand_path,
+        AGENT_CONFIG_FILE, CONFIG, Config, DEFAULT_NAMESPACE, DenySet, RemoteConfig,
+        RemoteRole, SpamThresholds, TEST_NAMESPACE, config, default_id, default_work_dir,
+        expand_path,
     },
     home::{base_dirs, cache_base_dir, check_base_dirs, data_base_dir},
+    shm::{make_shm_dir, remove_shm_dir, shm_dir},
     mcp::ServiceExt,
     nu::FromValue,
     error::error_to_call_result,
@@ -168,6 +170,7 @@ pub(crate) use sourcetrait_grammar_operator::{
     EmergencyKind, FromOperatorSys, HungThread, Observation, OperatorHandle, OperatorSysParams,
     OperatorSysPaths, OperatorSystem, SAMPLE_INTERVAL, SupervisorConfig, ThreadLane,
     check_fraction, clear_pins, effective_supervisor, install_child_subreaper, pin,
+    process_start_time,
 };
 
 pub(crate) use nuval::TryIntoNu;

@@ -3,7 +3,7 @@ use crate::*;
 /// Parameters for `interface remote open`.
 #[derive(Debug, ser::Deserialize, ser::Serialize)]
 pub struct RemoteChannelOpenParams {
-    /// The `[[remote]]` alias to open, from `.grammar/mcp/remotes.toml`.
+    /// The `[[remote]]` alias to open, from `.grammar/config.toml`.
     pub alias: String,
 }
 
@@ -20,10 +20,7 @@ impl NuSh {
         let Some(entry) = config().remotes.by_alias.get(&p.alias).cloned() else {
             return error_to_call_result(
                 GrammarMcpError::RemoteInvalidParams {
-                    reason: format!(
-                        "no remote `{}` in .grammar/mcp/remotes.toml",
-                        p.alias,
-                    ),
+                    reason: format!("no remote `{}` in {AGENT_CONFIG_FILE}", p.alias),
                 },
                 nonce,
             );

@@ -25,13 +25,13 @@ pub(crate) fn parse_start_time(stat: &str) -> Option<u64> {
 
 /// A live process's start time, or None when the pid is not running.
 #[cfg(target_os = "linux")]
-pub(crate) fn process_start_time(pid: u32) -> Option<u64> {
+pub fn process_start_time(pid: u32) -> Option<u64> {
     parse_start_time(&fs::read_to_string(format!("/proc/{pid}/stat")).ok()?)
 }
 
 /// Off Linux there is no /proc, so a pin can never be proven live.
 #[cfg(not(target_os = "linux"))]
-pub(crate) fn process_start_time(_pid: u32) -> Option<u64> {
+pub fn process_start_time(_pid: u32) -> Option<u64> {
     None
 }
 

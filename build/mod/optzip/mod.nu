@@ -2,7 +2,7 @@
 #
 # `<name>_<semver>_<os>_<arch>.opt.tar.zst`, no field holding `_`: a zstd tar
 # of exactly `<name>.tar`, its sha256sum record, and its detached OpenPGP
-# signature. It deploys to `$XDG_BIN_HOME/../opt/<name>`.
+# signature. It deploys to `$UENV_USR_LOCAL/opt/<name>`.
 
 # The tar options that make an archive's bytes depend on its content alone.
 const REPRODUCIBLE = [

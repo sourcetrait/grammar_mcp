@@ -2,9 +2,11 @@
 
 ## struct EngineParams
 What the engine reads of its host, given once at its start rather than read from
-the host's globals: the EQUIP trio a body sees, and the namespace's two homes, the
-data home holding the lib dirs and the plugin registry, the cache home holding the
-call logs and the cached definitions. The host builds them from its own config.
+the host's globals: the four EQUIP values a definition sees, the scratch
+directory among them, and the namespace's two homes, the data home holding the
+lib dirs and the plugin registry, the cache home holding the call logs and the
+cached definitions. The host builds them from its own config, the scratch
+directory made before them.
 
 ## fn params
 `None` before `init`, so the registry's path reads as no registry rather than a

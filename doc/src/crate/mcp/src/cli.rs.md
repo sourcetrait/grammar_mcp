@@ -1,14 +1,14 @@
 # cli.rs
 
 ## struct Cli
-ONE BINARY, with the variant selected at runtime by trusted operator config -
+One binary, with the variant selected at runtime by trusted operator config -
 which is why there is no build feature for a test host and no second target.
 
-The validation here is deliberately UNEVEN, and the unevenness is the design.
-`id` and `namespace` are NOT ident-checked: they come from trusted operator
+The validation here is deliberately uneven, and the unevenness is the design.
+`id` and `namespace` are not ident-checked: they come from trusted operator
 config (the `.mcp.json` entries), and a bad value surfaces as the natural
 downstream error rather than being pre-empted here. `workdir` is expanded but
-never existence-checked, on the same trust. `--deny` IS validated, because a
+never existence-checked, on the same trust. `--deny` is validated, because a
 typo silently denying nothing would defeat the operator's whole intent - the
 failure mode differs in kind from the others, so the treatment does.
 
@@ -21,15 +21,21 @@ The parse error in `parse_deniable` (`run.rs`) carries the full deniable list,
 which is why the `--deny` help text does not repeat it. That is the general
 shape of what the summary cap costs here: duplication, not information.
 
+### field config
+Named, the file must exist; unnamed, the host reads the agent's own file under
+its start directory, whose absence is the ordinary zero-config state
+(`config.rs`).
+
 ## enum CliTool
-Deny does NOT apply to this surface. It gates agent REGISTRATION, and the
+Deny does not apply to this surface. It gates agent registration, and the
 one-shot path dispatches straight to the handler methods without the router, so
 the operator always has the whole set.
 
-The consumer of this output is a WRAPPER, never a human eye - a nu-native front
+The consumer of this output is a wrapper, never a human eye - a nu-native front
 that takes real records and serializes at this argv boundary - which is why a
-tool's data arrives as single-quoted NUON text, as an agent sends it, and the output
-is the tool's NUON envelope as the wire carries it, with no tty branch anywhere.
+tool's data arrives as single-quoted NUON text, as an agent sends it, and the
+output is the tool's NUON envelope as the wire carries it, with no tty branch
+anywhere.
 
 `Interface` takes the command as one string, the text an agent sends, so the
 operator's command meets the same parse rather than a second grammar in clap.

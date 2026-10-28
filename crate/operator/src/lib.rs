@@ -16,7 +16,7 @@ mod tests {
 pub(crate) use crate::{
     liveness::{HOST_LOCK_FILE, HostLock, acquire as acquire_host_lock},
     pin::reap_pins,
-    reaper::{OrphanReaper, process_start_time},
+    reaper::OrphanReaper,
     watchdog::{Probe, Watchdog, now_millis, probe_disk, probe_vram},
 };
 
@@ -54,7 +54,7 @@ pub use crate::{
     },
     msg::{EngineReading, FromOperatorSys, HungThread, Observation, ThreadLane, ToOperatorSys},
     pin::{clear_pins, effective_supervisor, pin},
-    reaper::install_child_subreaper,
+    reaper::{install_child_subreaper, process_start_time},
     supervisor::{SupervisorConfig, check_fraction},
     system::{
         OperatorHandle, OperatorSysConfig, OperatorSysParams, OperatorSysPaths, OperatorSystem,

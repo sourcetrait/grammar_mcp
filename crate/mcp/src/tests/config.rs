@@ -1,4 +1,5 @@
 use crate::*;
+use crate::config::ConfigToml;
 
 /// Build a runtime config from file text alone; the argument-owned values are
 /// placeholders, since the file surface is what these lock.
@@ -14,14 +15,12 @@ fn from_text(text: &str) -> Result<Config, String> {
     )
 }
 
-/// The embedded default, read through the same path rather than restated as a literal,
-/// so these tests cannot drift from include/config/grammar_mcp.toml.
-fn embedded_cert_dir() -> PathBuf {
-    from_text("")
-        .expect("embedded defaults parse")
-        .channel
-        .cert_dir
-}
+/// An `[identity]` table naming a key pair under `/keys`.
+const IDENTITY: &str = "\
+[identity]
+cert_file = \"/keys/self.pem\"
+key_file = \"/keys/self.key.pem\"
+";
 
 #[test]
 fn an_empty_file_yields_the_embedded_defaults() {
@@ -30,39 +29,8 @@ fn an_empty_file_yields_the_embedded_defaults() {
         config.channel.port, None,
         "an unpinned port must stay None, not become a 0 sentinel",
     );
-    assert!(
-        config.channel.cert_dir.is_absolute(),
-        "the default cert_dir must be expanded at load, not left as a $VAR; got {}",
-        config.channel.cert_dir.display(),
-    );
-    assert!(
-        config.channel.cert_dir.ends_with("certs"),
-        "got {}",
-        config.channel.cert_dir.display(),
-    );
-}
-
-#[test]
-fn an_omitted_cert_dir_falls_back_to_the_default() {
-    let config = from_text("[channel]\nport = 47800\n").expect("valid");
-    assert_eq!(config.channel.port, Some(47800));
-    assert_eq!(
-        config.channel.cert_dir,
-        embedded_cert_dir(),
-        "omitting cert_dir must inherit the embedded default, not blank it",
-    );
-}
-
-#[test]
-fn an_explicit_cert_dir_wins_and_is_expanded() {
-    let config = from_text("[channel]\ncert_dir = \"~/some/certs\"\n").expect("valid");
-    assert!(
-        config.channel.cert_dir.is_absolute(),
-        "a `~` path must be expanded at load; got {}",
-        config.channel.cert_dir.display(),
-    );
-    assert!(config.channel.cert_dir.ends_with("some/certs"));
-    assert_eq!(config.channel.port, None, "port stays unpinned");
+    assert!(config.identity.is_none(), "the embedded base names no identity");
+    assert!(config.remotes.by_alias.is_empty(), "and no remote");
 }
 
 #[test]
@@ -124,138 +92,110 @@ fn the_test_flag_is_carried_on_the_runtime_config() {
 
 #[test]
 fn a_retired_channel_key_is_rejected() {
-    // bind / cert_name / verify_timeout_secs were removed; a stale file must fail loudly
-    // rather than be silently ignored.
+    // bind / cert_name / verify_timeout_secs / cert_dir were removed; a stale file must
+    // fail loudly rather than be silently ignored.
     for text in [
         "[channel]\nbind = \"0.0.0.0\"\n",
         "[channel]\ncert_name = \"custom\"\n",
         "[channel]\nverify_timeout_secs = 42\n",
+        "[channel]\ncert_dir = \"/somewhere/certs\"\n",
     ] {
         assert!(from_text(text).is_err(), "{text:?} must be rejected");
     }
 }
 
 #[test]
-fn cert_paths_derive_both_leaf_and_key_from_the_dir() {
-    let config = from_text("[channel]\ncert_dir = \"/somewhere/certs\"\n").expect("valid");
-    let (leaf, key) = config.channel.cert_paths();
-    assert!(leaf.ends_with("entity_grammar.pem"), "got {}", leaf.display());
+fn an_identity_names_both_files_expanded() {
+    let config =
+        from_text("[identity]\ncert_file = \"~/k/self.pem\"\nkey_file = \"~/k/self.key.pem\"\n")
+            .expect("valid");
+    let identity = config.identity.expect("an identity");
     assert!(
-        key.ends_with("entity_grammar.key.pem"),
-        "got {}",
-        key.display(),
+        identity.cert_file.is_absolute() && identity.key_file.is_absolute(),
+        "a `~` path must be expanded at load; got {} and {}",
+        identity.cert_file.display(),
+        identity.key_file.display(),
     );
+    assert!(identity.cert_file.ends_with("k/self.pem"));
+    assert!(identity.key_file.ends_with("k/self.key.pem"));
+}
+
+#[test]
+fn an_identity_missing_a_file_is_rejected() {
+    for (text, field) in [
+        ("[identity]\ncert_file = \"/k/self.pem\"\n", "key_file"),
+        ("[identity]\nkey_file = \"/k/self.key.pem\"\n", "cert_file"),
+    ] {
+        let err = from_text(text).expect_err("an identity names both files");
+        assert!(err.contains(field), "{text:?}: got {err}");
+    }
 }
 
 #[test]
 fn an_unset_variable_fails_the_load() {
     // Expansion happens at the boundary, so an unresolvable path is a config error
-    // rather than something that surfaces much later at first use. Only variables
-    // off the XDG / XDGX families are unresolvable; those families fall back.
-    let err = from_text("[channel]\ncert_dir = \"$GRAMMAR_TEST_UNSET_VAR/certs\"\n")
-        .expect_err("an unset off-family variable must fail the load");
+    // rather than something that surfaces much later at first use. Only an XDG home
+    // falls back to its spec default; any other unset variable is unresolvable.
+    let err = from_text(
+        "[identity]\ncert_file = \"$GRAMMAR_TEST_UNSET_VAR/self.pem\"\nkey_file = \"/k\"\n",
+    )
+    .expect_err("an unset variable outside the XDG homes must fail the load");
     assert!(err.contains("GRAMMAR_TEST_UNSET_VAR"), "got {err}");
 }
 
 #[test]
-fn the_xdg_and_xdgx_families_carry_spec_defaults() {
-    // The expansion context falls back to these when a variable is unset, so the
-    // embedded default cert_dir resolves on a machine without the SourceTrait
-    // environment. Hardcoded here for now; sourcetrait_common's XdgDir does not
-    // export its defaults and carries no XDGX family. XDGX builds on the xdg /
-    // typical unix defaults; the .sys convention applies only under the dotsys
-    // base spec. spec_default_for is the pure core, so both specs are driven
-    // explicitly and nothing here reads the box's own environment.
+fn the_xdg_homes_carry_spec_defaults() {
+    // The expansion context falls back to these when a variable is unset; every other
+    // variable has none and stays a load error.
     let home = PathBuf::from(std::env::var("HOME").expect("HOME set"));
     for (var, home_relative) in [
         ("XDG_CACHE_HOME", ".cache"),
         ("XDG_CONFIG_HOME", ".config"),
         ("XDG_DATA_HOME", ".local/share"),
         ("XDG_STATE_HOME", ".local/state"),
-        ("XDGX_ASSET_HOME", ".local/share"),
-        ("XDGX_EXECUTE_HOME", ".local/bin"),
-        ("XDGX_LIBRARY_HOME", ".local/lib"),
-        ("XDGX_PACKAGE_HOME", ".local/pkg"),
-        ("XDGX_TMP_HOME", "tmp"),
     ] {
         assert_eq!(
-            crate::config::spec_default_for(var, "xdg"),
+            crate::config::spec_default(var),
             Some(home.join(home_relative)),
-            "{var} must default under $HOME on the xdg base spec",
+            "{var} must default under $HOME as the XDG spec has it",
         );
     }
-    // The secret tier composes under the RESOLVED data home on the xdg spec:
-    // the env value when set, else XDG_DATA_HOME's own spec default.
-    let data_home = std::env::var("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| home.join(".local/share"));
-    assert_eq!(
-        crate::config::spec_default_for("XDGX_SECRET_DATA_HOME", "xdg"),
-        Some(data_home.join("secret")),
-        "the secret tier lives in XDG_DATA_HOME/secret on the xdg spec",
-    );
-    for (var, home_relative) in [
-        ("XDGX_ASSET_HOME", ".sys/local/share"),
-        ("XDGX_EXECUTE_HOME", ".sys/local/bin"),
-        ("XDGX_LIBRARY_HOME", ".sys/local/lib"),
-        ("XDGX_PACKAGE_HOME", ".sys/local/pkg"),
-        ("XDGX_SECRET_DATA_HOME", ".sys/.xdg/secret/data"),
-    ] {
+    for var in ["XDG_RUNTIME_DIR", "GRAMMAR_TEST_UNSET_VAR"] {
         assert_eq!(
-            crate::config::spec_default_for(var, "dotsys"),
-            Some(home.join(home_relative)),
-            "{var} must move to the .sys convention under dotsys",
+            crate::config::spec_default(var),
+            None,
+            "{var} has no default and stays a load error",
         );
     }
-    assert_eq!(
-        crate::config::spec_default_for("XDGX_TMP_HOME", "dotsys"),
-        Some(home.join("tmp")),
-        "the tmp home is home-relative on both specs",
-    );
-    assert_eq!(
-        crate::config::spec_default_for("XDGX_BASE_SPEC", "xdg"),
-        Some(PathBuf::from("xdg")),
-        "the base-spec selector itself defaults to xdg",
-    );
-    for spec in ["xdg", "dotsys"] {
-        assert!(
-            crate::config::spec_default_for("XDGX_SHM_DIR", spec)
-                .expect("XDGX_SHM_DIR has a default")
-                .starts_with("/dev/shm"),
-            "the shm default is user-keyed under /dev/shm on both specs",
-        );
-    }
-    assert_eq!(
-        crate::config::spec_default_for("GRAMMAR_TEST_UNSET_VAR", "xdg"),
-        None,
-        "an off-family variable has no default and stays a load error",
-    );
 }
 
-/// Parse a `remotes.toml` body and resolve it, as the startup load of
-/// `.grammar/mcp/remotes.toml` would.
-fn remotes(
-    text: &str,
-) -> Result<std::collections::HashMap<String, crate::config::RemoteConfig>, String> {
-    let file: crate::config::RemotesConfigToml = toml::from_str(text).map_err(|e| e.to_string())?;
-    Ok(crate::config::RemotesConfig::try_from(file)?.by_alias)
+#[test]
+fn the_agent_file_is_read_from_its_directory() {
+    let dir = tempfile::tempdir().expect("a directory");
+    let none = Config::read_agent_toml(dir.path()).expect("an absent file is none");
+    assert!(none.identity.is_none() && none.remote.is_empty());
+    let grammar = dir.path().join(".grammar");
+    fs::create_dir_all(&grammar).expect("its .grammar");
+    fs::write(grammar.join("config.toml"), "[channel]\nport = 47800\n").expect("its file");
+    let file = Config::read_agent_toml(dir.path()).expect("the file is read");
+    assert_eq!(file.channel.and_then(|channel| channel.port), Some(47800));
 }
 
 #[test]
 fn a_remote_entry_with_listen_is_a_listener() {
-    let text = "\
+    let text = format!(
+        "{IDENTITY}
 [[remote]]
 alias = \"bob\"
 listen = \"127.0.0.1:9000\"
 address = \"127.0.0.1\"
-self_public_key_file = \"/keys/self.pem\"
-self_private_key_file = \"/keys/self.key.pem\"
 public_key_file = \"/keys/bob.pem\"
-";
-    let out = remotes(text).expect("valid listener entry");
-    let entry = out.get("bob").expect("bob present");
+"
+    );
+    let config = from_text(&text).expect("valid listener entry");
+    let entry = config.remotes.by_alias.get("bob").expect("bob present");
     match &entry.role {
-        crate::config::RemoteRole::Listener { bind, allow } => {
+        RemoteRole::Listener { bind, allow } => {
             assert_eq!(bind.to_string(), "127.0.0.1:9000");
             // `address` on a listener is a bare source-IP filter.
             assert_eq!(allow.map(|ip| ip.to_string()), Some("127.0.0.1".to_string()));
@@ -263,38 +203,43 @@ public_key_file = \"/keys/bob.pem\"
         other => panic!("expected a listener, got {other:?}"),
     }
     assert!(entry.peer_public_key_file.ends_with("bob.pem"));
+    assert!(
+        entry.self_public_key_file.ends_with("self.pem")
+            && entry.self_private_key_file.ends_with("self.key.pem"),
+        "a link presents the host's [identity]",
+    );
 }
 
 #[test]
 fn a_listener_address_with_a_port_is_rejected() {
     // A listener's `address` is a bare source-IP filter; the host:port form is the
     // connector's dial-target format and must not be accepted here.
-    let text = "\
+    let text = format!(
+        "{IDENTITY}
 [[remote]]
 alias = \"bob\"
 listen = \"127.0.0.1:9000\"
 address = \"127.0.0.1:5555\"
-self_public_key_file = \"/keys/self.pem\"
-self_private_key_file = \"/keys/self.key.pem\"
 public_key_file = \"/keys/bob.pem\"
-";
-    let err = remotes(text).expect_err("a host:port listener address must fail");
+"
+    );
+    let err = from_text(&text).expect_err("a host:port listener address must fail");
     assert!(err.contains("bare IP"), "got {err}");
 }
 
 #[test]
 fn a_remote_entry_without_listen_is_a_connector() {
-    let text = "\
+    let text = format!(
+        "{IDENTITY}
 [[remote]]
 alias = \"bob\"
 address = \"127.0.0.1:9001\"
-self_public_key_file = \"/keys/self.pem\"
-self_private_key_file = \"/keys/self.key.pem\"
 public_key_file = \"/keys/bob.pem\"
-";
-    let out = remotes(text).expect("valid connector entry");
-    match &out.get("bob").expect("bob present").role {
-        crate::config::RemoteRole::Connector { addr } => {
+"
+    );
+    let config = from_text(&text).expect("valid connector entry");
+    match &config.remotes.by_alias.get("bob").expect("bob present").role {
+        RemoteRole::Connector { addr } => {
             assert_eq!(addr.to_string(), "127.0.0.1:9001");
         }
         other => panic!("expected a connector, got {other:?}"),
@@ -303,41 +248,77 @@ public_key_file = \"/keys/bob.pem\"
 
 #[test]
 fn a_connector_without_an_address_is_rejected() {
-    let text = "\
+    let text = format!(
+        "{IDENTITY}
 [[remote]]
 alias = \"bob\"
-self_public_key_file = \"/keys/self.pem\"
-self_private_key_file = \"/keys/self.key.pem\"
 public_key_file = \"/keys/bob.pem\"
-";
-    let err = remotes(text).expect_err("a connector needs an address");
+"
+    );
+    let err = from_text(&text).expect_err("a connector needs an address");
     assert!(err.contains("address"), "got {err}");
 }
 
 #[test]
-fn a_remote_entry_missing_a_key_is_rejected() {
-    let text = "[[remote]]\nalias = \"bob\"\naddress = \"127.0.0.1:9001\"\n";
-    let err = remotes(text).expect_err("a missing key must fail");
-    assert!(err.contains("bob"), "got {err}");
+fn a_remote_entry_missing_its_peer_key_is_rejected() {
+    let text = format!("{IDENTITY}\n[[remote]]\nalias = \"bob\"\naddress = \"127.0.0.1:9001\"\n");
+    let err = from_text(&text).expect_err("a missing peer key must fail");
+    assert!(err.contains("bob") && err.contains("public_key_file"), "got {err}");
+}
+
+#[test]
+fn a_remote_without_an_identity_is_rejected() {
+    let text = "\
+[[remote]]
+alias = \"bob\"
+address = \"127.0.0.1:9001\"
+public_key_file = \"/keys/bob.pem\"
+";
+    let err = from_text(text).expect_err("a link presents the host's identity");
+    assert!(err.contains("[identity]"), "got {err}");
+}
+
+#[test]
+fn a_retired_remote_key_is_rejected() {
+    // A link's own key pair is the host's [identity]; a stale per-link pair must fail
+    // loudly rather than be silently ignored.
+    let text = format!(
+        "{IDENTITY}
+[[remote]]
+alias = \"bob\"
+address = \"127.0.0.1:9001\"
+self_public_key_file = \"/keys/self.pem\"
+public_key_file = \"/keys/bob.pem\"
+"
+    );
+    assert!(from_text(&text).is_err(), "a per-link self key must be rejected");
 }
 
 #[test]
 fn a_typoed_remote_field_is_rejected() {
     // deny_unknown_fields on the entry catches a field typo loudly.
-    let text = "[[remote]]\nalias = \"bob\"\naddres = \"127.0.0.1:9001\"\n";
-    assert!(remotes(text).is_err(), "a typo'd field must be rejected");
+    let text = format!("{IDENTITY}\n[[remote]]\nalias = \"bob\"\naddres = \"127.0.0.1:9001\"\n");
+    assert!(from_text(&text).is_err(), "a typo'd field must be rejected");
+}
+
+#[test]
+fn a_duplicate_alias_is_rejected() {
+    let entry = "[[remote]]\nalias = \"bob\"\naddress = \"127.0.0.1:9001\"\npublic_key_file = \"/keys/bob.pem\"\n";
+    let err = from_text(&format!("{IDENTITY}\n{entry}{entry}"))
+        .expect_err("an alias names one peer");
+    assert!(err.contains("duplicate"), "got {err}");
 }
 
 #[test]
 fn a_bad_remote_address_fails_the_load() {
-    let text = "\
+    let text = format!(
+        "{IDENTITY}
 [[remote]]
 alias = \"bob\"
 address = \"not-an-address\"
-self_public_key_file = \"/keys/self.pem\"
-self_private_key_file = \"/keys/self.key.pem\"
 public_key_file = \"/keys/bob.pem\"
-";
-    let err = remotes(text).expect_err("a non ip:port address must fail");
+"
+    );
+    let err = from_text(&text).expect_err("a non ip:port address must fail");
     assert!(err.contains("is not ip:port"), "got {err}");
 }

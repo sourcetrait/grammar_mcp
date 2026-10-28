@@ -74,9 +74,10 @@ async fn serve_or_oneshot(cli: Cli) -> process::ExitCode {
     CONFIG.set(config).expect("CONFIG set once at startup");
     if let Err(reason) = init_engine() {
         eprintln!("{reason}");
+        remove_shm_dir();
         return process::ExitCode::from(2);
     }
-    match command {
+    let code = match command {
         None => match run_server().await {
             Ok(()) => process::ExitCode::SUCCESS,
             Err(reason) => {
@@ -85,7 +86,9 @@ async fn serve_or_oneshot(cli: Cli) -> process::ExitCode {
             }
         },
         Some(CliCmd::Cli { tool }) => run_oneshot(tool).await,
-    }
+    };
+    remove_shm_dir();
+    code
 }
 
 /// `--test` supplies a default namespace, never an override.
@@ -128,7 +131,11 @@ pub(crate) fn parse_deniable(s: &str) -> Result<DeniableTool, String> {
 fn resolve_config(cli: Cli) -> Result<(Config, Option<CliCmd>), String> {
     let file = match &cli.config {
         Some(raw) => Config::read_toml(&expand_path(raw)?)?,
-        None => ConfigToml::default(),
+        None => {
+            let start_dir = std::env::current_dir()
+                .map_err(|e| format!("cannot read the start directory: {e}"))?;
+            Config::read_agent_toml(&start_dir)?
+        }
     };
     let work_dir = resolve_work_dir(cli.workdir.as_deref(), &cli.id)?;
     let namespace = resolve_namespace(cli.namespace, cli.test);

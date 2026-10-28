@@ -17,17 +17,17 @@ use sourcetrait_common::testing::prelude::*;
 static TESTING: testing::Module = testing::module!(Integration, { .using_temp_dir() });
 
 /// The reusable consumer, standalone: connect a real WSS client to a host's
-/// Channel against a test-minted CA, verify, and receive a body-emitted packet.
+/// Channel against a test-minted CA, verify, and receive a definition's packet.
 #[tested]
 fn consumer_connects_verifies_and_receives_a_packet() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
 
     let ch = generate_keys("grammar", &root.join("channel"));
-    let config = write_host_config(&root.join("host"), &ch.dir);
+    write_host_config(&root.join("host"), &ch, "");
     let host = Host::spawn_in(
         &root.join("scratch"),
-        &["--id", "chan", "--namespace", "default", "--config", config.to_str().unwrap()],
+        &["--id", "chan", "--namespace", "default"],
         &root.join("host"),
     );
     let mut c = Consumer::attach(host, &ch.ca);
@@ -58,9 +58,51 @@ fn consumer_connects_verifies_and_receives_a_packet() {
     assert_eq!(
         packet.from.split('/').next(),
         Some("thread"),
-        "a body-origin packet is from `thread/<nonce>`; got {}",
+        "a definition-origin packet is from `thread/<nonce>`; got {}",
         packet.from,
     );
+}
+
+/// A host whose config names no `[identity]` refuses to open the Channel, naming
+/// the table it lacks.
+#[tested]
+fn a_channel_without_an_identity_is_refused() {
+    let t = testing::test!({ .using_temp_dir() });
+    let root = t.temp_dir();
+    let cwd = root.join("bare");
+    std::fs::create_dir_all(&cwd).expect("mkdir the start directory");
+    let mut host = Host::spawn_in(
+        &root.join("scratch"),
+        &["--id", "bare", "--namespace", "default"],
+        &cwd,
+    );
+    let open = host.interface("interface channel open async");
+    assert!(has_error_path(&open), "the Channel presents an identity it lacks; got {open}");
+    assert_eq!(err_kind(&open), "channel::start", "the refusal's kind; got {open}");
+    assert!(
+        open.to_string().contains("[identity]"),
+        "the refusal names the table it lacks; got {open}",
+    );
+}
+
+/// `--config` names the file in place of the start directory's own, which then
+/// goes unread: a broken one there would fail the start.
+#[tested]
+fn the_config_flag_replaces_the_start_directorys_file() {
+    let t = testing::test!({ .using_temp_dir() });
+    let root = t.temp_dir();
+    let ch = generate_keys("grammar", &root.join("channel"));
+    let named = write_host_config(&root.join("named"), &ch, "");
+    let cwd = root.join("host");
+    std::fs::create_dir_all(cwd.join(".grammar")).expect("mkdir .grammar");
+    std::fs::write(cwd.join(".grammar").join("config.toml"), "not [toml")
+        .expect("write a broken config");
+    let host = Host::spawn_in(
+        &root.join("scratch"),
+        &["--id", "flag", "--namespace", "default", "--config", named.to_str().unwrap()],
+        &cwd,
+    );
+    Consumer::attach(host, &ch.ca);
 }
 
 /// The full transport proof plus the ConnectionWoes contract: a synchronous
@@ -129,21 +171,19 @@ fn remote_connector_open_refused_is_synchronous() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
 
-    let ch = generate_keys("grammar", &root.join("channel"));
     let cert_a = generate_keys("a", &root.join("cert_a"));
     let cert_dead = generate_keys("dead", &root.join("cert_dead"));
 
     // A free (unbound) port - a dial there is refused immediately (not a timeout).
     let dead = format!("127.0.0.1:{}", free_port());
     let host_dir = root.join("host");
-    let config = write_host_config(&host_dir, &ch.dir);
-    write_remotes_connector(&host_dir, &dead, &cert_a, &cert_dead.public_key);
+    write_host_config(&host_dir, &cert_a, &remote_connector(&dead, &cert_dead.public_key));
     let host = Host::spawn_in(
         &root.join("scratch"),
-        &["--id", "dc", "--namespace", "default", "--config", config.to_str().unwrap()],
+        &["--id", "dc", "--namespace", "default"],
         &host_dir,
     );
-    let mut c = Consumer::attach(host, &ch.ca);
+    let mut c = Consumer::attach(host, &cert_a.ca);
 
     let open = c.host.interface("interface remote open 'peer'");
     assert!(has_error_path(&open), "a refused connect fails the open synchronously; got {open}");
@@ -162,20 +202,18 @@ fn remote_listener_double_open_fails_synchronously() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
 
-    let ch = generate_keys("grammar", &root.join("channel"));
     let cert_b = generate_keys("b", &root.join("cert_b"));
     let cert_peer = generate_keys("peer", &root.join("cert_peer"));
 
     let listen = format!("127.0.0.1:{}", free_port());
     let host_dir = root.join("host");
-    let config = write_host_config(&host_dir, &ch.dir);
-    write_remotes_listener(&host_dir, &listen, &cert_b, &cert_peer.public_key);
+    write_host_config(&host_dir, &cert_b, &remote_listener(&listen, &cert_peer.public_key));
     let host = Host::spawn_in(
         &root.join("scratch"),
-        &["--id", "dl", "--namespace", "default", "--config", config.to_str().unwrap()],
+        &["--id", "dl", "--namespace", "default"],
         &host_dir,
     );
-    let mut c = Consumer::attach(host, &ch.ca);
+    let mut c = Consumer::attach(host, &cert_b.ca);
 
     let first = c.host.interface("interface remote open 'peer'");
     assert!(!has_error_path(&first), "the first listener open binds synchronously; got {first}");
@@ -234,14 +272,13 @@ fn channel_send_spills_oversized_event() {
     let root = t.temp_dir();
 
     let ch = generate_keys("grammar", &root.join("channel"));
-    let config = write_host_config(&root.join("host"), &ch.dir);
+    write_host_config(&root.join("host"), &ch, "");
     let host = Host::spawn_in(
         &root.join("scratch"),
-        &["--id", "spill", "--namespace", "default", "--config", config.to_str().unwrap()],
+        &["--id", "spill", "--namespace", "default"],
         &root.join("host"),
     );
     let mut c = Consumer::attach(host, &ch.ca);
-    let nom = mcp_nom(&mut c);
 
     let resp = c.host.execute(
         "def execute [data: nothing]: nothing -> record<ok: bool> {\n    grimm channel send 'test/Big' {marker: 'SPILL_MARKER_42', blob: (1..3000 | each { 'x' } | str join)}\n    {ok: true}\n}",
@@ -266,7 +303,7 @@ fn channel_send_spills_oversized_event() {
         pkt.raw.chars().count(),
     );
 
-    let content = read_inbox(&nom, &spill_path(&pkt));
+    let content = c.read_inbox(&spill_path(&pkt));
     assert!(
         content.contains("SPILL_MARKER_42"),
         "the full event survives in the spill file; got {content}",
@@ -307,7 +344,7 @@ fn remote_send_spills_oversized_event() {
     );
     assert!(relayed.attached.is_some(), "the relayed packet names the delivery dir; got {relayed:?}");
 
-    let content = read_inbox(&nom_b, &spill_path(&relayed));
+    let content = b.read_inbox(&spill_path(&relayed));
     assert!(
         content.contains("REMOTE_SPILL_99"),
         "the full event survives in B's inbox spill file; got {content}",
@@ -393,41 +430,31 @@ fn spill_path(pkt: &Packet) -> String {
     ev["spilled_event_path"].as_str().expect("a spill pointer carries spilled_event_path").to_string()
 }
 
-/// Read a spilled event file from a host's inbox (`$XDGX_SHM_DIR/mcp/<nom>/inbox`).
-fn read_inbox(nom: &str, rel: &str) -> String {
-    let shm = std::env::var("XDGX_SHM_DIR").expect("XDGX_SHM_DIR is set");
-    let path = Path::new(&shm).join("mcp").join(nom).join("inbox").join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read spill file {}: {e}", path.display()))
-}
-
 /// Spawn a listener host (B) and a connector host (A) cross-configured on one free
 /// loopback port, each with an attached consumer. Returns (a, b, nom_a, nom_b); no
 /// link is opened yet.
 fn spawn_two_hosts(root: &Path) -> (Consumer, Consumer, String, String) {
-    let ch = generate_keys("grammar", &root.join("channel"));
     let cert_a = generate_keys("a", &root.join("cert_a"));
     let cert_b = generate_keys("b", &root.join("cert_b"));
     let listen = format!("127.0.0.1:{}", free_port());
 
     let b_dir = root.join("host_b");
-    let config_b = write_host_config(&b_dir, &ch.dir);
-    write_remotes_listener(&b_dir, &listen, &cert_b, &cert_a.public_key);
+    write_host_config(&b_dir, &cert_b, &remote_listener(&listen, &cert_a.public_key));
     let host_b = Host::spawn_in(
         &root.join("scratch_b"),
-        &["--id", "link_b", "--namespace", "default", "--config", config_b.to_str().unwrap()],
+        &["--id", "link_b", "--namespace", "default"],
         &b_dir,
     );
-    let mut b = Consumer::attach(host_b, &ch.ca);
+    let mut b = Consumer::attach(host_b, &cert_b.ca);
 
     let a_dir = root.join("host_a");
-    let config_a = write_host_config(&a_dir, &ch.dir);
-    write_remotes_connector(&a_dir, &listen, &cert_a, &cert_b.public_key);
+    write_host_config(&a_dir, &cert_a, &remote_connector(&listen, &cert_b.public_key));
     let host_a = Host::spawn_in(
         &root.join("scratch_a"),
-        &["--id", "link_a", "--namespace", "default", "--config", config_a.to_str().unwrap()],
+        &["--id", "link_a", "--namespace", "default"],
         &a_dir,
     );
-    let mut a = Consumer::attach(host_a, &ch.ca);
+    let mut a = Consumer::attach(host_a, &cert_a.ca);
 
     let nom_a = mcp_nom(&mut a);
     let nom_b = mcp_nom(&mut b);
