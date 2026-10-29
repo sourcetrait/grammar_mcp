@@ -3,6 +3,7 @@
 //!
 //! A binary of its own, its cases one Stepper sequence: the Channel is the
 //! process's one, so every case reads or changes the same state.
+#![cfg(feature = "embedded-cli")]
 
 use serde_json::{Value, json};
 use sourcetrait_common::testing::prelude::*;

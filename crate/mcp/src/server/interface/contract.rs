@@ -58,7 +58,7 @@ pub(crate) fn parse_command(
 ) -> Result<InterfaceCommand, Vec<Diagnostic>> {
     let mut ws = nu::StateWorkingSet::new(engine);
     let block = nu::parse(&mut ws, Some(COMMAND_FILE), text.as_bytes(), false);
-    let start = file_start(&ws, COMMAND_FILE);
+    let start = ws.get_span_for_filename(COMMAND_FILE).map_or(0, |span| span.start);
     let row = |(span, message): Refusal| -> Diagnostic {
         let position = match span {
             Some(span) => {

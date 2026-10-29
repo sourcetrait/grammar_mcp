@@ -1,5 +1,6 @@
 //! The lint at the `nu` tool's boundary: a definition breaking a rule never runs,
 //! on either lane. `tests/lint_rules.rs` covers the rules themselves.
+#![cfg(feature = "embedded-cli")]
 
 use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{TestServer, has_kind};

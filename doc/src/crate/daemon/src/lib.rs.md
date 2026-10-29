@@ -14,7 +14,8 @@ dispatch, `session` the controller's lease, and `transport` the listeners and
 their admission.
 
 ## mod cli, mod run
-grammard's command line and entry, behind `service`.
+grammard's command line and entry, behind `service`, the local CLI's declared
+stub among them (`cli/oneshot.rs`).
 
 ## pub use
 The runtime and its identity, the error and its kind, and, with `service`,

@@ -7,6 +7,7 @@ pub struct RemoteChannelCloseParams {
     pub alias: String,
 }
 
+#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// `interface remote channel close`: close an open link or a waiting listener.
     pub(crate) async fn remote_close(

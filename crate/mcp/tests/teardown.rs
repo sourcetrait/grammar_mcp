@@ -2,6 +2,7 @@
 //! cancel -> tree-kill path). In-process: `nu_timeout` drives the real dispatch, and
 //! the reap is asserted by scanning /proc for the child. Linux-only (the reap + this
 //! scan are /proc-based; the crate targets Linux).
+#![cfg(feature = "embedded-cli")]
 
 use std::time::{Duration, Instant};
 

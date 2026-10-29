@@ -1,5 +1,9 @@
 # call.rs
 
+## const CALL_DESCRIPTION
+The description in one place, so the client and the test driver advertise the
+same words (`server/client.rs`).
+
 ## fn call
 The host is resolved right after the nonce (`resolve_host`, `common.rs`). The data and
 the timeout cross to the engine as the agent's text, as `execute`'s do, so the request is

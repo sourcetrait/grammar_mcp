@@ -1,5 +1,6 @@
 //! The grammar builtin's rig: installed from this repository's `equip/`, each
 //! call runs by its bare name on the bundled plugins.
+#![cfg(feature = "embedded-cli")]
 
 use std::path::PathBuf;
 

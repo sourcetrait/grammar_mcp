@@ -1,6 +1,7 @@
 //! In-process equip lifecycle (new / uninstall) against the namespace on disk. The
 //! FRESH-PROCESS substrate init (keypair + repo creation at startup) is a SYSTEM
 //! concern -> `sourcetrait_grammar_tests` (substrate.rs).
+#![cfg(feature = "embedded-cli")]
 
 use std::path::Path;
 use std::process::Command;

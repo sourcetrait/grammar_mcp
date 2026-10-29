@@ -1,3 +1,5 @@
+#![cfg(feature = "embedded-cli")]
+
 use std::os::unix::fs::PermissionsExt;
 
 use sourcetrait_grammar_mcp::guts::{

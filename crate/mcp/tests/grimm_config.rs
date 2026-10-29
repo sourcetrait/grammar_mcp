@@ -5,6 +5,7 @@
 //! process the eval runs in, so a test can pin to its own pid and know for
 //! certain the process is alive - which is the one thing a spawned host could not
 //! give it.
+#![cfg(feature = "embedded-cli")]
 
 use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{

@@ -128,10 +128,10 @@ spread its traffic across identities to stay under the rate.
 ## static CHANNEL
 A process-global rather than a threaded parameter. The channel is
 one-per-process by design, exactly like CONFIG, and the alternative is passing
-an `Arc<ChannelHandle>` through NuSh, dispatch, the eval entry points and
+an `Arc<ChannelHandle>` through the server, dispatch, the eval entry points and
 `register_nuapi` - five signatures on the hot eval path - for a value that can
-never vary per eval. `NuSh` reads the same handle rather than owning its own, so
-the two can never diverge.
+never vary per eval. A server's Channel face reads the same handle rather than
+owning its own (`server/channel/face.rs`), so the two can never diverge.
 
 ## fn close_locked
 The teardown itself, with the lock already held, so the two entry points that

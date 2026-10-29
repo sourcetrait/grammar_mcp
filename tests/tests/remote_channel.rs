@@ -7,6 +7,7 @@
 //! `interface remote channel list`, the remotes file read and edited live, and the
 //! oversized event's spill. Keys are one-off and trusted directly, so this
 //! needs no OS trust store and runs unattended.
+#![cfg(feature = "embedded-cli")]
 
 use std::path::Path;
 use std::time::Duration;

@@ -1,5 +1,7 @@
 #[cfg(feature = "nu")]
 pub(crate) mod error;
+#[cfg(feature = "nu")]
+pub(crate) mod json;
 pub(crate) mod kind {
     pub(crate) mod compile;
     pub(crate) mod config;
@@ -67,5 +69,6 @@ pub use crate::{
 #[cfg(feature = "nu")]
 pub use crate::{
     error::{ConvertError, ConvertResult},
+    json::json_value_to_nu_value,
     val::{TryFromNu, TryIntoNu},
 };

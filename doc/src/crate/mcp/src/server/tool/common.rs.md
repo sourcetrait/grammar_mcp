@@ -1,8 +1,9 @@
 # common.rs
 
 ## struct NuSh
-One instance per process. The rmcp `#[tool_handler]` dispatches off `self.tool_router`,
-which is assembled deny-filtered at construction.
+The test driver's server, under `embedded-cli` alone; the serving MCP is the client
+(`server/client.rs`). One instance per process. The rmcp `#[tool_handler]` dispatches off
+`self.tool_router`, which is assembled deny-filtered at construction.
 
 ### field system
 Every eval, every equip action, and every signature block is the engine's answer to a
@@ -24,10 +25,9 @@ A clone of link.rs's process-wide registry, so the tools and the grimm sends see
 map. It is keyed by alias in both roles: a listener registers its link under the alias
 it opened, as a connector does.
 
-### field channel_open_lock
-ASYNC because it is held across an await; the channel's own state lock is a std Mutex
-precisely because the emit path must never need a runtime handle. The two locks differ in
-kind for opposite reasons, which is worth not "simplifying".
+### field face
+The Channel's commands on the same handle as `channel`, the face the client serves them
+through too (`server/channel/face.rs`), its open lock with it.
 
 ## fn NuSh::new
 The deny set is a PARAMETER rather than read from the config, because the one-shot CLI
@@ -38,9 +38,7 @@ The `mcp_nom` is the caller's, the process's one (`process_identity`), since the
 system's operator and emergency log are keyed by it too.
 
 ## fn NuSh::mint
-EVERY TOOL MINTS ITS NONCE FIRST, before any check, from its name and its parameters,
-so every envelope, a refusal's included, carries one. The name rides in the hash beside
-the parameters, so two tools given the same parameters at the same instant still part.
+`mint_nonce` on the server's generator (`server/identity.rs`), the client's minting too.
 The request carries the nonce to the engine, which runs the call under it.
 
 ## fn resolve_host
@@ -62,7 +60,7 @@ the text is the result, NUON the agent reads as it reads its own data.
 
 ## fn success
 A tool's own result struct crosses to nu through the serde bridge
-(`json_value_to_nu_value`), the crate's one JSON-to-Value path. `execute`, `rerun`, and
+(`json_value_to_nu_value`, nuval's), the workspace's one JSON-to-Value path. `execute`, `rerun`, and
 `call` hand their checked value to `success_value` as it is, so a duration stays a
 duration. A tool answering nothing carries `{nonce, result: null}`.
 

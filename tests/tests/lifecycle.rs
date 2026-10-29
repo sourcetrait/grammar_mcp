@@ -1,11 +1,12 @@
 //! Lifecycle SYSTEM tests for the conditions a nu definition cannot trigger on its
-//! own (a caught panic; a hung engine thread). They spawn the real host built with the
-//! mcp `test-hooks` feature (__test_panic / __test_hang) and are themselves gated
-//! behind this crate's `test-hooks` feature, so plain `cargo test --workspace`
-//! (which builds a no-hooks binary) skips them. Run:
-//!   cargo build -p sourcetrait_grammar_mcp --features test-hooks
-//!   cargo test -p sourcetrait_grammar_tests --features test-hooks -- --test-threads=1
-#![cfg(feature = "test-hooks")]
+//! own (a caught panic; a hung engine thread). They spawn the real host's test
+//! driver built with the mcp `embedded-cli` and `test-hooks` features
+//! (__test_panic / __test_hang) and are themselves gated behind both of this
+//! crate's, so plain `cargo test --workspace` (which builds a client binary)
+//! skips them. Run:
+//!   cargo build -p sourcetrait_grammar_mcp --features embedded-cli,test-hooks
+//!   cargo test -p sourcetrait_grammar_tests --features embedded-cli,test-hooks -- --test-threads=1
+#![cfg(all(feature = "embedded-cli", feature = "test-hooks"))]
 
 use std::time::{Duration, Instant};
 

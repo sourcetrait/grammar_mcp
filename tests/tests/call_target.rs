@@ -1,4 +1,5 @@
 //! A call runs its rig's committed copy, wherever the host starts.
+#![cfg(feature = "embedded-cli")]
 
 use sourcetrait_grammar_tests::*;
 use sourcetrait_common::testing::prelude::*;

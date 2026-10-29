@@ -3,6 +3,7 @@
 //! kind, and closing nothing succeeds. `channel_open` itself binds a socket and
 //! presents a CA-issued leaf, so it is exercised live on the test channel instead of
 //! here, where it would only be asserting the box's certificate installation.
+#![cfg(feature = "embedded-cli")]
 
 use sourcetrait_grammar_mcp::guts::{TestServer, error_kind, has_error};
 use sourcetrait_common::testing::prelude::*;

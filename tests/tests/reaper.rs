@@ -6,6 +6,7 @@
 //!
 //! SYSTEM tier: it needs a REAL host process to be the subreaper, and a real /proc view of
 //! that process's children. Neither is reachable in-process.
+#![cfg(feature = "embedded-cli")]
 
 use std::path::Path;
 use std::time::{Duration, Instant};

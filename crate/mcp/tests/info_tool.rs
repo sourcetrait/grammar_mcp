@@ -1,3 +1,5 @@
+#![cfg(feature = "embedded-cli")]
+
 use std::path::Path;
 
 use sourcetrait_grammar_mcp::guts::{

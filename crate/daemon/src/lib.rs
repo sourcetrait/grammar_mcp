@@ -3,6 +3,7 @@ pub(crate) mod bridge {}
 #[cfg(feature = "service")]
 pub(crate) mod cli {
     pub(crate) mod command;
+    pub(crate) mod oneshot;
 }
 pub(crate) mod error;
 pub(crate) mod event {}
@@ -19,7 +20,10 @@ pub(crate) mod session {}
 pub(crate) mod transport {}
 
 #[cfg(feature = "service")]
-pub(crate) use crate::cli::command::{GrammardCli, GrammardCmd};
+pub(crate) use crate::cli::{
+    command::{GrammardCli, GrammardCmd},
+    oneshot::run_oneshot,
+};
 
 pub(crate) use std::{
     fmt,

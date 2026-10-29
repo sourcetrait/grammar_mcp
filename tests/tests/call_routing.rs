@@ -1,5 +1,6 @@
 //! A call's `print` and `grimm dbg` land in that call's own logs, whichever call
 //! parsed the code that runs them.
+#![cfg(feature = "embedded-cli")]
 
 use std::path::Path;
 

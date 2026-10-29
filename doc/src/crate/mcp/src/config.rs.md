@@ -104,6 +104,11 @@ command gets flagged. That is why erring permissive is right here.
 Both files are required and expanded at load, so a missing one or an
 unresolvable variable fails at startup with its name, not at the first open.
 
+## fn merged_supervisor
+Under `embedded-cli` alone, with `Config.supervisor`: the operator reads the
+table. A client build accepts it, its shape held by the file layer, and ignores
+it, so one agent file serves either build.
+
 ## fn fraction_field
 The range is the operator's `check_fraction`, the one check a runtime pin is
 held to as well: a pin must not be able to reach a state a config load would

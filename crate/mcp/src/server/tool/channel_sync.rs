@@ -3,7 +3,7 @@ use crate::*;
 /// The packet field naming an attachment, absent from a line without one.
 const ATTACHED: &str = "attached";
 
-impl NuSh {
+impl ChannelFace {
     /// `interface channel sync`: the packets a sync channel queued since the last.
     pub(crate) async fn channel_sync(
         &self,

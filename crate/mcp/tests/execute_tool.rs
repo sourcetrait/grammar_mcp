@@ -1,5 +1,6 @@
 //! The `execute` tool end to end through the in-process harness: its lanes, its
 //! checks, its timeout, and `rerun` over its definitions.
+#![cfg(feature = "embedded-cli")]
 
 use serde_json::{Value, json};
 use sourcetrait_common::testing::prelude::*;

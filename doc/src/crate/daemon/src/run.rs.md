@@ -9,4 +9,5 @@ protocol on it.
 ## fn run
 Every command refuses with `Unimplemented`: a command that exits 0 before it
 exists would read as one that works. Each command replaces its refusal as its
-own code lands.
+own code lands; the local CLI's already runs through its declared stub
+(`cli/oneshot.rs`).

@@ -14,6 +14,7 @@ pub struct ExecuteParams {
     pub timeout: Option<String>,
 }
 
+#[cfg(feature = "embedded-cli")]
 #[mcp::tool_router(router = execute_router, vis = "pub(crate)")]
 impl NuSh {
     #[allow(clippy::doc_overindented_list_items)]

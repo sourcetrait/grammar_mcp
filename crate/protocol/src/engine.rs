@@ -241,6 +241,27 @@ pub struct Source {
     pub position: [u64; 2],
 }
 
+/// A byte offset's 1-based line and column in its source text.
+pub fn span_to_line_col(source: &str, byte_offset: usize) -> (usize, usize) {
+    let mut line = 1usize;
+    let mut col = 1usize;
+    for (i, b) in source.bytes().enumerate() {
+        if i >= byte_offset {
+            return (line, col);
+        }
+        if b == b'\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    (line, col)
+}
+
+/// The most rows one lint reports.
+pub const LINT_VIOLATION_CAP: usize = 3;
+
 /// One agent-facing diagnostic row.
 #[cereal::derived(Data)]
 pub struct Diagnostic {

@@ -1,3 +1,5 @@
+#![cfg(feature = "embedded-cli")]
+
 use std::process::Command;
 
 use sourcetrait_grammar_tests::*;

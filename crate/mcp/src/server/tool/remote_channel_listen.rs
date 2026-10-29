@@ -9,7 +9,7 @@ pub struct RemoteListenParams {
     pub on: Option<String>,
 }
 
-
+#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// `interface remote channel listen`: bind for a peer, blocking on the bind.
     pub(crate) async fn remote_listen(

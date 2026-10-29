@@ -1,6 +1,7 @@
 //! The destruction half: the per-namespace host lock, and the signal handlers that run
 //! the shutdown sweep. Both need a REAL process that can be signalled and killed, so
 //! both are system tests.
+#![cfg(feature = "embedded-cli")]
 
 use std::os::unix::process::ExitStatusExt;
 use std::path::Path;

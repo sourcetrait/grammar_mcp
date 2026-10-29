@@ -14,9 +14,14 @@ pub struct RerunParams {
     pub timeout: Option<String>,
 }
 
+/// The tool's description, the same on the client and the test driver.
+pub(crate) const RERUN_DESCRIPTION: &str =
+    "Re-evaluate an earlier `execute` call's definition with fresh data.";
+
+#[cfg(feature = "embedded-cli")]
 #[mcp::tool_router(router = rerun_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(description = "Re-evaluate an earlier `execute` call's definition with fresh data.")]
+    #[mcp::tool(description = RERUN_DESCRIPTION)]
     pub(crate) async fn rerun(
         &self,
         mcp::Parameters(p): mcp::Parameters<RerunParams>,

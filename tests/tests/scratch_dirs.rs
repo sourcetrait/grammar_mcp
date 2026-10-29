@@ -3,6 +3,7 @@
 //! The scratch directories are private to their process, exported to every
 //! definition, removed at an ordinary end, and swept once their owner is gone;
 //! each Channel open makes an inbox beside the transient one.
+#![cfg(feature = "embedded-cli")]
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

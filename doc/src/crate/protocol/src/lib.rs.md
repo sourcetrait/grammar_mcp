@@ -20,9 +20,10 @@ deny words, with both rendered blocks, shared by a frontend's description and
 deny parsing and the runtime's dispatch.
 
 ## mod engine
-The engine's requests, commands, and answers, with the diagnostics, the error,
-and the documents they carry, moved here from the engine so the frontend and
-the daemon share one definition; the engine re-exports them.
+The engine's requests, commands, and answers, with the diagnostics, their cap
+and positions, the error, and the documents they carry, moved here from the
+engine so the frontend and the daemon share one definition; the engine
+re-exports them.
 
 ## mod error
 The runtime's and the transport's errors, each rendering to the envelope's rows,

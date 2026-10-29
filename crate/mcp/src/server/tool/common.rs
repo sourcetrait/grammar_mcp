@@ -1,5 +1,7 @@
 use crate::*;
 
+/// The test driver's server: the four tools on the in-process engine.
+#[cfg(feature = "embedded-cli")]
 pub struct NuSh {
     /// mcp's system, which the engine's requests go through.
     pub(crate) system: Arc<McpHandle>,
@@ -10,8 +12,8 @@ pub struct NuSh {
     pub(crate) interface_engine: Arc<nu::EngineState>,
     /// The host's single packet channel; present but CLOSED at startup.
     pub(crate) channel: Arc<ChannelHandle>,
-    /// Serializes `channel_open`'s decide-then-start across its await.
-    pub(crate) channel_open_lock: Arc<tk::AsyncMutex<()>>,
+    /// The Channel's commands, on the same channel and its open lock.
+    pub(crate) face: ChannelFace,
     /// Which purview ids this host has in view; SESSION-resident.
     pub(crate) current_purview: Arc<CurrentPurview>,
     /// The process-wide registry of established remote links, keyed by alias.
@@ -20,11 +22,13 @@ pub struct NuSh {
 }
 
 /// One open remote link plus the peer address, for the registry and listing.
+#[cfg(feature = "embedded-cli")]
 pub(crate) struct RemoteLinkEntry {
     pub handle: RemoteLinkHandle,
     pub addr: std::net::SocketAddr,
 }
 
+#[cfg(feature = "embedded-cli")]
 impl NuSh {
     pub(crate) fn new(
         nonce_gen: Arc<datum::NonceGenerator>,
@@ -32,29 +36,27 @@ impl NuSh {
         system: Arc<McpHandle>,
         deny: &DenySet,
     ) -> Self {
+        let face = ChannelFace::new(nonce_gen.clone(), mcp_nom.clone());
         Self {
             system,
             nonce_gen,
             mcp_nom,
             interface_engine: Arc::new(interface_engine(deny)),
-            channel: channel_handle(),
-            channel_open_lock: Arc::new(tk::AsyncMutex::new(())),
+            channel: face.channel.clone(),
+            face,
             current_purview: Arc::new(CurrentPurview::new()),
             remote_links: remote_links(),
             tool_router: Self::tool_router(),
         }
     }
-}
 
-impl NuSh {
     /// A call's nonce, minted first from its tool and its parameters.
     pub(crate) fn mint<P: ser::Serialize>(
         &self,
         tool: &str,
         params: &P,
     ) -> datum::NoncePair {
-        let payload = json::to_vec(params).unwrap_or_default();
-        self.nonce_gen.generate_with(&(tool, payload)).into_pair()
+        mint_nonce(&self.nonce_gen, tool, params)
     }
 
     /// The signature block within pattern strings, as the engine renders it.
@@ -78,6 +80,7 @@ pub(crate) fn resolve_host(alias: &str) -> GrammarMcpResult<Host> {
 }
 
 /// The internal error an answer of another command's kind is.
+#[cfg(feature = "embedded-cli")]
 pub(crate) fn unexpected(command: &str) -> GrammarMcpError {
     GrammarMcpError::Internal {
         phase: format!("engine::{command}"),
@@ -129,6 +132,7 @@ pub(crate) fn success_void(nonce: datum::Nonce) -> Result<mcp::CallToolResult, m
 }
 
 /// A call's value from the engine, its nushell form, or why it has none.
+#[cfg(feature = "embedded-cli")]
 pub(crate) fn answer_value(answer: EngineResult<ValueAnswer>) -> GrammarMcpResult<nu::Value> {
     let value = answer?.result?;
     value

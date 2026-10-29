@@ -1,5 +1,6 @@
 //! The host's startup held to nushell's own on a pinned env: `$nu`'s paths, the
 //! startup env and constants, std, and `print`, through both of `execute`'s lanes and call.
+#![cfg(feature = "embedded-cli")]
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

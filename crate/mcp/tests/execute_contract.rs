@@ -1,4 +1,5 @@
 //! The execute contract over `execute` definitions, through `guts::analyze_definition`.
+#![cfg(feature = "embedded-cli")]
 
 use serde_json::Value;
 use sourcetrait_grammar_mcp::guts::analyze_definition;

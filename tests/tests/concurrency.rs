@@ -5,6 +5,7 @@
 //! saturates to exactly the cap and never past it. A SYSTEM test: it needs real
 //! pipelined concurrency against the spawned binary plus the process-global
 //! concurrency cap.
+#![cfg(feature = "embedded-cli")]
 
 use std::time::{Duration, Instant};
 

@@ -13,13 +13,6 @@ the keyword wins at parse under `use`, `overlay use` and `overlay use --prefix` 
 aliasing the overlay sidesteps the namespace entirely and the drive is a constant
 rather than the target's own name.
 
-## fn json_value_to_nu_value
-Also the write half of the rig index's NUON round-trip and the serde bridge every
-tool's record crosses, which is why it is in the engine's public face rather than
-private to the templates. An out-of-range number degrades to a string rather than
-failing, on the reasoning that a value the agent sent is better preserved lossily than
-rejected.
-
 ## fn build_call_source
 Four pieces, each load-bearing and none of them obvious:
 

@@ -1,5 +1,6 @@
 //! The definition cache behind `rerun`: written before dispatch, so every `execute`
 //! call's nonce is a handle, a timed-out one's included.
+#![cfg(feature = "embedded-cli")]
 
 use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{TestServer, error_kind, has_error};

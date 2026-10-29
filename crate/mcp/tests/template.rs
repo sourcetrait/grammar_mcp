@@ -3,6 +3,7 @@
 //! Integration rather than unit: `parses_clean` builds a full-shell
 //! `ParseEngine`, its plugin registry read off disk, so it rides the resource
 //! caveat.
+#![cfg(feature = "embedded-cli")]
 
 use std::path::Path;
 

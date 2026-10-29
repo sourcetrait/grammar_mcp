@@ -354,7 +354,7 @@ impl TestServer {
     /// `interface channel ready`; its result is null.
     pub fn channel_verified(&self) -> json::Value {
         let nonce = self.interface_nonce(&"channel ready");
-        Self::envelope(self.rt.block_on(self.nush.channel_ready(nonce)))
+        Self::envelope(self.rt.block_on(self.nush.face.channel_ready(nonce)))
     }
 
     /// A PARTIAL update; pass `None` for anything that should not move.
@@ -372,13 +372,13 @@ impl TestServer {
             spam_error_rate: error_rate,
         };
         let nonce = self.interface_nonce(&p);
-        Self::envelope(self.rt.block_on(self.nush.channel_config(nonce, p)))
+        Self::envelope(self.rt.block_on(self.nush.face.channel_config(nonce, p)))
     }
 
     /// `interface channel close`; closing a closed channel succeeds.
     pub fn channel_close(&self) -> json::Value {
         let nonce = self.interface_nonce(&"channel close");
-        Self::envelope(self.rt.block_on(self.nush.channel_close(nonce)))
+        Self::envelope(self.rt.block_on(self.nush.face.channel_close(nonce)))
     }
 
     /// Each routed tool as `tools/list` carries it.

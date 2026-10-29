@@ -17,6 +17,10 @@ their words under their topics, rendered from the table the parse registers
 interface` and the grammar-mcp skill, keeping the description small as the
 commands grow (User).
 
+## const INTERFACE_DESCRIPTION
+The router's stub, which `interface_description` replaces on the client's
+router and the test driver's alike, so both carry the same description.
+
 ## fn interface
 The nonce is minted FIRST, over the tool's name and the command text, so a
 refusal at the parse carries one exactly as a dispatched command's answer does.
@@ -26,6 +30,9 @@ under that same nonce: each command's method takes the nonce rather than minting
 its own.
 
 ## fn run_interface
-One `match`, each arm a command's method. No command dispatches an eval, so
+One `match`, each arm a command's method, the Channel's through the face the
+client shares (`server/channel/face.rs`). No command dispatches an eval, so
 none appears in `interface process list`'s table and none takes a lane or a
 permit; a command's own locks are taken inside its method as its tool took them.
+It is the test driver's: the client runs the frontend's commands and answers the
+rest unavailable (`server/client.rs`).

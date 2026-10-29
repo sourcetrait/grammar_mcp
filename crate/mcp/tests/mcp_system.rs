@@ -1,6 +1,7 @@
 //! mcp's system with both its components: a request reaches the engine through it,
 //! the operator holds the namespace's host lock while it runs, and the ordered
 //! shutdown stops them both. Its own binary, since the host lock is the namespace's.
+#![cfg(feature = "embedded-cli")]
 
 use sourcetrait_grammar_mcp::guts::SupervisedSystem;
 

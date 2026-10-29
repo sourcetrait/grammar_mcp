@@ -93,6 +93,15 @@ directly, rather than a nested source-carrier the reader would have to unwrap.
 usize line and column through nuval's `wide`, which never alters one: the same
 diagnostic reads the same from any platform's worker.
 
+## fn span_to_line_col
+A row's position as the agent reads its own text, 1-based. It lives beside the
+row, so the engine and the frontend's interface parse position their rows one
+way.
+
+## const LINT_VIOLATION_CAP
+The most rows one refusal reports: the lint's, the validator's, and the
+interface parse's, so the client caps its refusals with no engine.
+
 ## struct Diagnostic
 The single type for both a validation finding and a body-lint finding - one shape
 the wire and the check summary both carry.

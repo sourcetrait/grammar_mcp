@@ -6,6 +6,7 @@
 //!
 //! Each test resets the table first and uses unique rig and purview names, so
 //! nothing here depends on the order cargo happens to run them in.
+#![cfg(feature = "embedded-cli")]
 
 use std::path::Path;
 

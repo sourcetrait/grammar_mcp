@@ -1,16 +1,21 @@
 //! System-test harness for `grammar-mcp`.
 //!
-//! These tests spawn the REAL host binary - the one-shot `cli` subcommand or the
-//! JSON-RPC server over stdio - so they are SYSTEM tests and live outside the mcp
+//! These tests spawn the REAL host binary - the bare serving client, the
+//! `test-driver` JSON-RPC server over stdio on the in-process engine, or the
+//! one-shot `cli` subcommand - so they are SYSTEM tests and live outside the mcp
 //! crate to keep its own `cargo test` fast. The binary is located from the test
 //! binary's own path (`current_exe()` -> the `target/<profile>/grammar-mcp`
-//! sibling of `deps/`), so it must be built first:
-//! `cargo build -p sourcetrait_grammar_mcp` (or `cargo test --workspace`).
+//! sibling of `deps/`), so it must be built first, in the same target directory:
+//! `cargo build -p sourcetrait_grammar_mcp` for the client tests alone, and
+//! `--features embedded-cli` on both crates for the legacy cohort, which drives
+//! `test-driver` and `cli`.
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};
@@ -19,6 +24,10 @@ use serde_json::{Value, json};
 
 pub mod remote;
 pub use remote::*;
+
+/// The entry a legacy host serves under: MCP over stdio on the in-process engine,
+/// which only a binary built with mcp's `embedded-cli` carries.
+pub const TEST_DRIVER: &str = "test-driver";
 
 /// The `grammar-mcp` host binary, beside the running test binary's `deps/`.
 ///
@@ -69,6 +78,7 @@ fn scratch_bases(scratch: &Path) -> (PathBuf, PathBuf) {
     let run = scratch.join("run");
     for base in [&tmp, &run] {
         std::fs::create_dir_all(base).expect("mkdir a scratch base");
+        #[cfg(unix)]
         std::fs::set_permissions(base, std::fs::Permissions::from_mode(0o700))
             .expect("a scratch base's mode");
     }
@@ -145,7 +155,27 @@ impl Host {
     /// The test owns the first message, as a client probing before `initialize`
     /// does.
     pub fn spawn_uninitialized(scratch: &Path, stderr_log: &Path) -> Self {
-        Self::start(scratch, &[], &[], None, Some(stderr_log))
+        Self::start(Some(TEST_DRIVER), scratch, &[], &[], None, Some(stderr_log))
+    }
+
+    /// A host on the bare entry, serving as a client, with extra CLI args.
+    pub fn spawn_client(scratch: &Path, args: &[&str]) -> Self {
+        let mut host = Self::start(None, scratch, args, &[], None, None);
+        host.initialize();
+        host
+    }
+
+    /// `spawn_client` in a working directory, for a host whose `[identity]` must
+    /// resolve.
+    pub fn spawn_client_in(scratch: &Path, args: &[&str], cwd: &Path) -> Self {
+        let mut host = Self::start(None, scratch, args, &[], Some(cwd), None);
+        host.initialize();
+        host
+    }
+
+    /// A client host with its stderr in `stderr_log` and nothing sent.
+    pub fn spawn_client_uninitialized(scratch: &Path, args: &[&str], stderr_log: &Path) -> Self {
+        Self::start(None, scratch, args, &[], None, Some(stderr_log))
     }
 
     fn spawn_core(
@@ -155,12 +185,15 @@ impl Host {
         cwd: Option<&Path>,
         stderr_log: Option<&Path>,
     ) -> Self {
-        let mut host = Self::start(scratch, args, envs, cwd, stderr_log);
+        let mut host = Self::start(Some(TEST_DRIVER), scratch, args, envs, cwd, stderr_log);
         host.initialize();
         host
     }
 
+    /// Spawn the binary on `entry`, its subcommand after the CLI args, or on the
+    /// bare entry when none.
     fn start(
+        entry: Option<&str>,
         scratch: &Path,
         args: &[&str],
         envs: &[(&str, &str)],
@@ -180,6 +213,7 @@ impl Host {
         };
         let mut cmd = Command::new(grammar_mcp_bin());
         cmd.args(args)
+            .args(entry)
             .env("XDG_DATA_HOME", &data_home)
             .env("XDG_CACHE_HOME", &cache_home)
             .env("UENV_USR_DATA", &data_home)
@@ -233,6 +267,7 @@ impl Host {
     /// own terms (`code() == Some(128 + signo)`), while one that merely took the
     /// signal's default action is reported as killed by the signal (`code() == None`,
     /// `signal() == Some(signo)`). Only the former proves the shutdown sweep ran.
+    #[cfg(unix)]
     pub fn signal_and_wait(
         &mut self,
         signal: nix::sys::signal::Signal,
@@ -393,8 +428,9 @@ impl Host {
         }
     }
 
-    /// The legacy handshake: `initialize`, then `notifications/initialized`.
-    pub fn initialize(&mut self) {
+    /// The legacy handshake: `initialize`, then `notifications/initialized`; the
+    /// `initialize` response, its server info and instructions.
+    pub fn initialize(&mut self) -> Value {
         let id = self.next_id();
         self.send(&json!({
             "jsonrpc": "2.0",
@@ -406,11 +442,12 @@ impl Host {
                 "clientInfo": {"name": "grammar-system-tests", "version": "0.0.1"}
             }
         }));
-        let _ = self.read_id(id);
+        let reply = self.read_id(id);
         self.send(&json!({
             "jsonrpc": "2.0",
             "method": "notifications/initialized",
         }));
+        reply
     }
 
     /// Send a `tools/call` without reading its response; the request id.
@@ -595,7 +632,7 @@ pub fn nu_literal(text: &str) -> String {
 /// signal names the mechanism (SIGSEGV = a memory fault, which for a parser means a
 /// stack overflow far more often than anything else).
 pub fn describe_exit(status: &std::process::ExitStatus) -> String {
-    match (status.code(), status.signal()) {
+    match (status.code(), exit_signal(status)) {
         (Some(code), _) => format!("exited with code {code}"),
         (None, Some(sig)) => {
             let name = match sig {
@@ -609,6 +646,18 @@ pub fn describe_exit(status: &std::process::ExitStatus) -> String {
         }
         (None, None) => "ended for an unknown reason".to_string(),
     }
+}
+
+/// The signal that ended a child, on Unix.
+#[cfg(unix)]
+fn exit_signal(status: &std::process::ExitStatus) -> Option<i32> {
+    status.signal()
+}
+
+/// Off Unix no signal ends a child.
+#[cfg(not(unix))]
+fn exit_signal(_status: &std::process::ExitStatus) -> Option<i32> {
+    None
 }
 
 /// An `execute` call's arguments: its definition and its data's NUON text.

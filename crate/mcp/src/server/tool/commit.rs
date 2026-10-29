@@ -7,6 +7,7 @@ pub struct CommitParams {
     pub namepath: String,
 }
 
+#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// `interface equip commit`: an equip's source promoted into the namespace.
     pub(crate) async fn equip_commit(

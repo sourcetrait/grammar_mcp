@@ -1,9 +1,8 @@
 use crate::*;
-use sourcetrait_grammar_protocol::MCP_RESERVED_PREFIX;
 use crate::server::emergency::{emergency_line, emergency_model};
-use sourcetrait_grammar_operator::{
+use sourcetrait_grammar_protocol::{
     BackgroundJobsWarningEmergency, CpuWarningEmergency, CriticalEmergency, DiskWarningEmergency,
-    HungEngineThreadEmergency, RamWarningEmergency, VramWarningEmergency,
+    HungEngineThreadEmergency, MCP_RESERVED_PREFIX, RamWarningEmergency, VramWarningEmergency,
 };
 
 fn a_hang() -> Emergency {

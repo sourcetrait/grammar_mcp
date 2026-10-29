@@ -1,5 +1,11 @@
 use crate::*;
 
+/// The stack every runtime worker gets, the size of an eval thread's.
+const WORKER_STACK_SIZE: usize = 64 * 1024 * 1024;
+
+#[cfg(feature = "embedded-cli")]
+const _: () = assert!(WORKER_STACK_SIZE >= EVAL_STACK_SIZE);
+
 /// Set a home from its flag, under its UENV name too, so the flag wins.
 fn set_cli_env_path(k: &'static str, v: &Option<PathBuf>) -> Result<(), String> {
     let Some(v) = v else { return Ok(()) };
@@ -43,7 +49,7 @@ pub fn run_with(cli: Cli) -> process::ExitCode {
 fn run(cli: Cli) -> process::ExitCode {
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
-        .thread_stack_size(EVAL_STACK_SIZE)
+        .thread_stack_size(WORKER_STACK_SIZE)
         .build()
     {
         Ok(runtime) => runtime,
@@ -76,23 +82,56 @@ async fn serve_or_oneshot(cli: Cli) -> process::ExitCode {
         }
     };
     CONFIG.set(config).expect("CONFIG set once at startup");
-    if let Err(reason) = init_engine() {
-        eprintln!("{reason}");
-        remove_scratch_dirs();
-        return process::ExitCode::from(2);
-    }
     let code = match command {
-        None => match run_server().await {
+        None => match serve_client().await {
             Ok(()) => process::ExitCode::SUCCESS,
             Err(reason) => {
                 eprintln!("grammar: {reason}");
                 process::ExitCode::FAILURE
             }
         },
-        Some(CliCmd::Cli { tool }) => run_oneshot(tool).await,
+        Some(CliCmd::Cli { tool }) => run_cli(tool).await,
+        #[cfg(feature = "embedded-cli")]
+        Some(CliCmd::TestDriver) => run_test_driver().await,
     };
     remove_scratch_dirs();
     code
+}
+
+/// The local CLI: one tool call on the in-process engine, its envelope printed.
+#[cfg(feature = "embedded-cli")]
+async fn run_cli(tool: CliTool) -> process::ExitCode {
+    if let Err(reason) = init_engine() {
+        eprintln!("{reason}");
+        return process::ExitCode::from(2);
+    }
+    run_oneshot(tool).await
+}
+
+/// Without the in-process engine there is no local CLI; say what carries one.
+#[cfg(not(feature = "embedded-cli"))]
+async fn run_cli(_tool: CliTool) -> process::ExitCode {
+    eprintln!(
+        "grammar: the local CLI is not in this build: it runs on the in-process engine, \
+         which only a build with the embedded-cli feature carries"
+    );
+    process::ExitCode::from(2)
+}
+
+/// The test driver: MCP over stdio on the in-process engine, for legacy tests.
+#[cfg(feature = "embedded-cli")]
+async fn run_test_driver() -> process::ExitCode {
+    if let Err(reason) = init_engine() {
+        eprintln!("{reason}");
+        return process::ExitCode::from(2);
+    }
+    match run_server().await {
+        Ok(()) => process::ExitCode::SUCCESS,
+        Err(reason) => {
+            eprintln!("grammar: {reason}");
+            process::ExitCode::FAILURE
+        }
+    }
 }
 
 /// `--test` supplies a default namespace, never an override.

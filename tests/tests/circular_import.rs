@@ -5,6 +5,7 @@
 //! leave nothing to assert on - only a spawned host can be watched from outside while
 //! it dies. Both paths that can reach a cycle are covered: a definition's direct `use`,
 //! and the rig validator.
+#![cfg(feature = "embedded-cli")]
 
 use std::path::Path;
 use std::time::Duration;

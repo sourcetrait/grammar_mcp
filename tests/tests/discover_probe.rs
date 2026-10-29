@@ -1,5 +1,6 @@
 //! A client's first message before `initialize`: Claude Code's `server/discover`
 //! probe and its kin, each answered or refused, never a panic.
+#![cfg(feature = "embedded-cli")]
 
 use std::path::Path;
 use std::time::Duration;

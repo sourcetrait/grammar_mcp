@@ -3,13 +3,29 @@
 The manifest carries no prose of its own by convention, so what follows is only
 what a reader of it could reasonably get wrong.
 
+## cfg_attr allow(dead_code, unused_imports)
+A build without `embedded-cli` serves a narrow surface over the shared facade:
+the Channel's state, the emergency lines, the remotes file, and the interface
+catalog compile whole, their breadth serving the test driver. The allow is that
+build's alone. The `embedded-cli` build compiles every module with both lints,
+and clippy runs over it, so code dead there still fails.
+
+## cfg embedded-cli
+The engine, the operator, nix, and every module that reaches them - the host,
+the system, the operator's watch, the purviews, the remote links, the cert
+profile, the one-shot, the test driver's server, and `guts` - compile under
+`embedded-cli` alone, as does each tool's engine-side method; each tool's
+parameters stay in every build, since the interface parse carries them. The
+client, the Channel, the interface parse, the config, and the scratch
+directories compile in every build.
+
 ## mod schema
 The shim re-exporting `schemars::JsonSchema`, reached only through the
 `schema::JsonSchema` path on a derive.
 
 ## use sourcetrait_grammar_engine
 The engine's public face named bare, as mcp's own items are, and the crate
-itself as `engine`, the path its `init` is called by.
+itself as `engine`, the path its `init` is called by, under `embedded-cli`.
 
 ## use futures_util
 `SinkExt` and `StreamExt`, and `PemObject` beside them, ride at CRATE ROOT

@@ -8,12 +8,14 @@ pub struct InspectParams {
 }
 
 /// Success result of `interface help`.
+#[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct InspectResult {
     /// An exact namepath's documentation, or a pattern's `signatures` block.
     pub doc: InspectDoc,
 }
 
+#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// `interface help`: documentation for a rig, a module, a call, or a pattern.
     pub(crate) async fn help(

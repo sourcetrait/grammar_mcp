@@ -1,6 +1,7 @@
 //! The MCP's own plugin registry: a host registers the plugins its plugin
 //! directory bundles by kind, lists them, and runs them, and it reads no other
 //! registry.
+#![cfg(feature = "embedded-cli")]
 
 use std::path::{Path, PathBuf};
 

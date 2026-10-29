@@ -12,6 +12,10 @@ data behind `#[cfg(feature = "nu")]`; a kind's code and message, an error's
 ## mod kind
 One file a nushell error type's family of kinds, the error model's tables.
 
+## mod json
+The serde_json bridge into nushell's values, behind `nu`, shared by the engine
+and the MCP client.
+
 ## use snafu::OptionExt
 A trait in scope for its `context` on an `Option`: a range's second value
 overflowing, and a row index past the platform's usize.

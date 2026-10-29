@@ -1,6 +1,7 @@
 //! The `interface` tool end to end through the in-process harness: every
 //! command reached through its parse and dispatch, answering as its tool did,
 //! and the refusals the contract makes.
+#![cfg(feature = "embedded-cli")]
 
 use serde_json::{Value, json};
 use sourcetrait_common::testing::prelude::*;

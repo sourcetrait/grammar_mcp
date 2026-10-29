@@ -198,27 +198,27 @@ pub use crate::{
     execute::{ExecuteDef, analyze_definition},
     executor::{Executor, eval_concurrency_cap},
     host::{ChannelSend, EngineHost, RemoteSend},
-    lint::{LINT_VIOLATION_CAP, lint_block},
+    lint::lint_block,
     namepath::{
         Namepath, NamepathPattern, NamepathRef, NamepathStr, PATTERN_ALL, PATTERN_CURRENT,
         resolve_builtin,
     },
     nuapi::grimm::common::{GRIMM, grimm_signatures},
     params::{EngineParams, init},
-    parse_engine::{
-        LintEngine, ParseEngine, file_start, span_text, span_to_line_col, wrap_as_module,
-    },
+    parse_engine::{LintEngine, ParseEngine, file_start, span_text, wrap_as_module},
     plugins::{ensure_plugin_registry, list_registered_plugins},
     schema::{NuTypedef, check_value, typedef_text},
     system::{EngineHandle, EngineSysConfig, EngineSysParams, EngineSysPaths, EngineSystem},
-    template::{build_call_source, build_execute_source, json_value_to_nu_value},
+    template::{build_call_source, build_execute_source},
 };
+
+pub use nuval::json_value_to_nu_value;
 
 pub use sourcetrait_grammar_protocol::{
     BUILTINS, CallDoc, CallRequest, CheckSummary, CommitResult, ControlAnswer, ControlRequest,
     Diagnostic, EngineCommand, EngineError, EngineHealth, EngineResult, ExecuteRequest,
-    FromEngineSys, Host, HungEval, InspectDoc, Lane, ModuleDoc, PluginInfo, ProcessRow,
-    RerunRequest, RigDoc,
+    FromEngineSys, Host, HungEval, InspectDoc, LINT_VIOLATION_CAP, Lane, ModuleDoc, PluginInfo,
+    ProcessRow, RerunRequest, RigDoc,
     Severity, SignaturesDoc, Source, ToEngineSys, ValueAnswer, builtin_equip, builtin_name,
-    display_equip,
+    display_equip, span_to_line_col,
 };

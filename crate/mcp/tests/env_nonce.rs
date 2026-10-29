@@ -1,3 +1,5 @@
+#![cfg(feature = "embedded-cli")]
+
 use sourcetrait_grammar_mcp::guts::{TestServer, has_error, write_tree};
 use sourcetrait_common::testing::prelude::*;
 

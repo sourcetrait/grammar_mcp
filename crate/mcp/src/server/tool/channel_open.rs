@@ -68,7 +68,7 @@ fn arm_verify_timer(channel: Arc<ChannelHandle>) {
     });
 }
 
-impl NuSh {
+impl ChannelFace {
     /// `interface channel open`: open the packet channel in its mode.
     pub(crate) async fn channel_open(
         &self,

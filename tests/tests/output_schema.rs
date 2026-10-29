@@ -1,5 +1,6 @@
 //! No tool declares an output schema, and every result is one NUON text content
 //! led by its nonce, a failure's as much as a success's, never structured content.
+#![cfg(feature = "embedded-cli")]
 
 use serde_json::{Value, json};
 use sourcetrait_grammar_tests::*;

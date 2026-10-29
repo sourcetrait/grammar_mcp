@@ -37,7 +37,7 @@ impl From<SpamThresholds> for ConfigChannelResult {
     }
 }
 
-impl NuSh {
+impl ChannelFace {
     /// `interface channel config`: read or adjust the send-rate thresholds.
     pub(crate) async fn channel_config(
         &self,

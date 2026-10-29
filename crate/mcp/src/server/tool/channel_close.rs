@@ -4,7 +4,7 @@ use crate::*;
 const CLOSE_PLANNED: u16 = 1000;
 const PLANNED_REASON: &str = "channel closed";
 
-impl NuSh {
+impl ChannelFace {
     /// `interface channel close`: close the packet channel and its inbox.
     pub(crate) async fn channel_close(
         &self,

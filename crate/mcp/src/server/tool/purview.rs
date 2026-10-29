@@ -1,6 +1,7 @@
 use crate::*;
 
 /// Success result of `interface purview set`.
+#[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct PurviewSetResult {
     /// `info`'s `signatures` for what this call brought INTO view, or null.
@@ -14,6 +15,7 @@ pub struct PurviewParams {
     pub purviews: Vec<String>,
 }
 
+#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// `interface purview set`: replace the current view with these purviews.
     pub(crate) async fn purview_set(

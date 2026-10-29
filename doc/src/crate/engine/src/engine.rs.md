@@ -51,8 +51,9 @@ A failure converting the env or loading std is reported and survived, as a
 failed plugin load is: the engine still serves every body that needs neither.
 
 No `setsid()`: the host is a child of the MCP client and cannot detach its own
-controlling terminal. The TLS crypto provider is installed in mcp's `NuSh::new`,
-not here, since nushell reads its own OnceLock once per process.
+controlling terminal. No TLS crypto provider is installed here: mcp names
+ring's on each TLS config it builds, the Channel's hub and the remote links,
+since nushell reads its own OnceLock once per process.
 
 ## fn add_print
 On every engine, as nushell's own startup puts `print` on its own, so the

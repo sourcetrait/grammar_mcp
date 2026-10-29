@@ -15,5 +15,8 @@ pub fn run_main() -> process::ExitCode {
 
 /// Runs one command; this build implements none, so each refuses.
 fn run(command: GrammardCmd) -> DaemonResult<()> {
-    Err(DaemonError::Unimplemented { command: command.name() })
+    match command {
+        GrammardCmd::Cli => run_oneshot(),
+        command => Err(DaemonError::Unimplemented { command: command.name() }),
+    }
 }

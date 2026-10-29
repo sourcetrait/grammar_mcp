@@ -1,5 +1,6 @@
 //! The builtins' install: a namespace made at a host's startup gets each builtin
 //! its deploy holds, and their purviews; an existing namespace is never touched.
+#![cfg(feature = "embedded-cli")]
 
 use std::path::{Path, PathBuf};
 

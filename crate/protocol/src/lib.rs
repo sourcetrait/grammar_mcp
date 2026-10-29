@@ -36,9 +36,9 @@ pub use crate::{
     engine::{
         BUILTINS, CallDoc, CallRequest, CheckSummary, CommitResult, ControlAnswer, ControlRequest,
         Diagnostic, EngineCommand, EngineError, EngineHealth, EngineResult, ExecuteRequest,
-        FromEngineSys, Host, HungEval, InspectDoc, Lane, ModuleDoc, ProcessRow, RerunRequest,
-        RigDoc, Severity, SignaturesDoc, Source, ToEngineSys, ValueAnswer, builtin_equip,
-        builtin_name, display_equip,
+        FromEngineSys, Host, HungEval, InspectDoc, LINT_VIOLATION_CAP, Lane, ModuleDoc,
+        ProcessRow, RerunRequest, RigDoc, Severity, SignaturesDoc, Source, ToEngineSys,
+        ValueAnswer, builtin_equip, builtin_name, display_equip, span_to_line_col,
     },
     error::{LOCAL_HOST, RuntimeError, TransportError},
     operator::{

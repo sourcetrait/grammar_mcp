@@ -1,5 +1,6 @@
 //! The `host` every tool takes: `local` is this MCP's own host, and any other
 //! alias is refused as `host::unknown` before the tool does anything.
+#![cfg(feature = "embedded-cli")]
 
 use serde_json::json;
 use sourcetrait_common::testing::prelude::*;

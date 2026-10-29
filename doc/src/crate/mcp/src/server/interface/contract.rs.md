@@ -13,12 +13,13 @@ calls the tool's own logic with the very value the tool used to deserialize.
 nushell's own parser over the interface engine, so the arguments' types are
 checked by the commands' signatures, as any Nu call's are, and an error lands
 at the agent's line and column, measured from the command's start in the span
-space (`file_start`), since a working set numbers spans after whatever the
-engine holds.
+space (`get_span_for_filename`, as the engine's `file_start` reads it), since a
+working set numbers spans after whatever the engine holds.
 
 A parse error is refused before anything else is read: a refused parse's
 expressions are garbage. The rows are deduplicated and capped as a definition's
-are.
+are, by the protocol's `LINT_VIOLATION_CAP`, so the client caps them with no
+engine.
 
 ## fn held_call
 THE TWO RULES, made structural. One statement, one pipeline element, no

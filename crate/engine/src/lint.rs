@@ -1,11 +1,6 @@
 //! The definition lint: hard-coded paths and denied externals, read off the AST.
 use crate::*;
 
-
-/// The most rows one lint reports.
-pub const LINT_VIOLATION_CAP: usize = 3;
-
-
 /// The prefixes that start a path a definition hard-codes.
 const PATH_PREFIXES: &[&str] = &["/", "~/", "./", "../"];
 

@@ -20,9 +20,13 @@ pub(crate) fn interface_description(deny: &DenySet) -> String {
     format!("{}\n\n{}", INTERFACE_PRETEXT.trim_end(), render_command_list(deny))
 }
 
+/// The tool's stub description; the router carries `interface_description`.
+pub(crate) const INTERFACE_DESCRIPTION: &str = "Interfaces directly with the Grammar MCP.";
+
+#[cfg(feature = "embedded-cli")]
 #[mcp::tool_router(router = interface_router, vis = "pub(crate)")]
 impl NuSh {
-    #[mcp::tool(description = "Interfaces directly with the Grammar MCP.")]
+    #[mcp::tool(description = INTERFACE_DESCRIPTION)]
     pub(crate) async fn interface(
         &self,
         mcp::Parameters(p): mcp::Parameters<InterfaceParams>,
@@ -40,6 +44,7 @@ impl NuSh {
     }
 }
 
+#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// Run a parsed command under the interface call's nonce.
     pub(crate) async fn run_interface(
@@ -56,11 +61,11 @@ impl NuSh {
             InterfaceCommand::PurviewSet(p) => self.purview_set(nonce, p).await,
             InterfaceCommand::PurviewExtend(p) => self.purview_extend(nonce, p).await,
             InterfaceCommand::PurviewConfigure(p) => self.purview_configure(nonce, p).await,
-            InterfaceCommand::ChannelOpen(p) => self.channel_open(nonce, p).await,
-            InterfaceCommand::ChannelSync => self.channel_sync(nonce).await,
-            InterfaceCommand::ChannelReady => self.channel_ready(nonce).await,
-            InterfaceCommand::ChannelClose => self.channel_close(nonce).await,
-            InterfaceCommand::ChannelConfig(p) => self.channel_config(nonce, p).await,
+            InterfaceCommand::ChannelOpen(p) => self.face.channel_open(nonce, p).await,
+            InterfaceCommand::ChannelSync => self.face.channel_sync(nonce).await,
+            InterfaceCommand::ChannelReady => self.face.channel_ready(nonce).await,
+            InterfaceCommand::ChannelClose => self.face.channel_close(nonce).await,
+            InterfaceCommand::ChannelConfig(p) => self.face.channel_config(nonce, p).await,
             InterfaceCommand::RemoteList => self.remote_list(nonce).await,
             InterfaceCommand::RemoteGet(p) => self.remote_get(nonce, p).await,
             InterfaceCommand::RemoteSet(p) => self.remote_set(nonce, p).await,

@@ -2,6 +2,7 @@
 //! `execute` call. A SYSTEM test - it needs a real client sending the kill WHILE a call
 //! is in flight (pipelined requests over the stdio transport). No test-hooks: nu
 //! `sleep` polls Signals, so it bails on the cancel.
+#![cfg(feature = "embedded-cli")]
 
 use std::time::{Duration, Instant};
 

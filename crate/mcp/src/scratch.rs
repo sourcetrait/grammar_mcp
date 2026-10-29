@@ -166,3 +166,17 @@ fn read_owner(dir: &Path) -> Option<(u32, u64)> {
     let mut parts = text.split_whitespace();
     Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
 }
+
+/// A live process's start time from its `/proc` stat, none when it is not running.
+#[cfg(target_os = "linux")]
+fn process_start_time(pid: u32) -> Option<u64> {
+    let stat = fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let rparen = stat.rfind(')')?;
+    stat[rparen + 1..].split_whitespace().nth(19)?.parse().ok()
+}
+
+/// Off Linux there is no `/proc`: no owner is marked, so none is swept.
+#[cfg(not(target_os = "linux"))]
+fn process_start_time(_pid: u32) -> Option<u64> {
+    None
+}

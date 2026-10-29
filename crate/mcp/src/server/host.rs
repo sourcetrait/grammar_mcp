@@ -5,19 +5,6 @@ use crate::*;
 const CLOSE_UNVERIFIED_EMIT: u16 = 1008;
 const UNVERIFIED_EMIT_REASON: &str = "emit before verification";
 
-/// This process's nonce generator and the nom drawn from it, minted once.
-static PROCESS_IDENTITY: OnceLock<(Arc<datum::NonceGenerator>, datum::NomPair)> = OnceLock::new();
-
-/// The process's nonce generator and its nom, the host's id for its life.
-pub(crate) fn process_identity() -> (Arc<datum::NonceGenerator>, datum::NomPair) {
-    let (nonce_gen, mcp_nom) = PROCESS_IDENTITY.get_or_init(|| {
-        let nonce_gen = Arc::new(datum::NonceGenerator::new());
-        let mcp_nom = datum::Nom::generate(&nonce_gen).into_pair();
-        (nonce_gen, mcp_nom)
-    });
-    (nonce_gen.clone(), mcp_nom.clone())
-}
-
 /// Start the engine on the config's id, namespace, and homes, mcp its host.
 ///
 /// Its scratch directories are made first, since parameters carry them.

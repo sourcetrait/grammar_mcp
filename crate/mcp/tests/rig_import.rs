@@ -1,3 +1,5 @@
+#![cfg(feature = "embedded-cli")]
+
 use sourcetrait_grammar_mcp::guts::{
     TestServer, equip_source, error_kind, error_kinds, error_messages, error_text, has_error,
     valid_function_source, write_source,

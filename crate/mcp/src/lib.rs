@@ -1,26 +1,39 @@
+#![cfg_attr(not(feature = "embedded-cli"), allow(dead_code, unused_imports))]
+
 pub(crate) mod error;
 pub(crate) mod run;
 pub(crate) mod server {
+    #[cfg(feature = "embedded-cli")]
     pub(crate) mod cert;
     pub(crate) mod channel {
+        pub(crate) mod face;
         pub(crate) mod hub;
         pub(crate) mod state;
     }
+    pub(crate) mod client;
     pub(crate) mod emergency;
+    #[cfg(feature = "embedded-cli")]
     pub(crate) mod host;
+    pub(crate) mod identity;
     pub(crate) mod interface {
         pub(crate) mod contract;
         pub(crate) mod grammar;
     }
+    #[cfg(feature = "embedded-cli")]
     pub(crate) mod oneshot;
+    #[cfg(feature = "embedded-cli")]
     pub(crate) mod operator;
+    #[cfg(feature = "embedded-cli")]
     pub(crate) mod purview;
+    #[cfg(feature = "embedded-cli")]
     pub(crate) mod remote {
         pub(crate) mod codec;
         pub(crate) mod link;
         pub(crate) mod verify;
     }
+    #[cfg(feature = "embedded-cli")]
     pub(crate) mod run;
+    #[cfg(feature = "embedded-cli")]
     pub(crate) mod system;
     pub(crate) mod tool {
         pub(crate) mod call;
@@ -31,7 +44,9 @@ pub(crate) mod server {
         pub(crate) mod commit;
         pub(crate) mod config_channel;
         pub(crate) mod common;
+        #[cfg(feature = "embedded-cli")]
         pub(crate) mod handler;
+        #[cfg(feature = "embedded-cli")]
         pub(crate) mod info;
         pub(crate) mod inspect;
         pub(crate) mod interface;
@@ -39,9 +54,11 @@ pub(crate) mod server {
         pub(crate) mod execute;
         pub(crate) mod kill;
         pub(crate) mod new;
+        #[cfg(feature = "embedded-cli")]
         pub(crate) mod processes;
         pub(crate) mod purview_configure;
         pub(crate) mod purview_extend;
+        #[cfg(feature = "embedded-cli")]
         pub(crate) mod purviews;
         pub(crate) mod purview;
         pub(crate) mod remote_channel_close;
@@ -54,9 +71,12 @@ pub(crate) mod server {
     #[cfg(test)]
     mod tests {
         mod channel;
+        mod client;
         mod emergency;
         mod interface;
+        #[cfg(feature = "embedded-cli")]
         mod remote;
+        #[cfg(feature = "embedded-cli")]
         mod purview;
     }
 }
@@ -71,6 +91,7 @@ pub(crate) mod consts;
 pub(crate) mod home;
 pub(crate) mod remotes;
 pub(crate) mod scratch;
+#[cfg(feature = "embedded-cli")]
 pub mod guts;
 
 pub(crate) use crate::{
@@ -94,8 +115,8 @@ pub(crate) use crate::{
     nu::FromValue,
     error::error_to_call_result,
     server::{
-        cert::ensure_cert_profile,
         channel::{
+            face::{ChannelFace, close_channel_for_shutdown, spawn_signal_sweep},
             hub::{FROM_MCP, open_packet, start as start_channel_hub},
             state::{
                 ChannelHandle, ChannelSendError, ChannelSyncError, ChannelVerifyError,
@@ -103,46 +124,27 @@ pub(crate) use crate::{
                 event_overflows, event_spill_pointer, mint_msg_id, render_nuon, render_packet,
             },
         },
+        client::serve_client,
         emergency::{EmergencyTx, spawn_emergency_responder},
-        host::{ensure_substrate, init_engine, process_identity},
+        identity::{mint_nonce, process_identity},
         interface::{
             contract::{InterfaceCommand, parse_command},
             grammar::{interface_engine, render_command_list, render_signatures},
         },
-        oneshot::run_oneshot,
-        operator::{OperatorWatch, spawn_observer},
-        purview::{
-            CurrentPurview, PURVIEW_ALL, PURVIEW_CORE, PURVIEW_DEFAULT, PURVIEW_REF,
-            is_derived_purview, is_rig_pattern, is_valid_purview_id, load_purviews,
-            ensure_default_purview, expand_values, is_nameable_purview, is_valid_purview_ref,
-            pattern_delta, prune_dangling, purview_ref, purview_views,
-            purviews_path, resolve_patterns, save_purviews, seed_builtin, seed_builtin_purviews,
-        },
-        remote::{
-            codec::{
-                AcceptorToInitiator, BitcodeCodec, FileFrame, InitiatorToAcceptor, MsgFrame,
-                RemoteStream,
-            },
-            link::{
-                LinkKeys, RemoteLinkHandle, bound_listeners, close_listener, connect_remote,
-                find_link_send, listen_remote, remote_links, safe_dest,
-            },
-            verify::PublicKeyVerifier,
-        },
-        run::run_server,
-        system::{McpHandle, Notice, notice_status, start_system},
         tool::{
-            call::CallParams,
+            call::{CALL_DESCRIPTION, CallParams},
             channel_open::ChannelOpenParams,
             commit::CommitParams,
             config_channel::ConfigChannelParams,
             equip::EquipParams,
             common::{
-                NuSh, RemoteLinkEntry, answer_value, envelope_text, now_millis,
-                resolve_host, serde_to_nu, success, success_value, success_void, unexpected,
+                envelope_text, now_millis, resolve_host, serde_to_nu, success, success_value,
+                success_void,
             },
             inspect::InspectParams,
-            interface::{INTERFACE_TOOL, InterfaceParams, interface_description},
+            interface::{
+                INTERFACE_DESCRIPTION, INTERFACE_TOOL, InterfaceParams, interface_description,
+            },
             kill::KillParams,
             new::NewParams,
             execute::ExecuteParams,
@@ -153,8 +155,8 @@ pub(crate) use crate::{
             remote_channel_connect::RemoteConnectParams,
             remote_channel_listen::RemoteListenParams,
             remote_channel_set::RemoteSetParams,
-            remote_channels::{RemoteAliasParams, RemoteRow, link_keys, remote_entries},
-            rerun::RerunParams,
+            remote_channels::RemoteAliasParams,
+            rerun::{RERUN_DESCRIPTION, RerunParams},
         },
     },
     run::{
@@ -162,14 +164,47 @@ pub(crate) use crate::{
     },
 };
 
+#[cfg(feature = "embedded-cli")]
+pub(crate) use crate::server::{
+    cert::ensure_cert_profile,
+    host::{ensure_substrate, init_engine},
+    oneshot::run_oneshot,
+    operator::{OperatorWatch, spawn_observer},
+    purview::{
+        CurrentPurview, PURVIEW_ALL, PURVIEW_CORE, PURVIEW_DEFAULT, PURVIEW_REF,
+        is_derived_purview, is_rig_pattern, is_valid_purview_id, load_purviews,
+        ensure_default_purview, expand_values, is_nameable_purview, is_valid_purview_ref,
+        pattern_delta, prune_dangling, purview_ref, purview_views,
+        purviews_path, resolve_patterns, save_purviews, seed_builtin, seed_builtin_purviews,
+    },
+    remote::{
+        codec::{
+            AcceptorToInitiator, BitcodeCodec, FileFrame, InitiatorToAcceptor, MsgFrame,
+            RemoteStream,
+        },
+        link::{
+            LinkKeys, RemoteLinkHandle, bound_listeners, close_listener, connect_remote,
+            find_link_send, listen_remote, remote_links, safe_dest,
+        },
+        verify::PublicKeyVerifier,
+    },
+    run::run_server,
+    system::{McpHandle, Notice, notice_status, start_system},
+    tool::{
+        common::{NuSh, RemoteLinkEntry, answer_value, unexpected},
+        remote_channels::{RemoteRow, link_keys, remote_entries},
+    },
+};
+
+#[cfg(feature = "embedded-cli")]
 pub(crate) use sourcetrait_grammar_engine::{
     self as engine, ChannelSend, EVAL_STACK_SIZE, EngineHandle, EngineHost, EngineParams,
-    EngineSystem, GRIMM, LINT_VIOLATION_CAP, LintEngine, NU_VERSION, NamepathPattern,
+    EngineSystem, GRIMM, LintEngine, NU_VERSION, NamepathPattern,
     NamepathStr, ParseEngine, PluginInfo, RemoteSend, analyze_definition, build_call_source,
     build_execute_source, definition_file, ensure_equip_store, ensure_plugin_registry,
     equip_repo_lock, equip_root, file_start, grimm_signatures, index_from_nuon,
-    install_builtins, json_value_to_nu_value, lib_dir, lint_block, list_registered_plugins,
-    registered_rig_names, rig_dir, rig_meta_path, span_to_line_col, typedef_text,
+    install_builtins, lib_dir, lint_block, list_registered_plugins,
+    registered_rig_names, rig_dir, rig_meta_path, typedef_text,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
@@ -184,18 +219,22 @@ pub(crate) use sourcetrait_grammar_protocol::{
     ArgShape, ArgSpec, COMMANDS, CallRequest, CheckSummary, CommandKind, CommandSpec,
     CommitResult, ControlAnswer, ControlRequest, Diagnostic, EngineCommand, EngineError,
     EngineHealth, EngineResult, ExecuteRequest, FromEngineSys, Host, INTERFACE, InspectDoc,
-    RerunRequest, SignaturesDoc, Source, ToEngineSys, ValueAnswer, builtin_equip, builtin_name,
-    command_by_words, command_spec,
+    LINT_VIOLATION_CAP, RerunRequest, SignaturesDoc, Source, ToEngineSys, ValueAnswer,
+    builtin_equip, builtin_name, command_by_words, command_spec, span_to_line_col,
 };
 
+pub(crate) use sourcetrait_grammar_protocol::{
+    ChannelSpamErrorEmergency, ChannelSpamWarningEmergency, Emergency, EmergencyKind, Observation,
+};
+
+#[cfg(feature = "embedded-cli")]
 pub(crate) use sourcetrait_grammar_operator::{
-    ChannelSpamErrorEmergency, ChannelSpamWarningEmergency, Emergency, EmergencyKind,
-    FromOperatorSys, Observation, OperatorHandle, OperatorSysParams, OperatorSysPaths,
-    OperatorSystem, SAMPLE_INTERVAL, SupervisorConfig, check_fraction, clear_pins,
-    effective_supervisor, install_child_subreaper, pin, process_start_time,
+    FromOperatorSys, OperatorHandle, OperatorSysParams, OperatorSysPaths, OperatorSystem,
+    SAMPLE_INTERVAL, SupervisorConfig, check_fraction, clear_pins, effective_supervisor,
+    install_child_subreaper, pin,
 };
 
-pub(crate) use nuval::{TryIntoNu, wide};
+pub(crate) use nuval::{TryIntoNu, json_value_to_nu_value, wide};
 
 pub(crate) use std::{
     collections::{HashMap, HashSet},
@@ -287,7 +326,6 @@ pub(crate) mod tk {
         select, spawn,
         io::{ReadHalf, WriteHalf, split},
         net::{TcpListener, TcpStream},
-        signal::unix::{SignalKind, signal},
         task::JoinHandle,
         sync::{
             Mutex as AsyncMutex, oneshot,
@@ -295,6 +333,8 @@ pub(crate) mod tk {
         },
         time::{Duration as TkDuration, sleep, timeout},
     };
+    #[cfg(unix)]
+    pub(crate) use tokio::signal::unix::{SignalKind, signal};
 }
 
 pub(crate) mod tku {

@@ -130,23 +130,6 @@ pub fn span_text(text: &str, text_start: usize, span: nu::Span) -> Option<&str> 
     text.get(start..end)
 }
 
-pub fn span_to_line_col(source: &str, byte_offset: usize) -> (usize, usize) {
-    let mut line = 1usize;
-    let mut col = 1usize;
-    for (i, b) in source.bytes().enumerate() {
-        if i >= byte_offset {
-            return (line, col);
-        }
-        if b == b'\n' {
-            line += 1;
-            col = 1;
-        } else {
-            col += 1;
-        }
-    }
-    (line, col)
-}
-
 pub fn wrap_as_module(source: &str, wrapper_name: &str) -> (String, usize) {
     let prefix = format!("module {wrapper_name} {{\n");
     let prefix_len = prefix.len();

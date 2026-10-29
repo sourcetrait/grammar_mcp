@@ -2,22 +2,16 @@
 
 ## fn init_engine
 The engine's start: its parameters from the config, its homes the namespace's
-(`home.rs`), and mcp its host. No engine can be built before it, so the server
-and the one-shot CLI start it first (`run.rs`), and the test harness once a
-process (`guts.rs`).
+(`home.rs`), and mcp its host. No engine can be built before it, so the test
+driver and the one-shot CLI start it first, both under `embedded-cli` and never
+on the serving path (`run.rs`), and the test harness once a process
+(`guts.rs`).
 
 The scratch directories are made here, before the engine, because parameters
 carry them: every definition reads them as `$env.EQUIP_TMP` and
 `$env.EQUIP_TRANSIENT` (`scratch.rs`). A directory that cannot be made fails the
 start, as any other parameter would. The process's nom rides the parameters the
 same way, a definition's `$env.EQUIP_MCP_NOM`.
-
-## fn process_identity
-One nom a process, drawn at the first ask. The engine's start needs it before
-the server or the one-shot builds its system, so both take this one rather than
-minting their own, as does every `TestServer` in a test binary, whose engine is
-the process's too. The generator rides with it: the nonces a host mints come
-from the generator that drew its nom, as they did when the server minted both.
 
 ## fn ensure_substrate
 The engine's equip store first, then mcp's purview bookkeeping, the plugin
@@ -32,8 +26,8 @@ host from serving.
 `ensure_plugin_registry` is non-fatal for the same reason, and runs before the
 builtins, since grammar's rig calls plugin commands its validation must know. It
 belongs to the substrate because every engine base loads the registry it writes,
-so it must land before the first base is built, on every entry point: the
-server, the one-shot CLI, and the test server.
+so it must land before the first base is built, on every entry point that
+starts an engine: the test driver, the one-shot CLI, and the test server.
 
 The engine starts after it, its locks hydrated from the store this makes, so
 they hold the builtins installed a moment before (`run.rs`).

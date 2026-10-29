@@ -8,11 +8,13 @@ pub struct NewParams {
 }
 
 /// Success result of `interface equip scaffold`: every path the batch made.
+#[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct NewResult {
     pub created: Vec<String>,
 }
 
+#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// `interface equip scaffold`: modules and calls scaffolded into rigs.
     pub(crate) async fn equip_scaffold(

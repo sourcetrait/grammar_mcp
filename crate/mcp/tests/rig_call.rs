@@ -1,3 +1,5 @@
+#![cfg(feature = "embedded-cli")]
+
 use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{
     TestServer, error_kind, has_error, rig_block, valid_function_source, write_source,

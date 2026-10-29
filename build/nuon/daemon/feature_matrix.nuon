@@ -71,14 +71,14 @@
     },
     {
       name: "test_hooks",
-      summary: "The test-only commands the system tests drive, never shipped",
+      summary: "The embedded CLI with the test-only commands the system tests drive, never shipped",
       packages: ["sourcetrait_grammar_mcp"],
       bins: ["grammar-mcp"],
-      features: ["test-hooks"],
+      features: ["embedded-cli", "test-hooks"],
       default_features: true,
       release: false,
       ships: null,
-      required: [],
+      required: ["sourcetrait_grammar_engine", "sourcetrait_grammar_operator"],
       forbidden: ["aws-lc-rs", "aws-lc-sys"]
     },
     {

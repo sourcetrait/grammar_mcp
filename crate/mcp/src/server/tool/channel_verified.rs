@@ -1,6 +1,6 @@
 use crate::*;
 
-impl NuSh {
+impl ChannelFace {
     /// `interface channel ready`: the channel/Open packet seen; verify it.
     pub(crate) async fn channel_ready(
         &self,

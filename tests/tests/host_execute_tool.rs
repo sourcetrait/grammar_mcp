@@ -1,3 +1,5 @@
+#![cfg(feature = "embedded-cli")]
+
 use serde_json::json;
 use sourcetrait_grammar_tests::*;
 use sourcetrait_common::testing::prelude::*;

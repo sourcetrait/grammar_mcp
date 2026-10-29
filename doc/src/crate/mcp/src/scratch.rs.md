@@ -30,6 +30,13 @@ next open makes another, so the end removes each.
 The owner's pid and its start time, the identity the operator's pins use
 (`process_start_time`): a pid alone is recycled, and the pair is not.
 
+## fn process_start_time
+Field 22 of `/proc/<pid>/stat`, read past the last `)`, since a process's name
+may hold spaces and parentheses. The operator reads its pins' owners the same
+way; the frontend keeps its own reading because the client build has no
+operator. Off Linux there is no `/proc`: no marker is written, and a sweep
+finds none to act on.
+
 ## const SCRATCH_MODE
 Asked of `tempfile` outright: its directories default to 0777 less the umask,
 which left one 0755 under a 022 umask. The umask can only narrow the mode asked
@@ -73,8 +80,8 @@ inbox the process removed is no longer its own, and a directory that takes its
 name later is someone else's, which the end must leave.
 
 ## fn remove_scratch_dirs
-Every ordinary end calls it, the server's, the one-shot's, a failed start's, and
-a signal's (`run.rs`, `server/run.rs`). The inboxes go first, each one the
+Every ordinary end calls it, the client's, the test driver's, the one-shot's, a
+failed start's, and a signal's (`run.rs`, `server/channel/face.rs`). The inboxes go first, each one the
 process made; a directory already gone, an inbox a deliberate close removed
 among them, is no error. A host killed outright leaves its inbox, which nothing
 sweeps.

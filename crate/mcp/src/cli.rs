@@ -38,14 +38,20 @@ pub struct CliEnv {
     pub vars: Option<HashMap<String, String>>,
 }
 
-/// The host's subcommands; absent means serve MCP over stdio.
+/// The host's subcommands; absent means serve MCP over stdio, as a client.
 #[derive(clap::Subcommand)]
 pub enum CliCmd {
-    /// One-shot CLI over the tool surface; prints the tool's NUON envelope.
+    /// One tool call on the in-process engine, its NUON envelope printed.
+    ///
+    /// A build without embedded-cli says the local CLI is absent.
     Cli {
         #[command(subcommand)]
         tool: CliTool,
     },
+    /// MCP over stdio on the in-process engine, for the legacy test cohort alone.
+    #[cfg(feature = "embedded-cli")]
+    #[command(name = "test-driver", hide = true)]
+    TestDriver,
 }
 
 /// One-shot mirrors of the MCP tools, for an operator with no agent.

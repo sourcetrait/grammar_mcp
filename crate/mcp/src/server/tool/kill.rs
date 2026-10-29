@@ -7,6 +7,7 @@ pub struct KillParams {
     pub nonce: String,
 }
 
+#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// `interface process kill`: cancel an in-flight call by its nonce.
     pub(crate) async fn process_kill(
