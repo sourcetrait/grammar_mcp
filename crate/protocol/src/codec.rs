@@ -1,0 +1,289 @@
+//! The wire's framing: a preface, then length-prefixed bitcode frames.
+use crate::*;
+
+/// The eight bytes each direction of a stream writes before its first frame.
+pub const PREFACE: [u8; 8] = *b"GRAMD001";
+
+/// The codec both ends must name in their hellos.
+pub const CODEC_ID: &str = "bitcode-0.6.9";
+
+/// The big-endian payload length before each frame.
+const HEADER_LEN: usize = 4;
+
+/// Refuse every codec but the pinned one, a compressed variant among them.
+pub fn check_codec(id: &str) -> Result<(), FrameError> {
+    if id == CODEC_ID {
+        Ok(())
+    } else {
+        Err(FrameError::UnsupportedCodec { id: id.to_string() })
+    }
+}
+
+/// Where in a stream a read ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameStage {
+    Preface,
+    Header,
+    Body,
+}
+
+/// A framing failure; each closes its own stream alone.
+#[derive(Debug)]
+pub enum FrameError {
+    /// The stream ended before its first byte.
+    ClosedBeforePreface,
+    /// A preface byte differed from `GRAMD001`.
+    BadPreface { at: usize, got: u8 },
+    /// The stream ended inside a preface, a header, or a body.
+    Truncated { stage: FrameStage, held: usize, expected: usize },
+    /// A frame declared no payload.
+    ZeroLength,
+    /// A received frame declared more than the stream's ceiling.
+    Oversize { len: u32, ceiling: u32 },
+    /// A frame to send holds more than the stream's ceiling.
+    TooLarge { len: usize, ceiling: u32 },
+    /// The peer named a codec other than the pinned one.
+    UnsupportedCodec { id: String },
+    /// A payload did not decode as its type: trailing bytes or an unknown
+    /// variant among the causes.
+    Decode,
+    /// The transport failed.
+    Io(io::Error),
+}
+
+impl From<io::Error> for FrameError {
+    fn from(e: io::Error) -> Self {
+        Self::Io(e)
+    }
+}
+
+impl fmt::Display for FrameError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ClosedBeforePreface => write!(f, "the stream closed before its preface"),
+            Self::BadPreface { at, got } => {
+                write!(f, "preface byte {at} is {got:#04x}, not GRAMD001's")
+            }
+            Self::Truncated { stage, held, expected } => {
+                write!(f, "the stream ended in a {stage:?} with {held} of {expected} bytes")
+            }
+            Self::ZeroLength => write!(f, "a frame declared no payload"),
+            Self::Oversize { len, ceiling } => {
+                write!(f, "a frame declared {len} bytes past the {ceiling}-byte ceiling")
+            }
+            Self::TooLarge { len, ceiling } => {
+                write!(f, "a frame of {len} bytes exceeds the {ceiling}-byte ceiling")
+            }
+            Self::UnsupportedCodec { id } => write!(f, "codec {id} where {CODEC_ID} is required"),
+            Self::Decode => write!(f, "a payload did not decode as its type"),
+            Self::Io(e) => write!(f, "the transport failed: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for FrameError {}
+
+impl FrameError {
+    /// The stable transport error the frontend reports for this failure.
+    pub fn transport(&self) -> TransportError {
+        match self {
+            Self::TooLarge { ceiling, .. } => TransportError::ResultTooLarge {
+                limit: u64::from(*ceiling),
+            },
+            Self::UnsupportedCodec { id } => TransportError::CodecMismatch {
+                expected: CODEC_ID.to_string(),
+                found: id.clone(),
+            },
+            other => TransportError::InvalidFrame { reason: other.to_string() },
+        }
+    }
+}
+
+/// One stream's framing: it reads the peer's preface, then frames up to the
+/// ceiling, and writes its own preface before its first frame.
+#[derive(Debug)]
+pub struct FrameCodec {
+    ceiling: u32,
+    preface_read: usize,
+    preface_written: bool,
+    body_len: Option<usize>,
+}
+
+impl Default for FrameCodec {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FrameCodec {
+    /// A codec for a new stream, held to the hello's ceiling until its role's is set.
+    pub fn new() -> Self {
+        Self {
+            ceiling: HELLO_FRAME_MAX,
+            preface_read: 0,
+            preface_written: false,
+            body_len: None,
+        }
+    }
+
+    /// The ceiling every later frame is held to, both ways, once the handshake
+    /// has negotiated it for the stream's role.
+    pub fn set_ceiling(&mut self, ceiling: u32) {
+        self.ceiling = ceiling;
+    }
+
+    /// The ceiling frames are held to now.
+    pub fn ceiling(&self) -> u32 {
+        self.ceiling
+    }
+}
+
+impl tku::Decoder for FrameCodec {
+    type Item = tku::Bytes;
+    type Error = FrameError;
+
+    fn decode(&mut self, src: &mut tku::BytesMut) -> Result<Option<tku::Bytes>, FrameError> {
+        use tku::Buf;
+        while self.preface_read < PREFACE.len() {
+            let Some(&got) = src.first() else {
+                return Ok(None);
+            };
+            if got != PREFACE[self.preface_read] {
+                return Err(FrameError::BadPreface { at: self.preface_read, got });
+            }
+            src.advance(1);
+            self.preface_read += 1;
+        }
+        let len = match self.body_len {
+            Some(len) => len,
+            None => {
+                let Some(header) = src.get(..HEADER_LEN) else {
+                    return Ok(None);
+                };
+                let len = u32::from_be_bytes([header[0], header[1], header[2], header[3]]);
+                if len == 0 {
+                    return Err(FrameError::ZeroLength);
+                }
+                if len > self.ceiling {
+                    return Err(FrameError::Oversize { len, ceiling: self.ceiling });
+                }
+                src.advance(HEADER_LEN);
+                // The length is checked, so the reservation is bounded by the ceiling.
+                let len = len as usize;
+                self.body_len = Some(len);
+                src.reserve(len.saturating_sub(src.len()));
+                len
+            }
+        };
+        if src.len() < len {
+            return Ok(None);
+        }
+        self.body_len = None;
+        Ok(Some(src.split_to(len).freeze()))
+    }
+
+    fn decode_eof(&mut self, src: &mut tku::BytesMut) -> Result<Option<tku::Bytes>, FrameError> {
+        if let Some(frame) = self.decode(src)? {
+            return Ok(Some(frame));
+        }
+        if self.preface_read == 0 {
+            return Err(FrameError::ClosedBeforePreface);
+        }
+        if self.preface_read < PREFACE.len() {
+            return Err(FrameError::Truncated {
+                stage: FrameStage::Preface,
+                held: self.preface_read,
+                expected: PREFACE.len(),
+            });
+        }
+        match self.body_len {
+            Some(len) => Err(FrameError::Truncated {
+                stage: FrameStage::Body,
+                held: src.len(),
+                expected: len,
+            }),
+            None if src.is_empty() => Ok(None),
+            None => Err(FrameError::Truncated {
+                stage: FrameStage::Header,
+                held: src.len(),
+                expected: HEADER_LEN,
+            }),
+        }
+    }
+}
+
+impl tku::Encoder<tku::Bytes> for FrameCodec {
+    type Error = FrameError;
+
+    fn encode(&mut self, payload: tku::Bytes, dst: &mut tku::BytesMut) -> Result<(), FrameError> {
+        if payload.is_empty() {
+            return Err(FrameError::ZeroLength);
+        }
+        let len = u32::try_from(payload.len())
+            .ok()
+            .filter(|len| *len <= self.ceiling)
+            .ok_or(FrameError::TooLarge { len: payload.len(), ceiling: self.ceiling })?;
+        if !self.preface_written {
+            dst.extend_from_slice(&PREFACE);
+            self.preface_written = true;
+        }
+        dst.reserve(HEADER_LEN + payload.len());
+        dst.extend_from_slice(&len.to_be_bytes());
+        dst.extend_from_slice(&payload);
+        Ok(())
+    }
+}
+
+/// The codec over a byte stream: a russh channel stream, a Unix socket, or a
+/// test duplex alike.
+pub fn framed<S>(stream: S) -> tku::Framed<S, FrameCodec>
+where
+    S: tk::AsyncRead + tk::AsyncWrite,
+{
+    tku::Framed::new(stream, FrameCodec::new())
+}
+
+/// A value as a frame's payload, encoded by the pinned bitcode.
+pub fn payload<T: bitcode::Encode + ?Sized>(value: &T) -> tku::Bytes {
+    tku::Bytes::from(bitcode::encode(value))
+}
+
+/// A type a payload may become, decoded within bounds that hold before
+/// anything is allocated. DecodeBudget's transport types implement it, and so
+/// do the fixed-width types, whose decode allocates nothing by a declared
+/// length.
+pub trait BoundedDecode: Sized {
+    /// The payload decoded whole, trailing bytes and unknown variants refused.
+    fn decode_bounded(payload: &[u8]) -> Result<Self, FrameError>;
+}
+
+/// A payload as `T`, through its bounded decode alone.
+pub fn decode_payload<T: BoundedDecode>(payload: &[u8]) -> Result<T, FrameError> {
+    T::decode_bounded(payload)
+}
+
+/// bitcode's own decode, which refuses trailing bytes and unknown variants but
+/// allocates by declared lengths as it reads, so only a bounded type reaches it.
+pub(crate) fn decode_exact<T: bitcode::DecodeOwned>(payload: &[u8]) -> Result<T, FrameError> {
+    bitcode::decode(payload).map_err(|_| FrameError::Decode)
+}
+
+macro_rules! fixed_width {
+    ($($ty:ty),* $(,)?) => {
+        $(impl BoundedDecode for $ty {
+            fn decode_bounded(payload: &[u8]) -> Result<Self, FrameError> {
+                decode_exact(payload)
+            }
+        })*
+    };
+}
+
+fixed_width!(
+    ClientInstanceId,
+    WorkerGeneration,
+    LeaseId,
+    OperationId,
+    ChannelEpoch,
+    Lane,
+    EmergencyKind,
+);

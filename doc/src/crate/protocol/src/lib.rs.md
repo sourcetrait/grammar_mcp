@@ -1,7 +1,8 @@
 # lib.rs
 
-The crate is the portable side of the daemon split: typed data alone, with no
-evaluator, operator, MCP server, or platform monitoring in its dependencies.
+The crate is the portable side of the daemon split: typed data and the wire's
+framing alone, with no evaluator, operator, MCP server, or platform monitoring
+in its dependencies.
 The engine, the client, the daemon, the MCP frontend, and the probe all take
 it, and it takes none of them, so the package graph stays one-way.
 
@@ -13,6 +14,11 @@ read it, and the default limits; the bytes move by SFTP.
 The Channel's reservations, caps, modes, and phases, and what crosses between a
 frontend and the worker that owns the logical Channel: its state and epoch, the
 frontend's notices, typed host events, and sends as data.
+
+## mod codec
+The wire's framing: the preface, the length-prefixed frames and their codec
+over any byte stream, the pinned codec's identity, and the one door from a
+payload to a value, a bounded decode.
 
 ## mod command
 The `interface` tool's catalog, its commands, arguments, results, summaries, and
@@ -28,6 +34,9 @@ re-exports them.
 ## mod error
 The runtime's and the transport's errors, each rendering to the envelope's rows,
 the transport's under stable `daemon::` kinds.
+
+## mod limits
+The frame ceilings the wire contract sets, each stream role's.
 
 ## mod operator
 The operator's portable data, its manager's observation and the emergencies it
@@ -52,8 +61,15 @@ request's identity and its host, and `subsys`'s error for a reply of the wrong
 kind. `cereal::derived` emits absolute `::serde`, `::bitcode`, and `::rkyv`
 paths, so those three are the crate's own dependencies.
 
+## mod tk
+## mod tku
+tokio's byte-stream traits and tokio-util's codec and bytes, under the names
+the mcp crate gives them, for the framing's adapter alone; the data needs
+neither.
+
 ## pub use
-The capability set, which every side advertises; the interface catalog; the
+The framing, its ceilings, and its errors; the capability set, which every
+side advertises; the interface catalog; the
 engine's protocol, its
 requests, commands, and answers with their diagnostics, error, and documents;
 the value bounds and their checks; and nuval's data under its own names, the

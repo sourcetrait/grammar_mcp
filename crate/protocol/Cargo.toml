@@ -15,10 +15,13 @@ bitcode.workspace = true
 nuval.workspace = true
 rkyv.workspace = true
 serde.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
 
 sourcetrait_common.workspace = true
 
 [dev-dependencies]
+futures-util.workspace = true
 serde_json.workspace = true
 
 [package.metadata]

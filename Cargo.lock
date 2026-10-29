@@ -6770,11 +6770,14 @@ name = "sourcetrait_grammar_protocol"
 version = "0.0.0-9"
 dependencies = [
  "bitcode",
+ "futures-util",
  "nuval",
  "rkyv",
  "serde",
  "serde_json",
  "sourcetrait_common",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
