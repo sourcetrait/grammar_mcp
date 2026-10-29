@@ -8,3 +8,5 @@
   summary: Every baseline public operation with its future owner and task
 - doc: daemon/engine_type_map.tsv
   summary: Each engine type moved into the protocol crate, from its old file to its new
+- doc: daemon/runtime_ownership.tsv
+  summary: Every tool, interface command, and host callback with its owner and types

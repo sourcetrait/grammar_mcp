@@ -57,7 +57,7 @@ pub enum GrammarMcpError {
 }
 
 impl GrammarMcpError {
-    /// The runtime's portable error this one is; none for the engine's or the transport's.
+    /// The portable runtime error this is; none for an engine or transport error.
     pub(crate) fn as_runtime(&self) -> Option<RuntimeError> {
         Some(match self.clone() {
             Self::Engine(_) | Self::Transport(_) => return None,

@@ -55,7 +55,7 @@ pub enum ArtifactState {
     Evicted,
 }
 
-/// What a result or an attachment names an artifact by: its identity, size, and hash.
+/// What a result or an attachment names an artifact by: identity, size, hash.
 #[cereal::derived(Data, Copy, Eq)]
 pub struct ArtifactRef {
     pub id: ArtifactId,
