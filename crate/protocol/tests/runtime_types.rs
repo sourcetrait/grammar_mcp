@@ -1,6 +1,7 @@
-//! The runtime's data on the wire: the interface catalog held to its baseline, a
-//! golden bitcode vector for every operator, Channel, peer, runtime, transport,
-//! and artifact variant, their round trips, and the errors' kinds and rows.
+//! The runtime's data on the wire: the interface catalog held to its baseline, the
+//! ownership table held to each dispatch, a golden bitcode vector for every
+//! operator, Channel, peer, runtime, transport, and artifact variant, their round
+//! trips, and the errors' kinds and rows.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -83,22 +84,26 @@ fn the_catalog_holds_the_baseline_commands() {
     assert_eq!(HELP_WORDS, ["interface", "grimm"]);
 }
 
-#[test]
-fn every_command_and_tool_has_an_owner() {
+/// The ownership table's rows by surface, each of six cells.
+fn ownership() -> BTreeMap<String, Vec<String>> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../doc/ai/daemon/runtime_ownership.tsv");
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-    let rows: BTreeMap<&str, Vec<&str>> = text
-        .lines()
+    text.lines()
         .skip(1)
         .map(|line| {
-            let cells: Vec<&str> = line.split('\t').collect();
+            let cells: Vec<String> = line.split('\t').map(String::from).collect();
             assert_eq!(cells.len(), 6, "{line}");
-            (cells[0], cells)
+            (cells[0].clone(), cells)
         })
-        .collect();
+        .collect()
+}
+
+#[test]
+fn every_command_and_tool_has_an_owner() {
+    let rows = ownership();
     for spec in COMMANDS {
         let row = rows.get(spec.name).unwrap_or_else(|| panic!("{} has no owner", spec.name));
-        assert!(["engine", "runtime", "frontend"].contains(&row[3]), "{}: {}", spec.name, row[3]);
+        assert!(["engine", "runtime", "frontend"].contains(&row[3].as_str()), "{}: {}", spec.name, row[3]);
     }
     for tool in ["execute", "rerun", "call", "interface"] {
         assert!(rows.contains_key(tool), "the {tool} tool has no owner");
@@ -106,6 +111,29 @@ fn every_command_and_tool_has_an_owner() {
     for callback in ["channel_send", "remote_send", "config_record", "pin_config"] {
         assert!(rows.contains_key(callback), "the {callback} callback has no owner");
     }
+}
+
+#[test]
+fn the_ownership_table_keeps_each_dispatch() {
+    let rows = ownership();
+    let help = &rows["interface help"];
+    assert_eq!((help[3].as_str(), help[4].as_str()), ("runtime", "RuntimeRequest::Interface"));
+    for word in HELP_WORDS {
+        let branch = rows
+            .get(&format!("interface help {word}"))
+            .unwrap_or_else(|| panic!("help's reserved word {word} has no branch"));
+        assert!(branch[5].starts_with("InspectDoc::Signatures"), "{word}: {}", branch[5]);
+    }
+    assert_eq!(rows["interface help <namepath>"][4], "RuntimeRequest::Engine(Control(EngineCommand::Help))");
+    assert!(
+        rows["interface help <pattern>"][4].starts_with("RuntimeRequest::Engine(Control(EngineCommand::Signatures))"),
+        "{}",
+        rows["interface help <pattern>"][4]
+    );
+    for callback in ["channel_send", "remote_send"] {
+        assert!(rows[callback][5].contains("id, or the refusal's text"), "{callback}: {}", rows[callback][5]);
+    }
+    assert_eq!(rows["config_record"][4], "none: local to the worker");
 }
 
 #[test]
@@ -174,7 +202,7 @@ fn runtime_errors() -> Vec<(&'static str, RuntimeError)> {
     use RuntimeError as R;
     vec![
         ("interface_violations", R::InterfaceViolations { diagnostics: vec![refusal(), warning()] }),
-        ("host_unknown", R::HostUnknown { host: "stressbox".into() }),
+        ("host_unknown", R::HostUnknown { host: "example".into() }),
         ("schema_invalid", R::SchemaInvalid { reason: "not a type".into() }),
         ("purview_invalid_id", R::PurviewInvalidId { id: "Bad".into(), reason: "uppercase".into() }),
         ("channel_start", R::ChannelStart { reason: "no port".into() }),
@@ -183,9 +211,9 @@ fn runtime_errors() -> Vec<(&'static str, RuntimeError)> {
         ("channel_wrong_mode", R::ChannelWrongMode { open: ChannelMode::Async, asked: ChannelMode::Sync }),
         ("channel_peer_gone", R::ChannelPeerGone),
         ("remote_invalid_params", R::RemoteInvalidParams { reason: "no cert".into() }),
-        ("remote_already_open", R::RemoteAlreadyOpen { alias: "ai/zero".into() }),
-        ("remote_not_open", R::RemoteNotOpen { alias: "ai/zero".into() }),
-        ("remote_open_failed", R::RemoteOpenFailed { alias: "ai/zero".into(), reason: "refused".into() }),
+        ("remote_already_open", R::RemoteAlreadyOpen { alias: "lab/peer".into() }),
+        ("remote_not_open", R::RemoteNotOpen { alias: "lab/peer".into() }),
+        ("remote_open_failed", R::RemoteOpenFailed { alias: "lab/peer".into(), reason: "refused".into() }),
         ("remote_channel_unverified", R::RemoteChannelUnverified),
         ("remotes_file", R::RemotesFile { reason: "line 3".into() }),
         ("internal", R::Internal { phase: "io".into(), reason: "denied".into() }),
@@ -200,7 +228,7 @@ fn transport_errors() -> Vec<(&'static str, TransportError)> {
         ("version_mismatch", T::VersionMismatch { expected: mismatch().0, found: mismatch().1 }),
         ("schema_mismatch", T::SchemaMismatch { expected: "a".into(), found: "b".into() }),
         ("codec_mismatch", T::CodecMismatch { expected: "bitcode-0.6.9".into(), found: "bitcode-0.7.0".into() }),
-        ("wrong_worker", T::WrongWorker { expected: "two/default".into(), found: "two/test".into() }),
+        ("wrong_worker", T::WrongWorker { expected: "fixture/default".into(), found: "fixture/test".into() }),
         ("unauthorized", T::Unauthorized { reason: "peer uid 1001".into() }),
         ("authentication_failed", T::AuthenticationFailed { reason: "publickey".into() }),
         ("lease_invalid", T::LeaseInvalid { reason: "another epoch".into() }),
@@ -265,9 +293,9 @@ fn replies() -> Vec<(&'static str, RuntimeReply)> {
         name: "grammar".into(),
         version: "0.0.0-9".into(),
         nu_version: "0.116.1".into(),
-        id: "two".into(),
+        id: "fixture".into(),
         namespace: "default".into(),
-        nom: "3aCAlK3qoAc".into(),
+        nom: "localnom001".into(),
         work_dir: "/srv/work".into(),
         tmp: "/srv/tmp/grammard.x".into(),
         transient: "/run/user/2001/grammard.y".into(),
@@ -309,12 +337,12 @@ fn channel() -> Vec<(&'static str, ChannelNotice)> {
 fn peer() -> Vec<(&'static str, RemoteChannelEvent)> {
     let failure = || RemoteFailure { kind: "listen".into(), message: "tls".into() };
     vec![
-        ("connected", RemoteChannelEvent::Connected { remote: "ai/zero".into(), mcp_nom: "eS7IBT8FMlH".into() }),
-        ("disconnected_closed", RemoteChannelEvent::Disconnected { remote: "ai/zero".into(), mcp_nom: None, error: None }),
-        ("disconnected_failed", RemoteChannelEvent::Disconnected { remote: "ai/zero".into(), mcp_nom: None, error: Some(failure()) }),
-        ("disconnected_ended", RemoteChannelEvent::Disconnected { remote: "ai/zero".into(), mcp_nom: Some("eS7IBT8FMlH".into()), error: None }),
-        ("sent", RemoteChannelEvent::Sent { id: "6Xoy6jpEzfC".into(), mcp_nom: "eS7IBT8FMlH".into() }),
-        ("unsent", RemoteChannelEvent::Unsent { id: "6Xoy6jpEzfC".into(), mcp_nom: "eS7IBT8FMlH".into(), error: failure() }),
+        ("connected", RemoteChannelEvent::Connected { remote: "lab/peer".into(), mcp_nom: "peernom0001".into() }),
+        ("disconnected_closed", RemoteChannelEvent::Disconnected { remote: "lab/peer".into(), mcp_nom: None, error: None }),
+        ("disconnected_failed", RemoteChannelEvent::Disconnected { remote: "lab/peer".into(), mcp_nom: None, error: Some(failure()) }),
+        ("disconnected_ended", RemoteChannelEvent::Disconnected { remote: "lab/peer".into(), mcp_nom: Some("peernom0001".into()), error: None }),
+        ("sent", RemoteChannelEvent::Sent { id: "eventid0001".into(), mcp_nom: "peernom0001".into() }),
+        ("unsent", RemoteChannelEvent::Unsent { id: "eventid0001".into(), mcp_nom: "peernom0001".into(), error: failure() }),
     ]
 }
 
@@ -343,22 +371,22 @@ fn misc() -> Vec<(&'static str, Vec<u8>)> {
         listening: true,
     };
     let event = HostEvent {
-        id: "1oNi3vuZtfZ".into(),
-        from: "remote/channel/eS7IBT8FMlH".into(),
-        model: "zero/ReviewCheckpoint".into(),
+        id: "eventid0002".into(),
+        from: "remote/channel/peernom0001".into(),
+        model: "peer/Checkpoint".into(),
         event: NuVal::Record(vec![("event_bytes".into(), NuVal::Int(641))]),
-        attached: Some("eS7IBT8FMlH/82HjcY8nV6N".into()),
+        attached: Some("peernom0001/attach00001".into()),
     };
-    let send = ChannelSendData { from: "thread/x".into(), model: "two/TaskNote".into(), event: NuVal::Nothing, attached: None };
-    let remote = RemoteSendData { mcp_nom: "eS7IBT8FMlH".into(), model: "two/TaskReceipt".into(), event: NuVal::Nothing, attached: Some(NuVal::List(Vec::new())) };
+    let send = ChannelSendData { from: "thread/x".into(), model: "example/Note".into(), event: NuVal::Nothing, attached: None };
+    let remote = RemoteSendData { mcp_nom: "peernom0001".into(), model: "example/Receipt".into(), event: NuVal::Nothing, attached: Some(NuVal::List(Vec::new())) };
     let row = RemoteChannelRow {
-        alias: "ai/zero".into(),
+        alias: "lab/peer".into(),
         address: None,
-        listen: Some("127.0.0.1:9871".into()),
-        cert: Some("zero.pem".into()),
+        listen: Some("127.0.0.1:7000".into()),
+        cert: Some("peer.pem".into()),
         state: RemoteLinkState::Open,
-        endpoint: Some("127.0.0.1:9871".into()),
-        remote_mcp_nom: Some("eS7IBT8FMlH".into()),
+        endpoint: Some("127.0.0.1:7000".into()),
+        remote_mcp_nom: Some("peernom0001".into()),
     };
     let thresholds = SpamThresholdsData { warn_window_secs: 1, warn_rate: 20, error_window_secs: 10, error_rate: 100 };
     let reference = ArtifactRef { id: ARTIFACT, size: 1, sha256: HASH };
@@ -567,7 +595,7 @@ fn a_mode_and_a_link_state_serialize_as_their_words() {
 fn the_reservations_and_caps_hold_their_values() {
     assert_eq!(reserved_prefix("mcp/channel/Open"), Some(MCP_RESERVED_PREFIX));
     assert_eq!(reserved_prefix("remote/channel/Sent"), Some(REMOTE_RESERVED_PREFIX));
-    assert_eq!(reserved_prefix("two/TaskNote"), None);
+    assert_eq!(reserved_prefix("example/Note"), None);
     assert_eq!(SYNC_QUEUE_CAP, 1000);
     assert_eq!(LOCAL_HOST, "local");
 }

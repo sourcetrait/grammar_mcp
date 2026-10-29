@@ -4,7 +4,11 @@ rerun	tool	crate/mcp/src/server/tool/rerun.rs	engine	RuntimeRequest::Engine(ToEn
 call	tool	crate/mcp/src/server/tool/call.rs	engine	RuntimeRequest::Engine(ToEngineSys::Call)	RuntimeReply::Engine(FromEngineSys::Value)
 interface	tool	crate/mcp/src/server/tool/interface.rs	runtime	RuntimeRequest::Interface	RuntimeReply::Interface or Refused
 interface info	interface	crate/mcp/src/server/tool/info.rs	runtime	RuntimeRequest::Info	RuntimeReply::Info(InfoReply)
-interface help	interface	crate/mcp/src/server/tool/inspect.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::Help))	ControlAnswer::Help(InspectDoc)
+interface help	interface	crate/mcp/src/server/tool/inspect.rs	runtime	RuntimeRequest::Interface	InspectDoc, by the branch its namepath takes
+interface help interface	help branch	crate/mcp/src/server/tool/inspect.rs	runtime	the reserved word: the catalog under the controller's deny set	InspectDoc::Signatures(render_signatures)
+interface help grimm	help branch	crate/mcp/src/server/tool/inspect.rs	engine	the reserved word: the engine's grimm commands	InspectDoc::Signatures(grimm_signatures)
+interface help <namepath>	help branch	crate/mcp/src/server/tool/inspect.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::Help))	ControlAnswer::Help(InspectDoc)
+interface help <pattern>	help branch	crate/mcp/src/server/tool/common.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::Signatures)), `.` resolved through the current purview first	ControlAnswer::Signatures as InspectDoc::Signatures
 interface process list	interface	crate/mcp/src/server/tool/processes.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::Processes))	ControlAnswer::Processes(ProcessRow)
 interface process kill	interface	crate/mcp/src/server/tool/kill.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::Kill))	ControlAnswer::Done
 interface purview list	interface	crate/mcp/src/server/tool/purviews.rs	runtime	RuntimeRequest::Interface	RuntimeReply::Interface(PurviewRow, PurviewView)
@@ -29,9 +33,9 @@ interface equip check	interface	crate/mcp/src/server/tool/equip.rs	engine	Runtim
 interface equip uninstall	interface	crate/mcp/src/server/tool/equip.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::EquipUninstall))	ControlAnswer::Uninstalled
 interface equip scaffold	interface	crate/mcp/src/server/tool/new.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::EquipScaffold))	ControlAnswer::Created
 interface equip commit	interface	crate/mcp/src/server/tool/commit.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::EquipCommit))	ControlAnswer::Committed(CommitResult)
-channel_send	host callback	crate/mcp/src/server/host.rs	runtime	ChannelSendData	HostEvent
-remote_send	host callback	crate/mcp/src/server/host.rs	runtime	RemoteSendData	RemoteChannelEvent::Sent or Unsent
-config_record	host callback	crate/mcp/src/server/host.rs	runtime	RuntimeRequest::Info	NuVal record of the worker's config
+channel_send	host callback	crate/mcp/src/server/host.rs	runtime	ChannelSendData	the message id, or the refusal's text; its HostEvent emitted to the Channel apart
+remote_send	host callback	crate/mcp/src/server/host.rs	runtime	RemoteSendData	the send id, or the refusal's text; RemoteChannelEvent::Sent or Unsent emitted apart
+config_record	host callback	crate/mcp/src/server/host.rs	runtime	none: local to the worker	NuVal record of the worker's config
 pin_config	host callback	crate/mcp/src/server/host.rs	runtime	none: local to the worker	Ok or the refusal's text
 operator observation	host task	crate/mcp/src/server/operator.rs	runtime	Observation	FromOperatorSys::Emergency(Emergency)
 emergency announcement	host task	crate/mcp/src/server/emergency.rs	runtime	Emergency	HostEvent under the mcp/ reservation

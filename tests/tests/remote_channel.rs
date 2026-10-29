@@ -278,7 +278,7 @@ fn remote_entries_are_set_read_and_unset_live() {
     assert_eq!(envelope(&listed)["result"], json!([]), "no remotes yet; got {listed}");
 
     let remotes = host_dir.join(".grammar").join("remotes.toml");
-    std::fs::write(&remotes, "# kept\n[[channel]]\nalias = \"zero\"\ncert = \"/k/zero.pem\"\n")
+    std::fs::write(&remotes, "# kept\n[[channel]]\nalias = \"other\"\ncert = \"/k/other.pem\"\n")
         .expect("an entry written by hand");
     let cert = peer.public_key.to_str().expect("a UTF-8 path");
     let set = host.interface(&format!(
@@ -288,7 +288,7 @@ fn remote_entries_are_set_read_and_unset_live() {
     assert_eq!(envelope(&set)["result"]["cert"], cert, "it answers the row; got {set}");
     let text = std::fs::read_to_string(&remotes).expect("the file");
     assert!(text.starts_with("# kept\n"), "the file's comment stays; got {text}");
-    assert!(text.contains("alias = \"zero\""), "and its other entry; got {text}");
+    assert!(text.contains("alias = \"other\""), "and its other entry; got {text}");
 
     let changed = host.interface("interface remote channel set 'peer' --listen '127.0.0.1'");
     assert!(!has_error_path(&changed), "a change holds; got {changed}");
@@ -310,7 +310,7 @@ fn remote_entries_are_set_read_and_unset_live() {
         .iter()
         .map(|row| row["alias"].clone())
         .collect();
-    assert_eq!(aliases, vec![json!("zero")], "the other entry stays");
+    assert_eq!(aliases, vec![json!("other")], "the other entry stays");
 
     std::fs::write(&remotes, "not [toml").expect("a broken file");
     let broken = host.interface("interface remote channel list");

@@ -73,8 +73,8 @@ fn a_malformed_entry_is_refused() {
 
 #[test]
 fn a_set_makes_a_new_entry_and_keeps_the_file_around_it() {
-    let text = "# peers of this agent\n\n[[channel]]\n# the reviewer\nalias = \"zero\"\n\
-                cert = \"/k/zero.pem\"\n";
+    let text = "# peers of this agent\n\n[[channel]]\n# a peer\nalias = \"peer\"\n\
+                cert = \"/k/peer.pem\"\n";
     let change = RemoteChange {
         cert: Some("/k/bob.pem".to_string()),
         address: Some("127.0.0.1:9001".to_string()),
@@ -82,8 +82,8 @@ fn a_set_makes_a_new_entry_and_keeps_the_file_around_it() {
     };
     let edited = set_entry(text, "bob", &change).expect("a new entry");
     assert!(edited.starts_with("# peers of this agent\n"), "{edited}");
-    assert!(edited.contains("# the reviewer\nalias = \"zero\""), "{edited}");
-    assert_eq!(aliases(&edited), ["zero", "bob"]);
+    assert!(edited.contains("# a peer\nalias = \"peer\""), "{edited}");
+    assert_eq!(aliases(&edited), ["peer", "bob"]);
     let bob = &parse_remotes(&edited).expect("valid")[1];
     assert_eq!(bob.address.as_deref(), Some("127.0.0.1:9001"));
     assert_eq!(bob.cert, "/k/bob.pem");
@@ -114,10 +114,10 @@ fn a_set_that_would_break_the_file_is_refused() {
 
 #[test]
 fn an_unset_removes_its_entry_alone() {
-    let text = format!("{BOB}\n# the reviewer\n[[channel]]\nalias = \"zero\"\ncert = \"/k/zero.pem\"\n");
+    let text = format!("{BOB}\n# a peer\n[[channel]]\nalias = \"peer\"\ncert = \"/k/peer.pem\"\n");
     let edited = unset_entry(&text, "bob").expect("bob removed");
-    assert!(edited.contains("# the reviewer"), "{edited}");
-    assert_eq!(aliases(&edited), ["zero"]);
+    assert!(edited.contains("# a peer"), "{edited}");
+    assert_eq!(aliases(&edited), ["peer"]);
     let err = unset_entry(&edited, "bob").expect_err("bob is gone");
     assert!(err.contains("`bob`"), "got {err}");
 }

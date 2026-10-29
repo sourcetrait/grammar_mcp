@@ -63,7 +63,7 @@ fn a_body_send_waits_for_the_next_sync() {
     let s = TESTING.harness();
     let sent = s.execute(
         "def execute [data: nothing]: nothing -> record<ok: bool> {\n    \
-         grimm channel send 'two/test/Ping' {n: 1} | ignore\n    {ok: true}\n}",
+         grimm channel send 'example/Ping' {n: 1} | ignore\n    {ok: true}\n}",
         "null",
     );
     assert!(!has_error(&sent), "{sent}");
@@ -71,7 +71,7 @@ fn a_body_send_waits_for_the_next_sync() {
     let env = s.interface("interface channel sync");
     let packet = one_packet(&env);
     assert_eq!(packet["from"], json!(format!("thread/{nonce}")), "{env}");
-    assert_eq!(packet["model"], json!("two/test/Ping"), "{env}");
+    assert_eq!(packet["model"], json!("example/Ping"), "{env}");
     assert_eq!(packet["event"], json!({"n": 1}), "{env}");
     let again = s.interface("interface channel sync");
     assert_eq!(again["result"]["packets"], json!([]), "the sync emptied the queue; {again}");

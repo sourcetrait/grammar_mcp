@@ -64,7 +64,7 @@ fn requests() -> Vec<(String, ToEngineSys)> {
         let rerun = RerunRequest {
             host,
             nonce: NONCE,
-            source: "5bnqeS0HmOy".into(),
+            source: "nonceSource".into(),
             data: "{repo: 'ключ ✓'}".into(),
             timeout: Some("30sec".into()),
         };
@@ -120,7 +120,7 @@ fn engine_errors() -> Vec<(&'static str, EngineError)> {
         ("rerun_body_missing", E::RerunBodyMissing { nonce: "aOiwlfCpNKg".into() }),
         ("dispatch", E::Dispatch { reason: "busy".into() }),
         ("timeout", E::Timeout { timeout_ms: u64::MAX }),
-        ("host_unserved", E::HostUnserved { host: "stressbox".into() }),
+        ("host_unserved", E::HostUnserved { host: "example".into() }),
         ("internal", E::Internal { phase: "io".into(), reason: "denied".into() }),
     ]
 }
@@ -144,11 +144,11 @@ fn control_answers() -> Vec<(&'static str, ControlAnswer)> {
             path: None,
         },
         ProcessRow {
-            nonce: "jvdAnnfjsXu".into(),
+            nonce: "nonceRerun1".into(),
             tool: "rerun".into(),
             started_at: 0,
             args: NuVal::List(vec![NuVal::Int(i64::MIN)]),
-            source_nonce: Some("5bnqeS0HmOy".into()),
+            source_nonce: Some("nonceSource".into()),
             path: Some("acme/geo:shape:area".into()),
         },
     ];
