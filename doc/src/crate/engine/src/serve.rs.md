@@ -130,9 +130,9 @@ teardown regardless.
 An unknown or already-finished nonce is a race-safe no-op, because the dispatch's cleanup
 guard removes the entry.
 
-The escalation happens outside the map's lock, deliberately: both the /proc walk and the
-SIGKILL are blocking, and holding the async mutex across them would stall every other
-request.
+The escalation happens outside the map's lock, deliberately: both the process table's
+walk and the SIGKILL are blocking, and holding the async mutex across them would stall
+every other request.
 
 `kill_plugin_subprocesses` fires here but never on an automatic timeout. It is broad -
 nushell shares plugin subprocesses across evals - so it is reserved for a call the agent

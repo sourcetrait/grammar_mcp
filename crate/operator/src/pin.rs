@@ -102,7 +102,7 @@ pub fn pin(
         ));
     };
     let value = validate(key, value)?;
-    let Some(start_time) = process_start_time(pid) else {
+    let Some(start_time) = sourcetrait_process::start_time(pid) else {
         return Err(format!("process {pid} is not running; nothing to pin to"));
     };
     pins().insert(
@@ -118,7 +118,7 @@ pub fn pin(
 
 /// Drop every pin whose process has gone.
 pub(crate) fn reap_pins() {
-    pins().retain(|_, pin| process_start_time(pin.pid) == Some(pin.start_time));
+    pins().retain(|_, pin| sourcetrait_process::start_time(pin.pid) == Some(pin.start_time));
 }
 
 /// The supervisor settings as they currently apply, `base` under the pins.

@@ -6,7 +6,10 @@
 //!
 //! SYSTEM tier: it needs a REAL host process to be the subreaper, and a real /proc view of
 //! that process's children. Neither is reachable in-process.
-#![cfg(feature = "embedded-cli")]
+//!
+//! Linux alone: the subreaper is Linux's `PR_SET_CHILD_SUBREAPER`. Elsewhere an orphan
+//! goes to init (launchd on macOS), which reaps it, so the host has no such duty.
+#![cfg(all(feature = "embedded-cli", target_os = "linux"))]
 
 use std::path::Path;
 use std::time::{Duration, Instant};

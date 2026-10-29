@@ -73,7 +73,7 @@ fn the_stateful_lane_is_linted_too() {
 fn a_well_known_system_path_passes() {
     let s = TESTING.harness();
     let env = s.execute(
-        "def execute [data: nothing]: nothing -> record<seen: bool> { { seen: ('/proc/self' | path exists) } }",
+        "def execute [data: nothing]: nothing -> record<seen: bool> { { seen: ('/dev/null' | path exists) } }",
         "null",
     );
     assert_eq!(env["result"], json!({"seen": true}), "got {env}");

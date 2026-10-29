@@ -9,8 +9,10 @@ static TEST_CONFIG: Once = Once::new();
 const INPROC_PREFIX: &str = "grammar_inproc_";
 
 /// Remove the temp namespaces left by test processes that have since exited.
-#[cfg(target_os = "linux")]
 fn sweep_dead_test_namespaces(temp: &std::path::Path) {
+    if sourcetrait_process::process(process::id()).is_none() {
+        return;
+    }
     let Ok(entries) = fs::read_dir(temp) else {
         return;
     };
@@ -22,15 +24,12 @@ fn sweep_dead_test_namespaces(temp: &std::path::Path) {
         else {
             continue;
         };
-        if pid == process::id() || PathBuf::from(format!("/proc/{pid}")).exists() {
+        if pid == process::id() || sourcetrait_process::process(pid).is_some() {
             continue;
         }
         let _ = fs::remove_dir_all(entry.path());
     }
 }
-
-#[cfg(not(target_os = "linux"))]
-fn sweep_dead_test_namespaces(_temp: &std::path::Path) {}
 
 /// Point the homes at a per-binary temp dir and seed CONFIG, once.
 fn ensure_test_config() {

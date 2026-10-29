@@ -92,6 +92,7 @@ sourcetrait_common = {
         "tomlx",
     ]
 }
+sourcetrait_process = { path = "../common_mono/unix/crates/sourcetrait_process", version = ">=0.0.0-0" }
 
 srcert_lib = { path = "../srcert/crates/srcert_lib" }
 

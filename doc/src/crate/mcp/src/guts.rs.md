@@ -29,13 +29,15 @@ these accumulate one per run FOREVER - a real sweep found 128 of them, roughly
 
 So each run sweeps the DEAD ones on the way IN, which bounds the litter to at most
 one namespace per currently-running test binary instead of one per run ever. A
-leftover whose pid is gone from /proc cannot be in use by anyone, and that is the
-whole liveness test.
+leftover whose pid is gone from the process table (`sourcetrait_process`) cannot be
+in use by anyone, and that is the whole liveness test. On macOS the table holds the
+user's own processes alone, and the temporary directory is the user's own, so every
+namespace there belongs to a process the table can show.
 
-Linux-gated like the rest of the /proc work, and elsewhere it is a NO-OP rather
-than a guess: without a liveness check the sweep could delete a live concurrent
-binary's namespace. Best-effort throughout, since a failed sweep must never fail a
-test. Pid reuse only defers a removal by one round.
+A table that cannot show this very process proves nothing dead, so the sweep is then
+a NO-OP rather than a guess: without a liveness check it could delete a live
+concurrent binary's namespace. Best-effort throughout, since a failed sweep must never
+fail a test. Pid reuse only defers a removal by one round.
 
 ## fn ensure_test_config
 The `unsafe` block is sound because the `Once` serializes it AND it runs before

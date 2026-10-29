@@ -6693,6 +6693,7 @@ dependencies = [
  "serde_json",
  "sourcetrait_common",
  "sourcetrait_grammar_protocol",
+ "sourcetrait_process",
  "tokio",
  "toml 1.1.8+spec-1.1.0",
 ]
@@ -6738,6 +6739,7 @@ dependencies = [
  "sourcetrait_grammar_engine",
  "sourcetrait_grammar_operator",
  "sourcetrait_grammar_protocol",
+ "sourcetrait_process",
  "srcert_lib",
  "tempfile",
  "tokio",
@@ -6759,6 +6761,7 @@ dependencies = [
  "serde",
  "sourcetrait_common",
  "sourcetrait_grammar_protocol",
+ "sourcetrait_process",
  "tokio",
 ]
 
@@ -6807,6 +6810,13 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
+]
+
+[[package]]
+name = "sourcetrait_process"
+version = "0.0.0-2"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

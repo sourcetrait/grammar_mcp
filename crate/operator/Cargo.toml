@@ -19,6 +19,7 @@ tokio.workspace = true
 
 sourcetrait_common.workspace = true
 sourcetrait_grammar_protocol.workspace = true
+sourcetrait_process.workspace = true
 
 [package.metadata]
 rein = "ai"

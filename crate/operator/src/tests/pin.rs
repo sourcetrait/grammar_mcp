@@ -1,6 +1,5 @@
 use crate::*;
 use crate::pin::{PinnableKey, PinValue};
-use crate::reaper::parse_start_time;
 use sourcetrait_common::testing::prelude::*;
 
 static TESTING: testing::Module = testing::module!(Unit);
@@ -25,31 +24,11 @@ fn me() -> u32 {
 }
 
 #[tested]
-fn start_time_is_field_22_counted_after_the_last_paren() {
-    // comm is unquoted and may contain both spaces and parens, so fields are
-    // counted after the last ')': index 0 is state (field 3), so starttime
-    // (field 22) is index 19. Here the run of integers makes the position
-    // readable - the 19th value after the state is 8675309.
-    let stat = "42 (weird ) name) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 8675309 rest";
-    assert_eq!(parse_start_time(stat), Some(8675309));
-}
-
-#[tested]
-fn a_truncated_stat_yields_no_start_time() {
-    assert!(parse_start_time("").is_none());
-    assert!(parse_start_time("no parens here").is_none());
-    assert!(
-        parse_start_time("5 (x) Z 1 2 3").is_none(),
-        "a stat cut short before field 22 must not read a nearby field as the start time",
-    );
-}
-
-#[tested]
 fn our_own_process_has_a_start_time() {
     // The pid-reuse guard rests on this being readable for a live process; if it
     // were not, every pin would be refused as dead.
     assert!(
-        process_start_time(me()).is_some(),
+        sourcetrait_process::start_time(me()).is_some(),
         "the running test process must report a start time",
     );
 }

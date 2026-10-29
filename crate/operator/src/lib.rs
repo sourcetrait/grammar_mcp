@@ -59,7 +59,7 @@ pub use sourcetrait_grammar_protocol::{
 pub use crate::{
     msg::{EngineReading, FromOperatorSys, HungThread, ThreadLane, ToOperatorSys},
     pin::{clear_pins, effective_supervisor, pin},
-    reaper::{install_child_subreaper, process_start_time},
+    reaper::install_child_subreaper,
     supervisor::{SupervisorConfig, check_fraction},
     system::{
         OperatorHandle, OperatorSysConfig, OperatorSysParams, OperatorSysPaths, OperatorSystem,

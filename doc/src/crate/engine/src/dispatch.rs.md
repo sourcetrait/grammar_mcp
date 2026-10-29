@@ -93,4 +93,4 @@ otherwise keep running as the host's user with its supervising thread already go
 
 The pids are collected BEFORE `kill_all`, for two reasons: that call clears the table and
 takes the tracked pid sets with it, and nushell's own kill reaches only the DIRECT child,
-so the /proc descendant walk in `tree_kill` is what gets a grandchild.
+so the process table's descendant walk in `tree_kill` is what gets a grandchild.

@@ -45,7 +45,8 @@ reason `name()` composes from `field()`: one spelling, one place.
 THE PID-REUSE GUARD. A pid alone is not an identity on a long-lived host - the kernel
 recycles them - so the pair (pid, start_time) is what actually names the process. On
 every check the stored start time is compared against the live one, and a mismatch
-means the pin's process is gone and something else now holds its number.
+means the pin's process is gone and something else now holds its number. Both come from
+the process table (`sourcetrait_process`), in the platform's unit.
 
 ## static PINS
 A map keyed by the SETTING is what makes last-write-wins fall out rather than be
@@ -67,9 +68,9 @@ than created and reaped a tick later, because those two outcomes look identical 
 caller a second afterwards and only one of them is honest about what happened.
 
 ## fn reap_pins
-Called on the watchdog tick, which already scans /proc, AND again before any read of
-the effective config - so a caller can never observe a pin held by a process that has
-already exited, whatever the tick happens to be doing.
+Called on the watchdog tick AND again before any read of the effective config - so a
+caller can never observe a pin held by a process that has already exited, whatever the
+tick happens to be doing.
 
 ## fn effective_supervisor
 EVERY reader goes through this rather than its base lines alone, the watchdog with its

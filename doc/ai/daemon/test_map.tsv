@@ -261,16 +261,11 @@ nuval	nuval	lib	crate/nuval/src/lib.rs	tests::val_error::short_drops_a_label_its
 nuval	nuval	lib	crate/nuval/src/lib.rs	tests::val_error::short_puts_an_error_on_one_line	portable	default	in-process	value data moves to protocol (ValueBoundary)
 sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::pin::a_channel_key_is_not_pinnable	daemon	default	in-process	operator monitoring moves with the engine
 sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::pin::a_pin_value_carries_the_shape_its_setting_holds	daemon	default	in-process	operator monitoring moves with the engine
-sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::pin::a_truncated_stat_yields_no_start_time	daemon	default	in-process	operator monitoring moves with the engine
 sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::pin::an_unknown_key_is_refused	daemon	default	in-process	operator monitoring moves with the engine
 sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::pin::every_pinnable_key_round_trips_its_name	daemon	default	in-process	operator monitoring moves with the engine
 sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::pin::our_own_process_has_a_start_time	daemon	default	in-process	operator monitoring moves with the engine
 sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::pin::registry_lifecycle_is_sequenced	daemon	default	in-process	operator monitoring moves with the engine
-sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::pin::start_time_is_field_22_counted_after_the_last_paren	daemon	default	in-process	operator monitoring moves with the engine
-sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::reaper::counts_fields_after_the_last_paren	daemon	default	in-process	operator monitoring moves with the engine
-sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::reaper::parses_state_and_ppid	daemon	default	in-process	operator monitoring moves with the engine
 sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::reaper::reaper_starts_empty_and_is_idempotent	daemon	default	in-process	operator monitoring moves with the engine
-sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::reaper::rejects_unparseable_stat	daemon	default	in-process	operator monitoring moves with the engine
 sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::watchdog::a_level_must_hold_before_it_warns	daemon	default	in-process	operator monitoring moves with the engine
 sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::watchdog::a_long_sustained_level_warns_only_twice_in_an_hour	daemon	default	in-process	operator monitoring moves with the engine
 sourcetrait_grammar_operator	sourcetrait_grammar_operator	lib	crate/operator/src/lib.rs	tests::watchdog::a_momentary_spike_is_not_an_event	daemon	default	in-process	operator monitoring moves with the engine
@@ -307,6 +302,7 @@ sourcetrait_grammar_mcp	rig_files	test	crate/mcp/tests/rig_files.rs	root_denies_
 sourcetrait_grammar_mcp	rig_files	test	crate/mcp/tests/rig_files.rs	root_sanctioned_files_carried	daemon	embedded_cli	guts	rig files
 sourcetrait_grammar_mcp	rig_files	test	crate/mcp/tests/rig_files.rs	sanctioned_file_in_module_dir_denied_root_only	daemon	embedded_cli	guts	rig files
 sourcetrait_grammar_mcp	teardown	test	crate/mcp/tests/teardown.rs	timed_out_external_is_reaped	daemon	embedded_cli	guts	teardown semantics; frontend detach changes it (LifecycleDetach)
+sourcetrait_grammar_mcp	teardown	test	crate/mcp/tests/teardown.rs	timed_out_external_tree_is_reaped	daemon	embedded_cli	guts	teardown semantics; frontend detach changes it (LifecycleDetach)
 sourcetrait_grammar_mcp	equip_substrate	test	crate/mcp/tests/equip_substrate.rs	equip_new_writes_repo_and_records_meta	daemon	embedded_cli	guts	equip substrate
 sourcetrait_grammar_mcp	equip_substrate	test	crate/mcp/tests/equip_substrate.rs	uninstall_missing_succeeds	daemon	embedded_cli	guts	equip substrate
 sourcetrait_grammar_mcp	equip_substrate	test	crate/mcp/tests/equip_substrate.rs	uninstall_removes_subtree_keeps_source	daemon	embedded_cli	guts	equip substrate

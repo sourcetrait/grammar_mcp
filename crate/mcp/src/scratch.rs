@@ -132,7 +132,7 @@ fn make_dir(base: &Path) -> Result<PathBuf, String> {
         .map_err(|e| format!("make a scratch directory in {}: {e}", base.display()))?
         .keep();
     let pid = process::id();
-    if let Some(start) = process_start_time(pid) {
+    if let Some(start) = sourcetrait_process::start_time(pid) {
         let owner = dir.join(OWNER_FILE);
         fs::write(&owner, format!("{pid} {start}\n"))
             .map_err(|e| format!("write {}: {e}", owner.display()))?;
@@ -154,7 +154,7 @@ fn sweep_stale(base: &Path) {
         let Some((pid, start)) = read_owner(&dir) else {
             continue;
         };
-        if process_start_time(pid) != Some(start) {
+        if sourcetrait_process::start_time(pid) != Some(start) {
             let _ = fs::remove_dir_all(&dir);
         }
     }
@@ -165,18 +165,4 @@ fn read_owner(dir: &Path) -> Option<(u32, u64)> {
     let text = fs::read_to_string(dir.join(OWNER_FILE)).ok()?;
     let mut parts = text.split_whitespace();
     Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
-}
-
-/// A live process's start time from its `/proc` stat, none when it is not running.
-#[cfg(target_os = "linux")]
-fn process_start_time(pid: u32) -> Option<u64> {
-    let stat = fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
-    let rparen = stat.rfind(')')?;
-    stat[rparen + 1..].split_whitespace().nth(19)?.parse().ok()
-}
-
-/// Off Linux there is no `/proc`: no owner is marked, so none is swept.
-#[cfg(not(target_os = "linux"))]
-fn process_start_time(_pid: u32) -> Option<u64> {
-    None
 }

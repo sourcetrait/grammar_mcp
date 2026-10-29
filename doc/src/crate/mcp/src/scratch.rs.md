@@ -27,15 +27,12 @@ other than a deliberate close leaves its inbox for the agent to read, and the
 next open makes another, so the end removes each.
 
 ## const OWNER_FILE
-The owner's pid and its start time, the identity the operator's pins use
-(`process_start_time`): a pid alone is recycled, and the pair is not.
-
-## fn process_start_time
-Field 22 of `/proc/<pid>/stat`, read past the last `)`, since a process's name
-may hold spaces and parentheses. The operator reads its pins' owners the same
-way; the frontend keeps its own reading because the client build has no
-operator. Off Linux there is no `/proc`: no marker is written, and a sweep
-finds none to act on.
+The owner's pid and its start time from the process table (`sourcetrait_process`),
+the identity the operator's pins use: a pid alone is recycled, and the pair is not.
+The start time is in the platform's unit, clock ticks since boot on Linux and
+microseconds since the epoch on macOS, and a pair is only checked on the host that
+wrote it. Where no table is read no marker is written, and a sweep finds none to
+act on.
 
 ## const SCRATCH_MODE
 Asked of `tempfile` outright: its directories default to 0777 less the umask,

@@ -1,10 +1,14 @@
 # reaper.rs
 
 The operator's half of an eval's teardown. The engine kills an eval's external
-tree by a /proc descendant walk (the engine's `teardown.rs`); the walk reaches a
-grandchild only while that grandchild stays on the host's ppid chain, which is
-what the subreaper here keeps it on, and adoption leaves zombies the host must
-then reap.
+tree by a descendant walk of the process table (the engine's `teardown.rs`); the
+walk reaches a grandchild only while that grandchild stays on the host's ppid
+chain, which is what the subreaper here keeps it on, and adoption leaves zombies
+the host must then reap.
+
+All of it is Linux's: the subreaper is `PR_SET_CHILD_SUBREAPER`, and elsewhere an
+orphan goes to init (launchd on macOS), which reaps it, so the reaper does nothing
+there.
 
 ## const REAP_GRACE_SECS
 The grace is the safety mechanism, not a tuning knob.
@@ -20,37 +24,12 @@ sitting there seconds later provably belongs to nobody. Age is what separates
 "abandoned" from "someone is mid-wait", without needing a registry of every pid
 the process is currently awaiting.
 
-## fn parse_state_ppid
-Fields are counted after the last ')' because the comm field is unquoted and can
-itself contain spaces and parens. After it, index 0 is state (field 3) and index
-1 is ppid.
-
-## fn parse_start_time
-Exists for the pid-reuse guard. A pid alone cannot say whether the process
-holding a pin is still the one that took it - pids are recycled, and a
-long-lived host will outlive plenty of them. The start time makes the pair (pid,
-start_time) an identity: the kernel will not hand out the same pid with the same
-start tick, so a pin whose stored start time no longer matches belongs to a
-process that has already gone.
-
-Same last-')' counting as above, so field 22 is index 19.
-
-## fn process_start_time
-Public because mcp marks its scratch directories with the same identity: a
-host's start sweeps a directory only when its marker's pair no longer names a
-live process (mcp's `scratch.rs`). On Linux it is field 22 of
-`/proc/<pid>/stat`, in clock ticks. On macOS it is `proc_pidinfo`'s BSD
-record, its start seconds and microseconds taken together as microseconds. The
-units differ by platform and never meet, since a pair is only checked on the
-host that wrote it. Elsewhere it is None, so a pin is never proven live and a
-scratch directory carries no marker, which the sweep leaves alone.
-
 ## struct OrphanReaper
 The subreaper is taken for its attachment property, but the same syscall
 imposes a duty: we are now those orphans' parent, and a parent must `wait()`
 them. An adopted child that exits with no waiter otherwise stays a zombie for
 the host's lifetime, holding a pid and a process-table slot and polluting the
-very /proc sweeps our own orphan discipline depends on.
+very process-table walks our own orphan discipline depends on.
 
 The reliable producer is `git commit`, which detaches its own auto-maintenance
 (`gc --auto`) - one leaked zombie per commit, and the equip lifecycle commits on
@@ -70,8 +49,8 @@ Serve-path only. A one-shot CLI process exits promptly, at which point its
 orphans reparent to init and are reaped there.
 
 ### fn reap
-Runs on the watchdog tick, which is cheap enough - a /proc scan of stat files,
-and usually nothing to reap. `WNOHANG` so a surprise never blocks the watchdog,
+Runs on the watchdog tick, which is cheap enough - one read of the process
+table, and usually nothing to reap. `WNOHANG` so a surprise never blocks the watchdog,
 and a pid someone else already reaped returns ECHILD, which is exactly the no-op
 wanted.
 
@@ -79,4 +58,4 @@ wanted.
 Best-effort and called once at host startup, by the host itself rather than the
 operator's system, since the one-shot CLI starts no operator and still kills
 trees. The subreaper only buys race-safety on kill-time orphans; the engine's
-/proc descendant walk is the actual mechanism.
+descendant walk of the process table is the actual mechanism.

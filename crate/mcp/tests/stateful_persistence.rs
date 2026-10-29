@@ -124,10 +124,10 @@ fn stateful_state_does_not_leak_into_the_pool(_t: &testing::Testable<'_, '_, '_>
 /// nushell's `EngineState::merge_env` ends by chdir'ing the process to `$env.PWD`.
 /// In-process that would move the whole grammar host for the rest of its life, so the
 /// stateful lane merges env WITHOUT that sync (the engine's merge_env_no_chdir) and
-/// `cd` stays engine state. Linux-only, like the rest of the /proc-based checks.
+/// `cd` stays engine state.
 fn a_stateful_cd_does_not_move_the_host_process_cwd(_t: &testing::Testable<'_, '_, '_>) {
     let s = TESTING.harness();
-    let before = std::fs::read_link("/proc/self/cwd").expect("read /proc/self/cwd");
+    let before = std::env::current_dir().expect("read the process cwd");
     let env = s.execute(
         "def --env execute [data: record<dir: string>]: nothing -> record<pwd: string> {\n    cd $data.dir\n    { pwd: $env.PWD }\n}",
         "{dir: /etc}",
@@ -137,7 +137,7 @@ fn a_stateful_cd_does_not_move_the_host_process_cwd(_t: &testing::Testable<'_, '
         json!({"pwd": "/etc"}),
         "cd should still set $env.PWD; got {env}",
     );
-    let after = std::fs::read_link("/proc/self/cwd").expect("read /proc/self/cwd");
+    let after = std::env::current_dir().expect("read the process cwd");
     assert_eq!(
         before, after,
         "a stateful `cd` must not move the host process cwd - in-process there is no \
