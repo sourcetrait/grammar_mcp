@@ -98,11 +98,9 @@ pub(crate) use crate::{
         channel::{
             hub::{FROM_MCP, open_packet, start as start_channel_hub},
             state::{
-                ChannelHandle, ChannelPhase, ChannelSendError, ChannelSyncError,
-                ChannelVerifyError, CloseSignal as ChannelCloseSignal, EVENT_SPILL_DEST,
-                EVENT_SPILL_KEY, MAX_FRAME_BYTES, REMOTE_RESERVED_PREFIX, SpamVerdict,
-                channel_handle, escape_line, event_overflows, event_spill_pointer, mint_msg_id,
-                render_nuon, render_packet, reserved_prefix,
+                ChannelHandle, ChannelSendError, ChannelSyncError, ChannelVerifyError,
+                CloseSignal as ChannelCloseSignal, SpamVerdict, channel_handle, escape_line,
+                event_overflows, event_spill_pointer, mint_msg_id, render_nuon, render_packet,
             },
         },
         emergency::{EmergencyTx, spawn_emergency_responder},
@@ -172,6 +170,11 @@ pub(crate) use sourcetrait_grammar_engine::{
     equip_repo_lock, equip_root, file_start, grimm_signatures, index_from_nuon,
     install_builtins, json_value_to_nu_value, lib_dir, lint_block, list_registered_plugins,
     registered_rig_names, rig_dir, rig_meta_path, span_to_line_col, typedef_text,
+};
+
+pub(crate) use sourcetrait_grammar_protocol::{
+    ChannelPhase, EVENT_BYTES_KEY, EVENT_SPILL_DEST, EVENT_SPILL_KEY, MAX_FRAME_BYTES,
+    NOTIFICATION_CAP, REMOTE_RESERVED_PREFIX, SYNC_QUEUE_CAP, reserved_prefix,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
@@ -314,5 +317,6 @@ pub use crate::{
     run::{
         run_main, run_with
     },
-    server::channel::state::ChannelMode,
 };
+
+pub use sourcetrait_grammar_protocol::ChannelMode;

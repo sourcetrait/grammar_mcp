@@ -1,4 +1,5 @@
 pub(crate) mod capability;
+pub(crate) mod channel;
 pub(crate) mod command;
 pub(crate) mod engine;
 pub(crate) mod operator;
@@ -12,6 +13,12 @@ pub(crate) use sourcetrait_common::{cereal, datum, subsys};
 
 pub use crate::{
     capability::Capabilities,
+    channel::{
+        ChannelEpoch, ChannelMode, ChannelNotice, ChannelPhase, ChannelSendData, ChannelState,
+        EVENT_BYTES_KEY, EVENT_SPILL_DEST, EVENT_SPILL_KEY, HostEvent, MAX_FRAME_BYTES,
+        MCP_RESERVED_PREFIX, NOTIFICATION_CAP, REMOTE_RESERVED_PREFIX, RemoteSendData,
+        SYNC_QUEUE_CAP, SpamThresholdsData, reserved_prefix,
+    },
     command::{
         ArgShape, ArgSpec, COMMANDS, CommandKind, CommandSpec, HELP_WORDS, INTERFACE,
         command_by_words, command_spec, render_command_list, render_signatures,

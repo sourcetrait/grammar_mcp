@@ -1,5 +1,5 @@
 use crate::*;
-use crate::server::channel::state::{MsgId, SYNC_QUEUE_CAP, escape_line};
+use crate::server::channel::state::{MsgId, escape_line};
 use sourcetrait_common::cereal;
 
 /// A permissive starting policy, so a test that is not ABOUT the thresholds never trips

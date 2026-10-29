@@ -5,6 +5,11 @@ evaluator, operator, MCP server, or platform monitoring in its dependencies.
 The engine, the client, the daemon, the MCP frontend, and the probe all take
 it, and it takes none of them, so the package graph stays one-way.
 
+## mod channel
+The Channel's reservations, caps, modes, and phases, and what crosses between a
+frontend and the worker that owns the logical Channel: its state and epoch, the
+frontend's notices, typed host events, and sends as data.
+
 ## mod command
 The `interface` tool's catalog, its commands, arguments, results, summaries, and
 deny words, with both rendered blocks, shared by a frontend's description and

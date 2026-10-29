@@ -1,22 +1,10 @@
 # state.rs
 
-## const MCP_RESERVED_PREFIX / const REMOTE_RESERVED_PREFIX / fn reserved_prefix
-Every model the host stamps lives beneath one of the two: `mcp/` for the local
-host's own packets, `remote/` for those about a remote, whose peer need not be
-an MCP (User). The value of a reservation is that it makes provenance a
-mechanical check: anything claiming either prefix from a source that is not the
-host can be rejected without interpreting it. Enforced wherever a non-host picks
-a model, a definition's send (`host.rs`) and a peer's relay (`link.rs`), both
-through `reserved_prefix`.
+The host's one Channel. Its modes, phases, reservations, and caps are the
+protocol crate's, shared with the worker that will own the logical Channel.
 
-## const MAX_FRAME_BYTES
-A hard `<`, never a `<=` against 1 MiB. A frame landing exactly on the cap
-arrives missing its first byte - not an error and not a dropped event, but a
-malformed record that fails `from nuon` at the reader with nothing upstream to
-blame. Above the cap the frame is dropped whole and the watch closes.
-
-## the auto-spill primitives (NOTIFICATION_CAP, event_overflows, event_spill_pointer)
-The second, lower cap. MAX_FRAME_BYTES (1 MiB) is what one wss frame carries,
+## fn event_overflows / fn event_spill_pointer
+The second, lower cap. `MAX_FRAME_BYTES` (1 MiB) is what one wss frame carries,
 but the client truncates a task-notification at about 500 characters of the
 whole rendered packet line - a claude-code constant the server never observes,
 measured at 500. An event between the two transits and fires Sent (the
@@ -28,41 +16,16 @@ place, so the agent reads <inbox>/<spilled_event_path> for the real event,
 `event_bytes` its original size. event_overflows tests the rendered event's
 character count against the cap minus a wrapper reserve (the id, from, model,
 attached, and NUON punctuation around it), not the exact line, so one threshold
-serves every send path without re-deriving the wrapper. NOTIFICATION_CAP is the
-single coupling point to the client - a client-cap change is a one-line edit.
-Distinct from the frame cap: an event over 1 MiB cannot ride a Deliver frame
-inline, so the remote spill transfers it through the file connection under
-EVENT_SPILL_DEST, inside the delivery's own inbox directory, which is why the
-spill is a send-path act, not a render choice.
-
-## enum ChannelMode
-User's two modes, both required to be named at the open with no default:
-`async` for a harness whose agent holds a Monitor on a websocket, `sync` for one
-with no such mechanism, its agent taking the packets by calling `interface
-channel sync`. The phases, the handshake, the gate, and the refusals are the
-same in both; only where a packet waits differs.
-
-## const SYNC_QUEUE_CAP
-A sync channel's queue waits on the agent, so it is bounded where the hub's,
-drained as fast as the socket takes it, is not: the oldest packet goes past the
-cap and the drop is counted for the next sync, so an agent learns what it missed
-rather than nothing. A packet is a notification, never a payload, and the spam
-thresholds already bound a definition's rate, so a thousand covers a long
-silence.
+serves every send path without re-deriving the wrapper. Distinct from the frame
+cap: an event over 1 MiB cannot ride a Deliver frame inline, so the remote spill
+transfers it through the file connection under `EVENT_SPILL_DEST`, inside the
+delivery's own inbox directory, which is why the spill is a send-path act, not a
+render choice.
 
 ## enum PacketSink
 One send path for both modes: `emit` and `send_control` push to whichever sink
 the open installed, so the gate, the spam counter, the spill, and the render
 never ask the mode.
-
-## enum ChannelPhase
-Read at send time, never captured. A job outliving its eval keeps its decl and
-everything it closed over, so a spawn-time snapshot would let work started
-before verification emit to an unproven peer - exactly what the gating forbids.
-
-Channels are optional and start lazily on the first `interface channel open`,
-which is why `Closed` is an ordinary state and an emit there is a plain
-catchable error rather than a fault.
 
 ## type CloseSignal
 The completion half exists for shutdown. The frame is written by the hub task

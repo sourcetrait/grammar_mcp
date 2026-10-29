@@ -1,64 +1,5 @@
 use crate::*;
 
-/// The model-path prefix RESERVED for the local host's own packets.
-pub(crate) const MCP_RESERVED_PREFIX: &str = "mcp/";
-
-/// The model-path prefix RESERVED for the host's packets about a remote.
-pub(crate) const REMOTE_RESERVED_PREFIX: &str = "remote/";
-
-/// The reserved prefix `model` lies under, if any.
-pub(crate) fn reserved_prefix(model: &str) -> Option<&'static str> {
-    [MCP_RESERVED_PREFIX, REMOTE_RESERVED_PREFIX]
-        .into_iter()
-        .find(|prefix| model.starts_with(prefix))
-}
-
-/// The usable frame maximum.
-pub(crate) const MAX_FRAME_BYTES: usize = 1_048_575;
-
-/// What an emit is allowed to do right now.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ChannelPhase {
-    /// No hub running; the ordinary state of a session that never opens one.
-    Closed,
-    /// The hub is up but the peer has not yet proven it owns the session.
-    Open,
-    /// `interface channel ready` succeeded; emits flow.
-    Verified,
-}
-
-/// How an open Channel's packets reach its peer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ser::Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ChannelMode {
-    /// A Monitor reads them from the hub's loopback WSS stream as they come.
-    Async,
-    /// They queue until the agent takes them by `interface channel sync`.
-    Sync,
-}
-
-impl ChannelMode {
-    /// The mode's name, as `interface channel open` takes it.
-    pub(crate) fn name(self) -> &'static str {
-        match self {
-            Self::Async => "async",
-            Self::Sync => "sync",
-        }
-    }
-
-    /// The mode a name names, if any.
-    pub(crate) fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "async" => Some(Self::Async),
-            "sync" => Some(Self::Sync),
-            _ => None,
-        }
-    }
-}
-
-/// The most packets a sync Channel queues; past it, the oldest is dropped.
-pub(crate) const SYNC_QUEUE_CAP: usize = 1000;
-
 /// What a planned close carries: the code, the reason, and an optional ack.
 pub(crate) type CloseSignal = (u16, String, Option<tk::oneshot::Sender<()>>);
 
@@ -622,18 +563,8 @@ pub(crate) fn escape_line(rendered: &str) -> String {
     rendered.replace('\n', "\\n").replace('\r', "\\r")
 }
 
-/// The client's task-notification cap on a rendered packet line, in characters.
-pub(crate) const NOTIFICATION_CAP: usize = 500;
-
 /// What the packet's wrapper takes of the cap around its event.
 const NOTIFICATION_WRAPPER_RESERVE: usize = 120;
-
-/// The event key marking a spilled event, its value the full event's path.
-pub(crate) const EVENT_SPILL_KEY: &str = "spilled_event_path";
-const EVENT_BYTES_KEY: &str = "event_bytes";
-
-/// The dest a remote event spill transfers under, in its delivery's directory.
-pub(crate) const EVENT_SPILL_DEST: &str = ".mcp_event.nuon";
 
 /// Would this rendered event NUON overflow the notification cap once wrapped?
 pub(crate) fn event_overflows(event_nuon: &str) -> bool {
