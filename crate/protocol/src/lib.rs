@@ -2,8 +2,10 @@ pub(crate) mod capability;
 pub(crate) mod channel;
 pub(crate) mod command;
 pub(crate) mod engine;
+pub(crate) mod error;
 pub(crate) mod operator;
 pub(crate) mod peer;
+pub(crate) mod runtime;
 pub(crate) mod value;
 
 pub(crate) use std::{fmt, io};
@@ -31,6 +33,7 @@ pub use crate::{
         RigDoc, Severity, SignaturesDoc, Source, ToEngineSys, ValueAnswer, builtin_equip,
         builtin_name, display_equip,
     },
+    error::{LOCAL_HOST, RuntimeError, TransportError},
     operator::{
         BackgroundJobsWarningEmergency, ChannelSpamErrorEmergency, ChannelSpamWarningEmergency,
         CpuWarningEmergency, CriticalEmergency, DiskWarningEmergency, Emergency, EmergencyKind,
@@ -40,6 +43,7 @@ pub use crate::{
         MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT, RemoteChannelEvent,
         RemoteChannelRow, RemoteFailure, RemoteLinkState, RemoteListenResult,
     },
+    runtime::{ClientInstanceId, LeaseId, OperationId, WorkerGeneration},
     value::{ValueLimitError, ValueLimitErrorKind, ValueLimits, check_error, check_value},
 };
 

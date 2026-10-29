@@ -138,7 +138,7 @@ pub(crate) use crate::{
             config_channel::ConfigChannelParams,
             equip::EquipParams,
             common::{
-                LOCAL_HOST, NuSh, RemoteLinkEntry, answer_value, envelope_text, now_millis,
+                NuSh, RemoteLinkEntry, answer_value, envelope_text, now_millis,
                 resolve_host, serde_to_nu, success, success_value, success_void, unexpected,
             },
             inspect::InspectParams,
@@ -173,8 +173,9 @@ pub(crate) use sourcetrait_grammar_engine::{
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
-    ChannelPhase, EVENT_BYTES_KEY, EVENT_SPILL_DEST, EVENT_SPILL_KEY, MAX_FRAME_BYTES,
-    MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT, NOTIFICATION_CAP,
+    ChannelPhase, EVENT_BYTES_KEY, EVENT_SPILL_DEST, EVENT_SPILL_KEY, LOCAL_HOST,
+    MAX_FRAME_BYTES, MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT,
+    NOTIFICATION_CAP, RuntimeError, TransportError,
     REMOTE_RESERVED_PREFIX, RemoteChannelRow, RemoteLinkState, RemoteListenResult,
     SYNC_QUEUE_CAP, reserved_prefix,
 };

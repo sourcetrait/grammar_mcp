@@ -20,6 +20,10 @@ The engine's requests, commands, and answers, with the diagnostics, the error,
 and the documents they carry, moved here from the engine so the frontend and
 the daemon share one definition; the engine re-exports them.
 
+## mod error
+The runtime's and the transport's errors, each rendering to the envelope's rows,
+the transport's under stable `daemon::` kinds.
+
 ## mod operator
 The operator's portable data, its manager's observation and the emergencies it
 classifies, at fixed widths; the operator's Linux monitoring stays in its crate.
@@ -27,6 +31,10 @@ classifies, at fixed widths; the operator's Linux monitoring stays in its crate.
 ## mod peer
 The retained remote Channel's models, its list rows and listen result, and its
 lifecycle and delivery events, as data a worker reports to its frontend.
+
+## mod runtime
+The runtime's opaque identities: a client instance, a worker generation, a lease,
+and an operation.
 
 ## use nuval::wide
 The wire's widening, shared with nuval so every count and offset widens one

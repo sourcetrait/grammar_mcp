@@ -15,41 +15,15 @@ use `?` freely rather than mapping at every filesystem call.
 
 `From<EngineError>` wraps the engine's error whole: its kinds and messages are the
 engine's, the equips' refusals and an eval's failure among them, as the wire has always
-carried them.
+carried them. `From<TransportError>` wraps a transport failure whole under its
+`daemon::` kind.
 
-### fn kind_str
-The two violation variants `unreachable!()` here deliberately: they render through
-`bucket`, and reaching this arm would mean a caller bypassed that path. `Engine` takes
-the engine's kind.
-
-The remote kinds name their remote's kind, `remote::channel::`, as the commands do,
-so a remote engine's sit apart under `remote::engine::` (User).
-
-`remote::channel::open_failed` is the synchronous bind or connect failure of a
-blocking `interface remote channel listen` or `connect`: distinct from the async
-`remote/channel/Disconnected {error}` Channel model, which fires only for a listener's
-post-bind accept failure or an established link's later teardown.
-
-`remote::file` is the remotes file's own refusal, a file that doesn't parse or holds
-a malformed entry, named with its path; a bad value a command was given is that
-command's `remote::channel::invalid_params` instead.
-
-An `interface` call's refusal is `interface::invalid` rows, gathered under
-`InterfaceViolations`, each at its position in the command; a command that parsed and ran
-refuses with its own kinds, as its tool did.
-
-`remote::channel::unverified` refuses an `interface remote channel listen` or
-`connect` while the Channel isn't verified, before any bind or connect: the link's
-notices and relays ride the Channel's gate and would drop.
-
-`channel::wrong_mode` names the mode the Channel is open in and the one asked for:
-an open in the other mode, or a sync on an async Channel, each told to close
-first. `channel::not_claimed`'s message follows the mode, a Monitor to start or a
-sync to call.
-
-`host::unknown` is a tool's `host` alias naming no host this MCP knows, its message
-naming `local`. The engine's own `host::unserved` stays apart: that is a request naming
-a host its engine doesn't serve, which no tool sends.
+### fn as_runtime
+Every variant but the engine's and the transport's is the runtime's portable
+`RuntimeError`, whose kinds, messages, and rows are its own (the protocol crate's
+`error.rs`): this host's variants stay the values its impls build and bubble, and
+their wording lives once. `From<RuntimeError>` turns a worker's refusal back into
+the same variant, so it reaches the envelope as this host's own did.
 
 ## fn error_to_call_result
 The failure envelope, `{nonce, error}`: the error's rows as a table of `kind`,

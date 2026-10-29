@@ -6,6 +6,8 @@ pub type GrammarMcpResult<T> = Result<T, GrammarMcpError>;
 pub enum GrammarMcpError {
     /// What the engine refused or failed at, its kinds and messages its own.
     Engine(EngineError),
+    /// What the transport to a worker failed at, under its `daemon::` kinds.
+    Transport(TransportError),
     InterfaceViolations {
         diagnostics: Vec<Diagnostic>,
     },
@@ -55,83 +57,64 @@ pub enum GrammarMcpError {
 }
 
 impl GrammarMcpError {
-    fn kind_str(&self) -> &'static str {
-        match self {
-            Self::Engine(error) => error.kind(),
-            Self::HostUnknown { .. } => "host::unknown",
-            Self::SchemaInvalid { .. } => "schema::invalid",
-            Self::PurviewInvalidId { .. } => "purview::invalid_id",
-            Self::ChannelStart { .. } => "channel::start",
-            Self::ChannelNotOpen => "channel::not_open",
-            Self::ChannelNotClaimed { .. } => "channel::not_claimed",
-            Self::ChannelWrongMode { .. } => "channel::wrong_mode",
-            Self::ChannelPeerGone => "channel::peer_gone",
-            Self::RemoteInvalidParams { .. } => "remote::channel::invalid_params",
-            Self::RemoteAlreadyOpen { .. } => "remote::channel::already_open",
-            Self::RemoteNotOpen { .. } => "remote::channel::not_open",
-            Self::RemoteOpenFailed { .. } => "remote::channel::open_failed",
-            Self::RemoteChannelUnverified => "remote::channel::unverified",
-            Self::RemotesFile { .. } => "remote::file",
-            Self::Internal { .. } => "internal",
-            Self::InterfaceViolations { .. } => {
-                unreachable!("violation variants render via bucket, not kind_str")
+    /// The runtime's portable error this one is; none for the engine's or the transport's.
+    pub(crate) fn as_runtime(&self) -> Option<RuntimeError> {
+        Some(match self.clone() {
+            Self::Engine(_) | Self::Transport(_) => return None,
+            Self::InterfaceViolations { diagnostics } => {
+                RuntimeError::InterfaceViolations { diagnostics }
             }
+            Self::HostUnknown { host } => RuntimeError::HostUnknown { host },
+            Self::SchemaInvalid { reason } => RuntimeError::SchemaInvalid { reason },
+            Self::PurviewInvalidId { id, reason } => RuntimeError::PurviewInvalidId { id, reason },
+            Self::ChannelStart { reason } => RuntimeError::ChannelStart { reason },
+            Self::ChannelNotOpen => RuntimeError::ChannelNotOpen,
+            Self::ChannelNotClaimed { mode } => RuntimeError::ChannelNotClaimed { mode },
+            Self::ChannelWrongMode { open, asked } => RuntimeError::ChannelWrongMode { open, asked },
+            Self::ChannelPeerGone => RuntimeError::ChannelPeerGone,
+            Self::RemoteInvalidParams { reason } => RuntimeError::RemoteInvalidParams { reason },
+            Self::RemoteAlreadyOpen { alias } => RuntimeError::RemoteAlreadyOpen { alias },
+            Self::RemoteNotOpen { alias } => RuntimeError::RemoteNotOpen { alias },
+            Self::RemoteOpenFailed { alias, reason } => {
+                RuntimeError::RemoteOpenFailed { alias, reason }
+            }
+            Self::RemoteChannelUnverified => RuntimeError::RemoteChannelUnverified,
+            Self::RemotesFile { reason } => RuntimeError::RemotesFile { reason },
+            Self::Internal { phase, reason } => RuntimeError::Internal { phase, reason },
+        })
+    }
+}
+
+impl From<RuntimeError> for GrammarMcpError {
+    fn from(e: RuntimeError) -> Self {
+        match e {
+            RuntimeError::InterfaceViolations { diagnostics } => {
+                Self::InterfaceViolations { diagnostics }
+            }
+            RuntimeError::HostUnknown { host } => Self::HostUnknown { host },
+            RuntimeError::SchemaInvalid { reason } => Self::SchemaInvalid { reason },
+            RuntimeError::PurviewInvalidId { id, reason } => Self::PurviewInvalidId { id, reason },
+            RuntimeError::ChannelStart { reason } => Self::ChannelStart { reason },
+            RuntimeError::ChannelNotOpen => Self::ChannelNotOpen,
+            RuntimeError::ChannelNotClaimed { mode } => Self::ChannelNotClaimed { mode },
+            RuntimeError::ChannelWrongMode { open, asked } => Self::ChannelWrongMode { open, asked },
+            RuntimeError::ChannelPeerGone => Self::ChannelPeerGone,
+            RuntimeError::RemoteInvalidParams { reason } => Self::RemoteInvalidParams { reason },
+            RuntimeError::RemoteAlreadyOpen { alias } => Self::RemoteAlreadyOpen { alias },
+            RuntimeError::RemoteNotOpen { alias } => Self::RemoteNotOpen { alias },
+            RuntimeError::RemoteOpenFailed { alias, reason } => {
+                Self::RemoteOpenFailed { alias, reason }
+            }
+            RuntimeError::RemoteChannelUnverified => Self::RemoteChannelUnverified,
+            RuntimeError::RemotesFile { reason } => Self::RemotesFile { reason },
+            RuntimeError::Internal { phase, reason } => Self::Internal { phase, reason },
         }
     }
+}
 
-    fn message(&self) -> String {
-        match self {
-            Self::Engine(error) => error.message(),
-            Self::HostUnknown { host } => format!(
-                "unknown host `{host}`: `{LOCAL_HOST}` is this MCP's own host, \
-                 and no other is configured"
-            ),
-            Self::SchemaInvalid { reason } => format!("invalid schema: {reason}"),
-            Self::PurviewInvalidId { id, reason } => {
-                format!("invalid purview id `{id}`: {reason}")
-            }
-            Self::ChannelStart { reason } => format!("cannot start the channel hub: {reason}"),
-            Self::ChannelNotOpen => {
-                "the channel is not open; run `interface channel open` first".to_string()
-            }
-            Self::ChannelNotClaimed {
-                mode: ChannelMode::Async,
-            } => "nothing has connected to the channel yet; start \
-                 a Monitor at the wss endpoint `interface channel open` returned, see the \
-                 channel/Open packet, then run `interface channel ready`"
-                .to_string(),
-            Self::ChannelNotClaimed {
-                mode: ChannelMode::Sync,
-            } => "nothing has taken the channel's packets yet; run `interface channel \
-                 sync`, see the channel/Open packet, then run `interface channel ready`"
-                .to_string(),
-            Self::ChannelWrongMode { open, asked } => format!(
-                "the channel is open in `{}` mode, not `{}`; close it with \
-                 `interface channel close` to open it in `{}`",
-                open.name(),
-                asked.name(),
-                asked.name(),
-            ),
-            Self::ChannelPeerGone => "the channel's peer connection is gone; run \
-                 `interface channel close` then `interface channel open` for a fresh channel"
-                .to_string(),
-            Self::RemoteInvalidParams { reason } => {
-                format!("invalid remote link parameters: {reason}")
-            }
-            Self::RemoteAlreadyOpen { alias } => format!("remote link `{alias}` is already open"),
-            Self::RemoteNotOpen { alias } => format!("no open remote link `{alias}`"),
-            Self::RemoteOpenFailed { alias, reason } => {
-                format!("remote link `{alias}` failed to open: {reason}")
-            }
-            Self::RemoteChannelUnverified => "the channel is not verified; a remote link's \
-                 notices ride it, so open and verify the channel before the link"
-                .to_string(),
-            Self::RemotesFile { reason } => format!("the remotes file: {reason}"),
-            Self::Internal { phase, reason } => format!("internal error [{phase}]: {reason}"),
-            Self::InterfaceViolations { .. } => {
-                unreachable!("violation variants render via bucket, not message")
-            }
-        }
+impl From<TransportError> for GrammarMcpError {
+    fn from(e: TransportError) -> Self {
+        GrammarMcpError::Transport(e)
     }
 }
 
@@ -157,8 +140,8 @@ pub(crate) fn error_to_call_result(
 ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
     let rows = match error.into() {
         GrammarMcpError::Engine(error) => error.rows(),
-        GrammarMcpError::InterfaceViolations { diagnostics } => Diagnostic::bucket(diagnostics).0,
-        single => vec![Diagnostic::error(single.kind_str(), None, single.message())],
+        GrammarMcpError::Transport(error) => error.rows(),
+        runtime => runtime.as_runtime().map(RuntimeError::rows).unwrap_or_default(),
     };
     envelope_text(nonce, "error", serde_to_nu(&rows)?)
 }

@@ -43,10 +43,6 @@ so every envelope, a refusal's included, carries one. The name rides in the hash
 the parameters, so two tools given the same parameters at the same instant still part.
 The request carries the nonce to the engine, which runs the call under it.
 
-## const LOCAL_HOST
-`local` is hard-coded and every other alias is the configuration's, User's ruling, so
-this host's alias can never be configured away. No configuration names a host yet.
-
 ## fn resolve_host
 Every tool takes `host`, required, User's ruling: an agent working beside remote hosts,
 possibly several, names where each call runs rather than leaving it to a default it might
