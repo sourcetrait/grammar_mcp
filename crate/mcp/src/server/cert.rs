@@ -16,7 +16,7 @@ pub(crate) fn ensure_cert_profile() {
         Ok(done) if done.written => eprintln!(
             "grammar: shipped the `{name}` cert profile to {path}; run \
              `srcert generate {name} <dir>`, then name its entity certificate and key \
-             as [identity] `cert_file` and `key_file` in {AGENT_CONFIG_FILE} to enable \
+             as [identity] `cert` and `key` in {AGENT_CONFIG_FILE} to enable \
              the channel",
             name = consts::GRAMMAR,
             path = done.live.display(),

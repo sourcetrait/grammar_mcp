@@ -314,8 +314,8 @@ fn config_record() -> nu::Value {
         Some(identity) => {
             let path = |file: &Path| nu::Value::string(file.to_string_lossy().into_owned(), span);
             let mut record = nu::Record::new();
-            record.insert("cert_file", path(&identity.cert_file));
-            record.insert("key_file", path(&identity.key_file));
+            record.insert("cert", path(&identity.cert));
+            record.insert("key", path(&identity.key));
             nu::Value::record(record, span)
         }
         None => nu::Value::nothing(span),

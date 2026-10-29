@@ -293,12 +293,12 @@ fn emit_open_failed(
 pub(crate) struct RemoteLinkOptions {
     /// The acceptor's listen address.
     pub addr: std::net::SocketAddr,
-    /// This host's own public key, presented as the client certificate.
-    pub self_public_key_file: PathBuf,
-    /// The private key paired with `self_public_key_file`.
-    pub self_private_key_file: PathBuf,
-    /// The peer's known public key; the presented leaf must match it byte-for-byte.
-    pub peer_public_key_file: PathBuf,
+    /// This host's own certificate, presented as the client's.
+    pub self_cert: PathBuf,
+    /// The private key paired with `self_cert`.
+    pub self_key: PathBuf,
+    /// The peer's known certificate; the presented leaf must match it byte for byte.
+    pub peer_cert: PathBuf,
 }
 
 /// A running link: the peer's nom, its outbound queues, and their shared cancel.
@@ -407,9 +407,9 @@ async fn connect_link(
 ) -> io::Result<LinkDrivers> {
     let opts = RemoteLinkOptions {
         addr,
-        self_public_key_file: entry.self_public_key_file.clone(),
-        self_private_key_file: entry.self_private_key_file.clone(),
-        peer_public_key_file: entry.peer_public_key_file.clone(),
+        self_cert: entry.self_cert.clone(),
+        self_key: entry.self_key.clone(),
+        peer_cert: entry.peer_cert.clone(),
     };
     let connector = tls::TlsConnector::from(client_config(&opts)?);
     let (remote_msg, msg_read, msg_write) =
@@ -430,9 +430,9 @@ async fn bind_listener(
     bind: std::net::SocketAddr,
 ) -> io::Result<(tk::TcpListener, tls::TlsAcceptor)> {
     let tls_config = server_config(
-        &entry.self_public_key_file,
-        &entry.self_private_key_file,
-        &entry.peer_public_key_file,
+        &entry.self_cert,
+        &entry.self_key,
+        &entry.peer_cert,
     )?;
     let acceptor = tls::TlsAcceptor::from(tls_config);
     let listener = tk::TcpListener::bind(bind).await?;
@@ -1260,7 +1260,7 @@ async fn close_acceptor(
 
 /// Build the client config: present our public key, match the peer's known one.
 fn client_config(opts: &RemoteLinkOptions) -> io::Result<Arc<tls::ClientConfig>> {
-    let verifier = Arc::new(PublicKeyVerifier::new(load_public_key(&opts.peer_public_key_file)?));
+    let verifier = Arc::new(PublicKeyVerifier::new(load_public_key(&opts.peer_cert)?));
     let provider = Arc::new(rv::default_provider());
     let config = tls::ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()
@@ -1268,8 +1268,8 @@ fn client_config(opts: &RemoteLinkOptions) -> io::Result<Arc<tls::ClientConfig>>
         .dangerous()
         .with_custom_certificate_verifier(verifier)
         .with_client_auth_cert(
-            load_chain(&opts.self_public_key_file)?,
-            load_key(&opts.self_private_key_file)?,
+            load_chain(&opts.self_cert)?,
+            load_key(&opts.self_key)?,
         )
         .map_err(io_other)?;
     Ok(Arc::new(config))
@@ -1277,19 +1277,19 @@ fn client_config(opts: &RemoteLinkOptions) -> io::Result<Arc<tls::ClientConfig>>
 
 /// Build the server config: present our public key, match the client's known one.
 fn server_config(
-    self_public_key_file: &std::path::Path,
-    self_private_key_file: &std::path::Path,
-    peer_public_key_file: &std::path::Path,
+    self_cert: &std::path::Path,
+    self_key: &std::path::Path,
+    peer_cert: &std::path::Path,
 ) -> io::Result<Arc<tls::ServerConfig>> {
-    let verifier = Arc::new(PublicKeyVerifier::new(load_public_key(peer_public_key_file)?));
+    let verifier = Arc::new(PublicKeyVerifier::new(load_public_key(peer_cert)?));
     let provider = Arc::new(rv::default_provider());
     let config = tls::ServerConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()
         .map_err(io_other)?
         .with_client_cert_verifier(verifier)
         .with_single_cert(
-            load_chain(self_public_key_file)?,
-            load_key(self_private_key_file)?,
+            load_chain(self_cert)?,
+            load_key(self_key)?,
         )
         .map_err(io_other)?;
     Ok(Arc::new(config))

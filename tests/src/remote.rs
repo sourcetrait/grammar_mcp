@@ -78,7 +78,7 @@ pub fn write_host_config(cwd: &Path, identity: &GeneratedKeys, remote: &str) -> 
     let dir = cwd.join(".grammar");
     std::fs::create_dir_all(&dir).expect("mkdir .grammar");
     let toml = format!(
-        "[identity]\ncert_file = \"{cert}\"\nkey_file = \"{key}\"\n{remote}",
+        "[identity]\ncert = \"{cert}\"\nkey = \"{key}\"\n{remote}",
         cert = identity.public_key.display(),
         key = identity.private_key.display(),
     );
@@ -90,7 +90,7 @@ pub fn write_host_config(cwd: &Path, identity: &GeneratedKeys, remote: &str) -> 
 /// A connector `[[remote]]` entry, `peer`, dialing `peer_addr`.
 pub fn remote_connector(peer_addr: &str, peer_public: &Path) -> String {
     format!(
-        "\n[[remote]]\nalias = \"peer\"\naddress = \"{peer_addr}\"\npublic_key_file = \"{pk}\"\n",
+        "\n[[remote]]\nalias = \"peer\"\naddress = \"{peer_addr}\"\ncert = \"{pk}\"\n",
         pk = peer_public.display(),
     )
 }
@@ -98,7 +98,7 @@ pub fn remote_connector(peer_addr: &str, peer_public: &Path) -> String {
 /// A listener `[[remote]]` entry, `peer`, binding `listen`.
 pub fn remote_listener(listen: &str, peer_public: &Path) -> String {
     format!(
-        "\n[[remote]]\nalias = \"peer\"\nlisten = \"{listen}\"\npublic_key_file = \"{pk}\"\n",
+        "\n[[remote]]\nalias = \"peer\"\nlisten = \"{listen}\"\ncert = \"{pk}\"\n",
         pk = peer_public.display(),
     )
 }

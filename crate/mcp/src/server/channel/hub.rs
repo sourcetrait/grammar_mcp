@@ -32,19 +32,19 @@ fn server_config() -> Result<Arc<tls::ServerConfig>, GrammarMcpError> {
     let Some(identity) = config().identity.as_ref() else {
         return Err(GrammarMcpError::ChannelStart {
             reason: format!(
-                "the Channel presents the host's [identity]; name its `cert_file` and \
-                 `key_file` in {AGENT_CONFIG_FILE}"
+                "the Channel presents the host's [identity]; name its `cert` and \
+                 `key` in {AGENT_CONFIG_FILE}"
             ),
         });
     };
-    let leaf = tls::CertificateDer::from_pem_file(&identity.cert_file).map_err(|e| {
+    let leaf = tls::CertificateDer::from_pem_file(&identity.cert).map_err(|e| {
         GrammarMcpError::ChannelStart {
-            reason: format!("read {}: {e}", identity.cert_file.display()),
+            reason: format!("read {}: {e}", identity.cert.display()),
         }
     })?;
-    let key = tls::PrivateKeyDer::from_pem_file(&identity.key_file).map_err(|e| {
+    let key = tls::PrivateKeyDer::from_pem_file(&identity.key).map_err(|e| {
         GrammarMcpError::ChannelStart {
-            reason: format!("read {}: {e}", identity.key_file.display()),
+            reason: format!("read {}: {e}", identity.key.display()),
         }
     })?;
     let provider = Arc::new(rustls::crypto::ring::default_provider());

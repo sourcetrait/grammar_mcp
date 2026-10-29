@@ -46,9 +46,10 @@ message.
 ## struct RemoteToml
 One `[[remote]]` entry, a plain `deny_unknown_fields` struct. Its field names
 are the operator's and are never renamed for internal use (alias, listen,
-address, public_key_file); a mistyped field, or a per-link key pair a stale
-file still names, is a loud error. `public_key_file` is the peer's: the entry
-is about the peer, so the `remote_` prefix is implied.
+address, cert); a mistyped field, a per-link key pair a stale file still
+names, or a field by its former name, `public_key_file`, is a loud error.
+`cert` is the peer's: the entry is about the peer, so the `remote_` prefix is
+implied.
 
 ## struct ChannelConfigToml
 The port is the only structural key, because everything else about the
@@ -103,9 +104,8 @@ numbers barely affect detection and mostly decide how often a well-behaved fast
 command gets flagged. That is why erring permissive is right here.
 
 ## struct RemoteConfig / struct RemotesConfig
-The model layer, field names mirroring the file (self_public_key_file /
-self_private_key_file / peer_public_key_file - never cert / key / pin nouns in
-our own names). The two self files are the `[identity]`'s, carried on each peer
+The model layer, field names mirroring the file's (`self_cert`, `self_key`,
+`peer_cert`). The two self files are the `[identity]`'s, carried on each peer
 so a link's driver reads one record. `RemotesConfig { by_alias: HashMap }`
 lives in `Config.remotes`.
 

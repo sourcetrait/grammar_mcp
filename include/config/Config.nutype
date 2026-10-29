@@ -57,8 +57,8 @@ record<
     >,
     identity: oneof<
         record<
-            cert_file: path,
-            key_file: path
+            cert: path,
+            key: path
         >,
         nothing
     >

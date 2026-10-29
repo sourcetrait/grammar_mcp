@@ -18,8 +18,8 @@ fn from_text(text: &str) -> Result<Config, String> {
 /// An `[identity]` table naming a key pair under `/keys`.
 const IDENTITY: &str = "\
 [identity]
-cert_file = \"/keys/self.pem\"
-key_file = \"/keys/self.key.pem\"
+cert = \"/keys/self.pem\"
+key = \"/keys/self.key.pem\"
 ";
 
 #[test]
@@ -107,27 +107,41 @@ fn a_retired_channel_key_is_rejected() {
 #[test]
 fn an_identity_names_both_files_expanded() {
     let config =
-        from_text("[identity]\ncert_file = \"~/k/self.pem\"\nkey_file = \"~/k/self.key.pem\"\n")
+        from_text("[identity]\ncert = \"~/k/self.pem\"\nkey = \"~/k/self.key.pem\"\n")
             .expect("valid");
     let identity = config.identity.expect("an identity");
     assert!(
-        identity.cert_file.is_absolute() && identity.key_file.is_absolute(),
+        identity.cert.is_absolute() && identity.key.is_absolute(),
         "a `~` path must be expanded at load; got {} and {}",
-        identity.cert_file.display(),
-        identity.key_file.display(),
+        identity.cert.display(),
+        identity.key.display(),
     );
-    assert!(identity.cert_file.ends_with("k/self.pem"));
-    assert!(identity.key_file.ends_with("k/self.key.pem"));
+    assert!(identity.cert.ends_with("k/self.pem"));
+    assert!(identity.key.ends_with("k/self.key.pem"));
 }
 
 #[test]
 fn an_identity_missing_a_file_is_rejected() {
     for (text, field) in [
-        ("[identity]\ncert_file = \"/k/self.pem\"\n", "key_file"),
-        ("[identity]\nkey_file = \"/k/self.key.pem\"\n", "cert_file"),
+        ("[identity]\ncert = \"/k/self.pem\"\n", "key"),
+        ("[identity]\nkey = \"/k/self.key.pem\"\n", "cert"),
     ] {
         let err = from_text(text).expect_err("an identity names both files");
-        assert!(err.contains(field), "{text:?}: got {err}");
+        assert!(err.contains(&format!("`{field}`")), "{text:?}: got {err}");
+    }
+}
+
+#[test]
+fn a_field_by_its_former_name_is_rejected() {
+    // `cert_file`, `key_file`, and a remote's `public_key_file` became `cert` and
+    // `key`; a file still naming the old ones must fail loudly.
+    let remote = "[[remote]]\nalias = \"bob\"\naddress = \"127.0.0.1:9001\"\n";
+    for text in [
+        "[identity]\ncert_file = \"/k/self.pem\"\nkey = \"/k/self.key.pem\"\n".to_string(),
+        "[identity]\ncert = \"/k/self.pem\"\nkey_file = \"/k/self.key.pem\"\n".to_string(),
+        format!("{IDENTITY}\n{remote}public_key_file = \"/keys/bob.pem\"\n"),
+    ] {
+        assert!(from_text(&text).is_err(), "{text:?} must be rejected");
     }
 }
 
@@ -138,7 +152,7 @@ fn an_unset_variable_fails_the_load() {
     // UENV one or a standard one, falls back; any other unset variable is
     // unresolvable.
     let err = from_text(
-        "[identity]\ncert_file = \"$GRAMMAR_TEST_UNSET_VAR/self.pem\"\nkey_file = \"/k\"\n",
+        "[identity]\ncert = \"$GRAMMAR_TEST_UNSET_VAR/self.pem\"\nkey = \"/k\"\n",
     )
     .expect_err("an unset variable outside the XDG homes must fail the load");
     assert!(err.contains("GRAMMAR_TEST_UNSET_VAR"), "got {err}");
@@ -219,7 +233,7 @@ fn a_remote_entry_with_listen_is_a_listener() {
 alias = \"bob\"
 listen = \"127.0.0.1:9000\"
 address = \"127.0.0.1\"
-public_key_file = \"/keys/bob.pem\"
+cert = \"/keys/bob.pem\"
 "
     );
     let config = from_text(&text).expect("valid listener entry");
@@ -232,10 +246,10 @@ public_key_file = \"/keys/bob.pem\"
         }
         other => panic!("expected a listener, got {other:?}"),
     }
-    assert!(entry.peer_public_key_file.ends_with("bob.pem"));
+    assert!(entry.peer_cert.ends_with("bob.pem"));
     assert!(
-        entry.self_public_key_file.ends_with("self.pem")
-            && entry.self_private_key_file.ends_with("self.key.pem"),
+        entry.self_cert.ends_with("self.pem")
+            && entry.self_key.ends_with("self.key.pem"),
         "a link presents the host's [identity]",
     );
 }
@@ -250,7 +264,7 @@ fn a_listener_address_with_a_port_is_rejected() {
 alias = \"bob\"
 listen = \"127.0.0.1:9000\"
 address = \"127.0.0.1:5555\"
-public_key_file = \"/keys/bob.pem\"
+cert = \"/keys/bob.pem\"
 "
     );
     let err = from_text(&text).expect_err("a host:port listener address must fail");
@@ -264,7 +278,7 @@ fn a_remote_entry_without_listen_is_a_connector() {
 [[remote]]
 alias = \"bob\"
 address = \"127.0.0.1:9001\"
-public_key_file = \"/keys/bob.pem\"
+cert = \"/keys/bob.pem\"
 "
     );
     let config = from_text(&text).expect("valid connector entry");
@@ -282,7 +296,7 @@ fn a_connector_without_an_address_is_rejected() {
         "{IDENTITY}
 [[remote]]
 alias = \"bob\"
-public_key_file = \"/keys/bob.pem\"
+cert = \"/keys/bob.pem\"
 "
     );
     let err = from_text(&text).expect_err("a connector needs an address");
@@ -293,7 +307,7 @@ public_key_file = \"/keys/bob.pem\"
 fn a_remote_entry_missing_its_peer_key_is_rejected() {
     let text = format!("{IDENTITY}\n[[remote]]\nalias = \"bob\"\naddress = \"127.0.0.1:9001\"\n");
     let err = from_text(&text).expect_err("a missing peer key must fail");
-    assert!(err.contains("bob") && err.contains("public_key_file"), "got {err}");
+    assert!(err.contains("bob") && err.contains("`cert`"), "got {err}");
 }
 
 #[test]
@@ -302,7 +316,7 @@ fn a_remote_without_an_identity_is_rejected() {
 [[remote]]
 alias = \"bob\"
 address = \"127.0.0.1:9001\"
-public_key_file = \"/keys/bob.pem\"
+cert = \"/keys/bob.pem\"
 ";
     let err = from_text(text).expect_err("a link presents the host's identity");
     assert!(err.contains("[identity]"), "got {err}");
@@ -318,7 +332,7 @@ fn a_retired_remote_key_is_rejected() {
 alias = \"bob\"
 address = \"127.0.0.1:9001\"
 self_public_key_file = \"/keys/self.pem\"
-public_key_file = \"/keys/bob.pem\"
+cert = \"/keys/bob.pem\"
 "
     );
     assert!(from_text(&text).is_err(), "a per-link self key must be rejected");
@@ -333,7 +347,7 @@ fn a_typoed_remote_field_is_rejected() {
 
 #[test]
 fn a_duplicate_alias_is_rejected() {
-    let entry = "[[remote]]\nalias = \"bob\"\naddress = \"127.0.0.1:9001\"\npublic_key_file = \"/keys/bob.pem\"\n";
+    let entry = "[[remote]]\nalias = \"bob\"\naddress = \"127.0.0.1:9001\"\ncert = \"/keys/bob.pem\"\n";
     let err = from_text(&format!("{IDENTITY}\n{entry}{entry}"))
         .expect_err("an alias names one peer");
     assert!(err.contains("duplicate"), "got {err}");
@@ -346,7 +360,7 @@ fn a_bad_remote_address_fails_the_load() {
 [[remote]]
 alias = \"bob\"
 address = \"not-an-address\"
-public_key_file = \"/keys/bob.pem\"
+cert = \"/keys/bob.pem\"
 "
     );
     let err = from_text(&text).expect_err("a non ip:port address must fail");

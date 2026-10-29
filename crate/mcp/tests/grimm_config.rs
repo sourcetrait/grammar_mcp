@@ -284,7 +284,7 @@ fn only_the_supervisor_lines_are_pinnable(_t: &testing::Testable<'_, '_, '_>) {
     // `interface channel config` stays the sole mutator of the channel settings; a
     // value with two mutators is one whose effective setting depends on which you
     // ask. The identity is the file's alone.
-    for key in ["channel.spam_warn_rate", "channel.port", "identity.cert_file"] {
+    for key in ["channel.spam_warn_rate", "channel.port", "identity.cert"] {
         let env = s.execute(
             &pinning(
                 "record<out: int>",

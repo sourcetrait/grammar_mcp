@@ -34,9 +34,9 @@ pub(crate) struct ConfigToml {
 #[serde(deny_unknown_fields)]
 pub(crate) struct IdentityConfigToml {
     /// The host's certificate, PEM.
-    pub cert_file: Option<String>,
-    /// The private key paired with `cert_file`, PEM.
-    pub key_file: Option<String>,
+    pub cert: Option<String>,
+    /// The private key paired with `cert`, PEM.
+    pub key: Option<String>,
 }
 
 /// One `[[remote]]` entry (file layer): a peer to link with, by its alias.
@@ -52,8 +52,8 @@ pub(crate) struct RemoteToml {
     pub listen: Option<String>,
     /// A connector's peer `ip:port`, required; a listener's optional bare source IP.
     pub address: Option<String>,
-    /// The peer's known public key to match; `remote_` is implied by the entry.
-    pub public_key_file: Option<String>,
+    /// The peer's known certificate to match; `remote_` is implied by the entry.
+    pub cert: Option<String>,
 }
 
 /// The `[supervisor]` table: when a resource level is worth one warning.
@@ -102,8 +102,8 @@ pub(crate) struct Config {
 /// The host's own key pair (model layer), each path expanded.
 #[derive(Debug, Clone)]
 pub(crate) struct IdentityConfig {
-    pub cert_file: PathBuf,
-    pub key_file: PathBuf,
+    pub cert: PathBuf,
+    pub key: PathBuf,
 }
 
 /// A resolved remote peer (model layer): its role and its mTLS key files.
@@ -111,12 +111,12 @@ pub(crate) struct IdentityConfig {
 pub(crate) struct RemoteConfig {
     pub alias: String,
     pub role: RemoteRole,
-    /// This host's own public key it presents, `[identity]`'s certificate.
-    pub self_public_key_file: PathBuf,
-    /// The private key paired with `self_public_key_file`, `[identity]`'s key.
-    pub self_private_key_file: PathBuf,
-    /// The peer's known public key, matched byte-for-byte.
-    pub peer_public_key_file: PathBuf,
+    /// The certificate this host presents, `[identity]`'s.
+    pub self_cert: PathBuf,
+    /// The private key paired with `self_cert`, `[identity]`'s key.
+    pub self_key: PathBuf,
+    /// The peer's known certificate, matched byte-for-byte.
+    pub peer_cert: PathBuf,
 }
 
 /// The resolved RemoteChannel peer set (model layer), by alias.
@@ -197,11 +197,11 @@ fn resolved_identity(file: Option<IdentityConfigToml>) -> Result<Option<Identity
         return Ok(None);
     };
     let missing = |field: &str| format!("[identity] is missing `{field}`");
-    let cert_file = file.cert_file.ok_or_else(|| missing("cert_file"))?;
-    let key_file = file.key_file.ok_or_else(|| missing("key_file"))?;
+    let cert = file.cert.ok_or_else(|| missing("cert"))?;
+    let key = file.key.ok_or_else(|| missing("key"))?;
     Ok(Some(IdentityConfig {
-        cert_file: expand_path(Path::new(&cert_file))?,
-        key_file: expand_path(Path::new(&key_file))?,
+        cert: expand_path(Path::new(&cert))?,
+        key: expand_path(Path::new(&key))?,
     }))
 }
 
@@ -242,9 +242,9 @@ impl RemoteConfig {
         let alias = entry
             .alias
             .ok_or_else(|| "a [[remote]] entry is missing `alias`".to_string())?;
-        let peer_public = entry
-            .public_key_file
-            .ok_or_else(|| format!("[[remote]] `{alias}` is missing `public_key_file`"))?;
+        let peer_cert = entry
+            .cert
+            .ok_or_else(|| format!("[[remote]] `{alias}` is missing `cert`"))?;
         let role = match entry.listen {
             Some(listen) => {
                 let bind = listen.parse::<std::net::SocketAddr>().map_err(|e| {
@@ -275,9 +275,9 @@ impl RemoteConfig {
         Ok(RemoteConfig {
             alias,
             role,
-            self_public_key_file: identity.cert_file.clone(),
-            self_private_key_file: identity.key_file.clone(),
-            peer_public_key_file: expand_path(Path::new(&peer_public))?,
+            self_cert: identity.cert.clone(),
+            self_key: identity.key.clone(),
+            peer_cert: expand_path(Path::new(&peer_cert))?,
         })
     }
 }
@@ -295,8 +295,8 @@ impl RemotesConfig {
             return Ok(RemotesConfig { by_alias });
         }
         let identity = identity.ok_or_else(|| {
-            "a [[remote]] link presents the host's [identity]; name its `cert_file` and \
-             `key_file`"
+            "a [[remote]] link presents the host's [identity]; name its `cert` and \
+             `key`"
                 .to_string()
         })?;
         for entry in entries {
