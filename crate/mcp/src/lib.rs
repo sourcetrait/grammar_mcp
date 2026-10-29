@@ -174,7 +174,9 @@ pub(crate) use sourcetrait_grammar_engine::{
 
 pub(crate) use sourcetrait_grammar_protocol::{
     ChannelPhase, EVENT_BYTES_KEY, EVENT_SPILL_DEST, EVENT_SPILL_KEY, MAX_FRAME_BYTES,
-    NOTIFICATION_CAP, REMOTE_RESERVED_PREFIX, SYNC_QUEUE_CAP, reserved_prefix,
+    MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT, NOTIFICATION_CAP,
+    REMOTE_RESERVED_PREFIX, RemoteChannelRow, RemoteLinkState, RemoteListenResult,
+    SYNC_QUEUE_CAP, reserved_prefix,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{

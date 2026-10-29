@@ -1,10 +1,7 @@
 # remote_channels.rs
 
-## struct RemoteRow
-One row an alias, the file's entry beside its live state, so the agent reads
-what it configured and what is running in one place: `endpoint` is the bound or
-dialed address while live, and `remote_mcp_nom` the peer's nom once paired,
-which is what Sent, Unsent, and a relayed packet's `from` carry.
+## type RemoteRow
+The protocol crate's `RemoteChannelRow` under the name the commands use.
 
 ## fn remote_rows
 The file's entries and every live alias, an alias live but since unset among

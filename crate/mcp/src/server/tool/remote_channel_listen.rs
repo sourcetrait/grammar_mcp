@@ -9,12 +9,6 @@ pub struct RemoteListenParams {
     pub on: Option<String>,
 }
 
-/// Success result of `interface remote channel listen`.
-#[derive(Debug, ser::Serialize)]
-pub(crate) struct RemoteListenResult {
-    /// The address bound, its port the kernel's when random.
-    pub endpoint: String,
-}
 
 impl NuSh {
     /// `interface remote channel listen`: bind for a peer, blocking on the bind.

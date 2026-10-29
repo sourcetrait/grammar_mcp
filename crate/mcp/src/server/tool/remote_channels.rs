@@ -8,22 +8,7 @@ pub struct RemoteAliasParams {
 }
 
 /// One remote in `interface remote channel list` and `get`: its entry and state.
-#[derive(Debug, ser::Serialize)]
-pub(crate) struct RemoteRow {
-    pub alias: String,
-    /// The `ip:port` a connect dials by default, as the file writes it.
-    pub address: Option<String>,
-    /// The `ip` or `ip:port` a listen binds by default, as the file writes it.
-    pub listen: Option<String>,
-    /// The peer's certificate, as the file writes it.
-    pub cert: Option<String>,
-    /// `closed`, `listening`, or `open`.
-    pub state: &'static str,
-    /// The address bound or dialed while the remote is live.
-    pub endpoint: Option<String>,
-    /// The peer's nom while a link is open.
-    pub remote_mcp_nom: Option<String>,
-}
+pub(crate) type RemoteRow = RemoteChannelRow;
 
 /// A live alias's state: its endpoint, and its peer's nom once paired.
 struct Live {
@@ -87,9 +72,11 @@ impl NuSh {
                     Some(Live {
                         endpoint,
                         remote_mcp_nom: Some(nom),
-                    }) => ("open", Some(endpoint.clone()), Some(nom.clone())),
-                    Some(Live { endpoint, .. }) => ("listening", Some(endpoint.clone()), None),
-                    None => ("closed", None, None),
+                    }) => (RemoteLinkState::Open, Some(endpoint.clone()), Some(nom.clone())),
+                    Some(Live { endpoint, .. }) => {
+                        (RemoteLinkState::Listening, Some(endpoint.clone()), None)
+                    }
+                    None => (RemoteLinkState::Closed, None, None),
                 };
                 RemoteRow {
                     address: entry.and_then(|entry| entry.address.clone()),

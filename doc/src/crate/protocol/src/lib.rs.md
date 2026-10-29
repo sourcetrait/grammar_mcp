@@ -24,6 +24,10 @@ the daemon share one definition; the engine re-exports them.
 The operator's portable data, its manager's observation and the emergencies it
 classifies, at fixed widths; the operator's Linux monitoring stays in its crate.
 
+## mod peer
+The retained remote Channel's models, its list rows and listen result, and its
+lifecycle and delivery events, as data a worker reports to its frontend.
+
 ## use nuval::wide
 The wire's widening, shared with nuval so every count and offset widens one
 way.

@@ -17,11 +17,6 @@ const CLOSE_FRAME_GRACE: tk::TkDuration = tk::TkDuration::from_secs(2);
 /// One file chunk's uncompressed payload ceiling; zstd + the frame ride on top.
 const CHUNK_BYTES: usize = 256 * 1024;
 
-/// The host's lifecycle and delivery models, under the remote/ reservation.
-const MODEL_CONNECTED: &str = "remote/channel/Connected";
-const MODEL_DISCONNECTED: &str = "remote/channel/Disconnected";
-const MODEL_SENT: &str = "remote/channel/Sent";
-const MODEL_UNSENT: &str = "remote/channel/Unsent";
 
 /// Every open link, keyed by alias, behind a std Mutex an eval thread can take.
 static REMOTE_LINKS: LazyLock<Arc<std::sync::Mutex<HashMap<String, RemoteLinkEntry>>>> =

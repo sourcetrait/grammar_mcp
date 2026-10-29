@@ -3,6 +3,7 @@ pub(crate) mod channel;
 pub(crate) mod command;
 pub(crate) mod engine;
 pub(crate) mod operator;
+pub(crate) mod peer;
 pub(crate) mod value;
 
 pub(crate) use std::{fmt, io};
@@ -34,6 +35,10 @@ pub use crate::{
         BackgroundJobsWarningEmergency, ChannelSpamErrorEmergency, ChannelSpamWarningEmergency,
         CpuWarningEmergency, CriticalEmergency, DiskWarningEmergency, Emergency, EmergencyKind,
         HungEngineThreadEmergency, Observation, RamWarningEmergency, VramWarningEmergency,
+    },
+    peer::{
+        MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT, RemoteChannelEvent,
+        RemoteChannelRow, RemoteFailure, RemoteLinkState, RemoteListenResult,
     },
     value::{ValueLimitError, ValueLimitErrorKind, ValueLimits, check_error, check_value},
 };
