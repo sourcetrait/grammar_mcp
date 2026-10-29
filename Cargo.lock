@@ -6775,7 +6775,9 @@ dependencies = [
  "rkyv",
  "serde",
  "serde_json",
+ "sha2",
  "sourcetrait_common",
+ "syn 3.0.9",
  "tokio",
  "tokio-util",
 ]

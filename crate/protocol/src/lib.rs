@@ -41,8 +41,8 @@ pub use crate::{
         SYNC_QUEUE_CAP, SpamThresholdsData, reserved_prefix,
     },
     codec::{
-        BoundedDecode, CODEC_ID, FrameCodec, FrameError, FrameStage, PREFACE, check_codec,
-        decode_payload, framed, payload,
+        BoundedDecode, CODEC_ID, FrameCodec, FrameError, FrameStage, PREFACE, SCHEMA_ID,
+        check_codec, decode_payload, framed, payload,
     },
     command::{
         ArgShape, ArgSpec, COMMANDS, CommandKind, CommandSpec, HELP_WORDS, INTERFACE,

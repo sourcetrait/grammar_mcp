@@ -1,10 +1,12 @@
 //! The wire's framing: the preface, the length-prefixed frames, their ceilings,
-//! how a stream may end, and the bounded decode's refusals.
+//! how a stream may end, the bounded decode's refusals, and the schema and its ID.
+use std::path::Path;
+
 use futures_util::{SinkExt, StreamExt};
 use sourcetrait_grammar_protocol::{
     CODEC_ID, EVENT_FRAME_MAX, EmergencyKind, FrameCodec, FrameError, FrameStage, HELLO_FRAME_MAX,
-    Lane, OperationId, PREFACE, RPC_FRAME_DEFAULT, RPC_FRAME_HARD, StreamRole, TransportError,
-    check_codec, decode_payload, framed, payload,
+    Lane, OperationId, PREFACE, RPC_FRAME_DEFAULT, RPC_FRAME_HARD, SCHEMA_ID, StreamRole,
+    TransportError, check_codec, decode_payload, framed, payload,
 };
 use tokio_util::bytes::{Bytes, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
@@ -252,4 +254,433 @@ async fn the_adapter_carries_frames_over_a_byte_stream_a_byte_at_a_time() {
     }
     send.await.expect("sender");
     assert_eq!(got, vec![OperationId([1; 16]), OperationId([2; 16])]);
+}
+
+/// The wire's schema: every public type bitcode encodes in the protocol and
+/// nuval, read from their source, with the canonical form its ID hashes.
+mod schema {
+    use std::collections::BTreeMap;
+    use std::path::Path;
+
+    use serde_json::{Value, json};
+    use sha2::{Digest, Sha256};
+    use syn::punctuated::Punctuated;
+    use syn::{Meta, Token};
+
+    /// The checked-in schema, under the protocol crate.
+    pub const FILE: &str = "schema/v1.json";
+
+    /// The crates whose source declares the wire's own types, by directory.
+    const CRATES: [&str; 2] = ["protocol", "nuval"];
+
+    /// Common's datum, the workspace's sibling, whose types the wire carries
+    /// where a field names them.
+    const DATUM: &str = "../../../common/crates/sourcetrait_datum/src";
+
+    /// A schema's records by name.
+    type Records = BTreeMap<String, Value>;
+
+    /// The schema as the source declares it: each type, and each alias and
+    /// datum type the types' fields reach.
+    pub fn generate() -> Value {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut types = Records::new();
+        let mut reachable = Records::new();
+        for name in CRATES {
+            let src = manifest.join("..").join(name).join("src");
+            walk_file(&src.join("lib.rs"), &src, &mut types, &mut reachable);
+        }
+        let mut datum = Records::new();
+        let src = manifest.join(DATUM);
+        walk_file(&src.join("lib.rs"), &src, &mut datum, &mut reachable);
+        for (name, shape) in datum {
+            record(&mut reachable, name, shape);
+        }
+        let mut aliases = Records::new();
+        for (name, shape) in reach(&types, &reachable) {
+            match shape.get("kind") {
+                Some(_) => record(&mut types, name, shape),
+                None => record(&mut aliases, name, shape),
+            }
+        }
+        json!({
+            "aliases": Value::Object(aliases.into_iter().collect()),
+            "types": Value::Object(types.into_iter().collect()),
+        })
+    }
+
+    /// The SHA-256 of a schema text's canonical form.
+    pub fn id(text: &str) -> [u8; 32] {
+        let value: Value = serde_json::from_str(text).expect("the schema's JSON");
+        let mut id = [0u8; 32];
+        id.copy_from_slice(&Sha256::digest(canonical(&value).as_bytes()));
+        id
+    }
+
+    /// The form the ID hashes: keys sorted, no whitespace, UTF-8.
+    pub fn canonical(value: &Value) -> String {
+        let mut out = String::new();
+        write(value, false, 0, &mut out);
+        out
+    }
+
+    /// The checked-in form: the canonical order, two-space indents, LF, and
+    /// a record holding nothing nested on one line.
+    pub fn pretty(value: &Value) -> String {
+        let mut out = String::new();
+        write(value, true, 0, &mut out);
+        out.push('\n');
+        out
+    }
+
+    /// One value, its objects' keys sorted.
+    fn write(value: &Value, pretty: bool, depth: usize, out: &mut String) {
+        let entries: Vec<(Option<&String>, &Value)> = match value {
+            Value::Object(map) => {
+                let mut keys: Vec<&String> = map.keys().collect();
+                keys.sort();
+                keys.into_iter().map(|k| (Some(k), &map[k])).collect()
+            }
+            Value::Array(items) => items.iter().map(|v| (None, v)).collect(),
+            scalar => {
+                out.push_str(&serde_json::to_string(scalar).expect("a scalar"));
+                return;
+            }
+        };
+        let (open, close) = if value.is_object() { ('{', '}') } else { ('[', ']') };
+        let filled = |v: &Value| match v {
+            Value::Object(map) => !map.is_empty(),
+            Value::Array(items) => !items.is_empty(),
+            _ => false,
+        };
+        let lines = pretty && entries.iter().any(|(_, v)| filled(v));
+        let indent = |out: &mut String, depth: usize| {
+            out.push('\n');
+            out.push_str(&"  ".repeat(depth));
+        };
+        out.push(open);
+        for (i, (key, item)) in entries.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+                if pretty && !lines {
+                    out.push(' ');
+                }
+            }
+            if lines {
+                indent(out, depth + 1);
+            }
+            if let Some(key) = key {
+                out.push_str(&serde_json::to_string(key).expect("a key"));
+                out.push(':');
+                if pretty {
+                    out.push(' ');
+                }
+            }
+            write(item, pretty, depth + 1, out);
+        }
+        if lines {
+            indent(out, depth);
+        }
+        out.push(close);
+    }
+
+    /// The file's items, its child modules' files under `dir`.
+    fn walk_file(file: &Path, dir: &Path, types: &mut Records, aliases: &mut Records) {
+        let text = std::fs::read_to_string(file)
+            .unwrap_or_else(|e| panic!("read {}: {e}", file.display()));
+        let parsed =
+            syn::parse_file(&text).unwrap_or_else(|e| panic!("parse {}: {e}", file.display()));
+        walk(&parsed.items, dir, types, aliases);
+    }
+
+    /// Each public wire type and alias, modules followed, test modules skipped.
+    fn walk(items: &[syn::Item], dir: &Path, types: &mut Records, aliases: &mut Records) {
+        for item in items {
+            match item {
+                syn::Item::Mod(m) if !is_test(&m.attrs) => {
+                    let child = dir.join(m.ident.to_string());
+                    match &m.content {
+                        Some((_, inner)) => walk(inner, &child, types, aliases),
+                        None => {
+                            let file = dir.join(format!("{}.rs", m.ident));
+                            walk_file(&file, &child, types, aliases);
+                        }
+                    }
+                }
+                syn::Item::Struct(s) if is_public(&s.vis) && on_wire(&s.attrs) => {
+                    let name = s.ident.to_string();
+                    let shape = json!({
+                        "kind": "struct",
+                        "generics": generics(&s.generics),
+                        "fields": fields(&s.fields, &name),
+                    });
+                    record(types, name, shape);
+                }
+                syn::Item::Enum(e) if is_public(&e.vis) && on_wire(&e.attrs) => {
+                    let name = e.ident.to_string();
+                    let variants: Vec<Value> = e
+                        .variants
+                        .iter()
+                        .map(|v| {
+                            let variant = format!("{name}::{}", v.ident);
+                            fixed(&v.attrs, &variant);
+                            json!({"name": v.ident.to_string(), "fields": fields(&v.fields, &variant)})
+                        })
+                        .collect();
+                    let shape = json!({
+                        "kind": "enum",
+                        "generics": generics(&e.generics),
+                        "variants": variants,
+                    });
+                    record(types, name, shape);
+                }
+                syn::Item::Type(t) if is_public(&t.vis) => {
+                    let shape = json!({"generics": generics(&t.generics), "type": render(&t.ty)});
+                    record(aliases, t.ident.to_string(), shape);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Records a type or an alias by its name, which the schema keeps unique.
+    fn record(records: &mut Records, name: String, shape: Value) {
+        if records.insert(name.clone(), shape).is_some() {
+            panic!("{name} is declared twice; the schema names each type once");
+        }
+    }
+
+    /// The records the types name, followed through what each of those names.
+    fn reach(types: &Records, reachable: &Records) -> Records {
+        let mut texts: Vec<String> = types.values().flat_map(named).collect();
+        let mut reached = Records::new();
+        while let Some(text) = texts.pop() {
+            for word in text.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
+                if let Some(shape) = reachable.get(word)
+                    && !types.contains_key(word)
+                    && !reached.contains_key(word)
+                {
+                    texts.extend(named(shape));
+                    reached.insert(word.to_string(), shape.clone());
+                }
+            }
+        }
+        reached
+    }
+
+    /// Every type a record names: an alias's own, a type's fields'.
+    fn named(shape: &Value) -> Vec<String> {
+        let types = |fields: &Value| -> Vec<String> {
+            let fields = fields.as_array().expect("fields");
+            fields.iter().map(|f| f["type"].as_str().expect("a type").to_string()).collect()
+        };
+        match (&shape["type"], &shape["variants"]) {
+            (Value::String(ty), _) => vec![ty.clone()],
+            (_, Value::Array(variants)) => variants.iter().flat_map(|v| types(&v["fields"])).collect(),
+            _ => types(&shape["fields"]),
+        }
+    }
+
+    /// Whether the item is `pub`, the wire's types all being public.
+    fn is_public(vis: &syn::Visibility) -> bool {
+        matches!(vis, syn::Visibility::Public(_))
+    }
+
+    /// Whether a `cfg` names `test`: such a module never reaches the wire.
+    fn is_test(attrs: &[syn::Attribute]) -> bool {
+        attrs.iter().any(|a| a.path().is_ident("cfg") && words(a).iter().any(|w| w == "test"))
+    }
+
+    /// An attribute's argument words, punctuation dropped.
+    fn words(attr: &syn::Attribute) -> Vec<String> {
+        match &attr.meta {
+            Meta::List(list) => list
+                .tokens
+                .to_string()
+                .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+                .filter(|w| !w.is_empty())
+                .map(String::from)
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Whether bitcode's derive encodes the type: `cereal::derived` without
+    /// `not(Bitcode)`, or a derive naming bitcode's `Encode`.
+    fn on_wire(attrs: &[syn::Attribute]) -> bool {
+        attrs.iter().any(|a| {
+            let path = path_text(a.path());
+            if path == "cereal::derived" {
+                if cereal_listed(a, "has").iter().any(|p| p == "Bitcode") {
+                    panic!("a hand-written bitcode impl: its layout isn't its fields'");
+                }
+                !cereal_listed(a, "not").iter().any(|p| p == "Bitcode")
+            } else if path == "derive" {
+                let derives = a
+                    .parse_args_with(Punctuated::<syn::Path, Token![,]>::parse_terminated)
+                    .expect("a derive's paths");
+                derives.iter().any(|p| path_text(p).ends_with("bitcode::Encode"))
+            } else {
+                false
+            }
+        })
+    }
+
+    /// The names a `cereal::derived` lists under `not(..)` or `has(..)`.
+    fn cereal_listed(attr: &syn::Attribute, list: &str) -> Vec<String> {
+        let metas = attr
+            .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+            .expect("cereal's arguments");
+        metas
+            .iter()
+            .filter_map(|m| match m {
+                Meta::List(l) if l.path.is_ident(list) => Some(l),
+                _ => None,
+            })
+            .flat_map(|l| {
+                l.parse_args_with(Punctuated::<syn::Path, Token![,]>::parse_terminated)
+                    .expect("a cereal list's names")
+                    .iter()
+                    .map(path_text)
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    /// Refuses a `cfg` or `cfg_attr` on a field or a variant, which would make
+    /// the layout depend on the build.
+    fn fixed(attrs: &[syn::Attribute], what: &str) {
+        if attrs.iter().any(|a| a.path().is_ident("cfg") || a.path().is_ident("cfg_attr")) {
+            panic!("{what} carries a cfg: the wire's layout would vary with the build");
+        }
+    }
+
+    /// Whether bitcode skips the field. Any other bitcode attribute is refused
+    /// until the schema records what it does.
+    fn skipped(attrs: &[syn::Attribute], what: &str) -> bool {
+        attrs.iter().filter(|a| a.path().is_ident("bitcode")).any(|a| match words(a).as_slice() {
+            [word] if word == "skip" => true,
+            other => panic!("{what}: bitcode attribute {other:?} isn't one the schema records"),
+        })
+    }
+
+    /// Each field bitcode encodes, in order, by name or by position.
+    fn fields(fields: &syn::Fields, owner: &str) -> Vec<Value> {
+        fields
+            .iter()
+            .enumerate()
+            .filter_map(|(i, f)| {
+                let name = f.ident.as_ref().map_or_else(|| i.to_string(), ToString::to_string);
+                let what = format!("{owner}.{name}");
+                fixed(&f.attrs, &what);
+                (!skipped(&f.attrs, &what)).then(|| json!({"name": name, "type": render(&f.ty)}))
+            })
+            .collect()
+    }
+
+    /// The generic parameters in order: a type's name, a lifetime, a const.
+    fn generics(generics: &syn::Generics) -> Vec<String> {
+        generics
+            .params
+            .iter()
+            .map(|p| match p {
+                syn::GenericParam::Type(t) => t.ident.to_string(),
+                syn::GenericParam::Lifetime(l) => format!("'{}", l.lifetime.ident),
+                syn::GenericParam::Const(c) => format!("const {}: {}", c.ident, render(&c.ty)),
+            })
+            .collect()
+    }
+
+    /// A type as text in one spacing, whatever the source's whitespace.
+    fn render(ty: &syn::Type) -> String {
+        match ty {
+            syn::Type::Path(p) if p.qself.is_none() => path_text(&p.path),
+            syn::Type::Array(a) => format!("[{}; {}]", render(&a.elem), length(&a.len)),
+            syn::Type::Slice(s) => format!("[{}]", render(&s.elem)),
+            syn::Type::Tuple(t) => {
+                let elems: Vec<String> = t.elems.iter().map(render).collect();
+                match elems.as_slice() {
+                    [one] => format!("({one},)"),
+                    _ => format!("({})", elems.join(", ")),
+                }
+            }
+            syn::Type::Reference(r) => {
+                let lifetime = r.lifetime.as_ref().map_or_else(String::new, |l| format!("'{} ", l.ident));
+                let mutability = if r.mutability.is_some() { "mut " } else { "" };
+                format!("&{lifetime}{mutability}{}", render(&r.elem))
+            }
+            syn::Type::Paren(p) => render(&p.elem),
+            syn::Type::Group(g) => render(&g.elem),
+            _ => panic!("a field type the schema can't describe: a qualified path, pointer, function, trait, or macro"),
+        }
+    }
+
+    /// A path as `a::b<C, D>`.
+    fn path_text(path: &syn::Path) -> String {
+        let segments: Vec<String> = path
+            .segments
+            .iter()
+            .map(|s| match &s.arguments {
+                syn::PathArguments::None => s.ident.to_string(),
+                syn::PathArguments::AngleBracketed(a) => {
+                    let args: Vec<String> = a
+                        .args
+                        .iter()
+                        .map(|g| match g {
+                            syn::GenericArgument::Type(t) => render(t),
+                            syn::GenericArgument::Lifetime(l) => format!("'{}", l.ident),
+                            syn::GenericArgument::Const(e) => length(e),
+                            _ => panic!("{}: an associated type or a bound in a field's type", s.ident),
+                        })
+                        .collect();
+                    format!("{}<{}>", s.ident, args.join(", "))
+                }
+                syn::PathArguments::Parenthesized(_) => panic!("{}: a function trait in a field's type", s.ident),
+            })
+            .collect();
+        let lead = if path.leading_colon.is_some() { "::" } else { "" };
+        format!("{lead}{}", segments.join("::"))
+    }
+
+    /// An array's length or a const argument: a literal integer alone, so a
+    /// constant's value can't change the layout without changing the schema.
+    fn length(expr: &syn::Expr) -> String {
+        match expr {
+            syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(int), .. }) => int.base10_digits().to_string(),
+            _ => panic!("a length the schema can't record: write it as a literal integer"),
+        }
+    }
+}
+
+#[test]
+fn the_schema_records_every_public_wire_type_as_the_source_declares_it() {
+    let generated = schema::generate();
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(schema::FILE);
+    if std::env::var("BLESS").as_deref() == Ok("1") {
+        std::fs::create_dir_all(path.parent().expect("the schema's directory")).expect("created");
+        std::fs::write(&path, schema::pretty(&generated)).expect("the schema written");
+    }
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("read {}: {e}; BLESS=1 writes it", schema::FILE));
+    let file: serde_json::Value = serde_json::from_str(&text).expect("the schema's JSON");
+    assert_eq!(
+        schema::canonical(&file),
+        schema::canonical(&generated),
+        "a wire type changed; a deliberate change re-blesses {} and SCHEMA_ID",
+        schema::FILE,
+    );
+}
+
+#[test]
+fn the_schema_id_is_the_hash_of_the_schema_s_canonical_form() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(schema::FILE);
+    let text = std::fs::read_to_string(&path).expect("the schema");
+    let id = schema::id(&text);
+    // A checkout's line endings, and the file's spacing and key order, change
+    // its bytes but never its ID.
+    assert_eq!(schema::id(&text.replace('\n', "\r\n")), id);
+    let file: serde_json::Value = serde_json::from_str(&text).expect("the schema's JSON");
+    assert_eq!(schema::id(&serde_json::to_string(&file).expect("compact")), id);
+    let hex: String = id.iter().map(|b| format!("{b:02x}")).collect();
+    assert_eq!(SCHEMA_ID, id, "the checked-in schema's ID is {hex}");
 }

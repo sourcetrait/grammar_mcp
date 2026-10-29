@@ -15,6 +15,22 @@ The hello names it, and a test holds it to the bitcode version `Cargo.lock`
 resolves, so a dependency bump that changes the format cannot pass silently:
 the identity changes with it, and an old peer refuses the new one.
 
+## const SCHEMA_ID
+The hellos name it, and v1 requires exact agreement, as with the codec. It is
+the SHA-256 of the schema's canonical form, keys sorted and no whitespace, not
+of the file's bytes, so a checkout's line endings and the file's spacing never
+change it. `tests/framing.rs` generates `schema/v1.json` from source with syn:
+every public type bitcode encodes in the protocol and nuval, each struct's
+fields and each enum's variants in order with their types, then the aliases
+and datum's types those fields reach, a field bitcode skips left out. The
+generator refuses what would let the layout change unseen: a cfg on a field
+or a variant, an array length other than a literal, and a hand-written bitcode
+impl. `BLESS=1` rewrites the file, and the constant then takes the new ID. It
+holds 32 bytes rather than hex text, so the hello's field is fixed width.
+
+## fn schema_id
+A const fn, so a malformed literal fails the build rather than a hello.
+
 ## fn check_codec
 Exact agreement alone, as the contract asks for v1. A compressed variant is
 just another id, so it is refused like any other.

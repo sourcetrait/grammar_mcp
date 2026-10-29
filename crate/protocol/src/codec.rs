@@ -7,6 +7,32 @@ pub const PREFACE: [u8; 8] = *b"GRAMD001";
 /// The codec both ends must name in their hellos.
 pub const CODEC_ID: &str = "bitcode-0.6.9";
 
+/// The SHA-256 of `schema/v1.json`'s canonical form, named by both hellos.
+pub const SCHEMA_ID: [u8; 32] =
+    schema_id("35b319eda68a6b24cf25486cd41b1b77c56e5e76b520e95f1374b8b60655d41b");
+
+/// An ID's 32 bytes from its 64 lowercase hex digits, checked as it builds.
+const fn schema_id(hex: &str) -> [u8; 32] {
+    let hex = hex.as_bytes();
+    assert!(hex.len() == 64, "a schema ID is 64 hex digits");
+    let mut id = [0u8; 32];
+    let mut i = 0;
+    while i < 32 {
+        id[i] = (nibble(hex[2 * i]) << 4) | nibble(hex[2 * i + 1]);
+        i += 1;
+    }
+    id
+}
+
+/// One lowercase hex digit's value.
+const fn nibble(digit: u8) -> u8 {
+    match digit {
+        b'0'..=b'9' => digit - b'0',
+        b'a'..=b'f' => digit - b'a' + 10,
+        _ => panic!("a schema ID is lowercase hex"),
+    }
+}
+
 /// The big-endian payload length before each frame.
 const HEADER_LEN: usize = 4;
 

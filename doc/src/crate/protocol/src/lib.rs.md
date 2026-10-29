@@ -68,10 +68,9 @@ the mcp crate gives them, for the framing's adapter alone; the data needs
 neither.
 
 ## pub use
-The framing, its ceilings, and its errors; the capability set, which every
-side advertises; the interface catalog; the
-engine's protocol, its
-requests, commands, and answers with their diagnostics, error, and documents;
-the value bounds and their checks; and nuval's data under its own names, the
-value, its error and result, and every kind, so one value and error
+The framing, its ceilings, its errors, and the schema's ID; the capability
+set, which every side advertises; the interface catalog; the engine's protocol,
+its requests, commands, and answers with their diagnostics, error, and
+documents; the value bounds and their checks; and nuval's data under its own
+names, the value, its error and result, and every kind, so one value and error
 representation serves every endpoint without a second hierarchy.
