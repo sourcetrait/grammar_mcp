@@ -1,4 +1,3 @@
-pub(crate) mod emergency;
 pub(crate) mod liveness;
 pub(crate) mod msg;
 pub(crate) mod pin;
@@ -33,6 +32,8 @@ pub(crate) use std::{
 
 pub(crate) use sourcetrait_common::{agnostic, cereal, subsys};
 
+pub(crate) use sourcetrait_grammar_protocol::{EngineHealth, HungEval, Lane};
+
 pub(crate) mod ser {
     pub(crate) use ::serde::{Deserialize, Serialize};
 }
@@ -46,13 +47,14 @@ pub(crate) mod tk {
     };
 }
 
+pub use sourcetrait_grammar_protocol::{
+    BackgroundJobsWarningEmergency, ChannelSpamErrorEmergency, ChannelSpamWarningEmergency,
+    CpuWarningEmergency, CriticalEmergency, DiskWarningEmergency, Emergency, EmergencyKind,
+    HungEngineThreadEmergency, Observation, RamWarningEmergency, VramWarningEmergency,
+};
+
 pub use crate::{
-    emergency::{
-        BackgroundJobsWarningEmergency, ChannelSpamErrorEmergency, ChannelSpamWarningEmergency,
-        CpuWarningEmergency, CriticalEmergency, DiskWarningEmergency, Emergency, EmergencyKind,
-        HungEngineThreadEmergency, RamWarningEmergency, VramWarningEmergency,
-    },
-    msg::{EngineReading, FromOperatorSys, HungThread, Observation, ThreadLane, ToOperatorSys},
+    msg::{EngineReading, FromOperatorSys, HungThread, ThreadLane, ToOperatorSys},
     pin::{clear_pins, effective_supervisor, pin},
     reaper::{install_child_subreaper, process_start_time},
     supervisor::{SupervisorConfig, check_fraction},

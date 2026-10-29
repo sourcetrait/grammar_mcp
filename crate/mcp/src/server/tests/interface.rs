@@ -1,5 +1,4 @@
 use crate::server::interface::contract::KIND_INTERFACE;
-use crate::server::interface::grammar::CommandSpec;
 use crate::*;
 
 fn engine() -> nu::EngineState {

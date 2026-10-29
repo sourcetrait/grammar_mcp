@@ -109,10 +109,7 @@ pub(crate) use crate::{
         host::{ensure_substrate, init_engine, process_identity},
         interface::{
             contract::{InterfaceCommand, parse_command},
-            grammar::{
-                ArgShape, ArgSpec, COMMANDS, CommandKind, INTERFACE, command_by_words,
-                command_spec, interface_engine, render_command_list, render_signatures,
-            },
+            grammar::{interface_engine, render_command_list, render_signatures},
         },
         oneshot::run_oneshot,
         operator::{OperatorWatch, spawn_observer},
@@ -178,18 +175,18 @@ pub(crate) use sourcetrait_grammar_engine::{
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
-    CallRequest, CheckSummary, CommitResult, ControlAnswer, ControlRequest, Diagnostic,
-    EngineCommand, EngineError, EngineHealth, EngineResult, ExecuteRequest, FromEngineSys, Host,
-    InspectDoc, Lane, RerunRequest, SignaturesDoc, Source, ToEngineSys, ValueAnswer,
-    builtin_equip, builtin_name,
+    ArgShape, ArgSpec, COMMANDS, CallRequest, CheckSummary, CommandKind, CommandSpec,
+    CommitResult, ControlAnswer, ControlRequest, Diagnostic, EngineCommand, EngineError,
+    EngineHealth, EngineResult, ExecuteRequest, FromEngineSys, Host, INTERFACE, InspectDoc,
+    RerunRequest, SignaturesDoc, Source, ToEngineSys, ValueAnswer, builtin_equip, builtin_name,
+    command_by_words, command_spec,
 };
 
 pub(crate) use sourcetrait_grammar_operator::{
-    ChannelSpamErrorEmergency, ChannelSpamWarningEmergency, EngineReading, Emergency,
-    EmergencyKind, FromOperatorSys, HungThread, Observation, OperatorHandle, OperatorSysParams,
-    OperatorSysPaths, OperatorSystem, SAMPLE_INTERVAL, SupervisorConfig, ThreadLane,
-    check_fraction, clear_pins, effective_supervisor, install_child_subreaper, pin,
-    process_start_time,
+    ChannelSpamErrorEmergency, ChannelSpamWarningEmergency, Emergency, EmergencyKind,
+    FromOperatorSys, Observation, OperatorHandle, OperatorSysParams, OperatorSysPaths,
+    OperatorSystem, SAMPLE_INTERVAL, SupervisorConfig, check_fraction, clear_pins,
+    effective_supervisor, install_child_subreaper, pin, process_start_time,
 };
 
 pub(crate) use nuval::{TryIntoNu, wide};

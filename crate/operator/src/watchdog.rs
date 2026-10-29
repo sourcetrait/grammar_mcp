@@ -164,11 +164,11 @@ pub(crate) fn scan_hung(
     hung: &[HungThread],
     now: u64,
     grace_ms: u64,
-    pool_held: usize,
-    pool_cap: usize,
-) -> (Vec<(String, Emergency)>, usize) {
+    pool_held: u64,
+    pool_cap: u64,
+) -> (Vec<(String, Emergency)>, u64) {
     let mut out = Vec::new();
-    let mut confirmed_stateless = 0usize;
+    let mut confirmed_stateless = 0u64;
     for w in hung {
         let hung_ms = now.saturating_sub(w.cancelled_at);
         if hung_ms <= grace_ms {
@@ -199,8 +199,8 @@ pub(crate) fn engine_conditions(
     reading: &EngineReading,
     now: u64,
 ) -> Vec<(String, Emergency)> {
-    let held = reading.permits_held as usize;
-    let cap = reading.permits_cap as usize;
+    let held = reading.permits_held;
+    let cap = reading.permits_cap;
     let (mut conditions, confirmed_stateless) =
         scan_hung(&reading.hung, now, HUNG_GRACE_MS, held, cap);
     if cap > 0 && confirmed_stateless >= cap {
@@ -462,7 +462,7 @@ impl Watchdog {
         }
         let mut raised = Vec::new();
         if let Some(reading) = &observation.engine {
-            let jobs = reading.jobs as usize;
+            let jobs = reading.jobs;
             if self.jobs_gate.sample(
                 jobs as f64,
                 JOBS_THRESHOLD,

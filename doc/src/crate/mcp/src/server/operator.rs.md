@@ -10,10 +10,6 @@ hands each to this handler, which puts it on the emergency lane beside the Chann
 spam pair; the one responder logs and announces both. Its status changes and its end go
 to mcp's loop.
 
-## fn engine_reading
-The engine and the operator know nothing of each other, so the engine's health is
-mapped here into the operator's reading, lane for lane.
-
 ## fn engine_health
 Bounded by one sample's interval: an engine that cannot answer within it gives that
 observation no reading rather than stalling the observer, and the operator keeps its

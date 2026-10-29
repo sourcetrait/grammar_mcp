@@ -25,30 +25,6 @@ impl subsys::Handler<OperatorSystem> for OperatorWatch {
     }
 }
 
-/// The engine's health as the operator reads it.
-fn engine_reading(health: EngineHealth) -> EngineReading {
-    let hung = health
-        .hung
-        .into_iter()
-        .map(|eval| HungThread {
-            nonce: eval.nonce,
-            tool: eval.tool,
-            lane: match eval.lane {
-                Lane::Stateless => ThreadLane::Stateless,
-                Lane::Stateful => ThreadLane::Stateful,
-            },
-            started_at: eval.started_at,
-            cancelled_at: eval.cancelled_at,
-        })
-        .collect();
-    EngineReading {
-        hung,
-        permits_held: health.permits_held,
-        permits_cap: health.permits_cap,
-        jobs: health.jobs,
-    }
-}
-
 /// The engine's health, or none when it doesn't answer within a sample's interval.
 async fn engine_health(engine: &EngineHandle) -> Option<EngineHealth> {
     match tk::timeout(SAMPLE_INTERVAL, engine.control(EngineCommand::Health)).await {
@@ -65,7 +41,7 @@ pub(crate) fn spawn_observer(
     tk::spawn(async move {
         loop {
             tk::sleep(SAMPLE_INTERVAL).await;
-            let reading = engine_health(&engine).await.map(engine_reading);
+            let reading = engine_health(&engine).await;
             let listening = !matches!(channel_handle().status().phase, ChannelPhase::Closed);
             let observation = Observation {
                 engine: reading,

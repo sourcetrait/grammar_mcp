@@ -1,5 +1,13 @@
-//! The conditions the supervisor classifies, and the Channel's spam pair.
 use crate::*;
+
+/// What the operator's manager observed of the engine and the Channel.
+#[cereal::derived(Data)]
+pub struct Observation {
+    /// The engine's reading, none when it didn't answer in time.
+    pub engine: Option<EngineHealth>,
+    /// Whether the host's Channel is open, which a test host samples by.
+    pub listening: bool,
+}
 
 /// Copy discriminant mirror of `Emergency`, without the payload.
 #[cereal::derived(Data, Copy, Eq, Hash)]
@@ -41,8 +49,8 @@ pub struct HungEngineThreadEmergency {
     pub started_at: u64,
     pub cancelled_at: u64,
     pub hung_ms: u64,
-    pub pool_held: usize,
-    pub pool_cap: usize,
+    pub pool_held: u64,
+    pub pool_cap: u64,
 }
 
 /// Sustained host-process CPU over the sample window.
@@ -68,7 +76,7 @@ pub struct VramWarningEmergency {
 /// The environment-wide jobs table above the threshold count.
 #[cereal::derived(Data)]
 pub struct BackgroundJobsWarningEmergency {
-    pub job_count: usize,
+    pub job_count: u64,
 }
 
 /// A watched filesystem reached the warning line.
@@ -102,8 +110,8 @@ pub struct ChannelSpamErrorEmergency {
 #[cereal::derived(Data)]
 pub struct CriticalEmergency {
     pub reason: String,
-    pub hung: usize,
-    pub cap: usize,
+    pub hung: u64,
+    pub cap: u64,
 }
 
 /// A classified resource condition.

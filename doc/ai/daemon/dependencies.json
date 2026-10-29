@@ -96,7 +96,7 @@
   },
   "lock": {
     "path": "Cargo.lock",
-    "sha256": "55909e22508c66ac46efa9e78fd19a87c3cea7467a10bb70a02d122f85e929d0",
+    "sha256": "0a47a6f980edccc6feb261f33d2fbcd04460b3e38175849acc7124b45182d638",
     "committed": true
   },
   "siblings": [

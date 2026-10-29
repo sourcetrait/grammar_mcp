@@ -6758,6 +6758,7 @@ dependencies = [
  "rkyv",
  "serde",
  "sourcetrait_common",
+ "sourcetrait_grammar_protocol",
  "tokio",
 ]
 
