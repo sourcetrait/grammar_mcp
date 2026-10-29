@@ -133,7 +133,7 @@ const HELP_ARGS: &[ArgSpec] = &[ArgSpec {
     name: "namepath",
     shape: ArgShape::String,
     optional: false,
-    summary: "A namepath at any arity, or a pattern ending in `/` or `:`, or `*` / `.`.",
+    summary: "A namepath, a pattern ending in `/` or `:`, `*`, `.`, `interface`, or `grimm`.",
 }];
 
 const KILL_ARGS: &[ArgSpec] = &[ArgSpec {
@@ -569,6 +569,20 @@ pub(crate) fn interface_engine(deny: &DenySet) -> nu::EngineState {
     let delta = working_set.render();
     let _ = engine_state.merge_delta(delta);
     engine_state
+}
+
+/// The commands the deny set leaves, by their words, a `##` heading a topic.
+pub(crate) fn render_command_list(deny: &DenySet) -> String {
+    let mut out = String::from("# Command Signatures\n");
+    let mut topic = "";
+    for spec in COMMANDS.iter().filter(|spec| !deny.denies_command(spec.words())) {
+        if spec.topic != topic {
+            topic = spec.topic;
+            out.push_str(&format!("## {topic}\n"));
+        }
+        out.push_str(&format!("- {}\n", spec.name));
+    }
+    out
 }
 
 /// The signatures the deny set leaves, a `###` heading a topic.

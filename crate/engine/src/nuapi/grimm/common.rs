@@ -146,13 +146,74 @@ pub(crate) fn event_id_type() -> nu::Type {
     )]))
 }
 
+/// The word `interface help` takes for the `grimm` commands' signatures.
+pub const GRIMM: &str = "grimm";
+
+/// The `grimm *` decls, in the order the signature block lists them.
+fn grimm_decls() -> Vec<Box<dyn nu::Command>> {
+    vec![
+        Box::new(GrimmDbg),
+        Box::new(GrimmChannelSend),
+        Box::new(GrimmGetConfigAll),
+        Box::new(GrimmGetConfig),
+        Box::new(GrimmPinConfig),
+        Box::new(GrimmRemoteChannelSend),
+        Box::new(GrimmRemoteChannelSendWith),
+    ]
+}
+
 /// Register the `grimm *` decls into the working set an eval will parse with.
 pub(crate) fn register_nuapi(working_set: &mut nu::StateWorkingSet) {
-    working_set.add_decl(Box::new(GrimmDbg));
-    working_set.add_decl(Box::new(GrimmChannelSend));
-    working_set.add_decl(Box::new(GrimmGetConfigAll));
-    working_set.add_decl(Box::new(GrimmGetConfig));
-    working_set.add_decl(Box::new(GrimmPinConfig));
-    working_set.add_decl(Box::new(GrimmRemoteChannelSend));
-    working_set.add_decl(Box::new(GrimmRemoteChannelSendWith));
+    for decl in grimm_decls() {
+        working_set.add_decl(decl);
+    }
+}
+
+/// The `grimm` commands' signatures: a summary, then a signature line, each.
+pub fn grimm_signatures() -> String {
+    let mut out = String::from("## grimm Signatures\n");
+    for decl in grimm_decls() {
+        out.push_str(&format!(
+            "{}\n`{}`\n",
+            decl.description(),
+            signature_text(&decl.signature()),
+        ));
+    }
+    out
+}
+
+/// A signature's line: its words, its parameters, its input and output types.
+fn signature_text(signature: &nu::Signature) -> String {
+    let required = signature
+        .required_positional
+        .iter()
+        .map(|arg| format!("{}: {}", arg.name, arg.shape));
+    let optional = signature
+        .optional_positional
+        .iter()
+        .map(|arg| format!("{}?: {}", arg.name, arg.shape));
+    let rest = signature
+        .rest_positional
+        .iter()
+        .map(|arg| format!("...{}: {}", arg.name, arg.shape));
+    let flags = signature
+        .named
+        .iter()
+        .filter(|flag| flag.long != "help")
+        .map(|flag| match &flag.arg {
+            Some(shape) => format!("--{}: {}", flag.long, shape),
+            None => format!("--{}", flag.long),
+        });
+    let parameters: Vec<String> = required.chain(optional).chain(rest).chain(flags).collect();
+    let types: Vec<String> = signature
+        .input_output_types
+        .iter()
+        .map(|(input, output)| format!("{input} -> {output}"))
+        .collect();
+    format!(
+        "{} [{}]: {}",
+        signature.name,
+        parameters.join(", "),
+        types.join(", "),
+    )
 }

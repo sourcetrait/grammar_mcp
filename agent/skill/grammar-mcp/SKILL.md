@@ -45,7 +45,9 @@ That is `call` on `acme/geo:shape:area` with `{width: 3.0, height: 4.0}`. A
 builtin, `gram` or `grammar`, sits at an author's depth and is called by its
 bare name: `gram:get:log`. `interface help` takes a namepath or a pattern:
 `author/`, `author/rig:`, `.../mod/` its subtree, `.../mod:` its calls, `*`
-everything, `.` the purview.
+everything, `.` the purview. `interface help interface` gives every
+`interface` command's signature, the block that ends this skill, and
+`interface help grimm` every `grimm` command's.
 
 ## Purviews
 Named namepath patterns filtering what `info` shows, never access control:
@@ -54,23 +56,99 @@ Named namepath patterns filtering what `info` shows, never access control:
 
 ## Channel
 Packets from a definition to you: small summaries, never payloads.
-- async: `interface channel open async`, a Monitor on its `wss`, the
-  `mcp/channel/Open` packet, then `interface channel ready`.
+- async: OpenGrammarChannel.
 - sync: `interface channel open sync`; the first `interface channel sync`
   takes the greeting, then `interface channel ready`; each sync after takes
   what queued since.
-- A send before `ready` is refused and closes the Channel. `existing` is
-  normal: keep the Monitor. On `channel::peer_gone`, close and open again.
-- A packet is `{id, from, model, event, attached?}`; models under `mcp/` are
-  the host's. An oversized event spills to `<inbox>/<spilled_event_path>`.
+- A send before `ready` is refused and closes the Channel.
+- A packet is `{id, from, model, event, attached?}`; models under `mcp/` and
+  `remote/` are the host's. An oversized event spills to
+  `<inbox>/<spilled_event_path>`.
 - Sending too fast warns, then stops the sender.
 
 ## RemoteChannel
 Links two hosts' Channels. `.grammar/config.toml`, in the directory the host
-starts in, names its key pair as `[identity]` and each peer as a `[[remote]]`
-alias; peers trust each other by known public key.
-1. Both Channels open and ready.
-2. `interface remote open <alias>`: the listener first, then the connector.
-3. Send to the peer's nom from `interface remote list`, never the alias.
-4. `mcp/remote/Sent` or `Unsent` reports a send; a reply comes from
-   `mcp/remote/<nom>`.
+starts in, names its key pair as `[identity]`; `.grammar/remotes.toml` beside
+it names each peer as a `[[channel]]` alias with its `cert`, read at each
+command. Peers trust each other by known public key. A send reports
+`remote/channel/Sent` or `Unsent`; a reply comes from `remote/channel/<nom>`.
+
+## SEQUENCE: OpenGrammarChannel
+1. `interface channel open async`.
+2. On `new`, a Monitor on the returned `wss`; on `existing`, the running
+   Monitor; on `channel::peer_gone`, `interface channel close`, then step 1.
+3. Wait for the `mcp/channel/Open` packet.
+4. `interface channel ready`, nothing sent before it.
+
+## SEQUENCE: GrammarRemoteChannel
+1. OpenGrammarChannel on both hosts.
+2. Each host without the peer's entry:
+   `interface remote channel set <alias> --cert <peer's cert>`.
+3. The listener: `interface remote channel listen <alias>`; its `endpoint` to
+   the connector.
+4. The connector: `interface remote channel connect <alias> --address
+   <endpoint>`.
+5. The listener waits for `remote/channel/Connected`.
+6. Each sends to the peer's nom from `interface remote channel list`, never the
+   alias.
+
+## Command Signatures
+Note: Each begins with `interface `
+### General
+MCP details, Equipment signatures within current purview
+`info []: nothing -> record`
+Displays equipment documentation
+`help [namepath: string]: nothing -> record`
+### Process
+List in-flight MCP tool usage.
+`process list []: nothing -> record`
+Cancel an in-flight usage by its nonce.
+`process kill [nonce: string]: nothing -> nothing`
+### Purview
+List every configured purview, and what is currently in view.
+`purview list []: nothing -> record`
+Set the current view to these purviews.
+`purview set [purviews: list<string>]: nothing -> record`
+Bring more purviews into the current view.
+`purview extend [purviews: list<string>]: nothing -> record`
+Set a purview's namepath patterns; an empty list deletes it.
+`purview configure [purview: string, namepaths: list<string>]: nothing -> record`
+### Channel
+Opens the Channel
+`channel open [mode: string]: nothing -> record`
+Takes the packets a sync Channel queued since the last sync.
+`channel sync []: nothing -> record`
+Verifies Channel activation and begins normal use.
+`channel ready []: nothing -> nothing`
+Closes the Channel
+`channel close []: nothing -> nothing`
+Read or adjust the channel's send-rate thresholds at runtime.
+`channel config [--spam-warn-window-secs: int, --spam-warn-rate: int, --spam-error-window-secs: int, --spam-error-rate: int]: nothing -> record`
+### Remote
+List the remote channels, configured and live: each one's entry and state.
+`remote channel list []: nothing -> table`
+One remote channel's entry and state.
+`remote channel get [alias: string]: nothing -> record`
+Make or change a remote channel's entry in `remotes.toml`.
+`remote channel set [alias: string, --address: string, --listen: string, --cert: string]: nothing -> record`
+Remove a remote channel's entry from `remotes.toml`; a live link stays.
+`remote channel unset [alias: string]: nothing -> nothing`
+Listen for a remote channel's peer; blocks on the bind, answers its endpoint.
+`remote channel listen [alias: string, --on: string]: nothing -> record`
+Connect to a remote channel's peer; blocks on the connect.
+`remote channel connect [alias: string, --address: string]: nothing -> nothing`
+Close an open mTLS link to a remote grammar host.
+`remote channel close [alias: string]: nothing -> nothing`
+### Equip
+Register a new equip at its source and seed its rig.
+`equip new [source: string]: nothing -> record`
+Validate an equip's whole source and install it.
+`equip install [source: string]: nothing -> record`
+Validate an installed equip's source, writing nothing.
+`equip check [source: string]: nothing -> record`
+Remove an installed equip from the namespace; its source stays.
+`equip uninstall [source: string]: nothing -> record`
+Scaffold modules / functions (by namepath) into an equip's rig.
+`equip scaffold [namepaths: list<string>]: nothing -> record`
+Commit an equip's lib and rig from its source to the MCP's repository.
+`equip commit [namepath: string]: nothing -> record`

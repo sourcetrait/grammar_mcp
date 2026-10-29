@@ -5,6 +5,10 @@ EXACTLY ONE FIELD. The namepath is not reprinted because the caller supplied it,
 per-kind shapes carry nothing in common worth hoisting beside it.
 
 ## fn help
+The two words come before any namepath: `interface` answers the interface's signature
+block, its deny set applied, and `grimm` the grimm commands' (User). Both are held from
+equip names (`engine:equip/validate.rs`), so no namepath they could shadow exists.
+
 CLASSIFICATION IS BY SHAPE AND HAPPENS FIRST. A trailing hierarchy character, or a bare `*`
 or `.`, makes this a PATTERN; anything else validates as the exact namepath it always did,
 with the exact parser's strictness unchanged.

@@ -7,13 +7,15 @@ same refusals.
 
 ## const INTERFACE_PRETEXT
 User's `include/human/mcp/interface.md`, verbatim by `include_str!`: his pretext
-and nothing else, the signatures being the code's to render.
+and nothing else, the command list being the code's to render.
 
 ## fn interface_description
 His pretext, its trailing whitespace trimmed so one blank line parts it from the
-signatures whatever his file ends with, then the command signatures for the deny
-set, rendered from the table the parse registers (`server/interface/grammar.rs`),
-so the documentation is never a second copy to keep in step.
+list whatever his file ends with, then the commands the deny set leaves, by
+their words under their topics, rendered from the table the parse registers
+(`server/interface/grammar.rs`). The signatures moved to `interface help
+interface` and the grammar-mcp skill, keeping the description small as the
+commands grow (User).
 
 ## fn interface
 The nonce is minted FIRST, over the tool's name and the command text, so a

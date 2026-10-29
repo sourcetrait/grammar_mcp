@@ -51,12 +51,17 @@ isolation User asked for: no `use`, no `source`, no `let`, no external that
 resolves to anything but a refusal. Built once at startup from the deny set,
 which is fixed by then.
 
+## fn render_command_list
+The tool's description's list, User's format: `# Command Signatures`, a `##`
+heading a topic, and a `- ` line a command, its words whole. The signatures
+are `interface help interface`'s.
+
 ## fn render_signatures
-Generated from the same table the parse registers, so the documentation can't
-drift from what parses, and a denied command leaves both at once.
+`interface help interface`'s block, and the grammar-mcp skill's last section,
+which `tool_docs` holds to it. Generated from the same table the parse
+registers, so the documentation can't drift from what parses, and a denied
+command leaves both at once.
 
 User's format: the note that each command begins with `interface `, then under
 each topic's heading two lines a command, its summary and its signature in
-backticks, with no bullet, no `def`, and the words after `interface` alone. It
-keeps the description well inside Claude Code's 4,096 characters, which
-`tool_docs` holds every description to.
+backticks, with no bullet, no `def`, and the words after `interface` alone.

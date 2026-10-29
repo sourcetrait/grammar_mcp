@@ -27,6 +27,30 @@ fn result_of(env: &Value) -> &Value {
 }
 
 #[tested]
+fn help_answers_the_interfaces_and_grimms_signatures() {
+    let s = TESTING.harness();
+
+    let interface = s.interface("interface help interface");
+    let block = result_of(&interface)["doc"]["signatures"].as_str().unwrap_or_default();
+    assert!(
+        block.starts_with("## Command Signatures\nNote: Each begins with `interface `\n"),
+        "got {interface}",
+    );
+    assert!(
+        block.contains("`remote channel listen [alias: string, --on: string]: nothing -> record`"),
+        "got {interface}",
+    );
+
+    let grimm = s.interface("interface help grimm");
+    let block = result_of(&grimm)["doc"]["signatures"].as_str().unwrap_or_default();
+    assert!(block.starts_with("## grimm Signatures\n"), "got {grimm}");
+    assert!(block.contains("`grimm channel send ["), "got {grimm}");
+    assert!(block.contains("`grimm remote_channel_send_with ["), "got {grimm}");
+    let lines = block.lines().filter(|line| line.starts_with("`grimm ")).count();
+    assert_eq!(lines, 7, "every grimm command; got {grimm}");
+}
+
+#[tested]
 fn every_command_answers_through_the_interface() {
     let t = testing::test!({ .using_temp_dir() });
     let s = TESTING.harness();

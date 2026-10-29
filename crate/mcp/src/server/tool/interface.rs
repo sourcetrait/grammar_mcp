@@ -17,7 +17,7 @@ pub struct InterfaceParams {
 
 /// The tool's description: the pretext, then the commands the deny set leaves.
 pub(crate) fn interface_description(deny: &DenySet) -> String {
-    format!("{}\n\n{}", INTERFACE_PRETEXT.trim_end(), render_signatures(deny))
+    format!("{}\n\n{}", INTERFACE_PRETEXT.trim_end(), render_command_list(deny))
 }
 
 #[mcp::tool_router(router = interface_router, vis = "pub(crate)")]

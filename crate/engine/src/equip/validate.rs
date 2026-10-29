@@ -136,6 +136,9 @@ fn check_summary_length(
 
 pub(crate) const NAME_DENYLIST: &[&str] = &["docs", "tools", "bin", "target"];
 
+/// The words `interface help` answers itself, held from an equip's author and name.
+pub(crate) const HELP_WORDS: &[&str] = &["interface", GRIMM];
+
 const ASSET_EXT_DENYLIST: &[&str] = &[
     "nu", "sh", "bash", "zsh", "fish", "ksh", "py", "rb", "pl", "js", "ts", "lua", "ps1", "bat",
     "cmd", "com", "exe",

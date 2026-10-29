@@ -73,7 +73,7 @@ pub(crate) use crate::{
             index_to_nuon, is_valid_equip, is_valid_ident, is_valid_module_path, keypair_dir,
             lib_meta_path, load_lib_index, load_rig_source, meta_to_nuon, rig_docs_dir, run_git,
         },
-        validate::{NAME_DENYLIST, is_reserved_term, validate_equip_source},
+        validate::{HELP_WORDS, NAME_DENYLIST, is_reserved_term, validate_equip_source},
     },
     execute::{EXECUTE, contract_signature},
     host::{host, set_host},
@@ -214,6 +214,7 @@ pub use crate::{
         BUILTINS, Namepath, NamepathPattern, NamepathRef, NamepathStr, PATTERN_ALL,
         PATTERN_CURRENT, builtin_equip, builtin_name, display_equip, resolve_builtin,
     },
+    nuapi::grimm::common::{GRIMM, grimm_signatures},
     params::{EngineParams, init},
     parse_engine::{
         LintEngine, ParseEngine, file_start, span_text, span_to_line_col, wrap_as_module,

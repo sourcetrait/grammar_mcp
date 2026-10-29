@@ -3,7 +3,7 @@ use crate::*;
 /// Parameters for `interface help`.
 #[derive(Debug, ser::Deserialize, ser::Serialize)]
 pub struct InspectParams {
-    /// A namepath at any arity, or a PATTERN ending in `/` or `:`, or `*` / `.`.
+    /// A namepath, a PATTERN ending in `/` or `:`, `*`, `.`, `interface`, or `grimm`.
     pub namepath: String,
 }
 
@@ -21,6 +21,19 @@ impl NuSh {
         nonce: datum::Nonce,
         p: InspectParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let words = match p.namepath.as_str() {
+            INTERFACE => Some(render_signatures(&config().deny)),
+            GRIMM => Some(grimm_signatures()),
+            _ => None,
+        };
+        if let Some(signatures) = words {
+            return success(
+                nonce,
+                &InspectResult {
+                    doc: InspectDoc::Signatures(SignaturesDoc { signatures }),
+                },
+            );
+        }
         let pattern = match NamepathStr::parse(&p.namepath) {
             Ok(NamepathStr::Pattern(pattern)) => pattern,
             Ok(NamepathStr::Namepath(_)) => {

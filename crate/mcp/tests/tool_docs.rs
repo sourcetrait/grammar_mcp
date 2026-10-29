@@ -63,43 +63,57 @@ fn four_tools_are_routed() {
 }
 
 #[test]
-fn the_interface_is_described_by_its_pretext_then_its_command_signatures() {
+fn the_interface_is_described_by_its_pretext_then_its_command_list() {
     let s = TESTING.harness();
     let description = description(s, "interface");
-    let (pretext, signatures) = description
-        .split_once("\n\n## Command Signatures\n")
-        .unwrap_or_else(|| panic!("the signatures follow the pretext: {description}"));
+    let (pretext, list) = description
+        .split_once("\n\n# Command Signatures\n")
+        .unwrap_or_else(|| panic!("the list follows the pretext: {description}"));
     assert_eq!(pretext, INTERFACE_DOC.trim_end(), "{description}");
-    assert!(
-        signatures.starts_with("Note: Each begins with `interface `\n"),
-        "{description}",
-    );
     for topic in ["General", "Process", "Purview", "Channel", "Remote", "Equip"] {
-        assert!(signatures.contains(&format!("### {topic}\n")), "{topic}: {description}");
+        assert!(list.contains(&format!("## {topic}\n")), "{topic}: {description}");
     }
     assert!(
-        signatures.contains(
-            "Displays equipment documentation\n`help [namepath: string]: nothing -> record`\n"
-        ),
+        list.starts_with("## General\n- interface info\n- interface help\n"),
         "{description}",
     );
     assert!(
-        signatures.contains(
-            "Verifies Channel activation and begins normal use.\n\
-             `channel ready []: nothing -> nothing`\n"
-        ),
-        "{description}",
+        list.contains("- interface channel open\n- interface channel sync\n"),
+        "the sync follows the open; {description}",
     );
+    assert!(list.contains("- interface remote channel listen\n"), "{description}");
+    let commands = list.lines().filter(|line| line.starts_with("- interface ")).count();
+    assert_eq!(commands, 26, "{description}");
+    assert!(!list.contains('`'), "the list names commands alone; {description}");
+}
+
+/// The grammar-mcp skill's last section is `interface help interface`'s block, held
+/// here and rewritten under `BLESS=1`.
+#[test]
+fn the_skill_ends_with_the_interface_signatures() {
+    let s = TESTING.harness();
+    let answer = s.interface("interface help interface");
+    let block = answer["result"]["doc"]["signatures"]
+        .as_str()
+        .unwrap_or_else(|| panic!("`interface help interface` answers a block: {answer}"))
+        .to_string();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../agent/skill/grammar-mcp/SKILL.md");
+    let skill = std::fs::read_to_string(&path).expect("the skill");
+    if std::env::var("BLESS").as_deref() == Ok("1") {
+        let head = skill
+            .split("\n## Command Signatures\n")
+            .next()
+            .unwrap_or_default()
+            .trim_end();
+        std::fs::write(&path, format!("{head}\n\n{block}")).expect("bless the skill");
+        return;
+    }
     assert!(
-        signatures.contains(
-            "Opens the Channel\n`channel open [mode: string]: nothing -> record`\n\
-             Takes the packets a sync Channel queued since the last sync.\n\
-             `channel sync []: nothing -> record`\n"
-        ),
-        "the open takes its mode, and the sync follows it; {description}",
+        skill.ends_with(&format!("\n\n{block}")),
+        "the skill's last section is `interface help interface`; bless with BLESS=1:\n\
+         --- block ---\n{block}--- end ---",
     );
-    let lines = signatures.lines().filter(|line| line.starts_with('`')).count();
-    assert_eq!(lines, 26, "{description}");
 }
 
 #[test]

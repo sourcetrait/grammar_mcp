@@ -15,7 +15,7 @@ pub(crate) fn ensure_cert_profile() {
     match lib_cert::install_profile(&config_home, consts::GRAMMAR, GRAMMAR_PROFILE) {
         Ok(done) if done.written => eprintln!(
             "grammar: shipped the `{name}` cert profile to {path}; run \
-             `srcert generate {name} <dir>`, then name its entity certificate and key \
+             `srcert generate all {name} <dir>`, then name its entity certificate and key \
              as [identity] `cert` and `key` in {AGENT_CONFIG_FILE} to enable \
              the channel",
             name = consts::GRAMMAR,

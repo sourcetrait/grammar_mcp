@@ -331,6 +331,15 @@ fn equip_name_denylist() {
             "equip name `{denied}` should be denied; got {env}"
         );
     }
+    for held in ["sourcetrait/interface", "sourcetrait/grimm", "interface/held", "grimm/held"] {
+        let eq = equip_source(t.temp_dir(), held);
+        let env = s.equip("new", eq.to_str().unwrap());
+        assert_eq!(
+            error_kind(&env),
+            Some("equip::name_denied"),
+            "`interface help`'s words are held from `{held}`; got {env}"
+        );
+    }
     let eq = equip_source(t.temp_dir(), "sourcetrait/okname");
     let ok = s.equip("new", eq.to_str().unwrap());
     assert!(!has_error(&ok), "a normal name should succeed; got {ok}");

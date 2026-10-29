@@ -18,6 +18,11 @@ These names would collide with conventional directory meanings inside a namespac
 are refused wherever an equip is named rather than being allowed to produce a confusing
 tree.
 
+## const HELP_WORDS
+`interface help interface` and `interface help grimm` are answered before any namepath is
+read, so an equip under either word could never be helped by its own name. Each is held
+from an author as well as a name (User), the same refusal as a denied name.
+
 ## struct SelfView
 A temp `<tmp>/equip/<author>/<name>/<kind>` symlink per source kind, prepended to
 `NU_LIB_DIRS`, so an equip's OWN equip-prefixed `use` - a rig importing its own lib or its

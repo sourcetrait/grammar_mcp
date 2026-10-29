@@ -171,7 +171,8 @@ pub(crate) fn check_equip_name(equip: &str) -> Result<(), EngineError> {
             });
         }
     }
-    if NAME_DENYLIST.contains(&name) {
+    if NAME_DENYLIST.contains(&name) || HELP_WORDS.contains(&author) || HELP_WORDS.contains(&name)
+    {
         return Err(EngineError::EquipNameDenied {
             equip: equip.to_string(),
         });

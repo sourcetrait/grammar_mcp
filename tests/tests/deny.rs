@@ -56,8 +56,8 @@ fn deny_every_other_tool_leaves_the_interface() {
     assert!(!has_error_path(&info), "the interface still answers; got {info}");
 }
 
-/// A denied command leaves the parse and the description; the tool and every
-/// other command stand.
+/// A denied command leaves the parse, the description's list, and `interface help
+/// interface`'s signatures; the tool and every other command stand.
 #[tested]
 fn a_denied_command_leaves_the_parse_and_the_description() {
     let t = testing::test!({ .using_temp_dir() });
@@ -69,10 +69,20 @@ fn a_denied_command_leaves_the_parse_and_the_description() {
         .find(|tool| tool["name"] == "interface")
         .unwrap_or_else(|| panic!("the interface stands; got {tools:?}"));
     let description = interface["description"].as_str().expect("its description");
-    for denied in ["`purview configure [", "`equip commit ["] {
-        assert!(!description.contains(denied), "{denied} is undocumented; got {description}");
+    for denied in ["- interface purview configure\n", "- interface equip commit\n"] {
+        assert!(!description.contains(denied), "{denied} is unlisted; got {description}");
     }
-    assert!(description.contains("`purview list ["), "got {description}");
+    assert!(description.contains("- interface purview list\n"), "got {description}");
+
+    let help = host.interface("interface help interface");
+    let block = envelope(&help)["result"]["doc"]["signatures"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    for denied in ["`purview configure [", "`equip commit ["] {
+        assert!(!block.contains(denied), "{denied} is undocumented; got {help}");
+    }
+    assert!(block.contains("`purview list ["), "got {help}");
 
     let refused = host.interface("interface purview configure 'x' ['*']");
     assert_eq!(

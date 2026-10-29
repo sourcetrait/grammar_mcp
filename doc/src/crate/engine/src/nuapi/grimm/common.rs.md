@@ -65,6 +65,20 @@ a record signature did exactly that.
 ## fn event_id_type
 The declared half of the same contract, shared by the three signatures.
 
+## fn grimm_decls
+One list behind both the registration and the signature block, so `interface help
+grimm` can never document a decl an eval lacks, or miss one it has.
+
+## fn grimm_signatures
+`interface help grimm`'s block (User): a summary line, then the signature in
+backticks, each decl in the list's order, the same two-line shape `interface help
+interface` gives the interface's commands. Rendered from the decls themselves, so
+the documentation is the signature the parser checks.
+
+## fn signature_text
+Nushell's own `--help` flag, which every signature carries, is left out: a grimm
+command is never asked for its help that way.
+
 ## fn register_nuapi
 MUST run before `nu::parse`. The parser resolves command names at parse time, so a
 decl added afterwards is invisible to the code that needed it.
