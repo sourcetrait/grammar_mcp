@@ -29,7 +29,7 @@ nu-json = { workspace = true, features = ["nu-protocol"] }
 nu-protocol.workspace = true
 nuon.workspace = true
 serde_json.workspace = true
-sourcetrait_cert_lib.workspace = true
+srcert_lib.workspace = true
 tokio.workspace = true
 tokio-rustls.workspace = true
 tokio-tungstenite.workspace = true

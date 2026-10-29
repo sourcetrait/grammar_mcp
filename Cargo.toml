@@ -84,7 +84,7 @@ sourcetrait_common = {
     ]
 }
 
-sourcetrait_cert_lib = { path = "../sourcetrait_cert/crates/sourcetrait_cert_lib" }
+srcert_lib = { path = "../srcert/crates/srcert_lib" }
 
 [profile.release]
 # EmbedEngine principle 1 (grammar): eval runs in-process on host threads and a

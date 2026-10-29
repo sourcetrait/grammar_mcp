@@ -19,7 +19,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
-use sourcetrait_cert_lib as lib_cert;
+use srcert_lib as lib_cert;
 use tokio_rustls::rustls::pki_types::CertificateDer;
 use tokio_rustls::rustls::pki_types::pem::PemObject;
 
@@ -42,6 +42,7 @@ fn key_config(name: &str) -> lib_cert::config::CertGenConfig {
         name: name.to_string(),
         organization: "SourceTrait".to_string(),
         validity_days: 3650,
+        secret_data: None,
         authority: lib_cert::AuthorityConfig {
             common_name: format!("Test {name} CA"),
         },

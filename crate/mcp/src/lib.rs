@@ -196,7 +196,7 @@ pub(crate) use std::{
 
 pub(crate) use clap::Parser;
 
-pub(crate) use sourcetrait_cert_lib as lib_cert;
+pub(crate) use srcert_lib as lib_cert;
 
 pub(crate) mod dirs {
     pub(crate) use directories::BaseDirs;
