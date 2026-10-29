@@ -10,22 +10,11 @@ pub struct NuSh {
     pub(crate) mcp_nom: datum::NomPair,
     /// The engine an interface command parses on: its commands, nothing else.
     pub(crate) interface_engine: Arc<nu::EngineState>,
-    /// The host's single packet channel; present but CLOSED at startup.
-    pub(crate) channel: Arc<ChannelHandle>,
-    /// The Channel's commands, on the same channel and its open lock.
+    /// The Channel's and the remote channels' commands, the client's too.
     pub(crate) face: ChannelFace,
     /// Which purview ids this host has in view; SESSION-resident.
     pub(crate) current_purview: Arc<CurrentPurview>,
-    /// The process-wide registry of established remote links, keyed by alias.
-    pub(crate) remote_links: Arc<std::sync::Mutex<HashMap<String, RemoteLinkEntry>>>,
     pub(crate) tool_router: mcp::ToolRouter<NuSh>,
-}
-
-/// One open remote link plus the peer address, for the registry and listing.
-#[cfg(feature = "embedded-cli")]
-pub(crate) struct RemoteLinkEntry {
-    pub handle: RemoteLinkHandle,
-    pub addr: std::net::SocketAddr,
 }
 
 #[cfg(feature = "embedded-cli")]
@@ -42,10 +31,8 @@ impl NuSh {
             nonce_gen,
             mcp_nom,
             interface_engine: Arc::new(interface_engine(deny)),
-            channel: face.channel.clone(),
             face,
             current_purview: Arc::new(CurrentPurview::new()),
-            remote_links: remote_links(),
             tool_router: Self::tool_router(),
         }
     }

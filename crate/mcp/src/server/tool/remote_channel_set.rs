@@ -13,8 +13,7 @@ pub struct RemoteSetParams {
     pub cert: Option<String>,
 }
 
-#[cfg(feature = "embedded-cli")]
-impl NuSh {
+impl ChannelFace {
     /// `interface remote channel set`: make or change an entry, answering its row.
     pub(crate) async fn remote_set(
         &self,
@@ -76,7 +75,6 @@ impl NuSh {
 }
 
 /// Remove `alias`'s entry; an alias the file lacks is refused.
-#[cfg(feature = "embedded-cli")]
 fn unset_remote(alias: &str) -> Result<(), GrammarMcpError> {
     if !remote_entries()?.iter().any(|entry| entry.alias == alias) {
         return Err(GrammarMcpError::RemoteInvalidParams {

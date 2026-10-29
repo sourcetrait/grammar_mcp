@@ -8,18 +8,15 @@ pub struct RemoteAliasParams {
 }
 
 /// One remote in `interface remote channel list` and `get`: its entry and state.
-#[cfg(feature = "embedded-cli")]
 pub(crate) type RemoteRow = RemoteChannelRow;
 
 /// A live alias's state: its endpoint, and its peer's nom once paired.
-#[cfg(feature = "embedded-cli")]
 struct Live {
     endpoint: String,
     remote_mcp_nom: Option<String>,
 }
 
-#[cfg(feature = "embedded-cli")]
-impl NuSh {
+impl ChannelFace {
     /// `interface remote channel list`: every remote, configured or live, by alias.
     pub(crate) async fn remote_list(
         &self,
@@ -145,13 +142,11 @@ impl NuSh {
 }
 
 /// The remotes file's entries; a malformed file is refused whole.
-#[cfg(feature = "embedded-cli")]
 pub(crate) fn remote_entries() -> Result<Vec<RemoteEntry>, GrammarMcpError> {
     read_remotes(&config().remotes_file).map_err(|reason| GrammarMcpError::RemotesFile { reason })
 }
 
 /// The keys a link to `entry`'s peer presents and matches.
-#[cfg(feature = "embedded-cli")]
 pub(crate) fn link_keys(entry: &RemoteEntry) -> Result<LinkKeys, GrammarMcpError> {
     let identity = config()
         .identity

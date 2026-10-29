@@ -15,8 +15,8 @@ to the parse on either entry and a malformed command is refused with the same
 diagnostics.
 
 ### field face
-The frontend-owned Channel commands, `open`, `ready`, and `close`, on the
-process's one Channel through the face the test driver uses too
+The Channel's commands and the remote channels', on the process's one Channel
+and its links, through the face the test driver uses too
 (`server/channel/face.rs`).
 
 ## fn ClientSh::tool_router
@@ -34,11 +34,11 @@ The host alias is checked before the runtime's answer, so an unknown alias is
 refused `host::unknown` on either entry alike.
 
 ## fn ClientSh::run_interface
-The ownership is `doc/ai/daemon/runtime_ownership.tsv`'s. `channel open`,
-`ready`, and `close` are the frontend's and run here. `channel sync` and
-`channel config` are the runtime's, as every other command is, and answer
-unavailable: a sync-mode Channel opens but cannot be claimed until a runtime
-holds its queue.
+The ownership is `doc/ai/daemon/runtime_ownership.tsv`'s, after User's rulings:
+the Channel is events and communication, and the remote engine is control. So
+every Channel command and every remote channel command runs here, as the MCP
+always served them, a sync Channel's queue and the thresholds among them; the
+rest are the runtime's control and answer unavailable.
 
 ## fn ClientSh::interface
 The command meets the same contract parse as on the test driver, so a
@@ -51,5 +51,6 @@ configured.
 
 ## fn serve_client
 The scratch directories are made first, because the Channel's inbox goes beside
-the transient one (`scratch.rs`); no engine, substrate, or equip directory is
+the transient one (`scratch.rs`), and the cert profile is shipped as the test
+driver ships it (`server/cert.rs`); no engine, substrate, or equip directory is
 made. The signal sweep has no server shutdown of its own to run.

@@ -3,7 +3,6 @@
 pub(crate) mod error;
 pub(crate) mod run;
 pub(crate) mod server {
-    #[cfg(feature = "embedded-cli")]
     pub(crate) mod cert;
     pub(crate) mod channel {
         pub(crate) mod face;
@@ -25,7 +24,6 @@ pub(crate) mod server {
     pub(crate) mod operator;
     #[cfg(feature = "embedded-cli")]
     pub(crate) mod purview;
-    #[cfg(feature = "embedded-cli")]
     pub(crate) mod remote {
         pub(crate) mod codec;
         pub(crate) mod link;
@@ -74,7 +72,6 @@ pub(crate) mod server {
         mod client;
         mod emergency;
         mod interface;
-        #[cfg(feature = "embedded-cli")]
         mod remote;
         #[cfg(feature = "embedded-cli")]
         mod purview;
@@ -115,6 +112,7 @@ pub(crate) use crate::{
     nu::FromValue,
     error::error_to_call_result,
     server::{
+        cert::ensure_cert_profile,
         channel::{
             face::{ChannelFace, close_channel_for_shutdown, spawn_signal_sweep},
             hub::{FROM_MCP, open_packet, start as start_channel_hub},
@@ -130,6 +128,17 @@ pub(crate) use crate::{
         interface::{
             contract::{InterfaceCommand, parse_command},
             grammar::{interface_engine, render_command_list, render_signatures},
+        },
+        remote::{
+            codec::{
+                AcceptorToInitiator, BitcodeCodec, FileFrame, InitiatorToAcceptor, MsgFrame,
+                RemoteStream,
+            },
+            link::{
+                LinkKeys, RemoteLinkEntry, bound_listeners, close_listener, connect_remote,
+                find_link_send, listen_remote, remote_links, safe_dest,
+            },
+            verify::PublicKeyVerifier,
         },
         tool::{
             call::{CALL_DESCRIPTION, CallParams},
@@ -155,7 +164,7 @@ pub(crate) use crate::{
             remote_channel_connect::RemoteConnectParams,
             remote_channel_listen::RemoteListenParams,
             remote_channel_set::RemoteSetParams,
-            remote_channels::RemoteAliasParams,
+            remote_channels::{RemoteAliasParams, RemoteRow, link_keys, remote_entries},
             rerun::{RERUN_DESCRIPTION, RerunParams},
         },
     },
@@ -166,7 +175,6 @@ pub(crate) use crate::{
 
 #[cfg(feature = "embedded-cli")]
 pub(crate) use crate::server::{
-    cert::ensure_cert_profile,
     host::{ensure_substrate, init_engine},
     oneshot::run_oneshot,
     operator::{OperatorWatch, spawn_observer},
@@ -177,23 +185,9 @@ pub(crate) use crate::server::{
         pattern_delta, prune_dangling, purview_ref, purview_views,
         purviews_path, resolve_patterns, save_purviews, seed_builtin, seed_builtin_purviews,
     },
-    remote::{
-        codec::{
-            AcceptorToInitiator, BitcodeCodec, FileFrame, InitiatorToAcceptor, MsgFrame,
-            RemoteStream,
-        },
-        link::{
-            LinkKeys, RemoteLinkHandle, bound_listeners, close_listener, connect_remote,
-            find_link_send, listen_remote, remote_links, safe_dest,
-        },
-        verify::PublicKeyVerifier,
-    },
     run::run_server,
     system::{McpHandle, Notice, notice_status, start_system},
-    tool::{
-        common::{NuSh, RemoteLinkEntry, answer_value, unexpected},
-        remote_channels::{RemoteRow, link_keys, remote_entries},
-    },
+    tool::common::{NuSh, answer_value, unexpected},
 };
 
 #[cfg(feature = "embedded-cli")]

@@ -10,7 +10,9 @@ one, and the host does far more than the channel, so stopping it over a missing
 optional-feature cert would be wrong. So this ships the profile when absent,
 logs the operator hint once (on the first ship), and returns; an identity the
 config file does not name, or one whose files are missing, surfaces later as
-the channel's own `ChannelStart` error at open.
+the channel's own `ChannelStart` error at open. Both servers ship it as they
+start, the client and the test driver, since the Channel and the remote
+channels are each's own.
 
 The hint names both steps, since the generated pair does nothing until the
 config file names it: srcert writes the certificate and key, and the operator

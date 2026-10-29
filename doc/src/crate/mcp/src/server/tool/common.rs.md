@@ -16,18 +16,9 @@ Built once, from the deny set `NuSh::new` is handed, so a denied command is unkn
 parse for the host's whole life; nothing evaluates on it, so it is shared rather than
 cloned per call.
 
-### field channel
-The process-wide handle, NOT a fresh one. An eval reaches the channel through the same
-global, so a per-NuSh handle would diverge from what bodies actually emit on.
-
-### field remote_links
-A clone of link.rs's process-wide registry, so the tools and the grimm sends see one
-map. It is keyed by alias in both roles: a listener registers its link under the alias
-it opened, as a connector does.
-
 ### field face
-The Channel's commands on the same handle as `channel`, the face the client serves them
-through too (`server/channel/face.rs`), its open lock with it.
+The Channel's commands and the remote channels', on the process's one Channel and its
+links, the face the client serves them through too (`server/channel/face.rs`).
 
 ## fn NuSh::new
 The deny set is a PARAMETER rather than read from the config, because the one-shot CLI

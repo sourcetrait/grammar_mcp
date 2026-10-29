@@ -16,7 +16,7 @@ pub struct ClientSh {
     nonce_gen: Arc<datum::NonceGenerator>,
     /// The engine an interface command parses on: its commands, nothing else.
     interface_engine: Arc<nu::EngineState>,
-    /// The Channel's frontend-owned commands, open, ready, and close.
+    /// The Channel's and the remote channels' commands, the frontend's own.
     face: ChannelFace,
     tool_router: mcp::ToolRouter<ClientSh>,
 }
@@ -84,8 +84,17 @@ impl ClientSh {
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         match command {
             InterfaceCommand::ChannelOpen(p) => self.face.channel_open(nonce, p).await,
+            InterfaceCommand::ChannelSync => self.face.channel_sync(nonce).await,
             InterfaceCommand::ChannelReady => self.face.channel_ready(nonce).await,
             InterfaceCommand::ChannelClose => self.face.channel_close(nonce).await,
+            InterfaceCommand::ChannelConfig(p) => self.face.channel_config(nonce, p).await,
+            InterfaceCommand::RemoteList => self.face.remote_list(nonce).await,
+            InterfaceCommand::RemoteGet(p) => self.face.remote_get(nonce, p).await,
+            InterfaceCommand::RemoteSet(p) => self.face.remote_set(nonce, p).await,
+            InterfaceCommand::RemoteUnset(p) => self.face.remote_unset(nonce, p).await,
+            InterfaceCommand::RemoteListen(p) => self.face.remote_listen(nonce, p).await,
+            InterfaceCommand::RemoteConnect(p) => self.face.remote_connect(nonce, p).await,
+            InterfaceCommand::RemoteClose(p) => self.face.remote_close(nonce, p).await,
             _ => Self::unavailable(nonce),
         }
     }
@@ -179,6 +188,7 @@ impl mcp::ServerHandler for ClientSh {
 /// Its scratch directories are made first, since the Channel's inbox goes beside them.
 pub(crate) async fn serve_client() -> Result<(), String> {
     make_scratch_dirs()?;
+    ensure_cert_profile();
     let (nonce_gen, mcp_nom) = process_identity();
     let server = ClientSh::new(nonce_gen, mcp_nom, &config().deny);
     spawn_signal_sweep(|| async {});

@@ -1,7 +1,7 @@
-//! The Channel's commands as the client and the test driver serve them.
+//! The Channel's and the remote channels' commands, served by either server.
 use crate::*;
 
-/// The Channel's face to a server: its handle, its open lock, the host's identity.
+/// The Channel's face to a server: its handle, open lock, identity, and links.
 pub(crate) struct ChannelFace {
     /// The host's single packet channel; present but CLOSED at startup.
     pub(crate) channel: Arc<ChannelHandle>,
@@ -10,6 +10,8 @@ pub(crate) struct ChannelFace {
     pub(crate) nonce_gen: Arc<datum::NonceGenerator>,
     /// This host process's identity, minted once at startup.
     pub(crate) mcp_nom: datum::NomPair,
+    /// The process-wide registry of established remote links, keyed by alias.
+    pub(crate) remote_links: Arc<std::sync::Mutex<HashMap<String, RemoteLinkEntry>>>,
 }
 
 impl ChannelFace {
@@ -19,6 +21,7 @@ impl ChannelFace {
             channel_open_lock: Arc::new(tk::AsyncMutex::new(())),
             nonce_gen,
             mcp_nom,
+            remote_links: remote_links(),
         }
     }
 }

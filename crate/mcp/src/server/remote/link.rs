@@ -18,11 +18,17 @@ const CLOSE_FRAME_GRACE: tk::TkDuration = tk::TkDuration::from_secs(2);
 const CHUNK_BYTES: usize = 256 * 1024;
 
 
+/// One open remote link plus the peer address, for the registry and listing.
+pub(crate) struct RemoteLinkEntry {
+    pub handle: RemoteLinkHandle,
+    pub addr: std::net::SocketAddr,
+}
+
 /// Every open link, keyed by alias, behind a std Mutex an eval thread can take.
 static REMOTE_LINKS: LazyLock<Arc<std::sync::Mutex<HashMap<String, RemoteLinkEntry>>>> =
     LazyLock::new(|| Arc::new(std::sync::Mutex::new(HashMap::new())));
 
-/// The shared registry handle; NuSh holds a clone, the grimm sends reach it here.
+/// The shared registry; the Channel's face holds a clone, grimm sends reach it.
 pub(crate) fn remote_links() -> Arc<std::sync::Mutex<HashMap<String, RemoteLinkEntry>>> {
     REMOTE_LINKS.clone()
 }

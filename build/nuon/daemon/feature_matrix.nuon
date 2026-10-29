@@ -30,7 +30,7 @@
       default_features: false,
       release: true,
       ships: null,
-      required: ["sourcetrait_grammar_protocol", "sourcetrait_grammar_engine", "sourcetrait_grammar_operator", "rustls", "tokio-rustls"],
+      required: ["sourcetrait_grammar_protocol", "sourcetrait_grammar_engine", "sourcetrait_grammar_operator"],
       forbidden: ["sourcetrait_grammar_mcp", "rmcp", "russh", "russh-sftp", "aws-lc-rs", "aws-lc-sys"]
     },
     {
@@ -42,7 +42,7 @@
       default_features: true,
       release: true,
       ships: "grammar-daemon",
-      required: ["sourcetrait_grammar_protocol", "sourcetrait_grammar_engine", "sourcetrait_grammar_operator", "rustls", "tokio-rustls"],
+      required: ["sourcetrait_grammar_protocol", "sourcetrait_grammar_engine", "sourcetrait_grammar_operator"],
       forbidden: ["sourcetrait_grammar_mcp", "rmcp", "russh", "russh-sftp", "aws-lc-rs", "aws-lc-sys"]
     },
     {

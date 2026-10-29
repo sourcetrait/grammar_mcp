@@ -16,6 +16,3 @@ its own update took.
 ## fn channel_config
 THRESHOLDS ONLY. The port and the cert dir cannot change under a live hub, so they stay set
 once at startup - offering them here would be a knob that silently does nothing.
-
-The thresholds police the sends a runtime makes (`doc/ai/daemon/runtime_ownership.tsv`), so
-the test driver serves this command and the client answers it unavailable.

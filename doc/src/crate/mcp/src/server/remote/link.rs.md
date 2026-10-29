@@ -7,6 +7,12 @@ TCP is one ordered stream, so the separation is two connections rather than a
 multiplex inside one. A link opens on demand, after each agent's Channel is
 verified; the host runs no listener of its own.
 
+## struct RemoteLinkEntry
+One open link and its peer's address, the registry's value: the listing reads
+the address, and a close cancels the handle. It sits with the registry, which
+the Channel's face and the grimm sends share, so the link code builds in every
+build, the client's included.
+
 ## static REMOTE_LINKS
 A std Mutex, not the async one, because a grimm send reaches it from the
 synchronous eval thread. Its guards are held for map operations alone, never

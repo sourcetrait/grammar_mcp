@@ -9,9 +9,6 @@ also claims the channel (`take_sync`, `server/channel/state.rs`).
 An async channel refuses it as `channel::wrong_mode`, its packets going to its Monitor,
 and a closed one as `channel::not_open`, as a send would be.
 
-The queue is the runtime's (`doc/ai/daemon/runtime_ownership.tsv`), so the test driver
-serves this command and the client answers it unavailable.
-
 ## fn packet_record
 Each queued line is the rendered packet the wire would carry, read back by `from_nuon`
 into its record, so a packet reads the same whichever mode carried it, a spilled event's

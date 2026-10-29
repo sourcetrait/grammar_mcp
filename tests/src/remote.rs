@@ -217,6 +217,8 @@ pub struct Consumer {
     pub host: Host,
     /// The Channel's inbox, as the open reported it.
     pub inbox: PathBuf,
+    /// The host's nom, as its Open packet carries it.
+    pub nom: String,
     rx: Receiver<String>,
     _reader: JoinHandle<()>,
 }
@@ -246,12 +248,16 @@ impl Consumer {
             first.model, "mcp/channel/Open",
             "the first packet must be the handshake; got {first:?}",
         );
+        let nom = serde_json::from_str::<serde_json::Value>(&first.event)
+            .ok()
+            .and_then(|event| event["mcp_nom"].as_str().map(str::to_string))
+            .unwrap_or_else(|| panic!("the Open packet carries the host's nom; got {first:?}"));
         let verified = host.interface("interface channel ready");
         assert!(
             !has_error_path(&verified),
             "`interface channel ready` should succeed once claimed; got {verified}",
         );
-        Self { host, inbox, rx, _reader: reader }
+        Self { host, inbox, nom, rx, _reader: reader }
     }
 
     /// Read a file the Channel left in its inbox, by its inbox-relative path.

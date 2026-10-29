@@ -9,8 +9,7 @@ pub struct RemoteConnectParams {
     pub address: Option<String>,
 }
 
-#[cfg(feature = "embedded-cli")]
-impl NuSh {
+impl ChannelFace {
     /// `interface remote channel connect`: dial a peer, blocking on the connect.
     pub(crate) async fn remote_connect(
         &self,

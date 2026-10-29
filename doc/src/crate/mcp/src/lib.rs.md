@@ -5,19 +5,20 @@ what a reader of it could reasonably get wrong.
 
 ## cfg_attr allow(dead_code, unused_imports)
 A build without `embedded-cli` serves a narrow surface over the shared facade:
-the Channel's state, the emergency lines, the remotes file, and the interface
-catalog compile whole, their breadth serving the test driver. The allow is that
-build's alone. The `embedded-cli` build compiles every module with both lints,
-and clippy runs over it, so code dead there still fails.
+the Channel's send path, the emergency lines, and the interface catalog compile
+whole, their breadth serving the test driver. The allow is that build's alone.
+The `embedded-cli` build compiles every module with both lints, and clippy runs
+over it, so code dead there still fails.
 
 ## cfg embedded-cli
 The engine, the operator, nix, and every module that reaches them - the host,
-the system, the operator's watch, the purviews, the remote links, the cert
-profile, the one-shot, the test driver's server, and `guts` - compile under
-`embedded-cli` alone, as does each tool's engine-side method; each tool's
-parameters stay in every build, since the interface parse carries them. The
-client, the Channel, the interface parse, the config, and the scratch
-directories compile in every build.
+the system, the operator's watch, the purviews, the one-shot, the test driver's
+server, and `guts` - compile under `embedded-cli` alone, as does each tool's
+engine-side method; each tool's parameters stay in every build, since the
+interface parse carries them. The client, the Channel, the remote channels and
+their links, the cert profile, the interface parse, the config, and the scratch
+directories compile in every build: the Channel and the remote channels are the
+MCP's own, never the runtime's (User).
 
 ## mod schema
 The shim re-exporting `schemars::JsonSchema`, reached only through the

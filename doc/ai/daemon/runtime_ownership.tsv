@@ -16,30 +16,30 @@ interface purview set	interface	crate/mcp/src/server/tool/purview.rs	runtime	Run
 interface purview extend	interface	crate/mcp/src/server/tool/purview_extend.rs	runtime	RuntimeRequest::Interface	RuntimeReply::Interface(PurviewView)
 interface purview configure	interface	crate/mcp/src/server/tool/purview_configure.rs	runtime	RuntimeRequest::Interface	RuntimeReply::Interface(PurviewRow)
 interface channel open	interface	crate/mcp/src/server/tool/channel_open.rs	frontend	RuntimeRequest::Channel(ChannelNotice::Opened)	RuntimeReply::Channel(ChannelState)
-interface channel sync	interface	crate/mcp/src/server/tool/channel_sync.rs	runtime	RuntimeRequest::Interface	RuntimeReply::Interface(HostEvent)
+interface channel sync	interface	crate/mcp/src/server/tool/channel_sync.rs	frontend	none: the frontend's own queue	the queued packets as HostEvent rows, with the count dropped
 interface channel ready	interface	crate/mcp/src/server/tool/channel_verified.rs	frontend	RuntimeRequest::Channel(ChannelNotice::Ready)	RuntimeReply::Channel(ChannelState)
 interface channel close	interface	crate/mcp/src/server/tool/channel_close.rs	frontend	RuntimeRequest::Channel(ChannelNotice::Closed)	RuntimeReply::Channel(ChannelState)
-interface channel config	interface	crate/mcp/src/server/tool/config_channel.rs	runtime	RuntimeRequest::Interface	RuntimeReply::Interface(SpamThresholdsData)
-interface remote channel list	interface	crate/mcp/src/server/tool/remote_channels.rs	runtime	RuntimeRequest::Interface	RuntimeReply::Interface(RemoteChannelRow)
-interface remote channel get	interface	crate/mcp/src/server/tool/remote_channels.rs	runtime	RuntimeRequest::Interface	RuntimeReply::Interface(RemoteChannelRow)
-interface remote channel set	interface	crate/mcp/src/server/tool/remote_channel_set.rs	runtime	RuntimeRequest::Interface	RuntimeReply::Interface(RemoteChannelRow)
-interface remote channel unset	interface	crate/mcp/src/server/tool/remote_channel_set.rs	runtime	RuntimeRequest::Interface	RuntimeReply::Interface
-interface remote channel listen	interface	crate/mcp/src/server/tool/remote_channel_listen.rs	runtime	RuntimeRequest::Interface	RuntimeReply::Interface(RemoteListenResult)
-interface remote channel connect	interface	crate/mcp/src/server/tool/remote_channel_connect.rs	runtime	RuntimeRequest::Interface	RuntimeReply::Interface
-interface remote channel close	interface	crate/mcp/src/server/tool/remote_channel_close.rs	runtime	RuntimeRequest::Interface	RuntimeReply::Interface
+interface channel config	interface	crate/mcp/src/server/tool/config_channel.rs	frontend	none: the frontend's own thresholds	SpamThresholdsData in force
+interface remote channel list	interface	crate/mcp/src/server/tool/remote_channels.rs	frontend	none: the frontend's links and remotes.toml	RemoteChannelRow
+interface remote channel get	interface	crate/mcp/src/server/tool/remote_channels.rs	frontend	none: the frontend's links and remotes.toml	RemoteChannelRow
+interface remote channel set	interface	crate/mcp/src/server/tool/remote_channel_set.rs	frontend	none: the frontend's remotes.toml	RemoteChannelRow
+interface remote channel unset	interface	crate/mcp/src/server/tool/remote_channel_set.rs	frontend	none: the frontend's remotes.toml	nothing
+interface remote channel listen	interface	crate/mcp/src/server/tool/remote_channel_listen.rs	frontend	none: the frontend's links	RemoteListenResult
+interface remote channel connect	interface	crate/mcp/src/server/tool/remote_channel_connect.rs	frontend	none: the frontend's links	nothing
+interface remote channel close	interface	crate/mcp/src/server/tool/remote_channel_close.rs	frontend	none: the frontend's links	nothing
 interface equip new	interface	crate/mcp/src/server/tool/new.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::EquipNew))	ControlAnswer::Created
 interface equip install	interface	crate/mcp/src/server/tool/equip.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::EquipInstall))	ControlAnswer::Installed(CommitResult)
 interface equip check	interface	crate/mcp/src/server/tool/equip.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::EquipCheck))	ControlAnswer::Checked(CheckSummary)
 interface equip uninstall	interface	crate/mcp/src/server/tool/equip.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::EquipUninstall))	ControlAnswer::Uninstalled
 interface equip scaffold	interface	crate/mcp/src/server/tool/new.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::EquipScaffold))	ControlAnswer::Created
 interface equip commit	interface	crate/mcp/src/server/tool/commit.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::EquipCommit))	ControlAnswer::Committed(CommitResult)
-channel_send	host callback	crate/mcp/src/server/host.rs	runtime	ChannelSendData	the message id, or the refusal's text; its HostEvent emitted to the Channel apart
-remote_send	host callback	crate/mcp/src/server/host.rs	runtime	RemoteSendData	the send id, or the refusal's text; RemoteChannelEvent::Sent or Unsent emitted apart
+channel_send	host callback	crate/mcp/src/server/host.rs	frontend	ChannelSendData, from the runtime a definition runs in	the message id, or the refusal's text; its HostEvent emitted to the Channel apart
+remote_send	host callback	crate/mcp/src/server/host.rs	frontend	RemoteSendData, from the runtime a definition runs in	the send id, or the refusal's text; RemoteChannelEvent::Sent or Unsent emitted apart
 config_record	host callback	crate/mcp/src/server/host.rs	runtime	none: local to the worker	NuVal record of the worker's config
 pin_config	host callback	crate/mcp/src/server/host.rs	runtime	none: local to the worker	Ok or the refusal's text
 operator observation	host task	crate/mcp/src/server/operator.rs	runtime	Observation	FromOperatorSys::Emergency(Emergency)
 emergency announcement	host task	crate/mcp/src/server/emergency.rs	runtime	Emergency	HostEvent under the mcp/ reservation
-remote link lifecycle	host task	crate/mcp/src/server/remote/link.rs	runtime	none: the link's own	RemoteChannelEvent::Connected or Disconnected
+remote link lifecycle	host task	crate/mcp/src/server/remote/link.rs	frontend	none: the link's own	RemoteChannelEvent::Connected or Disconnected
 channel hub	host task	crate/mcp/src/server/channel/hub.rs	frontend	ChannelNotice	the agent's WSS stream
 health	engine control	crate/engine/src/serve.rs	engine	RuntimeRequest::Engine(Control(EngineCommand::Health))	ControlAnswer::Health(EngineHealth)
 operation lookup	runtime	none yet	runtime	RuntimeRequest::OperationLookup	RuntimeReply::Operation(OperationStatus)

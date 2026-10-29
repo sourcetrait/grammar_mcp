@@ -1,9 +1,9 @@
 # peer.rs
 
-The retained remote Channel's portable data: its models, its rows, and its
-events, so a worker that owns the links reports them to a frontend in the shapes
-the agent already reads. A remote Channel carries events, messages, and files
-between hosts, never an engine request, so nothing here names one.
+The remote Channel's portable data: its models, its rows, and its events, in
+the shapes the agent already reads. The links are the MCP's own, apart from the
+remote engine: a remote Channel carries events, messages, and files between
+hosts, never an engine request, so nothing here names one.
 
 ## const MODEL_CONNECTED / MODEL_DISCONNECTED / MODEL_SENT / MODEL_UNSENT
 The host's lifecycle and delivery models, under the `remote/` reservation, which

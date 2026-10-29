@@ -87,12 +87,26 @@ fn the_runtime_owned_commands_answer_unavailable() {
     for command in [
         "interface info",
         "interface help interface",
-        "interface channel sync",
-        "interface channel config",
+        "interface process list",
         "interface equip check 'equip/sourcetrait/geo'",
     ] {
         assert_eq!(interface_kind(&client, command).as_deref(), Some(UNAVAILABLE), "{command}");
     }
+}
+
+#[test]
+fn the_channel_and_the_remote_channels_are_the_clients_own() {
+    let client = client();
+    assert_eq!(interface_kind(&client, "interface channel config"), None);
+    assert_eq!(
+        interface_kind(&client, "interface channel sync").as_deref(),
+        Some("channel::not_open"),
+    );
+    let remote = interface_kind(&client, "interface remote channel get 'nobody'");
+    assert!(
+        remote.as_deref().is_some_and(|kind| kind.starts_with("remote::")),
+        "the client reads its own remotes; got {remote:?}",
+    );
 }
 
 #[test]

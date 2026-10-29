@@ -26,10 +26,12 @@ feature weakly: alone it brings no engine, and a hook build selects
 
 - The bare entry serves MCP over stdio as a client in every build and every
   feature combination, `--test` included. It never starts an engine and makes
-  no engine or equip state. With no runtime endpoint, each runtime-owned tool
-  and interface command answers `daemon::unavailable` in the existing
-  envelope; the frontend-owned Channel commands, `open`, `ready`, and `close`,
-  are the client's own. `runtime_ownership.tsv` names each operation's owner.
+  no engine or equip state. The Channel and the remote channels are the
+  client's own, as the MCP always served them: the Channel is events and
+  communication, the remote engine is control (User). With no runtime
+  endpoint, each runtime-owned tool and interface command, the control, answers
+  `daemon::unavailable` in the existing envelope. `runtime_ownership.tsv` names
+  each operation's owner.
 - `cli <tool>` runs one tool call on the in-process engine under
   `embedded-cli`. A build without it exits 2, naming the feature.
 - `test-driver`, hidden, serves MCP over stdio on the in-process engine under
@@ -82,12 +84,13 @@ system tests.
 
 The system tests' harness spawns `test-driver` for a legacy host and the bare
 entry for a client one. The tests crate's own `embedded-cli` and `test-hooks`
-features select the cohort and pull in nothing: the client-serving tests and
-the fixtures compile in every build, the legacy files under `embedded-cli`,
-and the lifecycle tests under both. The mcp crate's integration targets, all
-through its in-process `guts` facade, and its unit tests of the remote links
-and the purviews compile under `embedded-cli` alone. `test_map.tsv` records
-each test's profile and the entry it drives.
+features select the cohort and pull in nothing: the client-serving tests, the
+remote channel cases no definition drives, which run on the client, and the
+fixtures compile in every build; the legacy files and the remote channel
+cases a definition drives under `embedded-cli`; and the lifecycle tests under
+both. The mcp crate's integration targets, all through its in-process `guts`
+facade, and its unit tests of the purviews compile under `embedded-cli` alone.
+`test_map.tsv` records each test's profile and the entry it drives.
 
 ## The client build's lints
 

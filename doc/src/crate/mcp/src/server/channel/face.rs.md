@@ -1,13 +1,14 @@
 # face.rs
 
-The Channel's commands and its shutdown, shared by the client and the test
-driver, so both entries serve the Channel from one piece of code.
+The Channel's and the remote channels' commands and the Channel's shutdown,
+shared by the client and the test driver, so both entries serve them from one
+piece of code.
 
 ## struct ChannelFace
 What a server needs of the Channel: the process's one handle, the lock that
-serializes an open, and the identity its greeting carries. The client serves
-`open`, `ready`, and `close` through it, the test driver every Channel command
-(`server/client.rs`, `server/tool/interface.rs`).
+serializes an open, the identity its greeting carries, and the remote links.
+Both servers serve every Channel command and every remote channel command
+through it (`server/client.rs`, `server/tool/interface.rs`).
 
 ### field channel
 The process-wide handle, NOT a fresh one. An eval reaches the channel through
@@ -18,6 +19,11 @@ emit on.
 ASYNC because it is held across an await; the channel's own state lock is a std
 Mutex precisely because the emit path must never need a runtime handle. The two
 locks differ in kind for opposite reasons, which is worth not "simplifying".
+
+### field remote_links
+A clone of link.rs's process-wide registry, so the commands and the grimm sends
+see one map. It is keyed by alias in both roles: a listener registers its link
+under the alias it opened, as a connector does.
 
 ## const CLOSE_FLUSH_GRACE
 Bounded because a peer that has already gone must never hold the shutdown open.

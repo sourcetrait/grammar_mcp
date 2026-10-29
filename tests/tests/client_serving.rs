@@ -1,8 +1,9 @@
 //! Serving is a client in every build: the bare entry lists the four tools,
-//! answers the Channel's frontend-owned commands itself and every runtime-owned
-//! one `daemon::unavailable`, and makes no engine state. These run against the
-//! binary the cohort built, so a client build proves serving without
-//! embedded-cli and an embedded-cli build proves it with.
+//! answers the Channel's and the remote channels' commands itself and every
+//! runtime-owned one `daemon::unavailable`, and makes no engine state. These run
+//! against the binary the cohort built, so a client build proves serving
+//! without embedded-cli and an embedded-cli build proves it with; the remote
+//! channels' own cases are `remote_channel`'s.
 
 use std::path::Path;
 use std::time::Duration;
@@ -27,15 +28,6 @@ const RUNTIME_OWNED: &[&str] = &[
     "interface purview set ['default']",
     "interface purview extend ['core']",
     "interface purview configure 'mine' ['sourcetrait/geo:']",
-    "interface channel sync",
-    "interface channel config",
-    "interface remote channel list",
-    "interface remote channel get 'peer'",
-    "interface remote channel set 'peer' --address '127.0.0.1:1'",
-    "interface remote channel unset 'peer'",
-    "interface remote channel listen 'peer'",
-    "interface remote channel connect 'peer'",
-    "interface remote channel close 'peer'",
     "interface equip new 'equip/sourcetrait/geo'",
     "interface equip install 'equip/sourcetrait/geo'",
     "interface equip check 'equip/sourcetrait/geo'",
@@ -195,6 +187,38 @@ fn the_channel_handshake_completes_on_the_client() {
     let closed = consumer.host.interface("interface channel close");
     assert!(!has_error_path(&closed), "the client closes its Channel; got {closed}");
     assert_no_engine_state(&consumer.host);
+}
+
+/// A sync Channel is the client's too: the first sync takes the greeting, which
+/// claims the Channel, and `ready` verifies it.
+#[tested]
+fn a_sync_channel_completes_on_the_client() {
+    let t = testing::test!({ .using_temp_dir() });
+    let mut host = Host::spawn_client(t.temp_dir(), &[]);
+    let opened = host.interface("interface channel open sync");
+    assert_eq!(envelope(&opened)["result"]["status"], "new", "got {opened}");
+    let synced = host.interface("interface channel sync");
+    let packets = envelope(&synced)["result"]["packets"].clone();
+    assert_eq!(
+        packets[0]["model"], "mcp/channel/Open",
+        "the first sync takes the greeting; got {synced}",
+    );
+    let ready = host.interface("interface channel ready");
+    assert!(!has_error_path(&ready), "the claimed Channel verifies; got {ready}");
+    let closed = host.interface("interface channel close");
+    assert!(!has_error_path(&closed), "got {closed}");
+    assert_no_engine_state(&host);
+}
+
+/// The Channel's thresholds are the client's to read and adjust.
+#[tested]
+fn the_channel_thresholds_are_the_clients() {
+    let t = testing::test!({ .using_temp_dir() });
+    let mut host = Host::spawn_client(t.temp_dir(), &[]);
+    let adjusted = host.interface("interface channel config --spam-warn-rate 7");
+    assert_eq!(envelope(&adjusted)["result"]["spam_warn_rate"], 7, "got {adjusted}");
+    let read = host.interface("interface channel config");
+    assert_eq!(envelope(&read)["result"]["spam_warn_rate"], 7, "the change holds; got {read}");
 }
 
 /// `--test` selects the test namespace and nothing else: the runtime's
