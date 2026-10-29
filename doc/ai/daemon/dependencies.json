@@ -135,7 +135,7 @@
   ],
   "update_rules": [
     "A pin moves only to another exact version, its checksum, license, rust-version, and features recorded here in the same commit.",
-    "A dependency upgrade reruns the trust and platform rows it touches on Linux x86_64 and riscv64; a regenerated lock alone is no evidence.",
+    "A dependency upgrade reruns the trust and platform rows it touches on Linux aarch64, x86_64, and riscv64; a regenerated lock alone is no evidence.",
     "A codec or schema change ships with wire fixtures for every changed message.",
     "russh keeps its defaults off with ring and rsa alone: no aws-lc-rs, compression, DSA, or 3DES.",
     "The nushell crates move together at one version, with the plugins built from this workspace.",

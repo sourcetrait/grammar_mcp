@@ -2,6 +2,7 @@
   target_subdir: "daemon",
   targets: [
     {triple: "x86_64-unknown-linux-gnu", runner: "native x86_64 Linux"},
+    {triple: "aarch64-unknown-linux-gnu", runner: "native aarch64 Linux"},
     {triple: "riscv64gc-unknown-linux-gnu", runner: "native riscv64 Linux"}
   ],
   profiles: [
