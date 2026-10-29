@@ -321,7 +321,7 @@ fn check_path(
             "lint::hardcoded_variable",
             Some(Source {
                 path: None,
-                position: [line, col],
+                position: [wide(line), wide(col)],
             }),
             MSG_HARDCODED_VARIABLE,
         );
@@ -353,7 +353,7 @@ fn check_external_head(
             "lint::denied_command",
             Some(Source {
                 path: None,
-                position: [line, col],
+                position: [wide(line), wide(col)],
             }),
             MSG_DENIED_COMMAND,
         );

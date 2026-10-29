@@ -93,6 +93,8 @@ sourcetrait_common = {
     ]
 }
 
+sourcetrait_cereal_macro = { path = "../common/crates/sourcetrait_cereal_macro", version = ">=0.0.0-0" }
+
 srcert_lib = { path = "../srcert/crates/srcert_lib" }
 
 [profile.release]

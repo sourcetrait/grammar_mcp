@@ -12,10 +12,14 @@ keywords.workspace   = true
 
 [dependencies]
 bitcode.workspace = true
+nuval.workspace = true
 rkyv.workspace = true
 serde.workspace = true
 
-sourcetrait_common.workspace = true
+sourcetrait_cereal_macro.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
 
 [package.metadata]
 rein = "ai"

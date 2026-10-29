@@ -190,7 +190,7 @@ pub(crate) use sourcetrait_grammar_operator::{
     process_start_time,
 };
 
-pub(crate) use nuval::TryIntoNu;
+pub(crate) use nuval::{TryIntoNu, wide};
 
 pub(crate) use std::{
     collections::{HashMap, HashSet},

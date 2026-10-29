@@ -126,7 +126,7 @@ fn check_summary_length(
             "lint::summary_length",
             Some(Source {
                 path: Some(rel.to_string()),
-                position: [line, 1],
+                position: [wide(line), 1],
             }),
             "doc summary line exceeds 80 characters",
         ));
@@ -455,7 +455,7 @@ fn validate_lib_file(
             "lib::parse_error",
             Some(Source {
                 path: Some(rel.clone()),
-                position: [line, 0],
+                position: [wide(line), 0],
             }),
             format!("parse error: {}", nuval::NuValError::from(err).short()),
         ));
@@ -872,7 +872,7 @@ fn validate_flat_file(
             "rig::parse_error",
             Some(Source {
                 path: Some(rel.clone()),
-                position: [line, 0],
+                position: [wide(line), 0],
             }),
             format!("parse error: {}", nuval::NuValError::from(err).short()),
         ));
@@ -947,7 +947,7 @@ fn scan_reserved_terms(
                 "rig::reserved",
                 Some(Source {
                     path: Some(rel.to_string()),
-                    position: [line, 0],
+                    position: [wide(line), 0],
                 }),
                 format!(
                     "`{content}` is reserved -- it may appear only as a call-target's exported `main`; rename this identifier",
@@ -963,7 +963,7 @@ fn scan_reserved_terms(
                         "rig::reserved",
                         Some(Source {
                             path: Some(rel.to_string()),
-                            position: [line, 0],
+                            position: [wide(line), 0],
                         }),
                         format!(
                             "`{pname}` is reserved and cannot be a parameter name; rename it",
@@ -1081,7 +1081,7 @@ fn validate_mod_nu_ast(
             "rig::parse_error",
             Some(Source {
                 path: Some(rel.to_string()),
-                position: [line, 0],
+                position: [wide(line), 0],
             }),
             format!("parse error: {}", nuval::NuValError::from(err).short()),
         ));
@@ -1160,7 +1160,7 @@ fn check_mod_nu_pipeline_element(
                 "rig::mod_nu",
                 Some(Source {
                     path: Some(rel.to_string()),
-                    position: [line, 0],
+                    position: [wide(line), 0],
                 }),
                 format!(
                     "mod.nu may only contain the module cascade (`export module`/`export use`), exports (`export def`/`export const`), or private `def`/`const`/`use`/`alias` declarations; got call to `{name}`",
@@ -1175,7 +1175,7 @@ fn check_mod_nu_pipeline_element(
                 "rig::mod_nu",
                 Some(Source {
                     path: Some(rel.to_string()),
-                    position: [line, 0],
+                    position: [wide(line), 0],
                 }),
                 format!(
                     "mod.nu may only contain the module cascade, exports, or private declarations; got `{}`",
@@ -1244,7 +1244,7 @@ fn validate_function_file_ast(
             "rig::parse_error",
             Some(Source {
                 path: Some(rel.to_string()),
-                position: [line, 0],
+                position: [wide(line), 0],
             }),
             format!("parse error: {}", nuval::NuValError::from(err).short()),
         ));
@@ -1285,7 +1285,7 @@ fn validate_function_file_ast(
                     "rig::contract",
                     Some(Source {
                         path: Some(rel.to_string()),
-                        position: [main_line, 0],
+                        position: [wide(main_line), 0],
                     }),
                     reason,
                 ));

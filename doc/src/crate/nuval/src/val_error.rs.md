@@ -59,7 +59,18 @@ behaves as its source when it is. Its derived Debug output begins with that
 field, so a bounded writer reads the prefix and stops, never rendering the
 chain.
 
-## impl From<NuValError> for nu::LabeledError
+## impl From<miette::LabeledSpan> for NuValErrorLabel
+A label's end is its offset and its length added at the wire's width, the sum
+saturating rather than wrapping: a span can't reach the top of a u64 over real
+source text, and a wrapped end would land before its start.
+
+## fn nu_span
+A span back in nushell narrows both offsets through `usize::try_from` and
+refuses one ending before it starts, as `Span` from the wire: nushell's own
+`Span::new` asserts the order, and a peer's data must not reach that assert.
+
+## impl TryFrom<NuValError> for nu::LabeledError
 Back in nushell an error is a `LabeledError`, as nushell itself deserializes
 any shell error. The kind, severity, cause, and carried source have no place
-there and are dropped.
+there and are dropped. It is fallible because each label's span and each inner
+error's narrow, so a span the platform can't hold is refused, never cut.

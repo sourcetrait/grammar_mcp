@@ -12,7 +12,7 @@ pub enum Severity {
 #[cereal::derived(Data)]
 pub struct Source {
     pub path: Option<String>,
-    pub position: [usize; 2],
+    pub position: [u64; 2],
 }
 
 /// One agent-facing diagnostic row.

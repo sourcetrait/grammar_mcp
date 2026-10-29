@@ -48,6 +48,12 @@ refused as nushell refuses it.
 finite and apart from the start, and an end that is a number; an infinite end
 comes back unbounded, as nushell makes it.
 
+## fn try_into_nu
+A row index is u64 on the wire and usize in nushell, so going back it narrows
+through `usize::try_from` and a value past the platform's usize is refused as
+`Index` rather than truncated. Coming in, `wide` widens nushell's usize, which
+never alters it.
+
 ## const SPAN
 A value carried as data has no span, its source gone, so a member converted
 back to nushell takes the unknown span unless a caller gives one.

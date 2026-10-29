@@ -10,15 +10,20 @@ homepage.workspace   = true
 categories.workspace = true
 keywords.workspace   = true
 
+[features]
+# nushell's own values and errors, converted to and from nuval's: the
+# evaluator's side. The data alone, and every client of it, builds without.
+nu = ["dep:chrono", "dep:miette", "dep:nu-protocol", "dep:serde_json", "dep:snafu"]
+
 [dependencies]
 bitcode.workspace = true
-chrono.workspace = true
-miette.workspace = true
-nu-protocol.workspace = true
+chrono = { workspace = true, optional = true }
+miette = { workspace = true, optional = true }
+nu-protocol = { workspace = true, optional = true }
 rkyv.workspace = true
 serde.workspace = true
-serde_json.workspace = true
-snafu.workspace = true
+serde_json = { workspace = true, optional = true }
+snafu = { workspace = true, optional = true }
 
 sourcetrait_common.workspace = true
 

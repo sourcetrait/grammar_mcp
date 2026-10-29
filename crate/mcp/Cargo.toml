@@ -33,7 +33,7 @@ nu-json.workspace = true
 nu-parser.workspace = true
 nu-protocol.workspace = true
 nuon.workspace = true
-nuval.workspace = true
+nuval = { workspace = true, features = ["nu"] }
 rkyv.workspace = true
 rmcp.workspace = true
 rustls.workspace = true

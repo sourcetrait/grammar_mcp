@@ -319,6 +319,7 @@ impl ShellErrorKind {
     }
 }
 
+#[cfg(feature = "nu")]
 impl ShellErrorKind {
     /// The kind of an error, none for a variant wrapping another type.
     pub(crate) fn of(v: &nu::ShellError) -> Option<Self> {
@@ -464,6 +465,7 @@ impl ShellWarningKind {
     }
 }
 
+#[cfg(feature = "nu")]
 impl From<&nu::ShellWarning> for ShellWarningKind {
     fn from(v: &nu::ShellWarning) -> Self {
         #[allow(deprecated)]

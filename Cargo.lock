@@ -6765,9 +6765,11 @@ name = "sourcetrait_grammar_protocol"
 version = "0.0.0-9"
 dependencies = [
  "bitcode",
+ "nuval",
  "rkyv",
  "serde",
- "sourcetrait_common",
+ "serde_json",
+ "sourcetrait_cereal_macro",
 ]
 
 [[package]]

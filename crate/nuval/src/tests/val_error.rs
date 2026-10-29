@@ -323,7 +323,7 @@ fn back_in_nushell_an_error_is_a_labeled_error_with_its_parts() {
         span: span(2, 8),
     };
     let val = NuValError::from(&error);
-    let back = nu::ShellError::from(val.clone());
+    let back = nu::ShellError::try_from(val.clone()).expect("back to nushell");
     let again = NuValError::from(&back);
     assert_eq!(again.kind, NuValErrorKind::Labeled);
     assert_eq!(again.msg, val.msg);
@@ -408,4 +408,32 @@ fn a_result_carries_its_error_both_ways() {
         panic!("an error value");
     };
     assert_eq!(error.to_string(), "Division by zero.");
+}
+
+#[test]
+fn a_reversed_span_is_refused_back_in_nushell() {
+    let mut val = NuValError::from(&nu::ShellError::DivisionByZero { span: span(2, 8) });
+    val.labels = vec![NuValErrorLabel {
+        text: Some("here".into()),
+        span: SpanData { start: 8, end: 2 },
+        primary: true,
+    }];
+    assert!(matches!(
+        nu::ShellError::try_from(val.clone()),
+        Err(ConvertError::Span { start: 8, end: 2 })
+    ));
+    val.inner = vec![val.clone()];
+    val.labels.clear();
+    assert!(
+        matches!(nu::ShellError::try_from(val), Err(ConvertError::Span { .. })),
+        "an inner error's span is held too"
+    );
+}
+
+#[test]
+fn a_span_at_the_platform_end_saturates_rather_than_wrapping() {
+    let label = NuValErrorLabel::from(miette::LabeledSpan::new(None, usize::MAX, 1));
+    assert_eq!(label.span.start, wide(usize::MAX));
+    assert_eq!(label.span.end, wide(usize::MAX).saturating_add(1));
+    assert!(label.span.end >= label.span.start);
 }

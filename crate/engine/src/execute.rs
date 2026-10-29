@@ -48,7 +48,7 @@ pub fn analyze_definition(
         let position = match span {
             Some(span) => {
                 let (line, col) = span_to_line_col(definition, span.start.saturating_sub(start));
-                [line, col]
+                [wide(line), wide(col)]
             }
             None => [0, 0],
         };

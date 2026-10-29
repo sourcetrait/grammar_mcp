@@ -63,7 +63,7 @@ pub(crate) fn parse_command(
         let position = match span {
             Some(span) => {
                 let (line, col) = span_to_line_col(text, span.start.saturating_sub(start));
-                [line, col]
+                [wide(line), wide(col)]
             }
             None => [0, 0],
         };

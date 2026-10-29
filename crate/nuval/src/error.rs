@@ -23,6 +23,12 @@ pub enum ConvertError {
         seconds_fraction: u32,
         utc_offset_minus: i32,
     },
+    /// A cell path's row index past this platform's usize.
+    #[snafu(display("the row index {value} is past this platform's usize"))]
+    Index { value: u64 },
+    /// A span past this platform's usize, or one ending before it starts.
+    #[snafu(display("an invalid span: {start}..{end}"))]
+    Span { start: u64, end: u64 },
 }
 
 /// A conversion's result.

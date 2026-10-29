@@ -1,3 +1,4 @@
+#[cfg(feature = "nu")]
 pub(crate) mod error;
 pub(crate) mod kind {
     pub(crate) mod compile;
@@ -10,18 +11,23 @@ pub(crate) mod kind {
 }
 pub(crate) mod val;
 pub(crate) mod val_error;
-#[cfg(test)]
+pub(crate) mod width;
+#[cfg(all(test, feature = "nu"))]
 mod tests {
     mod val;
     mod val_error;
 }
 
+#[cfg(feature = "nu")]
 pub(crate) use crate::error::*;
 
+#[cfg(feature = "nu")]
 pub(crate) use snafu::OptionExt;
 
+#[cfg(feature = "nu")]
 pub(crate) use std::ops::Bound;
 
+#[cfg(feature = "nu")]
 pub(crate) mod nu {
     pub(crate) use nu_protocol::{
         ChainedError, CompileError, ConfigError, ConfigWarning, ErrorLabel, Filesize, FloatRange,
@@ -41,7 +47,6 @@ pub(crate) mod nu {
 pub(crate) use sourcetrait_common::cereal;
 
 pub use crate::{
-    error::{ConvertError, ConvertResult},
     kind::{
         compile::CompileErrorKind,
         config::{ConfigErrorKind, ConfigWarningKind},
@@ -53,7 +58,14 @@ pub use crate::{
     },
     val::{
         Bounded, CellPathMemberData, DateData, GlobData, NuVal, NuValResult, RangeData, SpanData,
-        TryFromNu, TryIntoNu, TypedRangeData,
+        TypedRangeData,
     },
     val_error::{NuValError, NuValErrorKind, NuValErrorLabel, NuValErrorSource, NuValSeverity},
+    width::wide,
+};
+
+#[cfg(feature = "nu")]
+pub use crate::{
+    error::{ConvertError, ConvertResult},
+    val::{TryFromNu, TryIntoNu},
 };

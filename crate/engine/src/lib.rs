@@ -154,7 +154,7 @@ pub(crate) mod nu {
 
 pub(crate) use nu::{CallExt, FromValue, IntoValue};
 
-pub(crate) use nuval::{NuVal, TryFromNu};
+pub(crate) use nuval::{NuVal, TryFromNu, wide};
 
 pub(crate) use sourcetrait_common::{agnostic, cereal, datum, subsys};
 

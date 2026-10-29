@@ -292,6 +292,7 @@ impl ParseErrorKind {
     }
 }
 
+#[cfg(feature = "nu")]
 impl From<&nu::ParseError> for ParseErrorKind {
     fn from(v: &nu::ParseError) -> Self {
         match v {
@@ -412,6 +413,7 @@ impl ParseWarningKind {
     }
 }
 
+#[cfg(feature = "nu")]
 impl From<&nu::ParseWarning> for ParseWarningKind {
     fn from(v: &nu::ParseWarning) -> Self {
         match v {

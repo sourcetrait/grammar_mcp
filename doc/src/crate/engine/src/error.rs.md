@@ -13,6 +13,10 @@ timeout, an unregistered-equip error.
 The shape stays flat - `path` plus `position` - which is what the agent consumes
 directly, rather than a nested source-carrier the reader would have to unwrap.
 
+`position` is a pair of u64s, the wire's fixed width, built from the parser's
+usize line and column through nuval's `wide`, which never alters one: the same
+diagnostic reads the same from any platform's worker.
+
 ## struct Diagnostic
 The single type for both a validation finding and a body-lint finding - one shape
 the wire and the check summary both carry.

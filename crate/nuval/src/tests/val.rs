@@ -190,3 +190,18 @@ fn an_error_value_is_the_results_error_however_deep() {
         Ok(Ok(NuVal::Int(1)))
     ));
 }
+
+#[test]
+fn a_row_index_past_this_platform_is_refused_and_one_inside_it_round_trips() {
+    let val = NuVal::CellPath(vec![CellPathMemberData::Int {
+        value: u64::MAX,
+        optional: false,
+    }]);
+    let back = val.clone().try_into_nu(SPAN);
+    if usize::BITS < u64::BITS {
+        assert!(matches!(back, Err(ConvertError::Index { .. })), "{back:?}");
+    } else {
+        let again = NuVal::try_from_nu(back.expect("a 64-bit usize holds it")).expect("back");
+        assert_eq!(again, val);
+    }
+}
