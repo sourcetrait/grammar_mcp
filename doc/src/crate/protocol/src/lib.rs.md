@@ -5,6 +5,10 @@ evaluator, operator, MCP server, or platform monitoring in its dependencies.
 The engine, the client, the daemon, the MCP frontend, and the probe all take
 it, and it takes none of them, so the package graph stays one-way.
 
+## mod artifact
+An artifact's metadata, the requests that reserve, publish, abort, describe, and
+read it, and the default limits; the bytes move by SFTP.
+
 ## mod channel
 The Channel's reservations, caps, modes, and phases, and what crosses between a
 frontend and the worker that owns the logical Channel: its state and epoch, the
@@ -33,8 +37,8 @@ The retained remote Channel's models, its list rows and listen result, and its
 lifecycle and delivery events, as data a worker reports to its frontend.
 
 ## mod runtime
-The runtime's opaque identities: a client instance, a worker generation, a lease,
-and an operation.
+The runtime's opaque identities, its request and reply, the host's metadata, the
+purviews, the controller's policy, and an operation's status.
 
 ## use nuval::wide
 The wire's widening, shared with nuval so every count and offset widens one

@@ -112,8 +112,8 @@ pub(crate) use crate::{
         oneshot::run_oneshot,
         operator::{OperatorWatch, spawn_observer},
         purview::{
-            CurrentPurview, PURVIEW_ALL, PURVIEW_CORE, PURVIEW_DEFAULT, PURVIEW_REF, PurviewRow,
-            PurviewView, is_derived_purview, is_rig_pattern, is_valid_purview_id, load_purviews,
+            CurrentPurview, PURVIEW_ALL, PURVIEW_CORE, PURVIEW_DEFAULT, PURVIEW_REF,
+            is_derived_purview, is_rig_pattern, is_valid_purview_id, load_purviews,
             ensure_default_purview, expand_values, is_nameable_purview, is_valid_purview_ref,
             pattern_delta, prune_dangling, purview_ref, purview_views,
             purviews_path, resolve_patterns, save_purviews, seed_builtin, seed_builtin_purviews,
@@ -175,7 +175,7 @@ pub(crate) use sourcetrait_grammar_engine::{
 pub(crate) use sourcetrait_grammar_protocol::{
     ChannelPhase, EVENT_BYTES_KEY, EVENT_SPILL_DEST, EVENT_SPILL_KEY, LOCAL_HOST,
     MAX_FRAME_BYTES, MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT,
-    NOTIFICATION_CAP, RuntimeError, TransportError,
+    NOTIFICATION_CAP, PurviewRow, PurviewView, RuntimeError, TransportError,
     REMOTE_RESERVED_PREFIX, RemoteChannelRow, RemoteLinkState, RemoteListenResult,
     SYNC_QUEUE_CAP, reserved_prefix,
 };

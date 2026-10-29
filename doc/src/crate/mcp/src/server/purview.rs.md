@@ -21,9 +21,6 @@ Runs once, for the builtins a new namespace installed: each one's own purview an
 reference in `core`, under the equip repository's lock the purview table rides. `default`
 keeps the `['*']` a new namespace starts with.
 
-## struct PurviewRow
-`namepath_patterns` is the DESIGN's own column name, so the persisted table reads as it
-was specified rather than as an implementation happened to name it.
 
 ## fn purviews_to_nuon
 Through the serde Value bridge - the same one the rig index uses - so ONE bridge covers

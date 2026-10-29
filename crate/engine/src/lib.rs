@@ -208,7 +208,7 @@ pub use crate::{
     parse_engine::{
         LintEngine, ParseEngine, file_start, span_text, span_to_line_col, wrap_as_module,
     },
-    plugins::{PluginInfo, ensure_plugin_registry, list_registered_plugins},
+    plugins::{ensure_plugin_registry, list_registered_plugins},
     schema::{NuTypedef, check_value, typedef_text},
     system::{EngineHandle, EngineSysConfig, EngineSysParams, EngineSysPaths, EngineSystem},
     template::{build_call_source, build_execute_source, json_value_to_nu_value},
@@ -217,7 +217,8 @@ pub use crate::{
 pub use sourcetrait_grammar_protocol::{
     BUILTINS, CallDoc, CallRequest, CheckSummary, CommitResult, ControlAnswer, ControlRequest,
     Diagnostic, EngineCommand, EngineError, EngineHealth, EngineResult, ExecuteRequest,
-    FromEngineSys, Host, HungEval, InspectDoc, Lane, ModuleDoc, ProcessRow, RerunRequest, RigDoc,
+    FromEngineSys, Host, HungEval, InspectDoc, Lane, ModuleDoc, PluginInfo, ProcessRow,
+    RerunRequest, RigDoc,
     Severity, SignaturesDoc, Source, ToEngineSys, ValueAnswer, builtin_equip, builtin_name,
     display_equip,
 };

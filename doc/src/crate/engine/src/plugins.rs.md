@@ -8,11 +8,6 @@ engine's version, never the user's shell registry: nu-plugin-protocol loads a
 plugin only where the two versions caret-match, so a system registry kept for
 another nushell is a registry of plugins that fail to load here.
 
-## struct PluginInfo
-A tuple struct, so it serializes as the positional `[name, version]` pair rather
-than a two-key object. Both slots are inferable from position, and an `Invalid`
-registry item yields a `null` second slot rather than dropping it - the pair
-keeps its arity whatever the plugin reported.
 
 ## fn registry_path
 Per NAMESPACE, in its data dir beside the equip repository: a plugin added on the

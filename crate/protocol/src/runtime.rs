@@ -48,3 +48,105 @@ impl OperationId {
         hex128(&self.0)
     }
 }
+
+/// One plugin as a positional `[name, version]` pair (version may be null).
+#[cereal::derived(Data)]
+pub struct PluginInfo(pub String, pub Option<String>);
+
+/// One configured purview: a label bound to what it puts in view.
+#[cereal::derived(Data)]
+pub struct PurviewRow {
+    pub id: String,
+    pub namepath_patterns: Vec<String>,
+}
+
+/// One `[id, namepath_patterns]` pair as the tools report it.
+#[cereal::derived(Data)]
+pub struct PurviewView(pub String, pub Vec<String>);
+
+/// `interface info`'s answer: the execution host's identity, scratch, and surface.
+#[cereal::derived(Data)]
+pub struct InfoReply {
+    pub name: String,
+    pub version: String,
+    pub nu_version: String,
+    /// The `--id` the worker was configured with.
+    pub id: String,
+    pub namespace: String,
+    /// The worker's nom, stable for its life: $env.EQUIP_MCP_NOM.
+    pub nom: String,
+    /// The worker's working directory, exported as $env.EQUIP_WORK_DIR.
+    pub work_dir: String,
+    /// The worker's bulk scratch directory, exported as $env.EQUIP_TMP.
+    pub tmp: String,
+    /// The worker's transient scratch directory, exported as $env.EQUIP_TRANSIENT.
+    pub transient: String,
+    pub plugins: Vec<PluginInfo>,
+    /// The callable surface within the reported purview, as one block.
+    pub signatures: String,
+    /// The purview `signatures` was rendered for.
+    pub purview: Vec<PurviewView>,
+}
+
+/// A controller's policy, frozen when it attaches and enforced before dispatch.
+#[cereal::derived(Data)]
+pub struct ControllerPolicy {
+    /// The tools its frontend denies, by name.
+    pub deny_tools: Vec<String>,
+    /// The interface commands its frontend denies, by their words.
+    pub deny_commands: Vec<String>,
+}
+
+/// An admitted operation's last known state.
+#[cereal::derived(Data, Copy, Eq)]
+pub enum OperationState {
+    Admitted,
+    Running,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+/// What a lookup knows of an operation: its state, nothing, or that it expired.
+#[cereal::derived(Data)]
+pub enum OperationStatus {
+    Known {
+        operation: OperationId,
+        state: OperationState,
+    },
+    Unknown {
+        operation: OperationId,
+    },
+    Expired {
+        operation: OperationId,
+    },
+}
+
+/// A request to a worker's runtime.
+#[cereal::derived(Data)]
+pub enum RuntimeRequest {
+    /// A typed engine request: an eval, a rerun, a call, or a control command.
+    Engine(ToEngineSys),
+    /// An `interface` command's text, parsed by the runtime against the catalog.
+    Interface { command: String },
+    Info,
+    OperationLookup { operation: OperationId },
+    Policy(ControllerPolicy),
+    Channel(ChannelNotice),
+    Artifact(ArtifactRequest),
+}
+
+/// A worker runtime's answer.
+#[cereal::derived(Data)]
+pub enum RuntimeReply {
+    Engine(FromEngineSys),
+    /// An `interface` command's result, which the frontend renders.
+    Interface { result: NuVal },
+    Info(InfoReply),
+    Operation(OperationStatus),
+    Policy(ControllerPolicy),
+    Channel(ChannelState),
+    Artifact(ArtifactReply),
+    /// The runtime's refusal, outside the engine.
+    Refused(RuntimeError),
+}

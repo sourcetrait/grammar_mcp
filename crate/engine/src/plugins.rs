@@ -15,10 +15,6 @@ const PLUGIN_KINDS: [&str; 3] = ["core", "grammar", "rig"];
 /// The cache subdir a registration writes its output to.
 const REGISTRATION_LOG_DIR: &str = "plugins";
 
-/// One plugin as a positional `[name, version]` pair (version may be null).
-#[derive(Debug, ser::Serialize)]
-pub struct PluginInfo(pub String, pub Option<String>);
-
 /// The registry this namespace owns, `<data dir>/plugin.msgpackz`, once set.
 pub(crate) fn registry_path() -> Option<PathBuf> {
     Some(params()?.data_home.join(REGISTRY_FILE))

@@ -21,12 +21,6 @@ pub(crate) fn purviews_path() -> PathBuf {
     data_base_dir().join(META_DIR).join(PURVIEWS_FILE)
 }
 
-/// One configured purview: a label bound to what it puts in view.
-#[derive(Debug, Clone, ser::Serialize, ser::Deserialize)]
-pub(crate) struct PurviewRow {
-    pub id: String,
-    pub namepath_patterns: Vec<String>,
-}
 
 /// Render the purview table as NUON through the serde Value bridge.
 pub(crate) fn purviews_to_nuon(rows: &[PurviewRow]) -> Result<String, String> {
@@ -396,9 +390,6 @@ impl CurrentPurview {
     }
 }
 
-/// One `[id, namepath_patterns]` pair as the tools report it.
-#[derive(Debug, ser::Serialize)]
-pub struct PurviewView(pub String, pub Vec<String>);
 
 /// Each id beside the namepath patterns it resolves to.
 pub(crate) fn purview_views(

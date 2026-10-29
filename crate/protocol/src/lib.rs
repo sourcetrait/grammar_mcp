@@ -1,3 +1,4 @@
+pub(crate) mod artifact;
 pub(crate) mod capability;
 pub(crate) mod channel;
 pub(crate) mod command;
@@ -15,6 +16,12 @@ pub(crate) use nuval::wide;
 pub(crate) use sourcetrait_common::{cereal, datum, subsys};
 
 pub use crate::{
+    artifact::{
+        ACTIVE_RESERVATIONS, ARTIFACT_MAX_BYTES, ArtifactDescription, ArtifactId, ArtifactPurpose,
+        ArtifactRef, ArtifactReply, ArtifactRequest, ArtifactState, LOG_READ_MAX, LogChunk,
+        LogStream, RESERVATION_EXPIRY_SECS, ReadLog, ReserveUpload, SFTP_CHUNK_MAX,
+        SFTP_PACKET_MAX, STORE_QUOTA_BYTES, UploadReservation,
+    },
     capability::Capabilities,
     channel::{
         ChannelEpoch, ChannelMode, ChannelNotice, ChannelPhase, ChannelSendData, ChannelState,
@@ -43,7 +50,11 @@ pub use crate::{
         MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT, RemoteChannelEvent,
         RemoteChannelRow, RemoteFailure, RemoteLinkState, RemoteListenResult,
     },
-    runtime::{ClientInstanceId, LeaseId, OperationId, WorkerGeneration},
+    runtime::{
+        ClientInstanceId, ControllerPolicy, InfoReply, LeaseId, OperationId, OperationState,
+        OperationStatus, PluginInfo, PurviewRow, PurviewView, RuntimeReply, RuntimeRequest,
+        WorkerGeneration,
+    },
     value::{ValueLimitError, ValueLimitErrorKind, ValueLimits, check_error, check_value},
 };
 
