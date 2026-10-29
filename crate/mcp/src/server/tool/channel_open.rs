@@ -30,14 +30,6 @@ const VERIFY_WINDOW: tk::TkDuration = tk::TkDuration::from_secs(300);
 const CLOSE_UNVERIFIED: u16 = 1008;
 const UNVERIFIED_REASON: &str = "verification window expired";
 
-/// The scratch directory's `inbox`, created here.
-fn ensure_inbox(channel: &ChannelHandle) -> Result<String, GrammarMcpError> {
-    let dir = inbox_dir().map_err(|reason| GrammarMcpError::ChannelStart { reason })?;
-    fs::create_dir_all(&dir)?;
-    channel.set_inbox(dir.clone());
-    Ok(dir.display().to_string())
-}
-
 /// The host's `channel/Open` packet, rendered.
 fn greeting(
     nonce_gen: &datum::NonceGenerator,
@@ -83,46 +75,52 @@ impl NuSh {
         nonce: datum::Nonce,
         p: ChannelOpenParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let inbox = match ensure_inbox(&self.channel) {
-            Ok(path) => path,
-            Err(error) => return error_to_call_result(error, nonce),
-        };
         let _opening = self.channel_open_lock.lock().await;
         let opened = match self.open_or_report(p.mode).await {
             Ok(opened) => opened,
             Err(error) => return error_to_call_result(error, nonce),
         };
         arm_verify_timer(self.channel.clone());
-        let (label, wss) = opened;
+        let (label, wss, inbox) = opened;
         success(
             nonce,
             &ChannelOpenResult {
                 status: label.to_string(),
                 mode: p.mode,
                 wss,
-                inbox,
+                inbox: inbox.display().to_string(),
             },
         )
     }
 
-    /// Open a closed channel in `mode`, or report the open one in the same mode.
+    /// Open a closed channel in `mode` on a new inbox, or report the open one.
     async fn open_or_report(
         &self,
         mode: ChannelMode,
-    ) -> Result<(&'static str, Option<String>), GrammarMcpError> {
+    ) -> Result<(&'static str, Option<String>, PathBuf), GrammarMcpError> {
         let status = self.channel.status();
         if matches!(status.phase, ChannelPhase::Closed) {
-            return match mode {
+            let inbox = make_channel_dir(self.mcp_nom.as_str())
+                .map_err(|reason| GrammarMcpError::ChannelStart { reason })?;
+            self.channel.set_inbox(inbox.clone());
+            let started = match mode {
                 ChannelMode::Async => {
-                    let url =
-                        start_channel_hub(&self.channel, &self.mcp_nom, self.nonce_gen.clone())
-                            .await?;
-                    Ok((STATUS_NEW, Some(url)))
+                    start_channel_hub(&self.channel, &self.mcp_nom, self.nonce_gen.clone())
+                        .await
+                        .map(Some)
                 }
-                ChannelMode::Sync => {
-                    self.channel
-                        .install_sync(greeting(&self.nonce_gen, &self.mcp_nom)?);
-                    Ok((STATUS_NEW, None))
+                ChannelMode::Sync => greeting(&self.nonce_gen, &self.mcp_nom).map(|line| {
+                    self.channel.install_sync(line);
+                    None
+                }),
+            };
+            return match started {
+                Ok(wss) => Ok((STATUS_NEW, wss, inbox)),
+                Err(error) => {
+                    if let Some(dir) = self.channel.take_inbox() {
+                        remove_channel_dir(&dir);
+                    }
+                    Err(error)
                 }
             };
         }
@@ -142,6 +140,10 @@ impl NuSh {
         if status.claimed {
             resend_open_packet(&self.channel, &self.nonce_gen, &self.mcp_nom)?;
         }
-        Ok((STATUS_EXISTING, status.url))
+        let inbox = self.channel.inbox().ok_or_else(|| GrammarMcpError::Internal {
+            phase: "channel_open::inbox".to_string(),
+            reason: "an open channel carries no inbox".to_string(),
+        })?;
+        Ok((STATUS_EXISTING, status.url, inbox))
     }
 }

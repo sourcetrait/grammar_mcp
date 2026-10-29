@@ -6,13 +6,6 @@ pub(crate) const MCP_RESERVED_PREFIX: &str = "mcp/";
 /// The usable frame maximum.
 pub(crate) const MAX_FRAME_BYTES: usize = 1_048_575;
 
-/// `<tmp>/inbox`, where attachments and a link's landed files meet.
-pub(crate) fn inbox_dir() -> Result<PathBuf, String> {
-    tmp_dir()
-        .map(|dir| dir.join("inbox"))
-        .ok_or_else(|| "the host has no scratch directory".to_string())
-}
-
 /// What an emit is allowed to do right now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ChannelPhase {

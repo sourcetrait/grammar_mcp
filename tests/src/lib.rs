@@ -10,6 +10,7 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};
@@ -46,15 +47,32 @@ pub fn run_output_env(scratch: &Path, args: &[&str], envs: &[(&str, &str)]) -> O
     let cache = scratch.join("cache");
     std::fs::create_dir_all(&data).expect("mkdir data");
     std::fs::create_dir_all(&cache).expect("mkdir cache");
+    let (tmp, run) = scratch_bases(scratch);
     Command::new(grammar_mcp_bin())
         .args(args)
         .env("XDG_DATA_HOME", &data)
         .env("XDG_CACHE_HOME", &cache)
         .env("UENV_USR_DATA", &data)
         .env("UENV_USR_CACHE", &cache)
+        .env("UENV_USR_TMP", &tmp)
+        .env("UENV_USR_TRANSIENT", &run)
         .envs(envs.iter().copied())
         .output()
         .expect("run grammar-mcp")
+}
+
+/// A host's temporary and runtime bases under `scratch`, private to it.
+///
+/// What a host killed outright leaves behind stays in the test's directory.
+fn scratch_bases(scratch: &Path) -> (PathBuf, PathBuf) {
+    let tmp = scratch.join("tmp");
+    let run = scratch.join("run");
+    for base in [&tmp, &run] {
+        std::fs::create_dir_all(base).expect("mkdir a scratch base");
+        std::fs::set_permissions(base, std::fs::Permissions::from_mode(0o700))
+            .expect("a scratch base's mode");
+    }
+    (tmp, run)
 }
 
 pub fn stdout_str(out: &Output) -> String {
@@ -153,6 +171,7 @@ impl Host {
         let cache_home = scratch.join("cache");
         std::fs::create_dir_all(&data_home).expect("mkdir data");
         std::fs::create_dir_all(&cache_home).expect("mkdir cache");
+        let (tmp, run) = scratch_bases(scratch);
         let stderr = match stderr_log {
             Some(path) => Stdio::from(
                 std::fs::File::create(path).expect("create the host's stderr log"),
@@ -165,6 +184,8 @@ impl Host {
             .env("XDG_CACHE_HOME", &cache_home)
             .env("UENV_USR_DATA", &data_home)
             .env("UENV_USR_CACHE", &cache_home)
+            .env("UENV_USR_TMP", &tmp)
+            .env("UENV_USR_TRANSIENT", &run)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(stderr);

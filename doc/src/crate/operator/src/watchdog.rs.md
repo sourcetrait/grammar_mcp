@@ -60,9 +60,9 @@ host starts is a PRE-EXISTING CONDITION, not something to report: this box carri
 threshold rule would warn about it forever. Only those below the line at startup are
 enrolled; they warn if they later cross it.
 
-Worth knowing what this watch happens to cover: `/dev/shm` is only 62.5 MiB here and is
-where the channel inbox writes attachments, so the attachment lane's own failure mode is
-inside this gate.
+Worth knowing what this watch happens to cover: the Channel's inbox sits in the runtime
+directory, a small tmpfs where logind makes one, so the attachment lane's own failure
+mode is inside this gate.
 
 ## fn probe_disk
 Blocking, run on a blocking-pool thread by the system, because a wedged mount must take

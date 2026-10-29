@@ -40,11 +40,15 @@ fn ensure_test_config() {
         let root = temp.join(format!("{INPROC_PREFIX}{}", process::id()));
         let _ = fs::create_dir_all(root.join("data"));
         let _ = fs::create_dir_all(root.join("cache"));
+        let _ = fs::create_dir_all(root.join("tmp"));
+        let _ = fs::create_dir_all(root.join("run"));
         unsafe {
             std::env::set_var("XDG_DATA_HOME", root.join("data"));
             std::env::set_var("XDG_CACHE_HOME", root.join("cache"));
             std::env::set_var("UENV_USR_DATA", root.join("data"));
             std::env::set_var("UENV_USR_CACHE", root.join("cache"));
+            std::env::set_var("UENV_USR_TMP", root.join("tmp"));
+            std::env::set_var("UENV_USR_TRANSIENT", root.join("run"));
         }
         let mut config = Config::default();
         config.id = "test".to_string();

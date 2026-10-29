@@ -1,7 +1,8 @@
-//! The host's scratch directories and their lifecycle.
+//! The host's scratch directories and Channel inboxes, and their lifecycle.
 //!
-//! Private to its process, exported to every definition, removed at an
-//! ordinary end, and swept once their owner is gone.
+//! The scratch directories are private to their process, exported to every
+//! definition, removed at an ordinary end, and swept once their owner is gone;
+//! each Channel open makes an inbox beside the transient one.
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -67,6 +68,21 @@ fn scratch_in(base: &Path) -> usize {
         .flatten()
         .filter(|entry| entry.file_name().to_string_lossy().starts_with("grammar-mcp."))
         .count()
+}
+
+/// The inbox a sync Channel opens on, as the open answers it.
+fn open_inbox(host: &mut Host) -> PathBuf {
+    let resp = host.interface("interface channel open sync");
+    PathBuf::from(
+        envelope(&resp)["result"]["inbox"]
+            .as_str()
+            .unwrap_or_else(|| panic!("the open answers its inbox; got {resp}")),
+    )
+}
+
+/// A directory's permission bits.
+fn mode(dir: &Path) -> u32 {
+    std::fs::metadata(dir).expect("the directory exists").permissions().mode() & 0o777
 }
 
 /// A private directory in `base`, under the sweep's prefix, marked by its host.
@@ -168,6 +184,8 @@ fn transient_files_fall_back_to_the_temporary_directory() {
     assert_scratch(&tmp_dir, &tmp, host.pid());
     assert_scratch(&transient_dir, &tmp, host.pid());
     assert_ne!(tmp_dir, transient_dir, "two directories still, side by side");
+    let inbox = open_inbox(&mut host);
+    assert_eq!(inbox.parent(), Some(tmp.as_path()), "the Channel's inbox goes with them");
     let stderr = std::fs::read_to_string(&log).expect("the host's stderr");
     assert!(stderr.contains("XDG_RUNTIME_DIR"), "the fallback is warned of; got {stderr:?}");
 }
@@ -209,6 +227,61 @@ fn sigterm_removes_both_directories() {
     assert_eq!(status.code(), Some(128 + Signal::SIGTERM as i32), "the handler ran");
     assert!(!tmp_dir.exists(), "the signal sweep removes {}", tmp_dir.display());
     assert!(!transient_dir.exists(), "and {}", transient_dir.display());
+}
+
+/// Each open makes the Channel's inbox beside the transient directory.
+///
+/// It is named for the host's nom, private, and the inbox itself, an
+/// attachment landing in it; a close removes it, a taken name falls back to a
+/// random one, and the host's end removes what it made and nothing else.
+#[tested]
+fn each_open_makes_the_channel_inbox_in_the_transient_base() {
+    let t = testing::test!({ .using_temp_dir() });
+    let (tmp, run) = bases(t.temp_dir());
+    let mut host = spawn_on(&t.temp_dir().join("host"), "scratchinbox", &tmp, &run);
+    let info = host.info();
+    let nom = envelope(&info)["result"]["nom"]
+        .as_str()
+        .unwrap_or_else(|| panic!("info carries nom; got {info}"))
+        .to_string();
+    let named = run.join(format!("grammar.channel.{nom}"));
+
+    let inbox = open_inbox(&mut host);
+    assert_eq!(inbox, named, "the inbox is named for the host's nom in the transient base");
+    assert_eq!(mode(&inbox), 0o700, "only its owner may enter {}", inbox.display());
+    host.interface("interface channel sync");
+    host.interface("interface channel ready");
+    let resp = host.execute(
+        "def execute [data: nothing]: nothing -> record<event_id: string> { \
+         grimm channel send test/inbox {n: 1} {n: 2} }",
+        "null",
+    );
+    let id = envelope(&resp)["result"]["event_id"]
+        .as_str()
+        .unwrap_or_else(|| panic!("the send answers its id; got {resp}"))
+        .to_string();
+    assert!(
+        inbox.join(format!("{id}.nuon")).is_file(),
+        "the attachment lands in the inbox itself, as {id}.nuon",
+    );
+
+    host.interface("interface channel close");
+    assert!(!inbox.exists(), "a close removes {}", inbox.display());
+
+    std::fs::create_dir(&named).expect("a directory holding the nom's name");
+    let fallback = open_inbox(&mut host);
+    assert_ne!(fallback, named, "a taken name falls back to a random one");
+    assert_eq!(fallback.parent(), Some(run.as_path()), "beside it in the transient base");
+    let name = fallback.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+    assert!(name.starts_with("grammar.channel."), "under the inbox's prefix; got {name}");
+    assert_eq!(mode(&fallback), 0o700, "only its owner may enter {}", fallback.display());
+
+    let status = host
+        .signal_and_wait(Signal::SIGTERM, Duration::from_secs(15))
+        .expect("a signalled host should exit rather than hang");
+    assert_eq!(status.code(), Some(128 + Signal::SIGTERM as i32), "the handler ran");
+    assert!(!fallback.exists(), "the host's end removes {}", fallback.display());
+    assert!(named.is_dir(), "and leaves {}, which it never made", named.display());
 }
 
 /// A dead host's directories go at the next start.

@@ -126,8 +126,10 @@ relay (an unverified Channel among the causes) is logged on the receiver alone,
 never reported to the sender as Unsent. The slot-map is what makes the files
 exist on disk before the agent observes the emission. land_file_chunk appends
 under <inbox>/<peer_nom>/<id>/<dest> - the same inbox the Channel's own
-attachments use, in the host's bulk scratch directory, so a relayed packet's
-`attached` ref resolves for the local agent.
+attachments use, so a relayed packet's `attached` ref resolves for the local
+agent. The inbox is read as each chunk lands, since every open makes a new
+one: a closed Channel has none and lands nothing, and a delivery that spans a
+close and an open loses its earlier chunks with the inbox the close removed.
 
 relay_to_channel refuses a model under `mcp/` first, `reserved_model`, as the
 sending grimm commands do (`reject_reserved_model`): the reservation is what

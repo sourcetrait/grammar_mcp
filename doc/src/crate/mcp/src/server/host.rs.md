@@ -73,7 +73,7 @@ it, which is also why the hash covers the attached content rather than its path.
 
 After the id and the caller's attachment, the rendered event is checked against
 the notification cap (event_overflows, state.rs); an oversized event spills to
-inbox/<id>.event.nuon and a compact pointer rides the wire in its place. The
+<inbox>/<id>.event.nuon and a compact pointer rides the wire in its place. The
 pointer names its own spill file, so it is orthogonal to the caller's
 `attached`: a big event and a caller attachment both survive, in separate files.
 

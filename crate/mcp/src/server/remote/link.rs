@@ -594,20 +594,13 @@ struct RecvContext {
     slots: Arc<std::sync::Mutex<HashMap<String, DeliverSlot>>>,
     /// The peer's McpNom - the `from = mcp/remote/<nom>` a relayed packet gets.
     peer_nom: String,
-    /// The scratch directory's `inbox` - where landed files + the Channel inbox meet.
-    inbox_root: PathBuf,
 }
 
 impl RecvContext {
     fn new(peer_nom: &str) -> Self {
-        let inbox_root = inbox_dir().unwrap_or_else(|e| {
-            eprintln!("grammar: remote inbox root unresolved ({e}); files will not land");
-            PathBuf::from("/nonexistent")
-        });
         Self {
             slots: Arc::new(std::sync::Mutex::new(HashMap::new())),
             peer_nom: peer_nom.to_string(),
-            inbox_root,
         }
     }
 }
@@ -803,7 +796,7 @@ fn try_finalize(
     }
 }
 
-/// Append one chunk to `<inbox_root>/<peer_nom>/<id>/<dest>`; true iff `last`.
+/// Append one chunk to `<inbox>/<peer_nom>/<id>/<dest>`; true iff `last`.
 fn land_file_chunk(
     ctx: &RecvContext,
     id: &str,
@@ -812,7 +805,10 @@ fn land_file_chunk(
     bytes: &[u8],
     last: bool,
 ) -> io::Result<bool> {
-    let path = ctx.inbox_root.join(&ctx.peer_nom).join(id).join(dest);
+    let inbox = channel_handle()
+        .inbox()
+        .ok_or_else(|| io::Error::other("the Channel has no inbox"))?;
+    let path = inbox.join(&ctx.peer_nom).join(id).join(dest);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }

@@ -2,17 +2,29 @@
 
 A host's scratch directories, two a process, each private to it, made at its
 start, and removed at its end: one for bulk, read by every definition as
-`$env.EQUIP_TMP` and holding the Channel's inbox, and one for small runtime
-files, `$env.EQUIP_TRANSIENT`. The host makes them rather than reading
-directories from the environment, so it works on any machine whatever its
-environment's conventions, and a path no other process shares needs no id
-inside it to keep two hosts apart. The split follows the XDG Base Directory
-spec, which keeps larger files out of `XDG_RUNTIME_DIR`, since it may sit in
-memory that cannot be swapped out.
+`$env.EQUIP_TMP`, and one for small runtime files, `$env.EQUIP_TRANSIENT`. The
+host makes them rather than reading directories from the environment, so it
+works on any machine whatever its environment's conventions, and a path no
+other process shares needs no id inside it to keep two hosts apart. The split
+follows the XDG Base Directory spec, which keeps larger files out of
+`XDG_RUNTIME_DIR`, since it may sit in memory that cannot be swapped out.
+
+Beside the transient one, each Channel open makes the Channel's inbox, a
+directory of its own in the same base.
 
 ## const SCRATCH_PREFIX
 The sweep's match: a directory not carrying it is never a scratch directory, so
 the sweep cannot touch anything else in a shared base.
+
+## const CHANNEL_PREFIX
+Not the sweep's prefix: an inbox carries no owner marker and no sweep takes
+it, its name the host's nom, which no other live host holds, or a random
+suffix.
+
+## static CHANNEL_DIRS
+Every inbox the process made, not only the Channel's current one: a teardown
+other than a deliberate close leaves its inbox for the agent to read, and the
+next open makes another, so the end removes each.
 
 ## const OWNER_FILE
 The owner's pid and its start time, the identity the operator's pins use
@@ -47,9 +59,25 @@ which the engine refuses, leaves none behind.
 `None` before the start, which a caller reports as the host having no scratch
 directory.
 
+## fn make_channel_dir
+The base is the transient directory's own, so an inbox follows the same order,
+`UENV_USR_TRANSIENT`, `XDG_RUNTIME_DIR`, then beside the bulk one. The nom's
+name is made with `create`, which fails on a name already there, so an inbox
+left by an earlier open or a directory of anyone else's is never reused; the
+fallback is `mkdtemp`'s, under the same prefix. Both are made at
+`SCRATCH_MODE` from creation.
+
+## fn remove_channel_dir
+A deliberate close's and a failed start's removal, the path forgotten first: an
+inbox the process removed is no longer its own, and a directory that takes its
+name later is someone else's, which the end must leave.
+
 ## fn remove_scratch_dirs
 Every ordinary end calls it, the server's, the one-shot's, a failed start's, and
-a signal's (`run.rs`, `server/run.rs`). A directory already gone is no error.
+a signal's (`run.rs`, `server/run.rs`). The inboxes go first, each one the
+process made; a directory already gone, an inbox a deliberate close removed
+among them, is no error. A host killed outright leaves its inbox, which nothing
+sweeps.
 
 ## fn make_dir
 `tempfile`'s builder, as `mkdtemp` makes one: the name unguessable and the mode

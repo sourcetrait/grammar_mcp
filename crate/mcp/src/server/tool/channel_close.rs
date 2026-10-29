@@ -11,10 +11,8 @@ impl NuSh {
         nonce: datum::Nonce,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         self.channel.close(CLOSE_PLANNED, PLANNED_REASON);
-        if let Some(inbox) = self.channel.take_inbox()
-            && let Err(e) = fs::remove_dir_all(&inbox)
-        {
-            eprintln!("grammar: inbox prune failed at {}: {e}", inbox.display());
+        if let Some(inbox) = self.channel.take_inbox() {
+            remove_channel_dir(&inbox);
         }
         success_void(nonce)
     }

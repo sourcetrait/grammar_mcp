@@ -9,12 +9,6 @@ A distinct code because close codes and reasons reach the agent verbatim, so the
 three teardowns - refused 1013, planned 1000, unverified 1008 - stay tellable
 apart.
 
-## fn ensure_inbox
-The inbox is the bulk scratch directory's (`state.rs`'s `inbox_dir`). Handing
-its path to the channel is what lets the emit path write an attachment without
-composing it again, and the open's result reports it, so the agent learns where
-a spill lands from the same call that gave it the endpoint.
-
 ## fn resend_open_packet
 A failing send is the only way to learn the connection has gone. Nothing else
 reports a peer that simply went away, which is why an `existing` open re-greets
@@ -34,6 +28,13 @@ The decide-then-start sequence spans an await, so it runs under one guard: two
 concurrent calls would otherwise both read Closed and both bind a hub.
 
 ## fn open_or_report
+A new open makes its inbox first (`scratch.rs`'s `make_channel_dir`) and hands
+the path to the channel, so the emit path writes an attachment without
+composing it again, and the result reports it, so the agent learns where a
+spill lands from the same call that gave it the endpoint. A start that fails
+takes the inbox back and removes it. An `existing` open answers the inbox its
+Channel opened with.
+
 A mode is never switched under a live channel: an open in the other mode is
 refused `channel::wrong_mode`, naming the open one, since switching would strand
 the packets queued for the first. The agent closes and opens again.

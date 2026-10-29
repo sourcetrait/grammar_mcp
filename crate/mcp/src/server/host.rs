@@ -195,7 +195,7 @@ fn reject_reserved_model(model: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Write `nuon` to `inbox/<name>` and return the name the wire carries.
+/// Write `nuon` to the Channel's inbox as `name`, the name the wire carries.
 fn write_inbox_file(
     channel: &ChannelHandle,
     name: &str,

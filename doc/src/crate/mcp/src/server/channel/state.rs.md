@@ -13,13 +13,6 @@ arrives missing its first byte - not an error and not a dropped event, but a
 malformed record that fails `from nuon` at the reader with nothing upstream to
 blame. Above the cap the frame is dropped whole and the watch closes.
 
-## fn inbox_dir
-The one composition point both producers share: a channel's attachments and a
-remote link's landed files meet here, so a relayed packet's refs resolve for
-the local agent. It sits in the host's bulk scratch directory (`scratch.rs`),
-which is private to the process, so the path needs no host id to keep two hosts
-apart, and it goes with the directory when the host ends.
-
 ## the auto-spill primitives (NOTIFICATION_CAP, event_overflows, event_spill_pointer)
 The second, lower cap. MAX_FRAME_BYTES (1 MiB) is what one wss frame carries,
 but the client truncates a task-notification at about 500 characters of the
@@ -104,11 +97,14 @@ so verification, a close and a re-arm all stand the timer down. That is also why
 re-opening cannot leave two timers racing one channel.
 
 ### field inbox
-A deliberate `interface channel close` takes it and prunes it; every other
-teardown leaves it. The shutdown close, the verify-timer expiry and the
-unverified-emit teardown are all host-initiated, so an attachment stays readable
-by nonce when the channel went away without the caller asking for it, until the
-host itself ends.
+The directory each open makes (`scratch.rs`'s `make_channel_dir`), where both
+producers meet: a channel's attachments and a remote link's landed files share
+it, so a relayed packet's refs resolve for the local agent. A deliberate
+`interface channel close` takes it and prunes it; every other teardown leaves
+it. The shutdown close, the verify-timer expiry and the unverified-emit
+teardown are all host-initiated, so an attachment stays readable by nonce when
+the channel went away without the caller asking for it, until the host itself
+ends.
 
 ## enum ChannelSendError
 The variants are deliberately distinguishable: a background consumer must be
