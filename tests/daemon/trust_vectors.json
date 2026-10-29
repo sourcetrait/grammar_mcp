@@ -1,0 +1,262 @@
+{
+  "schema_version": 1,
+  "alias": "endpoint.invalid",
+  "openssh": "OpenSSH_10.2p1, OpenSSL 3.5.9 29 Sep 2026",
+  "host_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE7qfsd50hmDnwZY4kxNzMc86/5i5WEFQVEZAfar3JYH trust vector host",
+  "cas": [
+    {
+      "name": "host_ca",
+      "public": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEWIYogvwgXUS0Cy2AU6Lw6o7A5hlfdUqs8MxVkaUB9R trust vector host_ca"
+    },
+    {
+      "name": "unknown_ca",
+      "public": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILvxQMkhbyiJ6xxRinLSvzgtF/W2uRSw9DWRQIK9fymu trust vector unknown_ca"
+    }
+  ],
+  "clients": [
+    {
+      "name": "controller_ed25519",
+      "public": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH8c1kBYolzyxxm1zDjpcQct+8nJRmicZd0pAr6EU9Rs trust vector controller_ed25519",
+      "authorized": true
+    },
+    {
+      "name": "controller_rsa",
+      "public": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDzfR1rK6o0MwqVoGBCg+TkXFCDuWtNUOIKxj72OKAYZwks3RgORaUEDqrrnhfaLuNBki3d9gzqXi37Ak9dk/VdnL76xwb7LAQbjMQIMgaPef/0pC9XR6B/7eck3lY0XU2AR1L7g2JZgazwnwl83lxDBBMTbWbXL1Ha+afgKfl2+mkxYJhCW9+/i0HwnyNE6gbtwvpw2/RAEK8EtTHpbpeAuDBs4AB29/rnV70oV4hLtjUIZqrW8QmOdl3Y1Hyz65KbcpPfCGtzY6RERgbGu7UdsHgyIIctRxCPkfIqLYpnAg9BMzl4Lzo+M7QckI1HNrFY8tUSztvO9CDhyOdLRpibPFE3TkZi/M0HJQ4n5MbWIvY83IDlxZ7flhUeCEAmZv3riFkFhy4W89cNV+BqcqkvZHZFB2DwQtHeoVgvSYtyjZz1Xf/g2j8UYGPvQ/lV9NDUFgJaYnONRqy+69P5+ZGcrEGDA8Pc21KsNZV5EI4FYN0CdByWoVRVnrjx04bmJVE= trust vector controller_rsa",
+      "authorized": true
+    },
+    {
+      "name": "rotated_old_ed25519",
+      "public": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHsNSBzEjfmHcLPCwLawVUu/yFzVnr1kgpi5+r9CDWSH trust vector rotated_old_ed25519",
+      "authorized": false
+    }
+  ],
+  "certs": [
+    {
+      "case": "valid",
+      "ca": "host_ca",
+      "principal": "endpoint.invalid",
+      "serial": 1,
+      "revoked": false,
+      "validity": "-1d:+3650d",
+      "cert": "ssh-ed25519-cert-v01@openssh.com AAAAIHNzaC1lZDI1NTE5LWNlcnQtdjAxQG9wZW5zc2guY29tAAAAIIKDXUTf/mCHEviLyZCeerTLkBfZj56CFN7jYSV9LuwkAAAAIE7qfsd50hmDnwZY4kxNzMc86/5i5WEFQVEZAfar3JYHAAAAAAAAAAEAAAACAAAADHZlY3Rvci12YWxpZAAAABQAAAAQZW5kcG9pbnQuaW52YWxpZAAAAABq4e0uAAAAAH2vQa4AAAAAAAAAAAAAAAAAAAAzAAAAC3NzaC1lZDI1NTE5AAAAIEWIYogvwgXUS0Cy2AU6Lw6o7A5hlfdUqs8MxVkaUB9RAAAAUwAAAAtzc2gtZWQyNTUxOQAAAEBIv1XvpPqEn95g9MhK4J9IW10hQS4Lk9sJSnWyX06tbQ7mI8BC7dqGVCY6z45VevXCWF2vZHoU/BV4/eD8oCQF trust vector host"
+    },
+    {
+      "case": "expired",
+      "ca": "host_ca",
+      "principal": "endpoint.invalid",
+      "serial": 2,
+      "revoked": false,
+      "validity": "20200101:20200102",
+      "cert": "ssh-ed25519-cert-v01@openssh.com AAAAIHNzaC1lZDI1NTE5LWNlcnQtdjAxQG9wZW5zc2guY29tAAAAIK7D0z1M8rs/3LPACFkMBJpMK8U1/yWGLa4cbbzHX4ijAAAAIE7qfsd50hmDnwZY4kxNzMc86/5i5WEFQVEZAfar3JYHAAAAAAAAAAIAAAACAAAADnZlY3Rvci1leHBpcmVkAAAAFAAAABBlbmRwb2ludC5pbnZhbGlkAAAAAF4L4QAAAAAAXg0ygAAAAAAAAAAAAAAAAAAAADMAAAALc3NoLWVkMjU1MTkAAAAgRYhiiC/CBdRLQLLYBTovDqjsDmGV91SqzwzFWRpQH1EAAABTAAAAC3NzaC1lZDI1NTE5AAAAQFihpSXISyuYEjgO7UW+x/X4ZrSyJgCgiHkUgXtM2OH4gMogKfsS+E24R7ZkM9LPRVyFh17PsI7pSHVCmCIXwQ4= trust vector host"
+    },
+    {
+      "case": "not_yet_valid",
+      "ca": "host_ca",
+      "principal": "endpoint.invalid",
+      "serial": 3,
+      "revoked": false,
+      "validity": "+3650d:+3660d",
+      "cert": "ssh-ed25519-cert-v01@openssh.com AAAAIHNzaC1lZDI1NTE5LWNlcnQtdjAxQG9wZW5zc2guY29tAAAAIJn/VL2Xciwd2tWWcaj89fN9R50Llmoz+d0vtNmzCWh1AAAAIE7qfsd50hmDnwZY4kxNzMc86/5i5WEFQVEZAfar3JYHAAAAAAAAAAMAAAACAAAAFHZlY3Rvci1ub3RfeWV0X3ZhbGlkAAAAFAAAABBlbmRwb2ludC5pbnZhbGlkAAAAAH2vQa4AAAAAfbxwrgAAAAAAAAAAAAAAAAAAADMAAAALc3NoLWVkMjU1MTkAAAAgRYhiiC/CBdRLQLLYBTovDqjsDmGV91SqzwzFWRpQH1EAAABTAAAAC3NzaC1lZDI1NTE5AAAAQAiJyZe9Y/wJ+zglnEtWZ8A0GKbSYBK42FvrKmVFEZkhfOtB6TyIHPgwk4zQyhJNq94pKrALzmX2WLSz6984TgI= trust vector host"
+    },
+    {
+      "case": "wrong_principal",
+      "ca": "host_ca",
+      "principal": "other.invalid",
+      "serial": 4,
+      "revoked": false,
+      "validity": "-1d:+3650d",
+      "cert": "ssh-ed25519-cert-v01@openssh.com AAAAIHNzaC1lZDI1NTE5LWNlcnQtdjAxQG9wZW5zc2guY29tAAAAIPHdl643VYKFf/EeuozEvnZ8DC/sUVDAB6/L5d9oCFqiAAAAIE7qfsd50hmDnwZY4kxNzMc86/5i5WEFQVEZAfar3JYHAAAAAAAAAAQAAAACAAAAFnZlY3Rvci13cm9uZ19wcmluY2lwYWwAAAARAAAADW90aGVyLmludmFsaWQAAAAAauHtLgAAAAB9r0GuAAAAAAAAAAAAAAAAAAAAMwAAAAtzc2gtZWQyNTUxOQAAACBFiGKIL8IF1EtAstgFOi8OqOwOYZX3VKrPDMVZGlAfUQAAAFMAAAALc3NoLWVkMjU1MTkAAABAgayxSYAnVMWWTadSNv8tXAsgxR0ov1DYKEc21RFYfhuL+yAd+Or5wGHg5Ge0HIMAGl/NIvVJiufwNMsjPRBABA== trust vector host"
+    },
+    {
+      "case": "revoked",
+      "ca": "host_ca",
+      "principal": "endpoint.invalid",
+      "serial": 5,
+      "revoked": true,
+      "validity": "-1d:+3650d",
+      "cert": "ssh-ed25519-cert-v01@openssh.com AAAAIHNzaC1lZDI1NTE5LWNlcnQtdjAxQG9wZW5zc2guY29tAAAAIF53EVjHvzCmd4yiogIN2aTN+rW2EH/z/RD4Fggm+xF1AAAAIE7qfsd50hmDnwZY4kxNzMc86/5i5WEFQVEZAfar3JYHAAAAAAAAAAUAAAACAAAADnZlY3Rvci1yZXZva2VkAAAAFAAAABBlbmRwb2ludC5pbnZhbGlkAAAAAGrh7S4AAAAAfa9BrgAAAAAAAAAAAAAAAAAAADMAAAALc3NoLWVkMjU1MTkAAAAgRYhiiC/CBdRLQLLYBTovDqjsDmGV91SqzwzFWRpQH1EAAABTAAAAC3NzaC1lZDI1NTE5AAAAQAyFNtmDf5EqaXuk+W0F1D3sPBmrJBckmGqNooq/vURpa0Lng2EjOAlPs2VMa+MEJo6jfAgxY7DTNuY5vpx0fg0= trust vector host"
+    },
+    {
+      "case": "unknown_ca",
+      "ca": "unknown_ca",
+      "principal": "endpoint.invalid",
+      "serial": 6,
+      "revoked": false,
+      "validity": "-1d:+3650d",
+      "cert": "ssh-ed25519-cert-v01@openssh.com AAAAIHNzaC1lZDI1NTE5LWNlcnQtdjAxQG9wZW5zc2guY29tAAAAIK4P2sjv5uOsnzsesIxTZb16KmvLum0TkJBbSsGNDuEgAAAAIE7qfsd50hmDnwZY4kxNzMc86/5i5WEFQVEZAfar3JYHAAAAAAAAAAYAAAACAAAAEXZlY3Rvci11bmtub3duX2NhAAAAFAAAABBlbmRwb2ludC5pbnZhbGlkAAAAAGrh7S4AAAAAfa9BrgAAAAAAAAAAAAAAAAAAADMAAAALc3NoLWVkMjU1MTkAAAAgu/FAySFvKInrHFGKctK/OC0X9ba5FLD0NZFAgr1/Ka4AAABTAAAAC3NzaC1lZDI1NTE5AAAAQL+Wf2wpjdi4JDnkJf8VQj+KRJWJA5RJa805H9f6D0CJ3+07gHtEMaVE1PNAth88jCw3Ue19RzZu52UzteiXewA= trust vector host"
+    }
+  ],
+  "krl_base64": "U1NIS1JMCgAAAAABAAAAAAAAAAAAAAAAauM+rgAAAAAAAAAAAAAAAAAAAAABAAAASAAAADMAAAALc3NoLWVkMjU1MTkAAAAgRYhiiC/CBdRLQLLYBTovDqjsDmGV91SqzwzFWRpQH1EAAAAAIAAAAAgAAAAAAAAABQ==",
+  "known_hosts": [
+    {
+      "name": "raw",
+      "lines": [
+        "endpoint.invalid ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE7qfsd50hmDnwZY4kxNzMc86/5i5WEFQVEZAfar3JYH"
+      ]
+    },
+    {
+      "name": "empty",
+      "lines": []
+    },
+    {
+      "name": "changed",
+      "lines": [
+        "endpoint.invalid ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHsNSBzEjfmHcLPCwLawVUu/yFzVnr1kgpi5+r9CDWSH"
+      ]
+    },
+    {
+      "name": "rotation",
+      "lines": [
+        "endpoint.invalid ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHsNSBzEjfmHcLPCwLawVUu/yFzVnr1kgpi5+r9CDWSH",
+        "endpoint.invalid ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE7qfsd50hmDnwZY4kxNzMc86/5i5WEFQVEZAfar3JYH"
+      ]
+    },
+    {
+      "name": "revoked_key",
+      "lines": [
+        "@revoked * ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE7qfsd50hmDnwZY4kxNzMc86/5i5WEFQVEZAfar3JYH",
+        "endpoint.invalid ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE7qfsd50hmDnwZY4kxNzMc86/5i5WEFQVEZAfar3JYH"
+      ]
+    },
+    {
+      "name": "ca",
+      "lines": [
+        "@cert-authority endpoint.invalid ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEWIYogvwgXUS0Cy2AU6Lw6o7A5hlfdUqs8MxVkaUB9R"
+      ]
+    },
+    {
+      "name": "unknown_ca",
+      "lines": [
+        "@cert-authority endpoint.invalid ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILvxQMkhbyiJ6xxRinLSvzgtF/W2uRSw9DWRQIK9fymu"
+      ]
+    },
+    {
+      "name": "revoked_ca",
+      "lines": [
+        "@cert-authority endpoint.invalid ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEWIYogvwgXUS0Cy2AU6Lw6o7A5hlfdUqs8MxVkaUB9R",
+        "@revoked * ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEWIYogvwgXUS0Cy2AU6Lw6o7A5hlfdUqs8MxVkaUB9R"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "case": "raw_known",
+      "known": "raw",
+      "expect": "accept",
+      "observed": "accept",
+      "exit": 0
+    },
+    {
+      "case": "raw_unknown",
+      "known": "empty",
+      "expect": "host_trust",
+      "observed": "host_trust",
+      "exit": 255
+    },
+    {
+      "case": "raw_changed",
+      "known": "changed",
+      "expect": "host_trust",
+      "observed": "host_trust",
+      "exit": 255
+    },
+    {
+      "case": "raw_rotation_two_keys",
+      "known": "rotation",
+      "expect": "accept",
+      "observed": "accept",
+      "exit": 0
+    },
+    {
+      "case": "raw_revoked_key",
+      "known": "revoked_key",
+      "expect": "host_trust",
+      "observed": "host_trust",
+      "exit": 255
+    },
+    {
+      "case": "cert_trusted_ca",
+      "known": "ca",
+      "expect": "accept",
+      "observed": "accept",
+      "exit": 0
+    },
+    {
+      "case": "cert_unknown_ca",
+      "known": "unknown_ca",
+      "expect": "host_trust",
+      "observed": "host_trust",
+      "exit": 255
+    },
+    {
+      "case": "cert_revoked_ca",
+      "known": "revoked_ca",
+      "expect": "host_trust",
+      "observed": "host_trust",
+      "exit": 255
+    },
+    {
+      "case": "auth_controller_rsa",
+      "known": "raw",
+      "expect": "accept",
+      "observed": "accept",
+      "exit": 0
+    },
+    {
+      "case": "auth_rotated_out",
+      "known": "raw",
+      "expect": "auth",
+      "observed": "auth",
+      "exit": 255
+    },
+    {
+      "case": "auth_password_only",
+      "known": "raw",
+      "expect": "auth",
+      "observed": "auth",
+      "exit": 255
+    },
+    {
+      "case": "tcp_forward_refused",
+      "known": "raw",
+      "expect": "forward",
+      "observed": "forward",
+      "exit": 255
+    },
+    {
+      "case": "presented_expired",
+      "known": "ca",
+      "expect": "host_trust",
+      "observed": "host_trust",
+      "exit": 255
+    },
+    {
+      "case": "presented_not_yet_valid",
+      "known": "ca",
+      "expect": "host_trust",
+      "observed": "host_trust",
+      "exit": 255
+    },
+    {
+      "case": "presented_wrong_principal",
+      "known": "ca",
+      "expect": "host_trust",
+      "observed": "host_trust",
+      "exit": 255
+    },
+    {
+      "case": "presented_revoked",
+      "known": "ca",
+      "expect": "host_trust",
+      "observed": "host_trust",
+      "exit": 255
+    },
+    {
+      "case": "presented_unknown_ca",
+      "known": "ca",
+      "expect": "host_trust",
+      "observed": "host_trust",
+      "exit": 255
+    }
+  ]
+}
