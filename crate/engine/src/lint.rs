@@ -1,16 +1,24 @@
+//! The definition lint: hard-coded paths and denied externals, read off the AST.
 use crate::*;
 
 
+/// The most rows one lint reports.
 pub const LINT_VIOLATION_CAP: usize = 3;
 
 
+/// The prefixes that start a path a definition hard-codes.
+const PATH_PREFIXES: &[&str] = &["/", "~/", "./", "../"];
+
+/// The system paths a definition may name outright.
 const ALLOWLIST_PATH_PREFIXES: &[&str] = &["/dev/", "/etc/", "/proc/", "/sys/"];
 
+/// The externals denied to a definition, most replaced by a nushell builtin.
 const DENYLIST_EXTERNALS: &[&str] = &[
     "awk", "bash", "cp", "date", "echo", "find", "grep", "jq", "ls", "nu", "rg", "rm", "sed", "sh",
     "sort", "which",
 ];
 
+/// The commands whose first positional is a regex under their `--regex` flag.
 const REGEX_RECEIVERS: &[&str] = &[
     "find",
     "idx search",
@@ -21,10 +29,14 @@ const REGEX_RECEIVERS: &[&str] = &[
     "str replace",
 ];
 
+/// The commands whose first positional is a path the parser resolves.
 const PARSE_PATH_RECEIVERS: &[&str] = &["use", "overlay use", "source", "source-env"];
 
 
+/// The hard-coded path rule's message.
 const MSG_HARDCODED_VARIABLE: &str = "hardcoded path literal; pass it in data";
+
+/// The denied external rule's message.
 const MSG_DENIED_COMMAND: &str = "denied external command; use a nushell builtin";
 
 
@@ -40,6 +52,7 @@ pub fn lint_block(
     diagnostics
 }
 
+/// Push `candidate` while under the cap; a candidate past it breaks the walk.
 fn push_diagnostic(diagnostics: &mut Vec<Diagnostic>, candidate: Diagnostic) -> ControlFlow<()> {
     if diagnostics.len() >= LINT_VIOLATION_CAP {
         ControlFlow::Break(())
@@ -49,6 +62,7 @@ fn push_diagnostic(diagnostics: &mut Vec<Diagnostic>, candidate: Diagnostic) -> 
     }
 }
 
+/// Walk every pipeline element of `block`.
 fn walk_block(
     block: &nu::Block,
     ws: &nu::StateWorkingSet,
@@ -64,6 +78,7 @@ fn walk_block(
     ControlFlow::Continue(())
 }
 
+/// Check `e` against the rules, then walk the expressions it holds.
 fn walk_expr(
     e: &nu::Expression,
     ws: &nu::StateWorkingSet,
@@ -73,15 +88,13 @@ fn walk_expr(
 ) -> ControlFlow<()> {
     match &e.expr {
         nu::Expr::Directory(s, _) | nu::Expr::Filepath(s, _) | nu::Expr::GlobPattern(s, _) => {
-            check_path(s, e.span.start, body, body_start, diagnostics)?;
+            check_path(s, false, e.span.start, body, body_start, diagnostics)?;
         }
         nu::Expr::String(s) | nu::Expr::RawString(s) => {
-            check_path(s, e.span.start, body, body_start, diagnostics)?;
+            check_path(s, true, e.span.start, body, body_start, diagnostics)?;
         }
-        nu::Expr::StringInterpolation(parts) => {
-            for part in parts {
-                walk_expr(part, ws, body, body_start, diagnostics)?;
-            }
+        nu::Expr::StringInterpolation(parts) | nu::Expr::GlobInterpolation(parts, _) => {
+            walk_interpolation(parts, ws, body, body_start, diagnostics)?;
         }
         nu::Expr::Call(call) => {
             let decl = ws.get_decl(call.decl_id);
@@ -216,11 +229,6 @@ fn walk_expr(
             }
             walk_expr(&ab.item, ws, body, body_start, diagnostics)?;
         }
-        nu::Expr::GlobInterpolation(parts, _) => {
-            for part in parts {
-                walk_expr(part, ws, body, body_start, diagnostics)?;
-            }
-        }
         nu::Expr::Keyword(kw) => {
             walk_expr(&kw.expr, ws, body, body_start, diagnostics)?;
         }
@@ -229,6 +237,37 @@ fn walk_expr(
     ControlFlow::Continue(())
 }
 
+/// Check an interpolation's leading literal, then walk its expression parts.
+fn walk_interpolation(
+    parts: &[nu::Expression],
+    ws: &nu::StateWorkingSet,
+    body: &str,
+    body_start: usize,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> ControlFlow<()> {
+    let leading: Vec<&str> = parts.iter().map_while(literal_text).collect();
+    if !leading.is_empty() {
+        let whole_text = leading.len() == parts.len();
+        let span_start = parts[0].span.start;
+        check_path(&leading.concat(), whole_text, span_start, body, body_start, diagnostics)?;
+    }
+    for part in parts {
+        if literal_text(part).is_none() {
+            walk_expr(part, ws, body, body_start, diagnostics)?;
+        }
+    }
+    ControlFlow::Continue(())
+}
+
+/// The text of `e` when it is a string literal.
+fn literal_text(e: &nu::Expression) -> Option<&str> {
+    match &e.expr {
+        nu::Expr::String(s) | nu::Expr::RawString(s) => Some(s),
+        _ => None,
+    }
+}
+
+/// Walk a match arm's pattern for the expressions it holds.
 fn walk_pattern(
     pat: &nu::Pattern,
     ws: &nu::StateWorkingSet,
@@ -256,29 +295,25 @@ fn walk_pattern(
 }
 
 
+/// Flag a string's leading `literal` that starts a hard-coded path.
 fn check_path(
-    s: &str,
+    literal: &str,
+    whole_text: bool,
     span_start: usize,
     body: &str,
     body_start: usize,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> ControlFlow<()> {
-    let trimmed = s.trim();
-    if trimmed.is_empty() {
-        return ControlFlow::Continue(());
-    }
-    if trimmed.contains("://") {
+    if literal.contains("://") || literal.starts_with("//") {
         return ControlFlow::Continue(());
     }
     for prefix in ALLOWLIST_PATH_PREFIXES {
-        if trimmed.starts_with(prefix) {
+        if literal.starts_with(prefix) {
             return ControlFlow::Continue(());
         }
     }
-    let flag = trimmed.starts_with('/')
-        || trimmed.starts_with("~/")
-        || trimmed.starts_with("./")
-        || trimmed.starts_with("../");
+    let separator = whole_text && PATH_PREFIXES.contains(&literal);
+    let flag = !separator && PATH_PREFIXES.iter().any(|prefix| literal.starts_with(prefix));
     if flag {
         let body_offset = span_start.saturating_sub(body_start);
         let (line, col) = span_to_line_col(body, body_offset);
@@ -295,6 +330,7 @@ fn check_path(
     ControlFlow::Continue(())
 }
 
+/// Flag an external call whose literal head names a denied command.
 fn check_external_head(
     head: &nu::Expression,
     body: &str,

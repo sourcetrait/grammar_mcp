@@ -1,14 +1,34 @@
-//! The lint AST walker's rules, driven directly through `guts::lint_definition`.
-//! Integration (not unit): each call builds a full-shell `ParseEngine` (plugin
-//! registry read off disk), the resource caveat. `tests/body_lint.rs` covers the
-//! same lint at the `execute` tool's boundary.
+//! The lint's rules, held to definitions through the `guts` surface.
+//!
+//! Integration rather than unit: each call builds a full-shell `ParseEngine`,
+//! its plugin registry read off disk, so it rides the resource caveat.
+//! `lint_definition` lints a definition whatever its parse, since a `use` or
+//! `source` path that resolves nowhere fails the parse; `refused` and
+//! `accepted` hold a definition to the contract first, so a case that fails to
+//! parse can neither pass nor trip. `tests/body_lint.rs` covers the same lint
+//! at the `execute` tool's boundary.
 
 use serde_json::{Value, json};
-use sourcetrait_grammar_mcp::guts::lint_definition;
+use sourcetrait_grammar_mcp::guts::{analyze_definition, lint_definition};
 
 /// A definition around `body`, its data a record of `fields`.
 fn definition(fields: &str, body: &str) -> String {
     format!("def execute [data: record<{fields}>]: nothing -> record<out: int> {{\n{body}\n}}")
+}
+
+/// The rows the contract refuses a definition around `body` with.
+fn refused(fields: &str, body: &str) -> Vec<Value> {
+    match analyze_definition(&definition(fields, body)) {
+        Ok(summary) => panic!("accepted `{body}` as {summary}"),
+        Err(rows) => rows,
+    }
+}
+
+/// Hold a definition around `body` to the contract, which accepts it.
+fn accepted(fields: &str, body: &str) {
+    if let Err(rows) = analyze_definition(&definition(fields, body)) {
+        panic!("refused `{body}`: {rows:?}");
+    }
 }
 
 fn lint(body: &str) -> Vec<Value> {
@@ -179,10 +199,63 @@ fn flags_nested_def_body() {
 }
 
 #[test]
-fn flags_interpolation_literal_parts() {
-    let v = lint("cd $\"/home/($env.USER)/proj/x\"; { out: 0 }");
-    assert_eq!(v.len(), 2, "got {v:?}");
-    assert!(v.iter().all(is_hardcoded));
+fn flags_interpolation_behind_hardcoded_root() {
+    let v = refused("noop: int", "cd $\"/home/($env.USER)/proj/x\"; { out: 0 }");
+    assert_eq!(kinds(&v), vec!["lint::hardcoded_variable"], "the leading literal alone; got {v:?}");
+    assert_eq!(v[0]["source"]["position"], json!([2, 6]), "at `/home/`; got {v:?}");
+}
+
+#[test]
+fn flags_leading_literal_path() {
+    let v = refused("name: string", "let m = $\"/srv/proj missing: ($data.name)\"; { out: 0 }");
+    assert_eq!(kinds(&v), vec!["lint::hardcoded_variable"], "got {v:?}");
+}
+
+#[test]
+fn flags_bare_prefix_before_interpolation() {
+    for body in ["let p = $'~/($data.rest)'; { out: 0 }", "let p = $'/($data.rest)'; { out: 0 }"] {
+        let v = refused("rest: string", body);
+        assert_eq!(kinds(&v), vec!["lint::hardcoded_variable"], "`{body}` got {v:?}");
+    }
+}
+
+#[test]
+fn flags_bare_prefix_path() {
+    for body in ["cd /; { out: 0 }", "cd ~/; { out: 0 }"] {
+        let v = refused("noop: int", body);
+        assert_eq!(kinds(&v), vec!["lint::hardcoded_variable"], "`{body}` got {v:?}");
+    }
+}
+
+#[test]
+fn passes_literal_after_interpolation() {
+    accepted("root: string", "let p = $'($data.root)/x'; { out: 0 }");
+    accepted("pid: int", "let p = $'/proc/($data.pid)/status'; { out: 0 }");
+}
+
+#[test]
+fn passes_untrimmed_separator() {
+    accepted("noop: int", "let s = ([a b] | str join ' / '); { out: 0 }");
+}
+
+#[test]
+fn passes_bare_prefix_text() {
+    for prefix in ["/", "./", "../", "~/"] {
+        accepted("noop: int", &format!("let s = ([a b] | str join '{prefix}'); {{ out: 0 }}"));
+    }
+}
+
+#[test]
+fn passes_document_text() {
+    accepted(
+        "name: string",
+        "let d = $\"Detail: `plan/agenda/($data.name)/<Task>.md`\"; { out: 0 }",
+    );
+}
+
+#[test]
+fn passes_comment_marker() {
+    accepted("noop: int", "let m = ['///' '//!' '//']; { out: 0 }");
 }
 
 #[test]
