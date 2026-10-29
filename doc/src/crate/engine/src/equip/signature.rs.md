@@ -90,18 +90,6 @@ One rig's slice of the block, walked from the depth its rig line sits above: a b
 one level shallower than an author's rig. The rig's read lock is held only while its index
 is read and walked.
 
-## struct CallDoc
-There is NO `summary` field, and its absence is deliberate: SUMMARY IS PART OF THE
-SIGNATURE, carried as the trailing ` # ...` exactly as the block does it.
-
-## enum InspectDoc
-UNTAGGED, so each member serializes as its own bare shape under the result's `doc`. The
-caller always knows which member it will get, because it knows whether it passed a pattern
-or an exact namepath.
-
-The four shapes stay distinguishable by FIELD SET alone: `srcdir` marks a rig, `src` plus
-`summary` a module, `src` plus `signature` a call, and a lone `signatures` a pattern.
-
 ## fn inspect_impl
 Every path composes from the NAMEPATH against the COMMITTED canonical tree, so nothing here
 reads `source_path`. Nothing agent-facing composes from it at all, so `source_path` is not

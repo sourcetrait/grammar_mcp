@@ -1,15 +1,5 @@
 # namepath.rs
 
-## const BUILTINS
-The equips central to the MCP, called by their bare names: `gram:log:latest` rather than
-`sourcetrait/gram:log:latest`. The list is closed and short by design, so a builtin cannot
-shadow an equip anyone installs: every other head still carries its author, and an equip
-named `gram` by another author stays reachable by its full name.
-
-## fn display_equip
-The one place a builtin's full name turns back into its bare one, so the block, a
-standalone signature, and the pattern an install writes all show the name an agent calls.
-
 ## fn resolve_builtin
 Resolution rewrites the HEAD alone and runs before any check, so every later rule - the
 equip's shape, the module path, the call's name - sees an ordinary compound and needs no

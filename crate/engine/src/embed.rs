@@ -10,22 +10,6 @@ impl Drop for FinishGuard {
     }
 }
 
-/// The lane an eval runs on: the stateless pool, or the stateful engine.
-#[cereal::derived(Data, Copy, Eq)]
-pub enum Lane {
-    Stateless,
-    Stateful,
-}
-
-impl Lane {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Stateless => "stateless",
-            Self::Stateful => "stateful",
-        }
-    }
-}
-
 /// `EngineState::merge_env` minus the process chdir.
 pub(crate) fn merge_env_no_chdir(
     engine_state: &mut nu::EngineState,

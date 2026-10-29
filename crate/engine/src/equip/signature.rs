@@ -206,46 +206,6 @@ async fn rig_signatures(
     Some((read_summary(&docs_dir, ""), body))
 }
 
-/// A rig's documentation; `srcdir` is the COMMITTED CANONICAL directory.
-#[cereal::derived(Data)]
-pub struct RigDoc {
-    pub srcdir: String,
-    pub summary: String,
-    pub details: String,
-}
-
-/// A module's documentation; `src` is its committed `mod.nu`.
-#[cereal::derived(Data)]
-pub struct ModuleDoc {
-    pub src: String,
-    pub summary: String,
-    pub details: String,
-}
-
-/// A call's documentation; `src` is the committed `mod.nu` holding its `main`.
-#[cereal::derived(Data)]
-pub struct CallDoc {
-    pub src: String,
-    pub signature: String,
-    pub details: String,
-}
-
-/// A pattern's `interface help`: the `interface info` block at the pattern.
-#[cereal::derived(Data)]
-pub struct SignaturesDoc {
-    pub signatures: String,
-}
-
-/// What `interface help` returns - one exact namepath, or a pattern's block.
-#[cereal::derived(Data)]
-#[serde(untagged)]
-pub enum InspectDoc {
-    Rig(RigDoc),
-    Module(ModuleDoc),
-    Call(CallDoc),
-    Signatures(SignaturesDoc),
-}
-
 pub fn index_node<'a>(
     index: &'a RigIndex,
     module_path: &str,

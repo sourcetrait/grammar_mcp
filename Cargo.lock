@@ -6692,6 +6692,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sourcetrait_common",
+ "sourcetrait_grammar_protocol",
  "tokio",
  "toml 1.1.8+spec-1.1.0",
 ]

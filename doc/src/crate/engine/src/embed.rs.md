@@ -11,11 +11,6 @@ because DROP covers both endings: a normal return and a caught panic both drop t
 guard, so both flip the flag. Only a thread stuck where it never returns leaves it
 false, which is exactly the condition the watchdog is looking for.
 
-## enum Lane
-The two lanes an eval runs on: the stateless pool's clones and the stateful engine's
-one thread. A definition's `def --env` picks the stateful lane (`execute.rs`); the
-host records the lane with each call in flight and with each hung thread it watches.
-
 ## fn merge_env_no_chdir
 NOT nushell's own `merge_env`, and this is the single most consequential deviation in
 the file. `merge_env` ends by calling `std::env::set_current_dir` with the stack's

@@ -18,33 +18,6 @@ pub enum NamepathRef {
     },
 }
 
-/// The builtins: equips central to the MCP, each called by its bare name.
-pub const BUILTINS: [(&str, &str); 2] = [
-    ("gram", "sourcetrait"),
-    ("grammar", "sourcetrait"),
-];
-
-/// The `<author>/<name>` a builtin's bare name stands for.
-pub fn builtin_equip(name: &str) -> Option<String> {
-    BUILTINS
-        .iter()
-        .find(|(builtin, _)| *builtin == name)
-        .map(|(builtin, author)| format!("{author}/{builtin}"))
-}
-
-/// The bare name an equip goes by when it is a builtin.
-pub fn builtin_name(equip: &str) -> Option<&'static str> {
-    BUILTINS
-        .iter()
-        .find(|(name, author)| equip.split_once('/') == Some((*author, *name)))
-        .map(|(name, _)| *name)
-}
-
-/// What an equip is shown and called by: a builtin's bare name, else itself.
-pub fn display_equip(equip: &str) -> &str {
-    builtin_name(equip).unwrap_or(equip)
-}
-
 /// `raw` with a head that is a builtin's bare name resolved to its equip.
 pub fn resolve_builtin(raw: &str) -> String {
     let (head, rest) = match raw.split_once(':') {

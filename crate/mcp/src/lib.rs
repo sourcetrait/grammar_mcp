@@ -168,18 +168,20 @@ pub(crate) use crate::{
 };
 
 pub(crate) use sourcetrait_grammar_engine::{
-    self as engine, CallRequest, ChannelSend, CheckSummary, CommitResult, ControlAnswer,
-    ControlRequest, Diagnostic, EVAL_STACK_SIZE, EngineCommand, EngineError, EngineHandle,
-    EngineHealth, EngineHost, EngineParams, EngineResult, EngineSystem, ExecuteRequest,
-    FromEngineSys, GRIMM, Host, InspectDoc, LINT_VIOLATION_CAP, Lane, LintEngine, NU_VERSION,
-    NamepathPattern, NamepathStr, ParseEngine, PluginInfo, RemoteSend, RerunRequest,
-    SignaturesDoc, Source, ToEngineSys, ValueAnswer, analyze_definition, build_call_source,
-    build_execute_source, builtin_equip,
-    builtin_name, definition_file, ensure_equip_store, ensure_plugin_registry, equip_repo_lock,
-    equip_root, file_start, grimm_signatures, index_from_nuon, install_builtins,
-    json_value_to_nu_value, lib_dir,
-    lint_block, list_registered_plugins, registered_rig_names, rig_dir, rig_meta_path,
-    span_to_line_col, typedef_text,
+    self as engine, ChannelSend, EVAL_STACK_SIZE, EngineHandle, EngineHost, EngineParams,
+    EngineSystem, GRIMM, LINT_VIOLATION_CAP, LintEngine, NU_VERSION, NamepathPattern,
+    NamepathStr, ParseEngine, PluginInfo, RemoteSend, analyze_definition, build_call_source,
+    build_execute_source, definition_file, ensure_equip_store, ensure_plugin_registry,
+    equip_repo_lock, equip_root, file_start, grimm_signatures, index_from_nuon,
+    install_builtins, json_value_to_nu_value, lib_dir, lint_block, list_registered_plugins,
+    registered_rig_names, rig_dir, rig_meta_path, span_to_line_col, typedef_text,
+};
+
+pub(crate) use sourcetrait_grammar_protocol::{
+    CallRequest, CheckSummary, CommitResult, ControlAnswer, ControlRequest, Diagnostic,
+    EngineCommand, EngineError, EngineHealth, EngineResult, ExecuteRequest, FromEngineSys, Host,
+    InspectDoc, Lane, RerunRequest, SignaturesDoc, Source, ToEngineSys, ValueAnswer,
+    builtin_equip, builtin_name,
 };
 
 pub(crate) use sourcetrait_grammar_operator::{

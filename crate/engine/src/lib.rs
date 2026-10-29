@@ -11,7 +11,6 @@ pub(crate) mod equip {
     pub(crate) mod store;
     pub(crate) mod validate;
 }
-pub(crate) mod error;
 pub(crate) mod execute;
 pub(crate) mod executor;
 pub(crate) mod host;
@@ -104,7 +103,6 @@ pub(crate) use crate::{
 
 pub(crate) use std::{
     collections::HashMap,
-    fmt::Display,
     fs,
     io::{self, Write},
     ops::ControlFlow,
@@ -181,17 +179,14 @@ pub(crate) mod json {
 pub use crate::{
     cache::{CacheKind, DEFINITION_FILE, cache_dir, definition_file},
     cycle::detect_import_cycle,
-    embed::{EVAL_STACK_SIZE, Lane, StatefulEngine, eval_stateless},
+    embed::{EVAL_STACK_SIZE, StatefulEngine, eval_stateless},
     engine::NU_VERSION,
     equip::{
         lifecycle::{
-            CommitResult, check_equip, check_source_dir, commit_equip, establish_equip,
-            install_equip, scaffold_leaf, scaffold_leaf_exists, uninstall_equip,
+            check_equip, check_source_dir, commit_equip, establish_equip, install_equip,
+            scaffold_leaf, scaffold_leaf_exists, uninstall_equip,
         },
-        signature::{
-            CallDoc, InspectDoc, ModuleDoc, RigDoc, SignaturesDoc, index_node, inspect_impl,
-            render_signatures_within,
-        },
+        signature::{index_node, inspect_impl, render_signatures_within},
         store::{
             AlreadyRegistered, IndexFunction, IndexModule, LibIndex, RigIndex, RigLocks,
             ensure_equip_store, equip_namepath_of, equip_repo_lock, equip_root,
@@ -200,19 +195,13 @@ pub use crate::{
         },
         validate::{DocEntry, ValidationResult},
     },
-    error::{Diagnostic, EngineError, EngineResult, Severity, Source},
     execute::{ExecuteDef, analyze_definition},
     executor::{Executor, eval_concurrency_cap},
     host::{ChannelSend, EngineHost, RemoteSend},
     lint::{LINT_VIOLATION_CAP, lint_block},
-    msg::{
-        CallRequest, CheckSummary, ControlAnswer, ControlRequest, EngineCommand, EngineHealth,
-        ExecuteRequest, FromEngineSys, Host, HungEval, ProcessRow, RerunRequest, ToEngineSys,
-        ValueAnswer,
-    },
     namepath::{
-        BUILTINS, Namepath, NamepathPattern, NamepathRef, NamepathStr, PATTERN_ALL,
-        PATTERN_CURRENT, builtin_equip, builtin_name, display_equip, resolve_builtin,
+        Namepath, NamepathPattern, NamepathRef, NamepathStr, PATTERN_ALL, PATTERN_CURRENT,
+        resolve_builtin,
     },
     nuapi::grimm::common::{GRIMM, grimm_signatures},
     params::{EngineParams, init},
@@ -223,4 +212,12 @@ pub use crate::{
     schema::{NuTypedef, check_value, typedef_text},
     system::{EngineHandle, EngineSysConfig, EngineSysParams, EngineSysPaths, EngineSystem},
     template::{build_call_source, build_execute_source, json_value_to_nu_value},
+};
+
+pub use sourcetrait_grammar_protocol::{
+    BUILTINS, CallDoc, CallRequest, CheckSummary, CommitResult, ControlAnswer, ControlRequest,
+    Diagnostic, EngineCommand, EngineError, EngineHealth, EngineResult, ExecuteRequest,
+    FromEngineSys, Host, HungEval, InspectDoc, Lane, ModuleDoc, ProcessRow, RerunRequest, RigDoc,
+    Severity, SignaturesDoc, Source, ToEngineSys, ValueAnswer, builtin_equip, builtin_name,
+    display_equip,
 };

@@ -6,3 +6,5 @@
   summary: Every baseline test with its cohort in the daemon split
 - doc: daemon/operation_map.tsv
   summary: Every baseline public operation with its future owner and task
+- doc: daemon/engine_type_map.tsv
+  summary: Each engine type moved into the protocol crate, from its old file to its new

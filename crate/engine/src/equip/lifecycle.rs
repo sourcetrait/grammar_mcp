@@ -165,21 +165,6 @@ pub fn scaffold_leaf(
     Ok(created)
 }
 
-/// A commit's changed paths, grouped by kind, and the validator's warning rows.
-#[cereal::derived(Data)]
-pub struct CommitResult {
-    pub added: Vec<String>,
-    pub modified: Vec<String>,
-    pub removed: Vec<String>,
-    pub warnings: Vec<Diagnostic>,
-}
-
-impl CommitResult {
-    fn is_empty(&self) -> bool {
-        self.added.is_empty() && self.modified.is_empty() && self.removed.is_empty()
-    }
-}
-
 fn run_git_output(dir: &std::path::Path, args: &[&str]) -> io::Result<String> {
     let out = process::Command::new("git")
         .args(args)
