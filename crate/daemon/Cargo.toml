@@ -1,0 +1,40 @@
+[package]
+name = "sourcetrait_grammar_daemon"
+description = "Grammar's persistent worker runtime and its service"
+version.workspace    = true
+authors.workspace    = true
+license.workspace    = true
+edition.workspace    = true
+repository.workspace = true
+homepage.workspace   = true
+categories.workspace = true
+keywords.workspace   = true
+
+[[bin]]
+name = "grammard"
+path = "src/main.rs"
+required-features = ["service"]
+
+[[test]]
+name = "grammard_cli"
+path = "tests/grammard_cli.rs"
+required-features = ["service"]
+
+[features]
+default = ["service"]
+# grammard's adapters over the runtime library: its command line, the user
+# service, and the controller bridge. An embedding host builds without them.
+service = ["dep:clap"]
+# Test-only engine decls (__test_hang / __test_panic) for the lifecycle system
+# tests; never enabled in a shipped build.
+test-hooks = ["sourcetrait_grammar_engine/test-hooks"]
+
+[dependencies]
+clap = { workspace = true, optional = true }
+
+sourcetrait_grammar_engine.workspace = true
+sourcetrait_grammar_operator.workspace = true
+sourcetrait_grammar_protocol.workspace = true
+
+[package.metadata]
+rein = "ai"

@@ -22,8 +22,11 @@
       "features": ["derive", "std"],
       "features_off": [],
       "in_lock": true,
-      "consumers": ["nuval", "sourcetrait_grammar_engine", "sourcetrait_grammar_operator", "sourcetrait_grammar_mcp"],
-      "planned_consumers": ["sourcetrait_grammar_protocol"],
+      "consumers": [
+        "nuval", "sourcetrait_grammar_engine", "sourcetrait_grammar_operator",
+        "sourcetrait_grammar_mcp", "sourcetrait_grammar_protocol"
+      ],
+      "planned_consumers": [],
       "notes": []
     },
     {
@@ -36,9 +39,9 @@
       "default_features": false,
       "features": ["ring", "rsa"],
       "features_off": ["aws-lc-rs", "flate2", "des", "dsa", "serde"],
-      "in_lock": false,
-      "consumers": [],
-      "planned_consumers": ["sourcetrait_grammar_client", "sourcetrait_grammar_daemon_probe"],
+      "in_lock": true,
+      "consumers": ["sourcetrait_grammar_client"],
+      "planned_consumers": [],
       "notes": [
         "It pins pre-releases exactly: ssh-key =0.7.0-rc.11 and rsa =0.10.0-rc.18, with pkcs1 0.8.0-rc.4.",
         "check_server_key receives PublicKeyOrCertificate, a raw host key or an SSH host certificate.",
@@ -59,9 +62,9 @@
       "default_features": true,
       "features": [],
       "features_off": ["async-trait"],
-      "in_lock": false,
-      "consumers": [],
-      "planned_consumers": ["sourcetrait_grammar_client"],
+      "in_lock": true,
+      "consumers": ["sourcetrait_grammar_client"],
+      "planned_consumers": [],
       "notes": [
         "It declares no rust-version; the workspace's minimum governs it.",
         "It runs over the stream it is given and opens no socket or process of its own."
@@ -69,10 +72,13 @@
     }
   ],
   "resolution": {
-    "against": "Cargo.lock",
-    "kept": "every locked version the three pins share with the workspace",
+    "kept": "every version the lock held before the pins' first consumers, 768",
     "added_crates": 79,
     "added_versions": ["generic-array 1.4.5", "hashbrown 0.14.5", "num-bigint 0.5.1"],
+    "added_members": [
+      "sourcetrait_grammar_client", "sourcetrait_grammar_daemon",
+      "sourcetrait_grammar_daemon_probe", "sourcetrait_grammar_protocol"
+    ],
     "outside_every_graph": ["des"]
   },
   "nushell": {
@@ -90,7 +96,7 @@
   },
   "lock": {
     "path": "Cargo.lock",
-    "sha256": "cd01a20ab6547553970c228a82e3ab16005a9de3254e79faf089a2d25f5c8154",
+    "sha256": "893e9ae9c20219d097321e618c439a50495e5edd0bab1f3662df2823ad5246d9",
     "committed": true
   },
   "siblings": [

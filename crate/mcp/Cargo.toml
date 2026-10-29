@@ -18,6 +18,9 @@ path = "src/main.rs"
 # Test-only engine decls (__test_hang / __test_panic) for the lifecycle system
 # tests; never enabled in a shipped build.
 test-hooks = ["sourcetrait_grammar_engine/test-hooks"]
+# The in-process engine of the local CLI and the test driver; nothing is gated
+# behind it yet.
+embedded-cli = []
 
 [dependencies]
 bitcode.workspace = true
@@ -48,8 +51,10 @@ toml_edit.workspace = true
 zstd.workspace = true
 
 sourcetrait_common.workspace = true
+sourcetrait_grammar_client.workspace = true
 sourcetrait_grammar_engine.workspace = true
 sourcetrait_grammar_operator.workspace = true
+sourcetrait_grammar_protocol.workspace = true
 
 srcert_lib.workspace              = true
 

@@ -1,0 +1,29 @@
+[package]
+name = "sourcetrait_grammar_daemon_probe"
+description = "The Grammar daemon's qualification probe"
+version.workspace    = true
+authors.workspace    = true
+license.workspace    = true
+edition.workspace    = true
+repository.workspace = true
+homepage.workspace   = true
+categories.workspace = true
+keywords.workspace   = true
+
+[[bin]]
+name = "grammard-probe"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+sourcetrait_grammar_client.workspace = true
+sourcetrait_grammar_protocol.workspace = true
+
+[dev-dependencies]
+sourcetrait_common.workspace = true
+
+[package.metadata]
+rein = "ai"
