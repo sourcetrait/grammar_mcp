@@ -37,7 +37,7 @@ impl IoErrorKind {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<&nu::IoKind> for IoErrorKind {
     fn from(v: &nu::IoKind) -> Self {
         match v {

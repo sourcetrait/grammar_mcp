@@ -100,7 +100,7 @@ pub struct NuValErrorSource {
     pub text: String,
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<miette::LabeledSpan> for NuValErrorLabel {
     fn from(v: miette::LabeledSpan) -> Self {
         let start = wide(v.offset());
@@ -117,7 +117,7 @@ impl From<miette::LabeledSpan> for NuValErrorLabel {
 
 impl NuValError {
     /// An error from a diagnostic, its kind, carried source, and inner given.
-    #[cfg(feature = "nu")]
+    #[cfg(feature = "nushell")]
     fn of(
         kind: NuValErrorKind,
         diag: &dyn miette::Diagnostic,
@@ -184,7 +184,7 @@ impl NuValError {
     }
 
     /// An error from a diagnostic outside nushell's own types.
-    #[cfg(feature = "nu")]
+    #[cfg(feature = "nushell")]
     pub fn from_diagnostic(diag: &dyn miette::Diagnostic) -> Self {
         let inner = diag
             .related()
@@ -211,13 +211,13 @@ fn repeats(
 }
 
 /// Shell errors as data, in order.
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 fn shells(errors: &[nu::ShellError]) -> Vec<NuValError> {
     errors.iter().map(NuValError::from).collect()
 }
 
 /// The source text a shell error carries itself, its labels' spans into it.
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 fn shell_source(e: &nu::ShellError) -> Option<NuValErrorSource> {
     match e {
         nu::ShellError::OutsideSpannedLabeledError { src, .. } => Some(NuValErrorSource {
@@ -234,7 +234,7 @@ fn shell_source(e: &nu::ShellError) -> Option<NuValErrorSource> {
 }
 
 /// A shell error's related errors, each converted by its own type.
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 #[allow(deprecated)]
 fn shell_inner(e: &nu::ShellError) -> Vec<NuValError> {
     match e {
@@ -248,7 +248,7 @@ fn shell_inner(e: &nu::ShellError) -> Vec<NuValError> {
 }
 
 /// The location text an error raised inside nushell carries as its source.
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 fn location_source(location: &str) -> NuValErrorSource {
     NuValErrorSource {
         name: None,
@@ -257,7 +257,7 @@ fn location_source(location: &str) -> NuValErrorSource {
 }
 
 /// A chain's first error is the error itself; a later chain wraps its errors.
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 fn chained(c: &nu::ChainedError) -> NuValError {
     let sources: Vec<nu::ShellError> = c.clone().sources_iter().collect();
     match sources.first() {
@@ -267,7 +267,7 @@ fn chained(c: &nu::ChainedError) -> NuValError {
 }
 
 /// Whether a chain is its first link, which nushell keeps in a private field.
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 fn chain_is_first(c: &nu::ChainedError) -> bool {
     const FIRST: &str = "ChainedError { first: true";
     let mut prefix = Prefix(String::with_capacity(FIRST.len()), FIRST.len());
@@ -276,10 +276,10 @@ fn chain_is_first(c: &nu::ChainedError) -> bool {
 }
 
 /// A writer keeping the first bytes written and refusing the rest.
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 struct Prefix(String, usize);
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl std::fmt::Write for Prefix {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         let room = self.1 - self.0.len();
@@ -293,7 +293,7 @@ impl std::fmt::Write for Prefix {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<&nu::ShellError> for NuValError {
     fn from(e: &nu::ShellError) -> Self {
         if let Some(kind) = ShellErrorKind::of(e) {
@@ -326,28 +326,28 @@ impl From<&nu::ShellError> for NuValError {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<&nu::LabeledError> for NuValError {
     fn from(e: &nu::LabeledError) -> Self {
         Self::of(NuValErrorKind::Labeled, e, None, shells(&e.inner))
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<&nu::ParseError> for NuValError {
     fn from(e: &nu::ParseError) -> Self {
         Self::of(NuValErrorKind::Parse(e.into()), e, None, Vec::new())
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<&nu::CompileError> for NuValError {
     fn from(e: &nu::CompileError) -> Self {
         Self::of(NuValErrorKind::Compile(e.into()), e, None, Vec::new())
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<&nu::ConfigError> for NuValError {
     fn from(e: &nu::ConfigError) -> Self {
         match (ConfigErrorKind::of(e), e) {
@@ -358,14 +358,14 @@ impl From<&nu::ConfigError> for NuValError {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<&nu::ConfigWarning> for NuValError {
     fn from(e: &nu::ConfigWarning) -> Self {
         Self::of(NuValErrorKind::ConfigWarning(e.into()), e, None, Vec::new())
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<&nu::ShellWarning> for NuValError {
     fn from(e: &nu::ShellWarning) -> Self {
         let inner = match e {
@@ -378,7 +378,7 @@ impl From<&nu::ShellWarning> for NuValError {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<&nu::ParseWarning> for NuValError {
     fn from(e: &nu::ParseWarning) -> Self {
         Self::of(NuValErrorKind::ParseWarning(e.into()), e, None, Vec::new())
@@ -386,7 +386,7 @@ impl From<&nu::ParseWarning> for NuValError {
 }
 
 /// A span back in nushell, refused past this platform's usize or reversed.
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 fn nu_span(span: SpanData) -> ConvertResult<nu::Span> {
     let SpanData { start, end } = span;
     match (usize::try_from(start), usize::try_from(end)) {
@@ -395,7 +395,7 @@ fn nu_span(span: SpanData) -> ConvertResult<nu::Span> {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl TryFrom<NuValError> for nu::LabeledError {
     type Error = ConvertError;
 
@@ -426,7 +426,7 @@ impl TryFrom<NuValError> for nu::LabeledError {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl TryFrom<NuValError> for nu::ShellError {
     type Error = ConvertError;
 

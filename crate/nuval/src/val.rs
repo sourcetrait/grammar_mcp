@@ -89,7 +89,7 @@ pub enum CellPathMemberData {
     },
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl CellPathMemberData {
     /// The member as nushell's at a span, refused past this platform's usize.
     pub fn try_into_nu(self, span: nu::Span) -> ConvertResult<nu::PathMember> {
@@ -113,7 +113,7 @@ impl CellPathMemberData {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<nu::PathMember> for CellPathMemberData {
     fn from(v: nu::PathMember) -> Self {
         match v {
@@ -131,10 +131,10 @@ impl From<nu::PathMember> for CellPathMemberData {
 }
 
 /// The span a cell path member takes back in nushell.
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 const SPAN: nu::Span = nu::Span::unknown();
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl TryFrom<CellPathMemberData> for nu::PathMember {
     type Error = ConvertError;
 
@@ -143,7 +143,7 @@ impl TryFrom<CellPathMemberData> for nu::PathMember {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl<T> From<Bound<T>> for Bounded<T> {
     fn from(v: Bound<T>) -> Self {
         match v {
@@ -154,7 +154,7 @@ impl<T> From<Bound<T>> for Bounded<T> {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl<T> From<Bounded<T>> for Bound<T> {
     fn from(v: Bounded<T>) -> Self {
         match v {
@@ -165,7 +165,7 @@ impl<T> From<Bounded<T>> for Bound<T> {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<nu::IntRange> for TypedRangeData<i64> {
     fn from(v: nu::IntRange) -> Self {
         Self {
@@ -176,7 +176,7 @@ impl From<nu::IntRange> for TypedRangeData<i64> {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<nu::FloatRange> for TypedRangeData<f64> {
     fn from(v: nu::FloatRange) -> Self {
         Self {
@@ -187,7 +187,7 @@ impl From<nu::FloatRange> for TypedRangeData<f64> {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<nu::Range> for RangeData {
     fn from(v: nu::Range) -> Self {
         match v {
@@ -197,7 +197,7 @@ impl From<nu::Range> for RangeData {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl TryFrom<RangeData> for nu::Range {
     type Error = ConvertError;
 
@@ -210,7 +210,7 @@ impl TryFrom<RangeData> for nu::Range {
 }
 
 /// An int range from its parts, refused where nushell's constructor refuses.
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 fn int_range(r: TypedRangeData<i64>) -> ConvertResult<nu::IntRange> {
     if r.step == 0 {
         return RangeSnafu { reason: "its step is zero" }.fail();
@@ -227,7 +227,7 @@ fn int_range(r: TypedRangeData<i64>) -> ConvertResult<nu::IntRange> {
 }
 
 /// A float range from its parts, refused where nushell's constructor refuses.
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 fn float_range(r: TypedRangeData<f64>) -> ConvertResult<nu::FloatRange> {
     if !r.start.is_finite() {
         return RangeSnafu { reason: "its start isn't finite" }.fail();
@@ -252,7 +252,7 @@ fn float_range(r: TypedRangeData<f64>) -> ConvertResult<nu::FloatRange> {
 }
 
 /// A nushell range built exactly from its start, its step, and its end.
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 fn range_from_parts<T, R>(start: T, step: T, end: Bound<T>) -> ConvertResult<R>
 where
     T: serde::Serialize,
@@ -264,7 +264,7 @@ where
     })
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<chrono::DateTime<chrono::FixedOffset>> for DateData {
     fn from(v: chrono::DateTime<chrono::FixedOffset>) -> Self {
         Self {
@@ -275,7 +275,7 @@ impl From<chrono::DateTime<chrono::FixedOffset>> for DateData {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl TryFrom<DateData> for chrono::DateTime<chrono::FixedOffset> {
     type Error = ConvertError;
 
@@ -300,18 +300,18 @@ impl TryFrom<DateData> for chrono::DateTime<chrono::FixedOffset> {
 }
 
 /// A conversion from a nushell value, refused for what nuval can't carry.
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 pub trait TryFromNu<V: Sized>: Sized {
     fn try_from_nu(value: V) -> ConvertResult<Self>;
 }
 
 /// A conversion back to a nushell value, every part at one span.
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 pub trait TryIntoNu {
     fn try_into_nu(self, span: nu::Span) -> ConvertResult<nu::Value>;
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl TryFromNu<nu::Value> for NuValResult {
     fn try_from_nu(value: nu::Value) -> ConvertResult<Self> {
         match NuVal::try_from_nu(value) {
@@ -322,7 +322,7 @@ impl TryFromNu<nu::Value> for NuValResult {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl TryIntoNu for NuValResult {
     fn try_into_nu(self, span: nu::Span) -> ConvertResult<nu::Value> {
         match self {
@@ -332,7 +332,7 @@ impl TryIntoNu for NuValResult {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl TryFromNu<nu::Value> for NuVal {
     fn try_from_nu(value: nu::Value) -> ConvertResult<Self> {
         Ok(match value {
@@ -381,7 +381,7 @@ impl TryFromNu<nu::Value> for NuVal {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl TryIntoNu for NuVal {
     fn try_into_nu(self, span: nu::Span) -> ConvertResult<nu::Value> {
         Ok(match self {

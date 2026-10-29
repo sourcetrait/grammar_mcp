@@ -1,6 +1,52 @@
 use crate::*;
 
+/// NUON text that didn't read, or a value that didn't convert to or from it.
+#[derive(Debug, snafu::Snafu)]
+#[snafu(visibility(pub(crate)))]
+pub enum NuonError {
+    /// The text broke off, or held what NUON doesn't, at a byte offset.
+    #[snafu(display("NUON at byte {offset}: {reason}"))]
+    Read { offset: usize, reason: String },
+    /// A value with no form in the other model, at its path.
+    #[snafu(display("{}", if path.is_empty() { reason.clone() } else { format!("at {path}: {reason}") }))]
+    Convert { path: String, reason: String },
+}
+
+impl NuonError {
+    /// A conversion refused for `reason`, its path filled in as it unwinds.
+    pub(crate) fn convert(reason: impl fmt::Display) -> Self {
+        Self::Convert { path: String::new(), reason: reason.to_string() }
+    }
+
+    /// The error as met within `segment`, a record's field or a list's index.
+    pub(crate) fn within(self, segment: impl fmt::Display) -> Self {
+        match self {
+            Self::Convert { path, reason } if path.is_empty() => {
+                Self::Convert { path: segment.to_string(), reason }
+            }
+            Self::Convert { path, reason } => Self::Convert { path: format!("{segment}.{path}"), reason },
+            read => read,
+        }
+    }
+}
+
+impl ser::Error for NuonError {
+    fn custom<T: fmt::Display>(msg: T) -> Self {
+        Self::convert(msg)
+    }
+}
+
+impl de::Error for NuonError {
+    fn custom<T: fmt::Display>(msg: T) -> Self {
+        Self::convert(msg)
+    }
+}
+
+/// A NUON read's or conversion's result.
+pub type NuonResult<T> = Result<T, NuonError>;
+
 /// A conversion between nushell and nuval that failed, and why.
+#[cfg(feature = "nushell")]
 #[derive(Debug, snafu::Snafu)]
 #[snafu(visibility(pub(crate)))]
 pub enum ConvertError {
@@ -32,4 +78,5 @@ pub enum ConvertError {
 }
 
 /// A conversion's result.
+#[cfg(feature = "nushell")]
 pub type ConvertResult<T> = Result<T, ConvertError>;

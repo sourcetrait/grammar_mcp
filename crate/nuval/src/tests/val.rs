@@ -74,8 +74,8 @@ fn every_kind_round_trips_through_nushell() {
 #[test]
 fn every_kind_round_trips_through_serde() {
     let val = every_kind_nuval();
-    let text = serde_json::to_string(&val).expect("serialize");
-    assert_eq!(serde_json::from_str::<NuVal>(&text).expect("deserialize"), val);
+    let text = to_nuon(&val, NuonStyle::Raw).expect("serialize");
+    assert_eq!(from_nuon::<NuVal>(&text).expect("deserialize"), val);
 }
 
 #[test]

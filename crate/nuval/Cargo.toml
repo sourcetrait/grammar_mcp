@@ -11,9 +11,11 @@ categories.workspace = true
 keywords.workspace   = true
 
 [features]
-# nushell's own values and errors, converted to and from nuval's: the
-# evaluator's side. The data alone, and every client of it, builds without.
-nu = ["dep:chrono", "dep:miette", "dep:nu-protocol", "dep:serde_json", "dep:snafu"]
+default = ["nushell"]
+# nushell's own values and errors, converted to and from nuval's, and the
+# MCP's JSON arguments bridged into them. The data and its NUON text, and
+# every client of them, build without.
+nushell = ["dep:chrono", "dep:miette", "dep:nu-protocol", "dep:serde_json"]
 
 [dependencies]
 bitcode.workspace = true
@@ -23,9 +25,15 @@ nu-protocol = { workspace = true, optional = true }
 rkyv.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, optional = true }
-snafu = { workspace = true, optional = true }
+snafu.workspace = true
 
 sourcetrait_common.workspace = true
+
+[dev-dependencies]
+# nuon takes nu-engine without `os` while nuval's nu-protocol keeps it, and
+# nu-engine builds only with the two paired, so its defaults pair them.
+nu-engine.workspace = true
+nuon.workspace = true
 
 [package.metadata]
 rein = "ai"

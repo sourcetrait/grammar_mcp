@@ -34,7 +34,7 @@ impl JobErrorKind {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<&nu::JobError> for JobErrorKind {
     fn from(v: &nu::JobError) -> Self {
         match v {

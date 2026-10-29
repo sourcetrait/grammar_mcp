@@ -1,5 +1,20 @@
 # error.rs
 
+## enum NuonError
+One error for the text and the conversions alike, so a caller reading a serde
+type from NUON meets one kind whether the text or the type refused.
+
+### Read
+The offset is the token's start in the whole text, a nested value's
+included, since the reader keeps absolute spans as nushell's parser does.
+
+### Convert
+### fn within
+The path is built as the error unwinds, each record field and list index
+prepended, so `nested.0.value.key` names the value serde refused. serde's own
+messages, a missing field or a wrong type, arrive with an empty path, which
+the unwinding fills.
+
 ## enum ConvertError
 Each variant is a value nushell holds that nuval can't, or data nuval holds
 that nushell wouldn't make.

@@ -88,7 +88,7 @@ impl CompileErrorKind {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<&nu::CompileError> for CompileErrorKind {
     fn from(v: &nu::CompileError) -> Self {
         match v {

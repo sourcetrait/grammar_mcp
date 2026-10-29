@@ -37,7 +37,7 @@ impl ConfigErrorKind {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl ConfigErrorKind {
     /// The kind of an error, none for a variant wrapping another type.
     pub(crate) fn of(v: &nu::ConfigError) -> Option<Self> {
@@ -78,7 +78,7 @@ impl ConfigWarningKind {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<&nu::ConfigWarning> for ConfigWarningKind {
     fn from(v: &nu::ConfigWarning) -> Self {
         match v {

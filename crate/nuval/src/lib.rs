@@ -1,6 +1,5 @@
-#[cfg(feature = "nu")]
 pub(crate) mod error;
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 pub(crate) mod json;
 pub(crate) mod kind {
     pub(crate) mod compile;
@@ -11,25 +10,36 @@ pub(crate) mod kind {
     pub(crate) mod parse;
     pub(crate) mod shell;
 }
+pub(crate) mod text {
+    pub(crate) mod de;
+    pub(crate) mod read;
+    pub(crate) mod ser;
+    pub(crate) mod write;
+}
 pub(crate) mod val;
 pub(crate) mod val_error;
 pub(crate) mod width;
-#[cfg(all(test, feature = "nu"))]
+#[cfg(all(test, feature = "nushell"))]
 mod tests {
+    mod text;
     mod val;
     mod val_error;
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 pub(crate) use crate::error::*;
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 pub(crate) use snafu::OptionExt;
 
-#[cfg(feature = "nu")]
+pub(crate) use std::{fmt, ops::Range};
+
+#[cfg(feature = "nushell")]
 pub(crate) use std::ops::Bound;
 
-#[cfg(feature = "nu")]
+pub(crate) use serde::{de, ser};
+
+#[cfg(feature = "nushell")]
 pub(crate) mod nu {
     pub(crate) use nu_protocol::{
         ChainedError, CompileError, ConfigError, ConfigWarning, ErrorLabel, Filesize, FloatRange,
@@ -49,6 +59,7 @@ pub(crate) mod nu {
 pub(crate) use sourcetrait_common::cereal;
 
 pub use crate::{
+    error::{NuonError, NuonResult},
     kind::{
         compile::CompileErrorKind,
         config::{ConfigErrorKind, ConfigWarningKind},
@@ -58,6 +69,11 @@ pub use crate::{
         parse::{ParseErrorKind, ParseWarningKind},
         shell::{ShellErrorKind, ShellWarningKind},
     },
+    text::{
+        de::{from_nuon, from_nuval},
+        ser::{to_nuon, to_nuval},
+        write::NuonStyle,
+    },
     val::{
         Bounded, CellPathMemberData, DateData, GlobData, NuVal, NuValResult, RangeData, SpanData,
         TypedRangeData,
@@ -66,7 +82,7 @@ pub use crate::{
     width::wide,
 };
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 pub use crate::{
     error::{ConvertError, ConvertResult},
     json::json_value_to_nu_value,

@@ -1,29 +1,42 @@
 # lib.rs
 
-## feature nu
-nushell's own values and errors, converted to and from nuval's, are the
-evaluator's side, and they take nu-protocol, miette, chrono, serde_json, and
-snafu. The data takes none of them: the protocol and the client carry values
-and errors without evaluating anything, so they build nuval without `nu`, and
-the engine and the MCP crate build it with. Each conversion sits beside its
-data behind `#[cfg(feature = "nu")]`; a kind's code and message, an error's
-`short`, and every type's codec derives need no feature.
+nuval is the standalone NUON library: the value, its NUON text, and serde
+types to and from both, for any crate that wants NUON, with nushell's own
+values beside them behind a feature (User).
+
+## feature nushell
+nushell's own values and errors, converted to and from nuval's, and the MCP's
+JSON arguments bridged into them, take nu-protocol, miette, chrono, and
+serde_json. The feature is on by default and gates every nushell dependency
+(User). The data and its text take none of them: the workspace takes nuval
+with default features off, so the protocol and the client carry values and
+their text without evaluating anything, and the engine and the MCP crate name
+`nushell`. Each conversion sits beside its data behind
+`#[cfg(feature = "nushell")]`; a kind's code and message, an error's `short`,
+every type's codec derives, and the NUON text need no feature.
 
 ## mod kind
 One file a nushell error type's family of kinds, the error model's tables.
 
-## mod json
-The serde_json bridge into nushell's values, behind `nu`, shared by the engine
-and the MCP client.
+## mod text
+NUON text without nushell: the reader and the writer port nushell's own, and
+the serde serializer and deserializer carry any type to and from a NuVal and
+so to and from the text.
 
+## mod json
+The serde_json bridge from the MCP's JSON arguments into nushell's values,
+behind `nushell`, shared by the engine and the MCP client.
+
+## use crate::error::*
 ## use snafu::OptionExt
-A trait in scope for its `context` on an `Option`: a range's second value
-overflowing, and a row index past the platform's usize.
+The conversions' error context, behind `nushell`: `context` on an `Option`
+for a range's second value overflowing and a row index past the platform's
+usize. snafu itself is in every build, since the NUON error derives with it.
 
 ## mod nu
 nushell's items the conversions name, under one path, so a reader tells them
-from nuval's own, behind `nu`. nushell's I/O error kind is `IoKind` here,
-apart from nuval's `IoErrorKind`.
+from nuval's own, behind `nushell`. nushell's I/O error kind is `IoKind`
+here, apart from nuval's `IoErrorKind`.
 
 ## use sourcetrait_common::cereal
 cereal comes through the workspace's `sourcetrait_common`, its facade feature
@@ -34,5 +47,6 @@ taken at nu-protocol's.
 
 ## pub use
 The value, its error and result, the data each kind of value holds, every
-family of error kinds, and `wide`; with `nu`, the two conversion traits and
-the conversion's error.
+family of error kinds, and `wide`; the NUON text's style, error, and serde
+conversions; with `nushell`, the two conversion traits and the conversion's
+error.

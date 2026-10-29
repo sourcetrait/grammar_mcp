@@ -74,7 +74,7 @@ nu-plugin-test-support = { version = "0.116.1" }
 nu-protocol = { version = "0.116.1" }
 nu-std = { version = "0.116.1" }
 nuon = { version = "0.116.1" }
-nuval = { path = "crate/nuval" }
+nuval = { path = "crate/nuval", default-features = false }
 sourcetrait_grammar_client = { path = "crate/client" }
 sourcetrait_grammar_engine = { path = "crate/engine" }
 sourcetrait_grammar_operator = { path = "crate/operator" }

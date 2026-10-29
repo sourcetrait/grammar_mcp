@@ -304,8 +304,8 @@ fn an_error_survives_serde_bitcode_and_rkyv() {
             .with_inner([nu::ShellError::DivisionByZero { span: span(6, 7) }]),
     );
     let val = NuValError::from(&error);
-    let text = serde_json::to_string(&val).expect("serialize");
-    assert_eq!(serde_json::from_str::<NuValError>(&text).expect("deserialize"), val);
+    let text = to_nuon(&val, NuonStyle::Raw).expect("serialize");
+    assert_eq!(from_nuon::<NuValError>(&text).expect("deserialize"), val);
     let bytes = bitcode::encode(&val);
     assert_eq!(bitcode::decode::<NuValError>(&bytes).expect("decode"), val);
     let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&val).expect("archive");

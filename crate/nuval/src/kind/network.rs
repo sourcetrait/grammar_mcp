@@ -34,7 +34,7 @@ impl NetworkErrorKind {
     }
 }
 
-#[cfg(feature = "nu")]
+#[cfg(feature = "nushell")]
 impl From<&nu::NetworkError> for NetworkErrorKind {
     fn from(v: &nu::NetworkError) -> Self {
         match v {
