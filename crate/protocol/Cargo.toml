@@ -16,7 +16,7 @@ nuval.workspace = true
 rkyv.workspace = true
 serde.workspace = true
 
-sourcetrait_cereal_macro.workspace = true
+sourcetrait_common.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

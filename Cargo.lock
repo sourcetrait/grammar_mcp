@@ -6769,7 +6769,7 @@ dependencies = [
  "rkyv",
  "serde",
  "serde_json",
- "sourcetrait_cereal_macro",
+ "sourcetrait_common",
 ]
 
 [[package]]

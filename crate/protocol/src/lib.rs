@@ -5,9 +5,7 @@ pub(crate) use std::fmt;
 
 pub(crate) use nuval::wide;
 
-pub(crate) mod cereal {
-    pub(crate) use sourcetrait_cereal_macro::*;
-}
+pub(crate) use sourcetrait_common::cereal;
 
 pub use crate::{
     capability::Capabilities,
