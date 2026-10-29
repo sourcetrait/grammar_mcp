@@ -5,7 +5,10 @@ private: no key's private half, no account, no host, and no path.
 
 - `identity_manifest.schema.json`: the JSON Schema of a fixture run's
   endpoint descriptor. The private copy names its credential files; the
-  redacted copy omits them; neither holds a key's body.
+  redacted copy omits them; neither holds a key's body. Each endpoint's
+  verification is a verdict, `pass`, `fail`, `incomplete`, or `unrun`, with the
+  cases, controls, cleanup, and first error behind it; a pass carries a clean
+  state.
 - `trust_vectors.json`: SSH trust and authentication vectors under the
   placeholder `endpoint.invalid`. Test-only keys, a host CA and an untrusted
   one, host certificates valid, expired, not yet valid, for the wrong

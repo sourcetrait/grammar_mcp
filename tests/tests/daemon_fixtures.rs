@@ -104,3 +104,27 @@ fn the_identity_manifest_schema_requires_the_qualification_fields() {
     assert_eq!(schema["properties"]["schema_version"]["const"], 1);
     assert_eq!(schema["$defs"]["reference"]["not"]["pattern"], "PRIVATE KEY");
 }
+
+#[test]
+fn a_verification_carries_its_verdict_and_the_state_behind_it() {
+    let schema = json("identity_manifest.schema.json");
+    let verified = &schema["$defs"]["endpoint"]["properties"]["verified"];
+    let required: BTreeSet<&str> = items(&verified["required"], "the verification's required fields")
+        .iter()
+        .map(|r| r.as_str().expect("a field"))
+        .collect();
+    let fields = ["verdict", "passed", "failed", "unhealthy_controls", "restored", "tunnel_closed", "error", "openssh"];
+    assert_eq!(required, fields.into_iter().collect());
+    let verdicts: BTreeSet<&str> = items(&verified["properties"]["verdict"]["enum"], "the verdicts")
+        .iter()
+        .map(|v| v.as_str().expect("a verdict"))
+        .collect();
+    assert_eq!(verdicts, ["pass", "fail", "incomplete", "unrun"].into_iter().collect());
+    assert_eq!(verified["if"]["properties"]["verdict"]["const"], "pass");
+    let clean = &verified["then"]["properties"];
+    assert_eq!(clean["failed"]["maxItems"], 0);
+    assert_eq!(clean["unhealthy_controls"]["maxItems"], 0);
+    assert_eq!(clean["restored"]["const"], true);
+    assert_eq!(clean["tunnel_closed"]["const"], true);
+    assert_eq!(clean["error"]["type"], "null");
+}

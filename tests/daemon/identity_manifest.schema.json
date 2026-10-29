@@ -121,20 +121,32 @@
           }
         },
         "verified": {
-          "oneOf": [
-            { "type": "null" },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["passed", "failed", "restored", "openssh"],
-              "properties": {
-                "passed": { "type": "integer", "minimum": 0 },
-                "failed": { "type": "array", "items": { "type": "string" } },
-                "restored": { "type": "boolean" },
-                "openssh": { "type": "string" }
-              }
+          "description": "The endpoint's verification: its verdict and the state behind it. No verification is unrun, and one without its verdict's fields incomplete; a pass carries a clean state.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["verdict", "passed", "failed", "unhealthy_controls", "restored", "tunnel_closed", "error", "openssh"],
+          "properties": {
+            "verdict": { "enum": ["pass", "fail", "incomplete", "unrun"] },
+            "passed": { "type": ["integer", "null"], "minimum": 0 },
+            "failed": { "type": ["array", "null"], "items": { "type": "string" } },
+            "unhealthy_controls": { "type": ["array", "null"], "items": { "type": "string" } },
+            "restored": { "type": ["boolean", "null"] },
+            "tunnel_closed": { "type": ["boolean", "null"] },
+            "error": { "type": ["string", "null"] },
+            "openssh": { "type": ["string", "null"] }
+          },
+          "if": { "properties": { "verdict": { "const": "pass" } } },
+          "then": {
+            "properties": {
+              "passed": { "type": "integer" },
+              "failed": { "type": "array", "maxItems": 0 },
+              "unhealthy_controls": { "type": "array", "maxItems": 0 },
+              "restored": { "const": true },
+              "tunnel_closed": { "const": true },
+              "error": { "type": "null" },
+              "openssh": { "type": "string" }
             }
-          ]
+          }
         }
       }
     },
