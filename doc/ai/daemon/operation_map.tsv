@@ -1,0 +1,49 @@
+kind	operation	owner	task
+tool	execute	frontend routes, worker executes	Mcp/ToolRouting, Runtime/Dispatch
+tool	rerun	frontend routes, worker executes	Mcp/ToolRouting, Runtime/Dispatch
+tool	call	frontend routes, worker executes	Mcp/ToolRouting, Runtime/Dispatch
+tool	interface	frontend forwards text, worker parses	Mcp/InterfaceProxy, Runtime/HostServices
+interface	info	worker metadata, frontend renders	Mcp/InterfaceProxy
+interface	help	worker or portable catalog (help interface, help grimm)	Foundation/RuntimeTypes, Mcp/InterfaceProxy
+interface	process list	worker	Runtime/HostServices
+interface	process kill	worker	Runtime/HostServices, Runtime/Cancellation
+interface	purview list	worker	Runtime/HostServices
+interface	purview set	worker	Runtime/HostServices
+interface	purview extend	worker	Runtime/HostServices
+interface	purview configure	worker	Runtime/HostServices
+interface	channel open	worker broker, frontend presentation	Runtime/EventBroker, Mcp/ChannelPresentation
+interface	channel sync	worker broker, frontend presentation	Runtime/EventBroker, Mcp/ChannelPresentation
+interface	channel ready	worker broker, frontend presentation	Runtime/EventBroker, Mcp/ChannelPresentation
+interface	channel close	worker broker, frontend presentation	Runtime/EventBroker, Mcp/ChannelPresentation
+interface	channel config	worker broker	Runtime/EventBroker
+interface	remote channel list	worker, the retained mTLS remote Channel	Peer/PeerConfig, Peer/LinkLifecycle, Peer/PeerGate
+interface	remote channel get	worker, the retained mTLS remote Channel	Peer/PeerConfig, Peer/LinkLifecycle, Peer/PeerGate
+interface	remote channel set	worker, the retained mTLS remote Channel	Peer/PeerConfig, Peer/LinkLifecycle, Peer/PeerGate
+interface	remote channel unset	worker, the retained mTLS remote Channel	Peer/PeerConfig, Peer/LinkLifecycle, Peer/PeerGate
+interface	remote channel listen	worker, the retained mTLS remote Channel	Peer/PeerConfig, Peer/LinkLifecycle, Peer/PeerGate
+interface	remote channel connect	worker, the retained mTLS remote Channel	Peer/PeerConfig, Peer/LinkLifecycle, Peer/PeerGate
+interface	remote channel close	worker, the retained mTLS remote Channel	Peer/PeerConfig, Peer/LinkLifecycle, Peer/PeerGate
+interface	equip new	worker	Runtime/HostServices, Mcp/ArtifactPresentation
+interface	equip install	worker	Runtime/HostServices, Mcp/ArtifactPresentation
+interface	equip check	worker	Runtime/HostServices
+interface	equip uninstall	worker	Runtime/HostServices
+interface	equip scaffold	worker	Runtime/HostServices
+interface	equip commit	worker	Runtime/HostServices
+cli	cli call	embedded-cli, grammard cli	Foundation/FeatureBoundary, Mcp/EmbeddedCli
+cli	cli execute	embedded-cli, grammard cli	Foundation/FeatureBoundary, Mcp/EmbeddedCli
+cli	cli rerun	embedded-cli, grammard cli	Foundation/FeatureBoundary, Mcp/EmbeddedCli
+cli	cli interface	embedded-cli, grammard cli	Foundation/FeatureBoundary, Mcp/EmbeddedCli
+cli	serve (default)	frontend client only	Mcp/ServingAdapter
+grimm	grimm dbg	worker	Runtime/HostServices
+grimm	grimm channel send	worker broker	Runtime/HostServices, Runtime/EventBroker
+grimm	grimm get_config	worker	Runtime/HostServices
+grimm	grimm get_config_all	worker	Runtime/HostServices
+grimm	grimm pin_config	worker, operator	Runtime/OperatorLifecycle
+grimm	grimm remote channel send	worker, the retained mTLS remote Channel send	Peer/LinkLifecycle, Peer/PeerGate
+grimm	grimm remote_channel_send_with	worker, the retained mTLS remote Channel send	Peer/LinkLifecycle, Peer/PeerGate
+plugin	eye, formats, gstat, inc, polars, query, soak	server package, worker registry	Packaging/ServerArtifacts
+equip	builtins gram and grammar	worker namespace	Runtime/HostServices
+channel	async WSS	frontend presentation of worker events	Mcp/ChannelPresentation
+channel	sync queue (cap 1000, dropped)	worker broker, frontend sync tool	Runtime/EventBroker, Mcp/ChannelPresentation
+channel	inbox grammar.channel.<mcp_nom>	frontend presentation scratch	Mcp/ClientScratch
+peer	mTLS link, remotes.toml [[channel]] live Channels	retained as built, no migration	Peer/PeerConfig, Peer/LinkLifecycle, Peer/PeerGate

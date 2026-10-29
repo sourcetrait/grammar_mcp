@@ -1,0 +1,97 @@
+{
+  target_subdir: "daemon",
+  targets: [
+    {triple: "x86_64-unknown-linux-gnu", runner: "native x86_64 Linux"},
+    {triple: "riscv64gc-unknown-linux-gnu", runner: "native riscv64 Linux"}
+  ],
+  profiles: [
+    {
+      name: "client",
+      summary: "The thin client, the serving MCP over native SSH with no local engine",
+      packages: ["sourcetrait_grammar_mcp"],
+      bins: ["grammar-mcp"],
+      features: [],
+      default_features: true,
+      release: true,
+      ships: "grammar-mcp",
+      required: ["sourcetrait_grammar_client", "sourcetrait_grammar_protocol", "russh", "russh-sftp"],
+      forbidden: [
+        "sourcetrait_grammar_engine", "sourcetrait_grammar_operator", "sourcetrait_grammar_daemon",
+        "nu-command", "nu-cmd-lang", "nu-cmd-extra", "nu-cmd-plugin", "nu-plugin-engine",
+        "aws-lc-rs", "aws-lc-sys"
+      ]
+    },
+    {
+      name: "runtime",
+      summary: "The reusable Linux runtime library, for a daemon or an embedding host",
+      packages: ["sourcetrait_grammar_daemon"],
+      bins: [],
+      features: [],
+      default_features: false,
+      release: true,
+      ships: null,
+      required: ["sourcetrait_grammar_protocol", "sourcetrait_grammar_engine", "sourcetrait_grammar_operator", "rustls", "tokio-rustls"],
+      forbidden: ["sourcetrait_grammar_mcp", "rmcp", "russh", "russh-sftp", "aws-lc-rs", "aws-lc-sys"]
+    },
+    {
+      name: "service",
+      summary: "grammard, the service, socket, and CLI adapter over the runtime library",
+      packages: ["sourcetrait_grammar_daemon"],
+      bins: ["grammard"],
+      features: [],
+      default_features: true,
+      release: true,
+      ships: "grammar-daemon",
+      required: ["sourcetrait_grammar_protocol", "sourcetrait_grammar_engine", "sourcetrait_grammar_operator", "rustls", "tokio-rustls"],
+      forbidden: ["sourcetrait_grammar_mcp", "rmcp", "russh", "russh-sftp", "aws-lc-rs", "aws-lc-sys"]
+    },
+    {
+      name: "plugins",
+      summary: "The nushell plugins the server package carries, built from this workspace",
+      packages: ["sourcetrait_grammar_eye", "sourcetrait_grammar_soak"],
+      bins: ["nu_plugin_eye", "nu_plugin_soak"],
+      features: [],
+      default_features: true,
+      release: true,
+      ships: "grammar-daemon",
+      required: ["nu-plugin"],
+      forbidden: ["aws-lc-rs", "aws-lc-sys"]
+    },
+    {
+      name: "embedded_cli",
+      summary: "The MCP with its in-process engine, the local CLI and test-driver path",
+      packages: ["sourcetrait_grammar_mcp"],
+      bins: ["grammar-mcp"],
+      features: ["embedded-cli"],
+      default_features: true,
+      release: false,
+      ships: null,
+      required: ["sourcetrait_grammar_engine", "sourcetrait_grammar_operator"],
+      forbidden: ["aws-lc-rs", "aws-lc-sys"]
+    },
+    {
+      name: "test_hooks",
+      summary: "The test-only commands the system tests drive, never shipped",
+      packages: ["sourcetrait_grammar_mcp"],
+      bins: ["grammar-mcp"],
+      features: ["test-hooks"],
+      default_features: true,
+      release: false,
+      ships: null,
+      required: [],
+      forbidden: ["aws-lc-rs", "aws-lc-sys"]
+    },
+    {
+      name: "probe",
+      summary: "grammard-probe, the qualification driver, never in a product package",
+      packages: ["sourcetrait_grammar_daemon_probe"],
+      bins: ["grammard-probe"],
+      features: [],
+      default_features: true,
+      release: true,
+      ships: null,
+      required: ["sourcetrait_grammar_client", "russh"],
+      forbidden: ["sourcetrait_grammar_engine", "sourcetrait_grammar_operator", "sourcetrait_grammar_daemon", "aws-lc-rs", "aws-lc-sys"]
+    }
+  ]
+}

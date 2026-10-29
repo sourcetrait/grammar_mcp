@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-29T05:44:19.824040697+00:00",
+  "repositories": [
+    {
+      "name": "grammar_mcp",
+      "head": "923fa92a126f4e6906a10db74fa99d78a6d3ad4b",
+      "tree": "252dad0f5282a4f1a819dde8c6e8a97946dc9ca9",
+      "status": [
+        "M LICENSES-EXTERNAL.txt"
+      ]
+    },
+    {
+      "name": "common",
+      "head": "933f8389c146eae84bd2198784d9493319aca11d",
+      "tree": "87efbf6c03047e9689c0027523d9e472a2f663d6",
+      "status": []
+    },
+    {
+      "name": "srcert",
+      "head": "18fb67b656f153df2c4216a0c0600b7cef322ae5",
+      "tree": "0a9f5e1b67b6dedab5aef8ea2df1742675b1aa37",
+      "status": []
+    },
+    {
+      "name": "gram",
+      "head": "d882cc56cf9e97b570299fc00c234e0c01c0442b",
+      "tree": "b4ac4649af5545aa8ca1ff4736c13b4e2c0153db",
+      "status": []
+    },
+    {
+      "name": "common_mono",
+      "head": "3fc4243413f0f4b100d959f1c74a7ba3fb0c7111",
+      "tree": "984d36d550b6691dfbed08e1c989f4d182aa410d",
+      "status": []
+    }
+  ],
+  "ignored_lock_sha256": "cd01a20ab6547553970c228a82e3ab16005a9de3254e79faf089a2d25f5c8154",
+  "toolchain": {
+    "rustc": "1.98.0",
+    "rustc_commit": "88d9e12ae178fab0fb5cc050a94da85685d449ea",
+    "rustc_date": "2026-08-18",
+    "llvm": "22.1.8",
+    "host": "x86_64-unknown-linux-gnu",
+    "cargo": "1.98.0 (797e8a9bc 2026-08-05)",
+    "cc": "(GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)"
+  }
+}

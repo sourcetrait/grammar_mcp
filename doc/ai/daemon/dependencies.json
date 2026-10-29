@@ -1,0 +1,139 @@
+{
+  "toolchain": {
+    "rustc": "1.98.0",
+    "rustc_commit": "88d9e12ae178fab0fb5cc050a94da85685d449ea",
+    "rustc_date": "2026-08-18",
+    "llvm": "22.1.8",
+    "cargo": "1.98.0 (797e8a9bc 2026-08-05)",
+    "host": "x86_64-unknown-linux-gnu",
+    "linker": "rust-lld 22.1.8, the toolchain's own, driven by cc (GCC 16.2.1)",
+    "minimum": "1.96.1",
+    "minimum_from": "the nushell 0.116.1 crates; of the pins, russh 0.65.0 declares the highest, 1.89"
+  },
+  "pins": [
+    {
+      "crate": "bitcode",
+      "version": "0.6.9",
+      "requirement": "=0.6.9",
+      "checksum_sha256": "0a6ed1b54d8dc333e7be604d00fa9262f4635485ffea923647b6521a5fff045d",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": "1.70",
+      "default_features": true,
+      "features": ["derive", "std"],
+      "features_off": [],
+      "in_lock": true,
+      "consumers": ["nuval", "sourcetrait_grammar_engine", "sourcetrait_grammar_operator", "sourcetrait_grammar_mcp"],
+      "planned_consumers": ["sourcetrait_grammar_protocol"],
+      "notes": []
+    },
+    {
+      "crate": "russh",
+      "version": "0.65.0",
+      "requirement": "=0.65.0",
+      "checksum_sha256": "3bb77a4b259312b2abbc541bca1c13cb4e9b61c560a7fd894068c3b92e0c9dc3",
+      "license": "Apache-2.0",
+      "rust_version": "1.89",
+      "default_features": false,
+      "features": ["ring", "rsa"],
+      "features_off": ["aws-lc-rs", "flate2", "des", "dsa", "serde"],
+      "in_lock": false,
+      "consumers": [],
+      "planned_consumers": ["sourcetrait_grammar_client", "sourcetrait_grammar_daemon_probe"],
+      "notes": [
+        "It pins pre-releases exactly: ssh-key =0.7.0-rc.11 and rsa =0.10.0-rc.18, with pkcs1 0.8.0-rc.4.",
+        "check_server_key receives PublicKeyOrCertificate, a raw host key or an SSH host certificate.",
+        "Preferred::DEFAULT offers no host-certificate algorithms and lists ssh-rsa, SHA-1 RSA signatures, last.",
+        "SHA-1 is compiled in through russh and ssh-key's sha1 feature; MD5 through legacy PEM key decryption.",
+        "The Unix agent client, connect_uds and connect_env, is compiled in and opens a socket only when called.",
+        "Only its own tests spawn processes, ssh-agent and ssh-add.",
+        "pageant is a Windows-only dependency, outside the Linux build graph."
+      ]
+    },
+    {
+      "crate": "russh-sftp",
+      "version": "3.0.1",
+      "requirement": "=3.0.1",
+      "checksum_sha256": "9bb17f72aba4314656b359ffba72c68dcbd70ed9e97497898b75498fe7198042",
+      "license": "Apache-2.0",
+      "rust_version": null,
+      "default_features": true,
+      "features": [],
+      "features_off": ["async-trait"],
+      "in_lock": false,
+      "consumers": [],
+      "planned_consumers": ["sourcetrait_grammar_client"],
+      "notes": [
+        "It declares no rust-version; the workspace's minimum governs it.",
+        "It runs over the stream it is given and opens no socket or process of its own."
+      ]
+    }
+  ],
+  "resolution": {
+    "against": "Cargo.lock",
+    "kept": "every locked version the three pins share with the workspace",
+    "added_crates": 79,
+    "added_versions": ["generic-array 1.4.5", "hashbrown 0.14.5", "num-bigint 0.5.1"],
+    "outside_every_graph": ["des"]
+  },
+  "nushell": {
+    "version": "0.116.1",
+    "crates": [
+      "nu-cmd-extra", "nu-cmd-lang", "nu-cmd-plugin", "nu-command", "nu-config",
+      "nu-engine", "nu-glob", "nu-json", "nu-parser", "nu-path", "nu-plugin",
+      "nu-plugin-engine", "nu-plugin-test-support", "nu-protocol", "nu-std", "nuon"
+    ]
+  },
+  "remote_channel": {
+    "transport": "mTLS, kept as built and apart from engine SSH",
+    "crates": ["ring 0.17.14", "rustls 0.23.46", "tokio-rustls 0.26.6", "srcert_lib"],
+    "excludes": ["russh", "russh-sftp"]
+  },
+  "lock": {
+    "path": "Cargo.lock",
+    "sha256": "cd01a20ab6547553970c228a82e3ab16005a9de3254e79faf089a2d25f5c8154",
+    "committed": true
+  },
+  "siblings": [
+    {
+      "repository": "common",
+      "path": "../common",
+      "revision": "933f8389c146eae84bd2198784d9493319aca11d",
+      "packages": [
+        "sourcetrait_agnostic", "sourcetrait_agnostic_bridge", "sourcetrait_cereal",
+        "sourcetrait_cereal_macro", "sourcetrait_clapx", "sourcetrait_common",
+        "sourcetrait_datum", "sourcetrait_stdx", "sourcetrait_subsys",
+        "sourcetrait_testing", "sourcetrait_testing_macro", "sourcetrait_tomlx",
+        "sourcetrait_tooling", "sourcetrait_twostr"
+      ]
+    },
+    {
+      "repository": "common_mono",
+      "path": "../common_mono",
+      "revision": "3fc4243413f0f4b100d959f1c74a7ba3fb0c7111",
+      "packages": ["sourcetrait_agnostic_linux", "sourcetrait_agnostic_macos", "sourcetrait_agnostic_unix"]
+    },
+    {
+      "repository": "srcert",
+      "path": "../srcert",
+      "revision": "18fb67b656f153df2c4216a0c0600b7cef322ae5",
+      "packages": ["srcert_lib"]
+    }
+  ],
+  "package_inputs": [
+    {
+      "repository": "gram",
+      "path": "ext/gram",
+      "revision": "d882cc56cf9e97b570299fc00c234e0c01c0442b",
+      "use": "the gram equip the package carries"
+    }
+  ],
+  "update_rules": [
+    "A pin moves only to another exact version, its checksum, license, rust-version, and features recorded here in the same commit.",
+    "A dependency upgrade reruns the trust and platform rows it touches on Linux x86_64 and riscv64; a regenerated lock alone is no evidence.",
+    "A codec or schema change ships with wire fixtures for every changed message.",
+    "russh keeps its defaults off with ring and rsa alone: no aws-lc-rs, compression, DSA, or 3DES.",
+    "The nushell crates move together at one version, with the plugins built from this workspace.",
+    "Cargo.lock is committed, and every build and check runs with --locked.",
+    "A build records its effective rustc, cargo, linker, and target; one below the minimum is refused."
+  ]
+}

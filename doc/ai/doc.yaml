@@ -1,0 +1,8 @@
+- doc: daemon/dependencies.json
+  summary: The daemon's pinned crates, toolchain, siblings, lock, and update rules
+- doc: daemon/source_baseline.json
+  summary: The implementation's starting revisions, trees, lock, and toolchain
+- doc: daemon/test_map.tsv
+  summary: Every baseline test with its cohort in the daemon split
+- doc: daemon/operation_map.tsv
+  summary: Every baseline public operation with its future owner and task

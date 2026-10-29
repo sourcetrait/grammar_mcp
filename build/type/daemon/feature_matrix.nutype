@@ -1,0 +1,44 @@
+# FeatureMatrix: the daemon's build profiles, each a set of packages and
+# features built for every Linux target in a target directory of its own.
+#
+#     let matrix: <this type> = (open build/nuon/daemon/feature_matrix.nuon)
+#
+# A profile's command is `cargo build --locked`, `--release` where `release`
+# holds, each package by `-p`, each binary by `--bin` or the library alone by
+# `--lib` where `bins` is empty, the features by `--features`,
+# `--no-default-features` where `default_features` is false, and `--target`
+# with each target's triple. Its target directory is
+# `<target dir>/<target_subdir>/<profile>/<triple>`, the target directory the
+# one cargo resolves, so no two profiles or targets share one.
+#
+# `ships` names the package a profile's binaries go into, `grammar-mcp` or
+# `grammar-daemon`, and is null for a profile that never ships: the embedded
+# CLI, the test hooks, and the qualification probe.
+#
+# `required` and `forbidden` hold against the profile's resolved closure,
+# `cargo tree --locked -e normal` for each target: every required package
+# present and no forbidden one, a forbidden package reached by a transitive
+# edge failing as one reached directly.
+#
+# A target's `runner` says where its runtime evidence comes from; a
+# cross-build is never native evidence.
+
+record<
+    target_subdir: string,
+    targets: table<
+        triple: string,
+        runner: string
+    >,
+    profiles: table<
+        name: string,
+        summary: string,
+        packages: list<string>,
+        bins: list<string>,
+        features: list<string>,
+        default_features: bool,
+        release: bool,
+        ships: oneof<string, nothing>,
+        required: list<string>,
+        forbidden: list<string>
+    >
+>

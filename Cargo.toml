@@ -21,7 +21,7 @@ categories = []
 keywords = ["sourcetrait", "grammar"]
 
 [workspace.dependencies]
-bitcode = { version = "0.6" }
+bitcode = { version = "=0.6.9" }
 chrono = { version = "0.4.45", default-features = false, features = ["serde", "std", "unstable-locales"] }
 clap = { version = "4", features = ["derive"] }
 directories = { version = "6" }
@@ -34,6 +34,8 @@ miette = { version = "7.6", features = ["fancy-no-backtrace"] }
 nix = { version = "0.31", features = ["fs", "process", "signal", "user"] }
 rkyv = { version = "0.8" }
 rmcp = { version = "3.8", features = ["server", "transport-io", "schemars", "macros"] }
+russh = { version = "=0.65.0", default-features = false, features = ["ring", "rsa"] }
+russh-sftp = { version = "=3.0.1" }
 rustls = { version = "0.23", default-features = false, features = ["logging", "ring", "std", "tls12"] }
 schemars = { version = "1" }
 serde = { version = "1", features = ["derive"] }
