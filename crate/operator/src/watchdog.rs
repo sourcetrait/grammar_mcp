@@ -33,6 +33,7 @@ fn total_ram_kb() -> Option<f64> {
 }
 
 /// Parse `MemTotal:` (kB) out of /proc/meminfo contents.
+#[cfg(any(target_os = "linux", test))]
 pub(crate) fn parse_mem_total_kb(meminfo: &str) -> Option<u64> {
     for line in meminfo.lines() {
         if let Some(rest) = line.strip_prefix("MemTotal:") {
@@ -235,6 +236,7 @@ pub(crate) fn rising_edges(
 }
 
 /// Parse VmRSS (kB) out of `/proc/self/status` contents.
+#[cfg(any(target_os = "linux", test))]
 pub(crate) fn parse_rss_kb(status: &str) -> Option<u64> {
     for line in status.lines() {
         if let Some(rest) = line.strip_prefix("VmRSS:") {
@@ -245,6 +247,7 @@ pub(crate) fn parse_rss_kb(status: &str) -> Option<u64> {
 }
 
 /// Parse cumulative CPU jiffies (utime + stime) out of a stat line.
+#[cfg(any(target_os = "linux", test))]
 pub(crate) fn parse_cpu_ticks(stat: &str) -> Option<u64> {
     let rparen = stat.rfind(')')?;
     let fields: Vec<&str> = stat[rparen + 1..].split_whitespace().collect();

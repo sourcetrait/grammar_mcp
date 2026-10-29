@@ -38,9 +38,12 @@ Same last-')' counting as above, so field 22 is index 19.
 ## fn process_start_time
 Public because mcp marks its scratch directories with the same identity: a
 host's start sweeps a directory only when its marker's pair no longer names a
-live process (mcp's `scratch.rs`). Off Linux it is None, so a pin is never
-proven live and a scratch directory carries no marker, which the sweep leaves
-alone.
+live process (mcp's `scratch.rs`). On Linux it is field 22 of
+`/proc/<pid>/stat`, in clock ticks. On macOS it is `proc_pidinfo`'s BSD
+record, its start seconds and microseconds taken together as microseconds. The
+units differ by platform and never meet, since a pair is only checked on the
+host that wrote it. Elsewhere it is None, so a pin is never proven live and a
+scratch directory carries no marker, which the sweep leaves alone.
 
 ## struct OrphanReaper
 The subreaper is taken for its attachment property, but the same syscall

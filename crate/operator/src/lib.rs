@@ -26,9 +26,12 @@ pub(crate) use std::{
     os::unix::fs::OpenOptionsExt,
     path::PathBuf,
     process,
-    sync::{LazyLock, OnceLock},
+    sync::LazyLock,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+
+#[cfg(target_os = "linux")]
+pub(crate) use std::sync::OnceLock;
 
 pub(crate) use sourcetrait_common::{agnostic, cereal, subsys};
 

@@ -1,10 +1,13 @@
 //! The host's reap of the orphans its evals leave, and its subreaper.
+#[cfg(target_os = "linux")]
 use crate::*;
 
 /// How long a zombie must persist before we treat it as ABANDONED.
+#[cfg(target_os = "linux")]
 const REAP_GRACE_SECS: u64 = 5;
 
 /// Parse `(state, ppid)` out of a `/proc/<pid>/stat` line.
+#[cfg(any(target_os = "linux", test))]
 pub(crate) fn parse_state_ppid(stat: &str) -> Option<(String, u32)> {
     let rparen = stat.rfind(')')?;
     let mut fields = stat[rparen + 1..].split_whitespace();
@@ -14,6 +17,7 @@ pub(crate) fn parse_state_ppid(stat: &str) -> Option<(String, u32)> {
 }
 
 /// Parse a process's START TIME (field 22) out of a stat line.
+#[cfg(any(target_os = "linux", test))]
 pub(crate) fn parse_start_time(stat: &str) -> Option<u64> {
     let rparen = stat.rfind(')')?;
     stat[rparen + 1..]
@@ -29,14 +33,31 @@ pub fn process_start_time(pid: u32) -> Option<u64> {
     parse_start_time(&fs::read_to_string(format!("/proc/{pid}/stat")).ok()?)
 }
 
-/// Off Linux there is no /proc, so a pin can never be proven live.
-#[cfg(not(target_os = "linux"))]
+/// A live process's start time in microseconds, or None when it is not running.
+#[cfg(target_os = "macos")]
+pub fn process_start_time(pid: u32) -> Option<u64> {
+    use nix::libc::{PROC_PIDTBSDINFO, c_int, proc_bsdinfo, proc_pidinfo};
+    let pid = c_int::try_from(pid).ok()?;
+    let size = c_int::try_from(std::mem::size_of::<proc_bsdinfo>()).ok()?;
+    // SAFETY: proc_bsdinfo holds integers and byte arrays alone, so all zeros
+    // is a valid value of it.
+    let mut info: proc_bsdinfo = unsafe { std::mem::zeroed() };
+    // SAFETY: the buffer is a proc_bsdinfo of exactly `size` bytes, and
+    // proc_pidinfo writes at most `size` bytes into it.
+    let written =
+        unsafe { proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, (&raw mut info).cast(), size) };
+    (written == size).then(|| info.pbi_start_tvsec * 1_000_000 + info.pbi_start_tvusec)
+}
+
+/// Elsewhere no process table is read, so a pin can never be proven live.
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub fn process_start_time(_pid: u32) -> Option<u64> {
     None
 }
 
 /// Harvests children the subreaper ADOPTED that nobody is waiting on.
 pub(crate) struct OrphanReaper {
+    #[cfg(target_os = "linux")]
     seen: HashMap<u32, Instant>,
 }
 
@@ -49,6 +70,7 @@ impl Default for OrphanReaper {
 impl OrphanReaper {
     pub(crate) fn new() -> Self {
         Self {
+            #[cfg(target_os = "linux")]
             seen: HashMap::new(),
         }
     }
