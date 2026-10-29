@@ -99,7 +99,7 @@ fn the_interface_is_described_by_its_pretext_then_its_command_signatures() {
         "the open takes its mode, and the sync follows it; {description}",
     );
     let lines = signatures.lines().filter(|line| line.starts_with('`')).count();
-    assert_eq!(lines, 22, "{description}");
+    assert_eq!(lines, 26, "{description}");
 }
 
 #[test]

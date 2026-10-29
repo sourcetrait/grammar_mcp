@@ -1,11 +1,12 @@
-//! RemoteChannel runtime proof: two real grammar-mcp hosts linked over mTLS, each
-//! with a simulated rmcp consumer (stdio JSON-RPC + a REAL WSS Channel client),
-//! proving the transport end to end - the channel connect/verify/receive path, the
-//! A->B->A application echo, the mcp/remote/{Connected, Disconnected} notice shapes,
-//! and the RemoteFirstBlood fixes: the synchronous blocking open (ConnectionWoes),
-//! the bound-listener `listening` set (RemoteChannelListeners), and the oversized
-//! event auto-spill (CapNoCap). Keys are one-off and trusted directly, so this needs
-//! no OS trust-store install and runs unattended. NO colony (dead pending redesign).
+//! RemoteChannel's runtime proof: two real hosts linked over mTLS.
+//!
+//! Each host has a simulated rmcp consumer, stdio JSON-RPC and a real WSS
+//! Channel client, proving the transport end to end: the Channel's connect,
+//! verify, and receive, the A->B->A echo, the Connected and Disconnected
+//! notices, the synchronous listen and connect, each remote's state in
+//! `interface remote channel list`, the remotes file read and edited live, and the
+//! oversized event's spill. Keys are one-off and trusted directly, so this
+//! needs no OS trust store and runs unattended.
 
 use std::path::Path;
 use std::time::Duration;
@@ -121,14 +122,14 @@ fn remote_loopback_echo() {
     // The connector gets NO Connected for its open attempt (the synchronous open
     // success is the notice); a stray one within a grace window is a failure.
     assert!(
-        a.await_packet(|p| p.model == "mcp/remote/Connected", Duration::from_secs(2)).is_none(),
+        a.await_packet(|p| p.model == "remote/channel/Connected", Duration::from_secs(2)).is_none(),
         "the connector open attempt emits no Connected",
     );
 
-    // A sends test/Ping to B; A sees its own mcp/remote/Sent (driven by the write).
+    // A sends test/Ping to B; A sees its own remote/channel/Sent (driven by the write).
     let send_id = remote_send(&mut a, &nom_b, "test/Ping", "note: \"ping-1\"");
     a.await_packet(
-        |p| p.model == "mcp/remote/Sent" && p.event.contains(&send_id),
+        |p| p.model == "remote/channel/Sent" && p.event.contains(&send_id),
         Duration::from_secs(15),
     )
     .expect("A should see its own Sent for the ping");
@@ -136,7 +137,7 @@ fn remote_loopback_echo() {
     // B's agent observes the relayed packet on B's Channel...
     let relayed = b
         .await_packet(
-            |p| p.model == "test/Ping" && p.from == format!("mcp/remote/{nom_a}"),
+            |p| p.model == "test/Ping" && p.from == format!("remote/channel/{nom_a}"),
             Duration::from_secs(15),
         )
         .expect("B should receive the relayed test/Ping");
@@ -146,7 +147,7 @@ fn remote_loopback_echo() {
     remote_send(&mut b, &nom_a, "test/Loopback", "echo: \"ping-1\"");
     let looped = a
         .await_packet(
-            |p| p.model == "test/Loopback" && p.from == format!("mcp/remote/{nom_b}"),
+            |p| p.model == "test/Loopback" && p.from == format!("remote/channel/{nom_b}"),
             Duration::from_secs(15),
         )
         .expect("A should receive the test/Loopback echo - the round-trip");
@@ -154,20 +155,21 @@ fn remote_loopback_echo() {
 
     // Teardown: closing the link on A drops the established link; Disconnected is
     // retained for an established-link teardown on BOTH roles.
-    let close = a.host.interface("interface remote close 'peer'");
-    assert!(!has_error_path(&close), "`interface remote close` succeeds on an open link; got {close}");
-    a.await_packet(|p| p.model == "mcp/remote/Disconnected", Duration::from_secs(15))
+    let close = a.host.interface("interface remote channel close 'peer'");
+    assert!(!has_error_path(&close), "`interface remote channel close` succeeds on an open link; got {close}");
+    a.await_packet(|p| p.model == "remote/channel/Disconnected", Duration::from_secs(15))
         .expect("the connector sees Disconnected on teardown");
-    b.await_packet(|p| p.model == "mcp/remote/Disconnected", Duration::from_secs(15))
+    b.await_packet(|p| p.model == "remote/channel/Disconnected", Duration::from_secs(15))
         .expect("the listener sees Disconnected on teardown");
 }
 
-/// ConnectionWoes: a connector whose dial is refused fails the open SYNCHRONOUSLY
-/// (remote::open_failed), with no async Disconnected for the open attempt. (The 20s
-/// connect timeout on an accept-but-hang peer is covered by the code + const, not
-/// separately forced here - it would cost a 20s wait per run.)
+/// A connect whose dial is refused fails synchronously, `remote::channel::open_failed`.
+///
+/// No Disconnected follows for the attempt. The 20 s connect timeout on a peer
+/// that accepts and hangs is the code's constant, not forced here: it would
+/// cost 20 s a run.
 #[tested]
-fn remote_connector_open_refused_is_synchronous() {
+fn a_refused_connect_fails_synchronously() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
 
@@ -185,20 +187,18 @@ fn remote_connector_open_refused_is_synchronous() {
     );
     let mut c = Consumer::attach(host, &cert_a.ca);
 
-    let open = c.host.interface("interface remote open 'peer'");
-    assert!(has_error_path(&open), "a refused connect fails the open synchronously; got {open}");
-    assert_eq!(err_kind(&open), "remote::open_failed", "the sync failure kind; got {open}");
+    let open = c.host.interface("interface remote channel connect 'peer'");
+    assert!(has_error_path(&open), "a refused connect fails synchronously; got {open}");
+    assert_eq!(err_kind(&open), "remote::channel::open_failed", "the sync failure kind; got {open}");
     assert!(
-        c.await_packet(|p| p.model == "mcp/remote/Disconnected", Duration::from_secs(3)).is_none(),
-        "the connector open attempt emits no async Disconnected",
+        c.await_packet(|p| p.model == "remote/channel/Disconnected", Duration::from_secs(3)).is_none(),
+        "the connect attempt emits no async Disconnected",
     );
 }
 
-/// ConnectionWoes (subsumed double-open): a redundant listener open fails
-/// SYNCHRONOUSLY on the bind ("address already in use") rather than slipping past
-/// into a confusing async Disconnected.
+/// A second listen on a listening remote is refused, `remote::channel::already_open`.
 #[tested]
-fn remote_listener_double_open_fails_synchronously() {
+fn a_second_listen_is_refused() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
 
@@ -215,52 +215,180 @@ fn remote_listener_double_open_fails_synchronously() {
     );
     let mut c = Consumer::attach(host, &cert_b.ca);
 
-    let first = c.host.interface("interface remote open 'peer'");
-    assert!(!has_error_path(&first), "the first listener open binds synchronously; got {first}");
-    let second = c.host.interface("interface remote open 'peer'");
-    assert!(has_error_path(&second), "a redundant listener open fails synchronously; got {second}");
-    assert_eq!(err_kind(&second), "remote::open_failed", "the sync bind-clash kind; got {second}");
+    let first = c.host.interface("interface remote channel listen 'peer'");
+    assert!(!has_error_path(&first), "the first listen binds synchronously; got {first}");
+    let second = c.host.interface("interface remote channel listen 'peer'");
+    assert!(has_error_path(&second), "a second listen is refused; got {second}");
+    assert_eq!(err_kind(&second), "remote::channel::already_open", "the refusal's kind; got {second}");
 }
 
-/// RemoteChannelListeners: a bound-but-unpaired listener shows under `listening`
-/// (invisible before), and moves into `channels` once a peer pairs.
+/// Each remote's row reads its state: `closed`, then `listening` at its
+/// endpoint, then `open` with its peer's nom once a connect pairs.
 #[tested]
-fn remote_channels_lists_bound_listener() {
+fn remote_list_shows_each_remotes_state() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
-    let (mut a, mut b, nom_a, _nom_b) = spawn_two_hosts(root);
+    let (mut a, mut b, nom_a, nom_b) = spawn_two_hosts(root);
 
-    // B's listener binds (synchronous) but has no peer yet.
-    let open_b = b.host.interface("interface remote open 'peer'");
-    assert!(!has_error_path(&open_b), "listener open is synchronous on bind; got {open_b}");
-    let rc = remote_channels_result(&mut b);
-    assert!(
-        listing_names(&rc["listening"], "remote").contains(&"peer".to_string()),
-        "a bound-waiting listener shows under `listening`; got {rc}",
-    );
-    assert!(
-        listing_names(&rc["channels"], "alias").is_empty(),
-        "nothing is established yet; got {rc}",
-    );
+    let closed = remote_row(&mut b, "peer");
+    assert_eq!(closed["state"], "closed", "got {closed}");
+    assert!(closed["endpoint"].is_null(), "no endpoint while closed; got {closed}");
 
-    // Pair: A connects, B sees Connected, the listener moves to `channels`.
-    let open_a = a.host.interface("interface remote open 'peer'");
-    assert!(!has_error_path(&open_a), "connector open is synchronous on connect; got {open_a}");
+    let listened = b.host.interface("interface remote channel listen 'peer'");
+    assert!(!has_error_path(&listened), "the listen is synchronous on its bind; got {listened}");
+    let endpoint = envelope(&listened)["result"]["endpoint"].clone();
+    let listening = remote_row(&mut b, "peer");
+    assert_eq!(listening["state"], "listening", "got {listening}");
+    assert_eq!(listening["endpoint"], endpoint, "the endpoint the listen bound; got {listening}");
+
+    let connected = a.host.interface("interface remote channel connect 'peer'");
+    assert!(!has_error_path(&connected), "the connect is synchronous; got {connected}");
     b.await_packet(
-        |p| p.model == "mcp/remote/Connected" && p.event.contains(&nom_a),
+        |p| p.model == "remote/channel/Connected" && p.event.contains(&nom_a),
         Duration::from_secs(15),
     )
     .expect("B sees Connected on pairing");
+    let open = remote_row(&mut b, "peer");
+    assert_eq!(open["state"], "open", "got {open}");
+    assert_eq!(open["remote_mcp_nom"], nom_a, "the peer's nom; got {open}");
+    let dialed = remote_row(&mut a, "peer");
+    assert_eq!(dialed["state"], "open", "got {dialed}");
+    assert_eq!(dialed["remote_mcp_nom"], nom_b, "the peer's nom; got {dialed}");
+}
 
-    let rc2 = remote_channels_result(&mut b);
-    assert!(
-        listing_names(&rc2["channels"], "alias").contains(&"peer".to_string()),
-        "the paired listener is now an established channel; got {rc2}",
+/// The remotes file is read and edited at each command, with no restart.
+///
+/// A set makes and changes an entry, keeping the file's comments and its other
+/// entries; a get and a list read it; an unset removes it; a malformed file
+/// refuses the command, naming itself.
+#[tested]
+fn remote_entries_are_set_read_and_unset_live() {
+    let t = testing::test!({ .using_temp_dir() });
+    let root = t.temp_dir();
+    let keys = generate_keys("live", &root.join("cert"));
+    let peer = generate_keys("peer", &root.join("cert_peer"));
+    let host_dir = root.join("host");
+    write_host_config(&host_dir, &keys, "");
+    let mut host = Host::spawn_in(
+        &root.join("scratch"),
+        &["--id", "live", "--namespace", "default"],
+        &host_dir,
     );
-    assert!(
-        listing_names(&rc2["listening"], "remote").is_empty(),
-        "the listener left `listening` once paired; got {rc2}",
+    let listed = host.interface("interface remote channel list");
+    assert_eq!(envelope(&listed)["result"], json!([]), "no remotes yet; got {listed}");
+
+    let remotes = host_dir.join(".grammar").join("remotes.toml");
+    std::fs::write(&remotes, "# kept\n[[channel]]\nalias = \"zero\"\ncert = \"/k/zero.pem\"\n")
+        .expect("an entry written by hand");
+    let cert = peer.public_key.to_str().expect("a UTF-8 path");
+    let set = host.interface(&format!(
+        "interface remote channel set 'peer' --cert '{cert}' --address '127.0.0.1:9'"
+    ));
+    assert!(!has_error_path(&set), "the set holds; got {set}");
+    assert_eq!(envelope(&set)["result"]["cert"], cert, "it answers the row; got {set}");
+    let text = std::fs::read_to_string(&remotes).expect("the file");
+    assert!(text.starts_with("# kept\n"), "the file's comment stays; got {text}");
+    assert!(text.contains("alias = \"zero\""), "and its other entry; got {text}");
+
+    let changed = host.interface("interface remote channel set 'peer' --listen '127.0.0.1'");
+    assert!(!has_error_path(&changed), "a change holds; got {changed}");
+    let row = remote_row_of(&mut host, "peer");
+    assert_eq!(row["listen"], "127.0.0.1", "the field changed; got {row}");
+    assert_eq!(row["address"], "127.0.0.1:9", "the rest as it was; got {row}");
+    assert_eq!(row["state"], "closed", "got {row}");
+
+    let refused = host.interface("interface remote channel set 'other' --address '127.0.0.1:9'");
+    assert_eq!(err_kind(&refused), "remote::channel::invalid_params", "a new remote needs its cert");
+
+    let unset = host.interface("interface remote channel unset 'peer'");
+    assert!(!has_error_path(&unset), "the unset holds; got {unset}");
+    let gone = host.interface("interface remote channel get 'peer'");
+    assert_eq!(err_kind(&gone), "remote::channel::invalid_params", "got {gone}");
+    let aliases: Vec<Value> = envelope(&host.interface("interface remote channel list"))["result"]
+        .as_array()
+        .expect("a table")
+        .iter()
+        .map(|row| row["alias"].clone())
+        .collect();
+    assert_eq!(aliases, vec![json!("zero")], "the other entry stays");
+
+    std::fs::write(&remotes, "not [toml").expect("a broken file");
+    let broken = host.interface("interface remote channel list");
+    assert_eq!(err_kind(&broken), "remote::file", "got {broken}");
+    assert!(broken.to_string().contains("remotes.toml"), "it names the file; got {broken}");
+}
+
+/// With no listen address, a listen binds loopback on a random port, and a
+/// connect dials the endpoint it is given, entries made after the start.
+#[tested]
+fn a_listen_defaults_to_loopback_and_a_connect_takes_its_endpoint() {
+    let t = testing::test!({ .using_temp_dir() });
+    let root = t.temp_dir();
+    let cert_a = generate_keys("a", &root.join("cert_a"));
+    let cert_b = generate_keys("b", &root.join("cert_b"));
+    let mut b = attach_bare(root, "b", &cert_b);
+    let mut a = attach_bare(root, "a", &cert_a);
+    let nom_a = mcp_nom(&mut a);
+    for (c, peer) in [(&mut b, &cert_a), (&mut a, &cert_b)] {
+        let cert = peer.public_key.to_str().expect("a UTF-8 path");
+        let set = c.host.interface(&format!("interface remote channel set 'peer' --cert '{cert}'"));
+        assert!(!has_error_path(&set), "the set holds; got {set}");
+    }
+
+    let listened = b.host.interface("interface remote channel listen 'peer'");
+    assert!(!has_error_path(&listened), "got {listened}");
+    let endpoint = envelope(&listened)["result"]["endpoint"]
+        .as_str()
+        .expect("the listen answers its endpoint")
+        .to_string();
+    let bound: std::net::SocketAddr = endpoint.parse().expect("an ip:port");
+    assert_eq!(bound.ip().to_string(), "127.0.0.1", "loopback by default; got {endpoint}");
+    assert_ne!(bound.port(), 0, "a random port, bound; got {endpoint}");
+
+    let unaddressed = a.host.interface("interface remote channel connect 'peer'");
+    assert_eq!(err_kind(&unaddressed), "remote::channel::invalid_params", "no address to dial");
+    let connected = a
+        .host
+        .interface(&format!("interface remote channel connect 'peer' --address '{endpoint}'"));
+    assert!(!has_error_path(&connected), "the connect takes its endpoint; got {connected}");
+    b.await_packet(
+        |p| p.model == "remote/channel/Connected" && p.event.contains(&nom_a),
+        Duration::from_secs(15),
+    )
+    .expect("B sees Connected on pairing");
+}
+
+/// A listen on a taken port fails, and one on its ip alone binds a random port.
+#[tested]
+fn a_taken_port_fails_and_its_ip_alone_listens_on_a_random_one() {
+    let t = testing::test!({ .using_temp_dir() });
+    let root = t.temp_dir();
+    let cert_b = generate_keys("b", &root.join("cert_b"));
+    let cert_peer = generate_keys("peer", &root.join("cert_peer"));
+    let taken = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("a port to take");
+    let port = taken.local_addr().expect("its address").port();
+    let host_dir = root.join("host");
+    let listen = format!("127.0.0.1:{port}");
+    write_host_config(&host_dir, &cert_b, &remote_listener(&listen, &cert_peer.public_key));
+    let host = Host::spawn_in(
+        &root.join("scratch"),
+        &["--id", "taken", "--namespace", "default"],
+        &host_dir,
     );
+    let mut c = Consumer::attach(host, &cert_b.ca);
+
+    let clash = c.host.interface("interface remote channel listen 'peer'");
+    assert_eq!(err_kind(&clash), "remote::channel::open_failed", "the port is taken; got {clash}");
+    let retried = c.host.interface("interface remote channel listen 'peer' --on '127.0.0.1'");
+    assert!(!has_error_path(&retried), "a listen on the ip alone binds; got {retried}");
+    let endpoint: std::net::SocketAddr = envelope(&retried)["result"]["endpoint"]
+        .as_str()
+        .expect("its endpoint")
+        .parse()
+        .expect("an ip:port");
+    assert_ne!(endpoint.port(), port, "not the taken port");
+    assert_ne!(endpoint.port(), 0, "a port bound");
+    drop(taken);
 }
 
 /// CapNoCap (local): an oversized channel_send event auto-spills to an inbox file;
@@ -325,7 +453,7 @@ fn remote_send_spills_oversized_event() {
 
     let relayed = b
         .await_packet(
-            |p| p.model == "test/BigRemote" && p.from == format!("mcp/remote/{nom_a}"),
+            |p| p.model == "test/BigRemote" && p.from == format!("remote/channel/{nom_a}"),
             Duration::from_secs(15),
         )
         .expect("B should receive the relayed oversized event");
@@ -374,13 +502,13 @@ fn remote_send_with_returns_its_event_id() {
         .to_string();
 
     a.await_packet(
-        |p| p.model == "mcp/remote/Sent" && p.event.contains(&send_id),
+        |p| p.model == "remote/channel/Sent" && p.event.contains(&send_id),
         Duration::from_secs(15),
     )
     .expect("A's own Sent carries the returned event_id");
     let relayed = b
         .await_packet(
-            |p| p.model == "test/Files" && p.from == format!("mcp/remote/{nom_a}"),
+            |p| p.model == "test/Files" && p.from == format!("remote/channel/{nom_a}"),
             Duration::from_secs(15),
         )
         .expect("B should receive the relayed test/Files");
@@ -412,16 +540,28 @@ fn err_kind(resp: &Value) -> String {
     envelope_error_kind(resp).unwrap_or_default()
 }
 
-/// `interface remote list`'s result, owned.
-fn remote_channels_result(c: &mut Consumer) -> Value {
-    envelope(&c.host.interface("interface remote list"))["result"].clone()
+/// One remote's row, as `interface remote channel get` answers it.
+fn remote_row(c: &mut Consumer, alias: &str) -> Value {
+    remote_row_of(&mut c.host, alias)
 }
 
-/// The values under `key` across an `interface remote list` listing array.
-fn listing_names(arr: &Value, key: &str) -> Vec<String> {
-    arr.as_array()
-        .map(|a| a.iter().filter_map(|e| e[key].as_str().map(String::from)).collect())
-        .unwrap_or_default()
+/// One remote's row from a host with no consumer.
+fn remote_row_of(host: &mut Host, alias: &str) -> Value {
+    let got = host.interface(&format!("interface remote channel get '{alias}'"));
+    assert!(!has_error_path(&got), "the get holds; got {got}");
+    envelope(&got)["result"].clone()
+}
+
+/// A host named `name` with its identity alone, its consumer attached.
+fn attach_bare(root: &Path, name: &str, keys: &GeneratedKeys) -> Consumer {
+    let dir = root.join(format!("host_{name}"));
+    write_host_config(&dir, keys, "");
+    let host = Host::spawn_in(
+        &root.join(format!("scratch_{name}")),
+        &["--id", &format!("bare_{name}"), "--namespace", "default"],
+        &dir,
+    );
+    Consumer::attach(host, &keys.ca)
 }
 
 /// The inbox-relative spill path from a spill-pointer packet's event.
@@ -461,15 +601,15 @@ fn spawn_two_hosts(root: &Path) -> (Consumer, Consumer, String, String) {
     (a, b, nom_a, nom_b)
 }
 
-/// Open the listener (B) then the connector (A) - both synchronous - and wait for
-/// B's Connected, so the link is established when this returns.
+/// B listens and A connects, both synchronous, then B's Connected is awaited, so
+/// the link is established when this returns.
 fn pair(a: &mut Consumer, b: &mut Consumer, nom_a: &str) {
-    let open_b = b.host.interface("interface remote open 'peer'");
-    assert!(!has_error_path(&open_b), "listener open is synchronous on bind; got {open_b}");
-    let open_a = a.host.interface("interface remote open 'peer'");
-    assert!(!has_error_path(&open_a), "connector open is synchronous on connect; got {open_a}");
+    let open_b = b.host.interface("interface remote channel listen 'peer'");
+    assert!(!has_error_path(&open_b), "the listen is synchronous on its bind; got {open_b}");
+    let open_a = a.host.interface("interface remote channel connect 'peer'");
+    assert!(!has_error_path(&open_a), "the connect is synchronous; got {open_a}");
     b.await_packet(
-        |p| p.model == "mcp/remote/Connected" && p.event.contains(nom_a),
+        |p| p.model == "remote/channel/Connected" && p.event.contains(nom_a),
         Duration::from_secs(15),
     )
     .expect("B sees Connected on pairing");

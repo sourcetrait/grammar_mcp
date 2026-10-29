@@ -2,10 +2,10 @@
 //! Remote links: two known-public-key mTLS connections to one peer.
 //!
 //! One connection carries messages and control, the other files.
-//! remote_channel_open opens a link on demand, as a connector or a listener; its
-//! open task emits mcp/remote/Connected once both connections handshake and
-//! mcp/remote/Disconnected when the link ends. A sent packet is emitted on the
-//! receiver's Channel from `mcp/remote/<sender_nom>`, its files alongside.
+//! `interface remote channel listen` and `connect` open a link on demand; its open
+//! task emits remote/channel/Connected once both connections handshake and
+//! remote/channel/Disconnected when the link ends. A sent packet is emitted on the
+//! receiver's Channel from `remote/channel/<sender_nom>`, its files alongside.
 use crate::*;
 
 /// The client handshake's server name, which the known-public-key match ignores.
@@ -17,11 +17,11 @@ const CLOSE_FRAME_GRACE: tk::TkDuration = tk::TkDuration::from_secs(2);
 /// One file chunk's uncompressed payload ceiling; zstd + the frame ride on top.
 const CHUNK_BYTES: usize = 256 * 1024;
 
-/// The host's lifecycle and delivery models, under the mcp/ reservation.
-const MODEL_CONNECTED: &str = "mcp/remote/Connected";
-const MODEL_DISCONNECTED: &str = "mcp/remote/Disconnected";
-const MODEL_SENT: &str = "mcp/remote/Sent";
-const MODEL_UNSENT: &str = "mcp/remote/Unsent";
+/// The host's lifecycle and delivery models, under the remote/ reservation.
+const MODEL_CONNECTED: &str = "remote/channel/Connected";
+const MODEL_DISCONNECTED: &str = "remote/channel/Disconnected";
+const MODEL_SENT: &str = "remote/channel/Sent";
+const MODEL_UNSENT: &str = "remote/channel/Unsent";
 
 /// Every open link, keyed by alias, behind a std Mutex an eval thread can take.
 static REMOTE_LINKS: LazyLock<Arc<std::sync::Mutex<HashMap<String, RemoteLinkEntry>>>> =
@@ -98,27 +98,15 @@ pub(crate) fn safe_dest(dest: &str) -> bool {
 /// How long a connector's dial may take before the open fails.
 const CONNECT_TIMEOUT: tk::TkDuration = tk::TkDuration::from_secs(20);
 
-/// Open a configured link, blocking on its bind or its connect.
-pub(crate) async fn open_remote_blocking(
+/// Connect to `alias`'s peer at `addr`, then watch for its teardown behind.
+pub(crate) async fn connect_remote(
     self_mcp_nom: &datum::NomPair,
-    entry: RemoteConfig,
-) -> Result<(), String> {
-    match entry.role.clone() {
-        RemoteRole::Connector { addr } => open_connector(self_mcp_nom, entry, addr).await,
-        RemoteRole::Listener { bind, allow } => {
-            open_listener(self_mcp_nom, entry, bind, allow).await
-        }
-    }
-}
-
-/// Connect, register the link, and watch for its teardown in the background.
-async fn open_connector(
-    self_mcp_nom: &datum::NomPair,
-    entry: RemoteConfig,
-    addr: std::net::SocketAddr,
+    alias: String,
+    keys: LinkKeys,
+    addr: SocketAddr,
 ) -> Result<(), String> {
     let (handle, msg_join, file_join) =
-        match tk::timeout(CONNECT_TIMEOUT, connect_link(self_mcp_nom, &entry, addr)).await {
+        match tk::timeout(CONNECT_TIMEOUT, connect_link(self_mcp_nom, &keys, addr)).await {
             Ok(Ok(drivers)) => drivers,
             Ok(Err(e)) => return Err(format!("connect {addr}: {e}")),
             Err(_) => {
@@ -129,7 +117,6 @@ async fn open_connector(
             }
         };
     let peer_nom = handle.remote_mcp_nom.clone();
-    let alias = entry.alias.clone();
     remote_links()
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -143,24 +130,28 @@ async fn open_connector(
     Ok(())
 }
 
-/// Bind, then accept and serve the peer in the background.
-async fn open_listener(
+/// Listen for `alias`'s peer on `bind`, answering the address bound.
+///
+/// The pairing goes on behind.
+pub(crate) async fn listen_remote(
     self_mcp_nom: &datum::NomPair,
-    entry: RemoteConfig,
-    bind: std::net::SocketAddr,
-    allow: Option<std::net::IpAddr>,
-) -> Result<(), String> {
-    let (listener, acceptor) = bind_listener(&entry, bind)
+    alias: String,
+    keys: LinkKeys,
+    bind: SocketAddr,
+) -> Result<SocketAddr, String> {
+    let (listener, acceptor) = bind_listener(&keys, bind)
         .await
         .map_err(|e| format!("bind {bind}: {e}"))?;
-    let alias = entry.alias.clone();
+    let bound = listener
+        .local_addr()
+        .map_err(|e| format!("bind {bind}: {e}"))?;
     let seq = LISTENER_SEQ.fetch_add(1, Ordering::Relaxed);
     let cancel = tku::CancellationToken::new();
     let (released_tx, released_rx) = tk::oneshot::channel::<()>();
     bound_listeners().lock().unwrap_or_else(|e| e.into_inner()).insert(
         alias.clone(),
         BoundListener {
-            addr: bind,
+            addr: bound,
             seq,
             cancel: cancel.clone(),
             released: Some(released_rx),
@@ -171,7 +162,7 @@ async fn open_listener(
         let accepted = tokio::select! {
             biased;
             _ = cancel.cancelled() => None,
-            accepted = accept_and_pair(&self_mcp_nom, listener, acceptor, allow) => Some(accepted),
+            accepted = accept_and_pair(&self_mcp_nom, listener, acceptor) => Some(accepted),
         };
         match accepted {
             None => {
@@ -180,7 +171,7 @@ async fn open_listener(
             }
             Some(Ok((handle, msg_join, file_join))) => {
                 let peer_nom = handle.remote_mcp_nom.clone();
-                let link = RemoteLinkEntry { handle, addr: bind };
+                let link = RemoteLinkEntry { handle, addr: bound };
                 if let Err(link) = promote_listener(&alias, seq, link) {
                     link.handle.cancel();
                     let _ = released_tx.send(());
@@ -203,7 +194,7 @@ async fn open_listener(
             }
         }
     });
-    Ok(())
+    Ok(bound)
 }
 
 /// Move a paired listener's link into the registry, unless it was closed first.
@@ -265,7 +256,7 @@ fn emit_lifecycle(
     push_report(model, nu::Value::record(event, span));
 }
 
-/// Emit mcp/remote/Disconnected {remote} for a listener closed before it paired.
+/// Emit remote/channel/Disconnected {remote}: a listener closed before it paired.
 fn emit_closed(alias: &str) {
     let span = nu::Span::unknown();
     let mut event = nu::Record::new();
@@ -273,7 +264,7 @@ fn emit_closed(alias: &str) {
     push_report(MODEL_DISCONNECTED, nu::Value::record(event, span));
 }
 
-/// Emit mcp/remote/Disconnected {remote, error} when a link never established.
+/// Emit remote/channel/Disconnected {remote, error} when a link never established.
 fn emit_open_failed(
     alias: &str,
     kind: &str,
@@ -289,11 +280,9 @@ fn emit_open_failed(
     push_report(MODEL_DISCONNECTED, nu::Value::record(event, span));
 }
 
-/// What connecting to a remote acceptor needs (a resolved connector entry).
-pub(crate) struct RemoteLinkOptions {
-    /// The acceptor's listen address.
-    pub addr: std::net::SocketAddr,
-    /// This host's own certificate, presented as the client's.
+/// The certificates a link presents and matches: this host's pair, the peer's.
+pub(crate) struct LinkKeys {
+    /// This host's own certificate, presented in either role.
     pub self_cert: PathBuf,
     /// The private key paired with `self_cert`.
     pub self_key: PathBuf,
@@ -402,16 +391,10 @@ type LinkDrivers = (RemoteLinkHandle, tk::JoinHandle<()>, tk::JoinHandle<()>);
 /// Connect as the initiator: both mTLS connections, handshaked, then driven.
 async fn connect_link(
     self_mcp_nom: &datum::NomPair,
-    entry: &RemoteConfig,
-    addr: std::net::SocketAddr,
+    keys: &LinkKeys,
+    addr: SocketAddr,
 ) -> io::Result<LinkDrivers> {
-    let opts = RemoteLinkOptions {
-        addr,
-        self_cert: entry.self_cert.clone(),
-        self_key: entry.self_key.clone(),
-        peer_cert: entry.peer_cert.clone(),
-    };
-    let connector = tls::TlsConnector::from(client_config(&opts)?);
+    let connector = tls::TlsConnector::from(client_config(keys)?);
     let (remote_msg, msg_read, msg_write) =
         connect_conn(&connector, addr, self_mcp_nom, RemoteStream::Message).await?;
     let (remote_file, file_read, file_write) =
@@ -424,16 +407,12 @@ async fn connect_link(
     ))
 }
 
-/// Bind the listener and build its TLS acceptor, the open's synchronous half.
+/// Bind the listener and build its TLS acceptor, the listen's synchronous half.
 async fn bind_listener(
-    entry: &RemoteConfig,
-    bind: std::net::SocketAddr,
+    keys: &LinkKeys,
+    bind: SocketAddr,
 ) -> io::Result<(tk::TcpListener, tls::TlsAcceptor)> {
-    let tls_config = server_config(
-        &entry.self_cert,
-        &entry.self_key,
-        &entry.peer_cert,
-    )?;
+    let tls_config = server_config(&keys.self_cert, &keys.self_key, &keys.peer_cert)?;
     let acceptor = tls::TlsAcceptor::from(tls_config);
     let listener = tk::TcpListener::bind(bind).await?;
     Ok((listener, acceptor))
@@ -444,21 +423,11 @@ async fn accept_and_pair(
     self_mcp_nom: &datum::NomPair,
     listener: tk::TcpListener,
     acceptor: tls::TlsAcceptor,
-    allow: Option<std::net::IpAddr>,
 ) -> io::Result<LinkDrivers> {
     let mut message: Option<(String, AcceptFramedRead, AcceptFramedWrite)> = None;
     let mut file: Option<(String, AcceptFramedRead, AcceptFramedWrite)> = None;
     while message.is_none() || file.is_none() {
-        let (tcp, peer) = listener.accept().await?;
-        if let Some(allow_ip) = allow
-            && peer.ip() != allow_ip
-        {
-            eprintln!(
-                "grammar: remote listener refuses source {} (allows {allow_ip} only)",
-                peer.ip(),
-            );
-            continue;
-        }
+        let (tcp, _) = listener.accept().await?;
         let (remote, stream, framed_read, framed_write) =
             accept_conn(&acceptor, self_mcp_nom, tcp).await?;
         match stream {
@@ -592,7 +561,7 @@ struct DeliverInfo {
 struct RecvContext {
     /// Per-id slots, coordinating the message + file connections.
     slots: Arc<std::sync::Mutex<HashMap<String, DeliverSlot>>>,
-    /// The peer's McpNom - the `from = mcp/remote/<nom>` a relayed packet gets.
+    /// The peer's McpNom - the `from = remote/channel/<nom>` a relayed packet gets.
     peer_nom: String,
 }
 
@@ -828,20 +797,17 @@ fn relay_to_channel(
     info: &DeliverInfo,
     has_files: bool,
 ) -> Result<(), (String, String)> {
-    if info.model.starts_with(MCP_RESERVED_PREFIX) {
+    if let Some(prefix) = reserved_prefix(&info.model) {
         return Err((
             "reserved_model".to_string(),
-            format!(
-                "model `{}` lies under the host's `{MCP_RESERVED_PREFIX}` reservation",
-                info.model,
-            ),
+            format!("model `{}` lies under the host's `{prefix}` reservation", info.model),
         ));
     }
     let event = nu::from_nuon(&info.event_nuon, None)
         .map_err(|e| ("event_unparseable".to_string(), e.to_string()))?;
     let event = rewrite_spill_pointer(event, &ctx.peer_nom, id);
     let event_nuon = render_nuon(&event).map_err(|e| ("render".to_string(), e))?;
-    let from = format!("{MCP_RESERVED_PREFIX}remote/{}", ctx.peer_nom);
+    let from = format!("{REMOTE_RESERVED_PREFIX}channel/{}", ctx.peer_nom);
     let attached = has_files.then(|| format!("{}/{}", ctx.peer_nom, id));
     let channel = channel_handle();
     let msg_id = mint_msg_id(
@@ -1259,7 +1225,7 @@ async fn close_acceptor(
 }
 
 /// Build the client config: present our public key, match the peer's known one.
-fn client_config(opts: &RemoteLinkOptions) -> io::Result<Arc<tls::ClientConfig>> {
+fn client_config(opts: &LinkKeys) -> io::Result<Arc<tls::ClientConfig>> {
     let verifier = Arc::new(PublicKeyVerifier::new(load_public_key(&opts.peer_cert)?));
     let provider = Arc::new(rv::default_provider());
     let config = tls::ClientConfig::builder_with_provider(provider)

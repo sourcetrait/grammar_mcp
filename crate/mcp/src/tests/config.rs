@@ -12,6 +12,7 @@ fn from_text(text: &str) -> Result<Config, String> {
         PathBuf::from("/w"),
         DenySet::default(),
         false,
+        PathBuf::from("/w/.grammar/remotes.toml"),
     )
 }
 
@@ -30,7 +31,6 @@ fn an_empty_file_yields_the_embedded_defaults() {
         "an unpinned port must stay None, not become a 0 sentinel",
     );
     assert!(config.identity.is_none(), "the embedded base names no identity");
-    assert!(config.remotes.by_alias.is_empty(), "and no remote");
 }
 
 #[test]
@@ -81,6 +81,7 @@ fn the_test_flag_is_carried_on_the_runtime_config() {
         PathBuf::from("/w"),
         DenySet::default(),
         true,
+        PathBuf::from("/w/.grammar/remotes.toml"),
     )
     .expect("valid");
     assert!(config.test, "the watchdog half reads this at every tick");
@@ -133,16 +134,22 @@ fn an_identity_missing_a_file_is_rejected() {
 
 #[test]
 fn a_field_by_its_former_name_is_rejected() {
-    // `cert_file`, `key_file`, and a remote's `public_key_file` became `cert` and
-    // `key`; a file still naming the old ones must fail loudly.
-    let remote = "[[remote]]\nalias = \"bob\"\naddress = \"127.0.0.1:9001\"\n";
+    // `cert_file` and `key_file` became `cert` and `key`; a file still naming the
+    // old ones must fail loudly.
     for text in [
-        "[identity]\ncert_file = \"/k/self.pem\"\nkey = \"/k/self.key.pem\"\n".to_string(),
-        "[identity]\ncert = \"/k/self.pem\"\nkey_file = \"/k/self.key.pem\"\n".to_string(),
-        format!("{IDENTITY}\n{remote}public_key_file = \"/keys/bob.pem\"\n"),
+        "[identity]\ncert_file = \"/k/self.pem\"\nkey = \"/k/self.key.pem\"\n",
+        "[identity]\ncert = \"/k/self.pem\"\nkey_file = \"/k/self.key.pem\"\n",
     ] {
-        assert!(from_text(&text).is_err(), "{text:?} must be rejected");
+        assert!(from_text(text).is_err(), "{text:?} must be rejected");
     }
+}
+
+#[test]
+fn a_remote_in_the_config_file_is_rejected() {
+    // The remotes live in `remotes.toml` beside the config; one left here is stale.
+    let text = format!("{IDENTITY}\n[[remote]]\nalias = \"bob\"\ncert = \"/keys/bob.pem\"\n");
+    let err = from_text(&text).expect_err("a [[remote]] in the config file must fail");
+    assert!(err.contains("remote"), "got {err}");
 }
 
 #[test]
@@ -217,152 +224,10 @@ fn a_uenv_home_stands_in_front_of_its_standard_variable() {
 fn the_agent_file_is_read_from_its_directory() {
     let dir = tempfile::tempdir().expect("a directory");
     let none = Config::read_agent_toml(dir.path()).expect("an absent file is none");
-    assert!(none.identity.is_none() && none.remote.is_empty());
+    assert!(none.identity.is_none());
     let grammar = dir.path().join(".grammar");
     fs::create_dir_all(&grammar).expect("its .grammar");
     fs::write(grammar.join("config.toml"), "[channel]\nport = 47800\n").expect("its file");
     let file = Config::read_agent_toml(dir.path()).expect("the file is read");
     assert_eq!(file.channel.and_then(|channel| channel.port), Some(47800));
-}
-
-#[test]
-fn a_remote_entry_with_listen_is_a_listener() {
-    let text = format!(
-        "{IDENTITY}
-[[remote]]
-alias = \"bob\"
-listen = \"127.0.0.1:9000\"
-address = \"127.0.0.1\"
-cert = \"/keys/bob.pem\"
-"
-    );
-    let config = from_text(&text).expect("valid listener entry");
-    let entry = config.remotes.by_alias.get("bob").expect("bob present");
-    match &entry.role {
-        RemoteRole::Listener { bind, allow } => {
-            assert_eq!(bind.to_string(), "127.0.0.1:9000");
-            // `address` on a listener is a bare source-IP filter.
-            assert_eq!(allow.map(|ip| ip.to_string()), Some("127.0.0.1".to_string()));
-        }
-        other => panic!("expected a listener, got {other:?}"),
-    }
-    assert!(entry.peer_cert.ends_with("bob.pem"));
-    assert!(
-        entry.self_cert.ends_with("self.pem")
-            && entry.self_key.ends_with("self.key.pem"),
-        "a link presents the host's [identity]",
-    );
-}
-
-#[test]
-fn a_listener_address_with_a_port_is_rejected() {
-    // A listener's `address` is a bare source-IP filter; the host:port form is the
-    // connector's dial-target format and must not be accepted here.
-    let text = format!(
-        "{IDENTITY}
-[[remote]]
-alias = \"bob\"
-listen = \"127.0.0.1:9000\"
-address = \"127.0.0.1:5555\"
-cert = \"/keys/bob.pem\"
-"
-    );
-    let err = from_text(&text).expect_err("a host:port listener address must fail");
-    assert!(err.contains("bare IP"), "got {err}");
-}
-
-#[test]
-fn a_remote_entry_without_listen_is_a_connector() {
-    let text = format!(
-        "{IDENTITY}
-[[remote]]
-alias = \"bob\"
-address = \"127.0.0.1:9001\"
-cert = \"/keys/bob.pem\"
-"
-    );
-    let config = from_text(&text).expect("valid connector entry");
-    match &config.remotes.by_alias.get("bob").expect("bob present").role {
-        RemoteRole::Connector { addr } => {
-            assert_eq!(addr.to_string(), "127.0.0.1:9001");
-        }
-        other => panic!("expected a connector, got {other:?}"),
-    }
-}
-
-#[test]
-fn a_connector_without_an_address_is_rejected() {
-    let text = format!(
-        "{IDENTITY}
-[[remote]]
-alias = \"bob\"
-cert = \"/keys/bob.pem\"
-"
-    );
-    let err = from_text(&text).expect_err("a connector needs an address");
-    assert!(err.contains("address"), "got {err}");
-}
-
-#[test]
-fn a_remote_entry_missing_its_peer_key_is_rejected() {
-    let text = format!("{IDENTITY}\n[[remote]]\nalias = \"bob\"\naddress = \"127.0.0.1:9001\"\n");
-    let err = from_text(&text).expect_err("a missing peer key must fail");
-    assert!(err.contains("bob") && err.contains("`cert`"), "got {err}");
-}
-
-#[test]
-fn a_remote_without_an_identity_is_rejected() {
-    let text = "\
-[[remote]]
-alias = \"bob\"
-address = \"127.0.0.1:9001\"
-cert = \"/keys/bob.pem\"
-";
-    let err = from_text(text).expect_err("a link presents the host's identity");
-    assert!(err.contains("[identity]"), "got {err}");
-}
-
-#[test]
-fn a_retired_remote_key_is_rejected() {
-    // A link's own key pair is the host's [identity]; a stale per-link pair must fail
-    // loudly rather than be silently ignored.
-    let text = format!(
-        "{IDENTITY}
-[[remote]]
-alias = \"bob\"
-address = \"127.0.0.1:9001\"
-self_public_key_file = \"/keys/self.pem\"
-cert = \"/keys/bob.pem\"
-"
-    );
-    assert!(from_text(&text).is_err(), "a per-link self key must be rejected");
-}
-
-#[test]
-fn a_typoed_remote_field_is_rejected() {
-    // deny_unknown_fields on the entry catches a field typo loudly.
-    let text = format!("{IDENTITY}\n[[remote]]\nalias = \"bob\"\naddres = \"127.0.0.1:9001\"\n");
-    assert!(from_text(&text).is_err(), "a typo'd field must be rejected");
-}
-
-#[test]
-fn a_duplicate_alias_is_rejected() {
-    let entry = "[[remote]]\nalias = \"bob\"\naddress = \"127.0.0.1:9001\"\ncert = \"/keys/bob.pem\"\n";
-    let err = from_text(&format!("{IDENTITY}\n{entry}{entry}"))
-        .expect_err("an alias names one peer");
-    assert!(err.contains("duplicate"), "got {err}");
-}
-
-#[test]
-fn a_bad_remote_address_fails_the_load() {
-    let text = format!(
-        "{IDENTITY}
-[[remote]]
-alias = \"bob\"
-address = \"not-an-address\"
-cert = \"/keys/bob.pem\"
-"
-    );
-    let err = from_text(&text).expect_err("a non ip:port address must fail");
-    assert!(err.contains("is not ip:port"), "got {err}");
 }

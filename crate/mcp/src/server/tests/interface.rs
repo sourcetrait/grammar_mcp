@@ -58,9 +58,13 @@ fn kind_of(command: &InterfaceCommand) -> CommandKind {
         InterfaceCommand::ChannelReady => CommandKind::ChannelReady,
         InterfaceCommand::ChannelClose => CommandKind::ChannelClose,
         InterfaceCommand::ChannelConfig(_) => CommandKind::ChannelConfig,
-        InterfaceCommand::RemoteOpen(_) => CommandKind::RemoteOpen,
-        InterfaceCommand::RemoteClose(_) => CommandKind::RemoteClose,
         InterfaceCommand::RemoteList => CommandKind::RemoteList,
+        InterfaceCommand::RemoteGet(_) => CommandKind::RemoteGet,
+        InterfaceCommand::RemoteSet(_) => CommandKind::RemoteSet,
+        InterfaceCommand::RemoteUnset(_) => CommandKind::RemoteUnset,
+        InterfaceCommand::RemoteListen(_) => CommandKind::RemoteListen,
+        InterfaceCommand::RemoteConnect(_) => CommandKind::RemoteConnect,
+        InterfaceCommand::RemoteClose(_) => CommandKind::RemoteClose,
         InterfaceCommand::EquipNew(_) => CommandKind::EquipNew,
         InterfaceCommand::EquipInstall(_) => CommandKind::EquipInstall,
         InterfaceCommand::EquipCheck(_) => CommandKind::EquipCheck,
@@ -120,6 +124,41 @@ fn arguments_reach_the_tools_parameters() {
         Ok(InterfaceCommand::Help(p)) => assert_eq!(p.namepath, "grammar:eye:git"),
         other => panic!("got {other:?}"),
     }
+}
+
+#[test]
+fn a_remote_takes_its_flags() {
+    match parse("interface remote channel listen 'peer' --on '127.0.0.1'") {
+        Ok(InterfaceCommand::RemoteListen(p)) => {
+            assert_eq!(p.alias, "peer");
+            assert_eq!(p.on.as_deref(), Some("127.0.0.1"));
+        }
+        other => panic!("got {other:?}"),
+    }
+    match parse("interface remote channel listen 'peer'") {
+        Ok(InterfaceCommand::RemoteListen(p)) => assert!(p.on.is_none(), "a flag absent is unset"),
+        other => panic!("got {other:?}"),
+    }
+    match parse("interface remote channel set 'peer' --cert '~/k/p.pem' --address '127.0.0.1:9'") {
+        Ok(InterfaceCommand::RemoteSet(p)) => {
+            assert_eq!(p.cert.as_deref(), Some("~/k/p.pem"));
+            assert_eq!(p.address.as_deref(), Some("127.0.0.1:9"));
+            assert_eq!(p.listen, None);
+        }
+        other => panic!("got {other:?}"),
+    }
+    match parse("interface remote channel connect 'peer' --address '127.0.0.1:9'") {
+        Ok(InterfaceCommand::RemoteConnect(p)) => {
+            assert_eq!(p.address.as_deref(), Some("127.0.0.1:9"));
+        }
+        other => panic!("got {other:?}"),
+    }
+    assert!(!refused("interface remote channel listen 'peer' --force").is_empty(), "no `--force`");
+    assert!(!refused("interface remote channel open 'peer'").is_empty(), "`open` is retired");
+    assert!(
+        !refused("interface remote list").is_empty(),
+        "the commands sit under `remote channel`"
+    );
 }
 
 #[test]
@@ -242,6 +281,10 @@ fn the_signatures_cover_every_command_by_topic() {
          `purview configure [purview: string, namepaths: list<string>]: nothing -> record`\n"
     ));
     assert!(rendered.contains("--spam-warn-rate: int"), "{rendered}");
+    assert!(
+        rendered.contains("`remote channel listen [alias: string, --on: string]: nothing -> record`"),
+        "a remote channel command renders its words; {rendered}",
+    );
     assert!(!rendered.contains("def ") && !rendered.contains("- `"), "{rendered}");
 }
 

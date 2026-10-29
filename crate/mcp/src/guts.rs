@@ -54,6 +54,7 @@ fn ensure_test_config() {
         config.id = "test".to_string();
         config.namespace = "default".to_string();
         config.work_dir = root.join("work");
+        config.remotes_file = root.join(".grammar").join(REMOTES_FILE);
         let _ = CONFIG.set(config);
         init_engine().expect("the engine starts for the tests");
     });

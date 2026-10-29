@@ -22,18 +22,25 @@ The two violation variants `unreachable!()` here deliberately: they render throu
 `bucket`, and reaching this arm would mean a caller bypassed that path. `Engine` takes
 the engine's kind.
 
-`remote::open_failed` is the SYNCHRONOUS bind/connect failure of a blocking
-`interface remote open` (ConnectionWoes): distinct from the async
-`mcp/remote/Disconnected {error}` Channel model, which now fires only for a listener's
+The remote kinds name their remote's kind, `remote::channel::`, as the commands do,
+so a remote engine's sit apart under `remote::engine::` (User).
+
+`remote::channel::open_failed` is the synchronous bind or connect failure of a
+blocking `interface remote channel listen` or `connect`: distinct from the async
+`remote/channel/Disconnected {error}` Channel model, which fires only for a listener's
 post-bind accept failure or an established link's later teardown.
+
+`remote::file` is the remotes file's own refusal, a file that doesn't parse or holds
+a malformed entry, named with its path; a bad value a command was given is that
+command's `remote::channel::invalid_params` instead.
 
 An `interface` call's refusal is `interface::invalid` rows, gathered under
 `InterfaceViolations`, each at its position in the command; a command that parsed and ran
 refuses with its own kinds, as its tool did.
 
-`remote::channel_unverified` refuses an `interface remote open` while the Channel isn't
-verified, before any bind or connect: the link's notices and relays ride the Channel's
-gate and would drop.
+`remote::channel::unverified` refuses an `interface remote channel listen` or
+`connect` while the Channel isn't verified, before any bind or connect: the link's
+notices and relays ride the Channel's gate and would drop.
 
 `channel::wrong_mode` names the mode the Channel is open in and the one asked for:
 an open in the other mode, or a sync on an async Channel, each told to close

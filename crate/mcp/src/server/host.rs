@@ -184,11 +184,11 @@ impl EngineHost for McpHost {
     }
 }
 
-/// The `mcp/` reservation is host-origin only; an agent send picks another path.
+/// Refuse a model under the host's `mcp/` or `remote/` reservation.
 fn reject_reserved_model(model: &str) -> Result<(), String> {
-    if model.starts_with(MCP_RESERVED_PREFIX) {
+    if let Some(prefix) = reserved_prefix(model) {
         return Err(format!(
-            "`{MCP_RESERVED_PREFIX}` is reserved for host-originated models; \
+            "`{prefix}` is reserved for host-originated models; \
              choose a model path outside it",
         ));
     }
@@ -263,7 +263,7 @@ fn spill_remote_event(
     Ok((pointer_nuon, payloads))
 }
 
-/// The whole config as a nu record, mirroring the TOML's tables but `[[remote]]`.
+/// The whole config as a nu record, mirroring the TOML's tables.
 fn config_record() -> nu::Value {
     let span = nu::Span::unknown();
     let cfg = config();

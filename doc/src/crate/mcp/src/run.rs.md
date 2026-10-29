@@ -77,6 +77,8 @@ arrived on.
 The file is `--config`'s when one is named, else the agent's own under the
 directory the host starts in, read once here: nothing an eval does moves the
 host's own cwd, and nothing after the load reads the start directory again.
+The remotes file's path is the config file's sibling, fixed here, though the
+file itself is read at each remote command (`remotes.rs`).
 
 The two surfaces are disjoint by design, so there is no precedence to resolve
 between flag and file. What makes that safe rather than fragile is

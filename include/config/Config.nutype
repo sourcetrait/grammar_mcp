@@ -3,8 +3,8 @@
 #     let cfg: <this type> = (grimm get_config_all)
 #
 # One model describes both surfaces. The record `grimm get_config_all` returns
-# mirrors the config file table for table and key for key, `[[remote]]` aside, so
-# this type annotates the parsed file and the live reading equally. That is also
+# mirrors the config file table for table and key for key, so this type annotates
+# the parsed file and the live reading equally. That is also
 # what makes a dotted key a real path: `get_config "supervisor.cpu_warn_fraction"`
 # and `get_config_all | get supervisor.cpu_warn_fraction` are the same question
 # asked two ways, because the key is the path into this shape.

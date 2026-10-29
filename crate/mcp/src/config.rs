@@ -23,13 +23,11 @@ pub(crate) struct ConfigToml {
     pub channel: Option<ChannelConfigToml>,
     pub supervisor: Option<SupervisorConfigToml>,
     pub identity: Option<IdentityConfigToml>,
-    #[serde(default)]
-    pub remote: Vec<RemoteToml>,
 }
 
 /// The `[identity]` table (file layer): the host's own key pair.
 ///
-/// The Channel presents it, and so does every `[[remote]]` link.
+/// The Channel presents it, and so does every remote channel's link.
 #[derive(Debug, Clone, Default, ser::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct IdentityConfigToml {
@@ -37,23 +35,6 @@ pub(crate) struct IdentityConfigToml {
     pub cert: Option<String>,
     /// The private key paired with `cert`, PEM.
     pub key: Option<String>,
-}
-
-/// One `[[remote]]` entry (file layer): a peer to link with, by its alias.
-///
-/// Its role is the presence of `listen`: set, this host binds and waits as the
-/// listener; unset, it dials `address` as the connector.
-#[derive(Debug, Clone, ser::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct RemoteToml {
-    /// The name remote_channel_open addresses this peer by.
-    pub alias: Option<String>,
-    /// `ip:port` to bind; present = listener, absent = connector.
-    pub listen: Option<String>,
-    /// A connector's peer `ip:port`, required; a listener's optional bare source IP.
-    pub address: Option<String>,
-    /// The peer's known certificate to match; `remote_` is implied by the entry.
-    pub cert: Option<String>,
 }
 
 /// The `[supervisor]` table: when a resource level is worth one warning.
@@ -95,8 +76,8 @@ pub(crate) struct Config {
     pub supervisor: SupervisorConfig,
     /// The host's own key pair, from `[identity]`; none when the file names none.
     pub identity: Option<IdentityConfig>,
-    /// Configured remote peers, from the file's `[[remote]]` entries.
-    pub remotes: RemotesConfig,
+    /// The remotes file beside the config file, read at each remote command.
+    pub remotes_file: PathBuf,
 }
 
 /// The host's own key pair (model layer), each path expanded.
@@ -104,37 +85,6 @@ pub(crate) struct Config {
 pub(crate) struct IdentityConfig {
     pub cert: PathBuf,
     pub key: PathBuf,
-}
-
-/// A resolved remote peer (model layer): its role and its mTLS key files.
-#[derive(Debug, Clone)]
-pub(crate) struct RemoteConfig {
-    pub alias: String,
-    pub role: RemoteRole,
-    /// The certificate this host presents, `[identity]`'s.
-    pub self_cert: PathBuf,
-    /// The private key paired with `self_cert`, `[identity]`'s key.
-    pub self_key: PathBuf,
-    /// The peer's known certificate, matched byte-for-byte.
-    pub peer_cert: PathBuf,
-}
-
-/// The resolved RemoteChannel peer set (model layer), by alias.
-#[derive(Debug, Clone, Default)]
-pub(crate) struct RemotesConfig {
-    pub by_alias: HashMap<String, RemoteConfig>,
-}
-
-/// A remote entry's role, decided by the presence of `listen`.
-#[derive(Debug, Clone)]
-pub(crate) enum RemoteRole {
-    /// Dial the peer at this address.
-    Connector { addr: std::net::SocketAddr },
-    /// Bind here and wait; if `allow` is set, require that inbound source IP.
-    Listener {
-        bind: std::net::SocketAddr,
-        allow: Option<std::net::IpAddr>,
-    },
 }
 
 /// The channel hub's operating parameters.
@@ -231,85 +181,6 @@ fn merged_supervisor(
     })
 }
 
-impl RemoteConfig {
-    /// Resolve one `[[remote]]` entry into a peer, its own key pair the identity's.
-    ///
-    /// Its role is the presence of `listen`; the peer's public key is required.
-    fn resolve(
-        entry: RemoteToml,
-        identity: &IdentityConfig,
-    ) -> Result<Self, String> {
-        let alias = entry
-            .alias
-            .ok_or_else(|| "a [[remote]] entry is missing `alias`".to_string())?;
-        let peer_cert = entry
-            .cert
-            .ok_or_else(|| format!("[[remote]] `{alias}` is missing `cert`"))?;
-        let role = match entry.listen {
-            Some(listen) => {
-                let bind = listen.parse::<std::net::SocketAddr>().map_err(|e| {
-                    format!("[[remote]] `{alias}` listen `{listen}` is not ip:port: {e}")
-                })?;
-                let allow = match entry.address {
-                    Some(addr) => Some(addr.parse::<std::net::IpAddr>().map_err(|e| {
-                        format!(
-                            "[[remote]] `{alias}` address `{addr}` is not a bare IP (a listener's `address` is a source-IP filter, no port): {e}"
-                        )
-                    })?),
-                    None => None,
-                };
-                RemoteRole::Listener { bind, allow }
-            }
-            None => {
-                let addr = entry.address.ok_or_else(|| {
-                    format!(
-                        "[[remote]] `{alias}` has no `listen`, so it is a connector and needs `address` to dial",
-                    )
-                })?;
-                let addr = addr.parse::<std::net::SocketAddr>().map_err(|e| {
-                    format!("[[remote]] `{alias}` address `{addr}` is not ip:port: {e}")
-                })?;
-                RemoteRole::Connector { addr }
-            }
-        };
-        Ok(RemoteConfig {
-            alias,
-            role,
-            self_cert: identity.cert.clone(),
-            self_key: identity.key.clone(),
-            peer_cert: expand_path(Path::new(&peer_cert))?,
-        })
-    }
-}
-
-impl RemotesConfig {
-    /// Resolve every `[[remote]]` entry by alias, the identity each presents.
-    ///
-    /// A duplicate alias fails the load, and so does any entry with no identity.
-    pub(crate) fn resolve(
-        entries: Vec<RemoteToml>,
-        identity: Option<&IdentityConfig>,
-    ) -> Result<Self, String> {
-        let mut by_alias = HashMap::new();
-        if entries.is_empty() {
-            return Ok(RemotesConfig { by_alias });
-        }
-        let identity = identity.ok_or_else(|| {
-            "a [[remote]] link presents the host's [identity]; name its `cert` and \
-             `key`"
-                .to_string()
-        })?;
-        for entry in entries {
-            let resolved = RemoteConfig::resolve(entry, identity)?;
-            if by_alias.contains_key(&resolved.alias) {
-                return Err(format!("duplicate [[remote]] alias `{}`", resolved.alias));
-            }
-            by_alias.insert(resolved.alias.clone(), resolved);
-        }
-        Ok(RemotesConfig { by_alias })
-    }
-}
-
 /// A supervisor fraction the merged layers carry, held to the operator's range.
 fn fraction_field(
     name: &str,
@@ -354,13 +225,13 @@ impl Config {
         work_dir: PathBuf,
         deny: DenySet,
         test: bool,
+        remotes_file: PathBuf,
     ) -> Result<Self, String> {
         let base: ConfigToml = toml::from_str(DEFAULTS_CONFIG)
             .map_err(|e| format!("the embedded defaults do not parse: {e}"))?;
         let channel = merged_channel(user.channel, base.channel)?;
         let supervisor = merged_supervisor(user.supervisor, base.supervisor)?;
         let identity = resolved_identity(user.identity)?;
-        let remotes = RemotesConfig::resolve(user.remote, identity.as_ref())?;
         Ok(Self {
             id,
             namespace,
@@ -370,7 +241,7 @@ impl Config {
             channel,
             supervisor,
             identity,
-            remotes,
+            remotes_file,
         })
     }
 
@@ -402,6 +273,7 @@ impl Default for Config {
             work_dir,
             DenySet::default(),
             false,
+            Path::new(AGENT_CONFIG_FILE).with_file_name(REMOTES_FILE),
         )
         .expect("embedded defaults parse")
     }

@@ -12,37 +12,42 @@ A std Mutex, not the async one, because a grimm send reaches it from the
 synchronous eval thread. Its guards are held for map operations alone, never
 across an await.
 
-## fn open_remote_blocking (open_connector / open_listener)
-Blocks on the link's immediate networking result so `interface remote open`
-returns synchronously; only a listener's peer-wait stays async. Binding is
-immediate, so a bind clash from a redundant listener open surfaces at once as
-"address already in use" rather than later as a confusing async Disconnected.
+## fn connect_remote / fn listen_remote
+Each blocks on the link's immediate networking result, so `interface remote
+channel connect` and `listen` return synchronously; only a listener's peer-wait stays
+async. Which role a host takes is the agent's call at each open, the remotes
+file giving only the defaults (`remotes.rs`).
 
-- Connector (open_connector): await connect_link under CONNECT_TIMEOUT (20s). On
-  success register the link and spawn only a teardown watcher (await both joins,
-  deregister, Disconnected); there is no Connected for the open attempt - the
+- connect_remote: await connect_link under CONNECT_TIMEOUT (20s). On success
+  register the link and spawn only a teardown watcher (await both joins,
+  deregister, Disconnected); there is no Connected for the attempt - the
   synchronous success is the notice. A connect error or timeout returns Err,
-  surfaced as remote::open_failed. A redundant connector open fails its connect
-  synchronously, or is caught by the already-open guard once the first link
-  registers.
-- Listener (open_listener): await bind_listener (bind and build the acceptor,
-  the sync half) and return the bind result synchronously (bound, or the bind
-  error as remote::open_failed). Then spawn the async accept-serve:
+  surfaced as remote::channel::open_failed.
+- listen_remote: await bind_listener (bind and build the acceptor, the sync
+  half) and return the address bound, its port the kernel's when random, or the
+  bind error as remote::channel::open_failed. Then spawn the async accept-serve:
   accept_and_pair one peer's two connections, register the link, emit Connected
   {remote, mcp_nom}, await both joins, deregister, emit Disconnected. An accept
   failure after a good bind emits Disconnected {remote, error} (post-bind, so
   async).
 
-A connector's open attempt emits no Connected or Disconnected; its synchronous
-return is the notice. Disconnected is kept for any established link's teardown,
-in both roles: once told the link is up - Connected for a listener's peer, or
-the synchronous open success for a connector - a later drop still emits
-Disconnected, so a long-running consumer learns the live link died.
-deregister_if_ours drops the registry entry only if it is still this task's
-link, since a re-open may have replaced it under the same alias.
-emit_open_failed (Disconnected {remote, error}, mcp_nom absent) serves only the
-listener's post-bind accept failure; the connector's and the bind's failures
-return synchronously.
+A connect attempt emits no Connected or Disconnected; its synchronous return is
+the notice. Disconnected is kept for any established link's teardown, in both
+roles: once told the link is up - Connected for a listener's peer, or the
+synchronous connect for a connector - a later drop still emits Disconnected, so
+a long-running consumer learns the live link died. deregister_if_ours drops the
+registry entry only if it is still this task's link, since a later open may
+have replaced it under the same alias. emit_open_failed (Disconnected {remote,
+error}, mcp_nom absent) serves only the listener's post-bind accept failure; a
+connect's and a bind's failures return synchronously.
+
+## fn bind_listener
+The bind is the address asked for, never another: a port taken is the agent's
+to answer, a listen on the ip alone taking the kernel's choice (User).
+
+## fn accept_and_pair
+Every peer's connection is taken to the handshake, where the known-key match
+decides it; no source address is filtered, the peer being known by its key.
 
 `remote` (the opened alias) is always present on a Connected or Disconnected
 packet, so a consumer keys on it and branches on field presence: mcp_nom
@@ -51,9 +56,10 @@ not, never null.
 
 ## static BOUND_LISTENERS / fn close_listener / fn promote_listener / fn unlisten
 The bound-but-unpaired listener registry, parallel to REMOTE_LINKS.
-open_listener registers a `BoundListener` the moment the bind succeeds, so
-`interface remote list` can surface a listener that has bound but not yet
-paired, and `interface remote close` can cancel one.
+listen_remote registers a `BoundListener` the moment the bind succeeds, at the
+address bound, so `interface remote channel list` can surface a listener that
+has bound but not yet paired, and `interface remote channel close` can cancel
+one.
 
 An entry carries its address, a sequence number, its accept's cancel token, and
 the receiving half of a `released` signal. close_listener removes the entry,
@@ -69,7 +75,7 @@ holds this task's sequence number, so a close that removed the entry first
 wins, and the paired link is cancelled there and then. Promotion registers the
 link before the entry leaves, so it is briefly in both sets, never in neither.
 The lock order is fixed: the listeners' map, then the links' map; `interface
-remote close` never holds both.
+remote channel close` never holds both.
 
 unlisten, on an accept failure, leaves only this task's own entry, by its
 sequence number, since a close followed by a re-open can put a newer listener
@@ -87,7 +93,7 @@ as defence against a buggy peer.
 
 ## struct RemoteLinkHandle
 The join handles live in the open task rather than here, so a cancel
-(`interface remote close`) lets that task observe the end and report it.
+(`interface remote channel close`) lets that task observe the end and report it.
 
 ### fn enqueue_send
 Registers the send in the SendTracker (its dests and the message) before any
@@ -131,7 +137,7 @@ agent. The inbox is read as each chunk lands, since every open makes a new
 one: a closed Channel has none and lands nothing, and a delivery that spans a
 close and an open loses its earlier chunks with the inbox the close removed.
 
-relay_to_channel refuses a model under `mcp/` first, `reserved_model`, as the
+relay_to_channel refuses a model under `mcp/` or `remote/` first, `reserved_model`, as the
 sending grimm commands do (`reject_reserved_model`): the reservation is what
 lets an agent take a model's path as proof of the host's origin, and a peer is
 not the local host. Its files have landed by then and stay, as for any refused
@@ -173,7 +179,8 @@ client = builder_with_provider(ring) .dangerous()
 public key, our private key) - present ours and match the server's; server =
 builder_with_provider(ring) .with_client_cert_verifier(PublicKeyVerifier)
 .with_single_cert(ours) - present ours and require and match the client's. Ours
-is the host's `[identity]`, the pair its Channel presents too (config.rs). The
+is the host's `[identity]`, the pair its Channel presents too (config.rs),
+carried with the peer's in `LinkKeys`. The
 ring provider is set by hand so the link never depends on a process default and
 no second backend creeps in. PublicKeyVerifier implements both verifier traits
 (verify.rs), so one value serves both sides. Single-leaf chain (load_chain =

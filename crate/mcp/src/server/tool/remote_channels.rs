@@ -1,57 +1,181 @@
 use crate::*;
 
-/// One established remote link in the `interface remote list` snapshot.
-#[derive(Debug, ser::Serialize)]
-pub(crate) struct RemoteChannelEntry {
+/// Parameters for a remote channel command that names one alias alone.
+#[derive(Debug, ser::Deserialize, ser::Serialize)]
+pub struct RemoteAliasParams {
+    /// The remote's alias.
     pub alias: String,
-    pub remote_mcp_nom: String,
-    pub address: String,
 }
 
-/// One bound-but-unpaired listener in the `listening` set: its alias and address.
+/// One remote in `interface remote channel list` and `get`: its entry and state.
 #[derive(Debug, ser::Serialize)]
-pub(crate) struct ListeningEntry {
-    pub remote: String,
-    pub address: String,
+pub(crate) struct RemoteRow {
+    pub alias: String,
+    /// The `ip:port` a connect dials by default, as the file writes it.
+    pub address: Option<String>,
+    /// The `ip` or `ip:port` a listen binds by default, as the file writes it.
+    pub listen: Option<String>,
+    /// The peer's certificate, as the file writes it.
+    pub cert: Option<String>,
+    /// `closed`, `listening`, or `open`.
+    pub state: &'static str,
+    /// The address bound or dialed while the remote is live.
+    pub endpoint: Option<String>,
+    /// The peer's nom while a link is open.
+    pub remote_mcp_nom: Option<String>,
 }
 
-/// Success result of `interface remote list`.
-#[derive(Debug, ser::Serialize)]
-pub(crate) struct RemoteChannelsResult {
-    pub channels: Vec<RemoteChannelEntry>,
-    pub listening: Vec<ListeningEntry>,
+/// A live alias's state: its endpoint, and its peer's nom once paired.
+struct Live {
+    endpoint: String,
+    remote_mcp_nom: Option<String>,
 }
 
 impl NuSh {
-    /// `interface remote list`: established links and listeners still waiting.
+    /// `interface remote channel list`: every remote, configured or live, by alias.
     pub(crate) async fn remote_list(
         &self,
         nonce: datum::Nonce,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let links = self.remote_links.lock().unwrap_or_else(|e| e.into_inner());
-        let mut channels: Vec<RemoteChannelEntry> = links
+        match self.remote_rows() {
+            Ok(rows) => success(nonce, &rows),
+            Err(error) => error_to_call_result(error, nonce),
+        }
+    }
+
+    /// `interface remote channel get`: one remote's entry and state.
+    pub(crate) async fn remote_get(
+        &self,
+        nonce: datum::Nonce,
+        p: RemoteAliasParams,
+    ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        match self.remote_row(&p.alias) {
+            Ok(row) => success(nonce, &row),
+            Err(error) => error_to_call_result(error, nonce),
+        }
+    }
+
+    /// One remote's row; an alias neither configured nor live is refused.
+    pub(crate) fn remote_row(
+        &self,
+        alias: &str,
+    ) -> Result<RemoteRow, GrammarMcpError> {
+        self.remote_rows()?
+            .into_iter()
+            .find(|row| row.alias == alias)
+            .ok_or_else(|| GrammarMcpError::RemoteInvalidParams {
+                reason: format!("no remote channel `{alias}`"),
+            })
+    }
+
+    /// Every remote's row: the file's entries and each live alias, by alias.
+    pub(crate) fn remote_rows(&self) -> Result<Vec<RemoteRow>, GrammarMcpError> {
+        let entries = remote_entries()?;
+        let live = self.live_remotes();
+        let mut aliases: Vec<String> = entries
             .iter()
-            .map(|(alias, entry)| RemoteChannelEntry {
-                alias: alias.clone(),
-                remote_mcp_nom: entry.handle.remote_mcp_nom.clone(),
-                address: entry.addr.to_string(),
+            .map(|entry| entry.alias.clone())
+            .chain(live.keys().cloned())
+            .collect();
+        aliases.sort();
+        aliases.dedup();
+        Ok(aliases
+            .into_iter()
+            .map(|alias| {
+                let entry = entries.iter().find(|entry| entry.alias == alias);
+                let (state, endpoint, remote_mcp_nom) = match live.get(&alias) {
+                    Some(Live {
+                        endpoint,
+                        remote_mcp_nom: Some(nom),
+                    }) => ("open", Some(endpoint.clone()), Some(nom.clone())),
+                    Some(Live { endpoint, .. }) => ("listening", Some(endpoint.clone()), None),
+                    None => ("closed", None, None),
+                };
+                RemoteRow {
+                    address: entry.and_then(|entry| entry.address.clone()),
+                    listen: entry.and_then(|entry| entry.listen.clone()),
+                    cert: entry.map(|entry| entry.cert.clone()),
+                    alias,
+                    state,
+                    endpoint,
+                    remote_mcp_nom,
+                }
+            })
+            .collect())
+    }
+
+    /// The live aliases: each open link, then each listener still waiting.
+    fn live_remotes(&self) -> HashMap<String, Live> {
+        let mut live: HashMap<String, Live> = self
+            .remote_links
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .map(|(alias, link)| {
+                let state = Live {
+                    endpoint: link.addr.to_string(),
+                    remote_mcp_nom: Some(link.handle.remote_mcp_nom.clone()),
+                };
+                (alias.clone(), state)
             })
             .collect();
-        drop(links);
-        channels.sort_by(|a, b| a.alias.cmp(&b.alias));
-
         let listeners = bound_listeners();
         let bound = listeners.lock().unwrap_or_else(|e| e.into_inner());
-        let mut listening: Vec<ListeningEntry> = bound
-            .iter()
-            .map(|(alias, listener)| ListeningEntry {
-                remote: alias.clone(),
-                address: listener.addr.to_string(),
-            })
-            .collect();
-        drop(bound);
-        listening.sort_by(|a, b| a.remote.cmp(&b.remote));
-
-        success(nonce, &RemoteChannelsResult { channels, listening })
+        for (alias, listener) in bound.iter() {
+            live.entry(alias.clone()).or_insert(Live {
+                endpoint: listener.addr.to_string(),
+                remote_mcp_nom: None,
+            });
+        }
+        live
     }
+
+    /// The entry a listen or a connect opens: its Channel verified, the alias idle.
+    pub(crate) fn remote_to_open(
+        &self,
+        alias: &str,
+    ) -> Result<RemoteEntry, GrammarMcpError> {
+        if !matches!(self.channel.status().phase, ChannelPhase::Verified) {
+            return Err(GrammarMcpError::RemoteChannelUnverified);
+        }
+        if self.live_remotes().contains_key(alias) {
+            return Err(GrammarMcpError::RemoteAlreadyOpen {
+                alias: alias.to_string(),
+            });
+        }
+        remote_entries()?
+            .into_iter()
+            .find(|entry| entry.alias == alias)
+            .ok_or_else(|| GrammarMcpError::RemoteInvalidParams {
+                reason: format!(
+                    "no remote channel `{alias}`; add it with `interface remote channel set`"
+                ),
+            })
+    }
+}
+
+/// The remotes file's entries; a malformed file is refused whole.
+pub(crate) fn remote_entries() -> Result<Vec<RemoteEntry>, GrammarMcpError> {
+    read_remotes(&config().remotes_file).map_err(|reason| GrammarMcpError::RemotesFile { reason })
+}
+
+/// The keys a link to `entry`'s peer presents and matches.
+pub(crate) fn link_keys(entry: &RemoteEntry) -> Result<LinkKeys, GrammarMcpError> {
+    let identity = config()
+        .identity
+        .as_ref()
+        .ok_or_else(|| GrammarMcpError::RemoteInvalidParams {
+            reason: format!(
+                "a link presents the host's [identity]; name its `cert` and `key` in \
+                 {AGENT_CONFIG_FILE}"
+            ),
+        })?;
+    let peer_cert = entry
+        .peer_cert()
+        .map_err(|reason| GrammarMcpError::RemoteInvalidParams { reason })?;
+    Ok(LinkKeys {
+        self_cert: identity.cert.clone(),
+        self_key: identity.key.clone(),
+        peer_cert,
+    })
 }

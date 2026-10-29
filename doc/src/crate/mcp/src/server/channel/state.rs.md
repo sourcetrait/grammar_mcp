@@ -1,11 +1,13 @@
 # state.rs
 
-## const MCP_RESERVED_PREFIX
-Every model the host stamps lives beneath it. The value of a reservation is that
-it makes provenance a mechanical check: anything claiming `mcp/` from a source
-that is not the host can be rejected without interpreting it. Enforced today at
-the one place a non-host picks a model, and available to a future peer surface
-on the same terms.
+## const MCP_RESERVED_PREFIX / const REMOTE_RESERVED_PREFIX / fn reserved_prefix
+Every model the host stamps lives beneath one of the two: `mcp/` for the local
+host's own packets, `remote/` for those about a remote, whose peer need not be
+an MCP (User). The value of a reservation is that it makes provenance a
+mechanical check: anything claiming either prefix from a source that is not the
+host can be rejected without interpreting it. Enforced wherever a non-host picks
+a model, a definition's send (`host.rs`) and a peer's relay (`link.rs`), both
+through `reserved_prefix`.
 
 ## const MAX_FRAME_BYTES
 A hard `<`, never a `<=` against 1 MiB. A frame landing exactly on the cap

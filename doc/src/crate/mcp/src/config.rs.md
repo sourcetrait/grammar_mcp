@@ -27,29 +27,22 @@ startup.
 
 ## const AGENT_CONFIG_FILE
 One file an agent, under the directory the host starts in: an agent's client
-starts its host in the agent's own directory. The channel, the supervisor, the
-identity and the remotes sit together in it, so an agent's whole configuration
-is one file beside its work, and two agents on one machine never share one by
-accident. `--config` names another file in its place.
+starts its host in the agent's own directory. The channel, the supervisor, and
+the identity sit together in it, read once at the start, and two agents on one
+machine never share one by accident. `--config` names another file in its
+place. The remotes live beside it in `remotes.toml` (`remotes.rs`), read at
+each use, so they change with no restart.
 
 ## struct ConfigToml
-The embedded base and the agent's file share this shape. `remote` defaults to
-empty: a file without a `[[remote]]` entry has no array at all.
+The embedded base and the agent's file share this shape. A `[[remote]]` here
+is an unknown field, so a file from before the remotes moved fails loudly.
 
 ## struct IdentityConfigToml
 The host's own key pair, one for everything it presents: the Channel's TLS and
-every `[[remote]]` link's mTLS. An agent is one identity, so a pair for each
-link would only repeat the same two paths. Both fields are optional here so a
+every remote link's mTLS. An agent is one identity, so a pair for each link
+would only repeat the same two paths. Both fields are optional here so a
 missing one is refused by its name at resolve rather than by serde's generic
 message.
-
-## struct RemoteToml
-One `[[remote]]` entry, a plain `deny_unknown_fields` struct. Its field names
-are the operator's and are never renamed for internal use (alias, listen,
-address, cert); a mistyped field, a per-link key pair a stale file still
-names, or a field by its former name, `public_key_file`, is a loud error.
-`cert` is the peer's: the entry is about the peer, so the `remote_` prefix is
-implied.
 
 ## struct ChannelConfigToml
 The port is the only structural key, because everything else about the
@@ -83,6 +76,10 @@ is the deployment's own, so there is no default to give. The Channel and each
 link refuse to start without it, each at its own open, so a host that opens
 neither runs without one.
 
+### field remotes_file
+The config file's sibling, whichever file the config came from, so `--config`
+moves the remotes with it.
+
 ## struct ChannelConfig
 
 ### field spam
@@ -103,27 +100,9 @@ emits single digits per burst, a loop emits thousands per second - so the
 numbers barely affect detection and mostly decide how often a well-behaved fast
 command gets flagged. That is why erring permissive is right here.
 
-## struct RemoteConfig / struct RemotesConfig
-The model layer, field names mirroring the file's (`self_cert`, `self_key`,
-`peer_cert`). The two self files are the `[identity]`'s, carried on each peer
-so a link's driver reads one record. `RemotesConfig { by_alias: HashMap }`
-lives in `Config.remotes`.
-
 ## fn resolved_identity
 Both files are required and expanded at load, so a missing one or an
 unresolvable variable fails at startup with its name, not at the first open.
-
-## fn RemoteConfig::resolve / fn RemotesConfig::resolve
-Named resolvers rather than `TryFrom`, since each takes the identity the file
-layer's entry does not carry. The per-entry resolve sets the role from
-`listen`'s presence: a listener's `address` is a bare source-IP filter (an
-`IpAddr`, a host:port form refused), a connector's is the ip:port it dials (a
-`SocketAddr`); the peer's key path is required and expanded at load, so a bad
-address or a missing key fails at startup, not at bind. The outer resolve
-refuses a duplicate alias, and refuses any entry at all when the file names no
-`[identity]`, since its link would have nothing to present. There are no
-embedded remotes, a peer being the deployment's own, so an absent file is an
-empty set.
 
 ## fn fraction_field
 The range is the operator's `check_fraction`, the one check a runtime pin is
@@ -146,8 +125,7 @@ Zero would forbid the first send outright rather than police a rate.
 ## fn from_toml
 Deliberately not a `TryFrom`: the model carries fields the format layer does
 not, and a named constructor that takes them keeps that asymmetry visible
-rather than hiding it behind a conversion. The identity resolves before the
-remotes, which take it.
+rather than hiding it behind a conversion.
 
 ## fn read_toml
 An explicit `--config` that is absent or malformed is an error rather than a

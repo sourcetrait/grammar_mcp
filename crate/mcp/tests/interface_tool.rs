@@ -94,16 +94,14 @@ fn every_command_answers_through_the_interface() {
     let closed = s.interface("interface channel close");
     assert_eq!(result_of(&closed), &Value::Null, "got {closed}");
 
-    let remotes = s.interface("interface remote list");
-    assert_eq!(
-        result_of(&remotes),
-        &json!({"channels": [], "listening": []}),
-        "got {remotes}",
-    );
-    let opened = s.interface("interface remote open 'nopeer'");
-    assert_eq!(error_kind(&opened), Some("remote::channel_unverified"), "got {opened}");
-    let shut = s.interface("interface remote close 'nopeer'");
-    assert_eq!(error_kind(&shut), Some("remote::not_open"), "got {shut}");
+    let remotes = s.interface("interface remote channel list");
+    assert_eq!(result_of(&remotes), &json!([]), "got {remotes}");
+    let connected = s.interface("interface remote channel connect 'nopeer'");
+    assert_eq!(error_kind(&connected), Some("remote::channel::unverified"), "got {connected}");
+    let missing = s.interface("interface remote channel get 'nopeer'");
+    assert_eq!(error_kind(&missing), Some("remote::channel::invalid_params"), "got {missing}");
+    let shut = s.interface("interface remote channel close 'nopeer'");
+    assert_eq!(error_kind(&shut), Some("remote::channel::not_open"), "got {shut}");
 }
 
 #[test]

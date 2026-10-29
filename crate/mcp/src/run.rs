@@ -133,12 +133,15 @@ pub(crate) fn parse_deniable(s: &str) -> Result<DeniableTool, String> {
 
 /// The argument-owned values plus whatever the file contributes.
 fn resolve_config(cli: Cli) -> Result<(Config, Option<CliCmd>), String> {
-    let file = match &cli.config {
-        Some(raw) => Config::read_toml(&expand_path(raw)?)?,
+    let (file, config_file) = match &cli.config {
+        Some(raw) => {
+            let path = expand_path(raw)?;
+            (Config::read_toml(&path)?, path)
+        }
         None => {
             let start_dir = std::env::current_dir()
                 .map_err(|e| format!("cannot read the start directory: {e}"))?;
-            Config::read_agent_toml(&start_dir)?
+            (Config::read_agent_toml(&start_dir)?, start_dir.join(AGENT_CONFIG_FILE))
         }
     };
     let work_dir = resolve_work_dir(cli.workdir.as_deref(), &cli.id)?;
@@ -150,6 +153,7 @@ fn resolve_config(cli: Cli) -> Result<(Config, Option<CliCmd>), String> {
         work_dir,
         DenySet::new(cli.deny),
         cli.test,
+        config_file.with_file_name(REMOTES_FILE),
     )?;
     Ok((config, cli.command))
 }

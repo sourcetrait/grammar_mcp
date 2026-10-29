@@ -106,16 +106,22 @@ fn a_record_with_an_embedded_newline_stays_one_line() {
     );
 }
 
-/// The `mcp/` RESERVATION. A definition is not the host, so it must not be able to
-/// stamp a model the host reserves - otherwise it could forge a control packet, and
-/// provenance would stop being checkable from the model path alone.
+/// The `mcp/` and `remote/` RESERVATIONS. A definition is not the host, so it must
+/// not be able to stamp a model the host reserves - otherwise it could forge a control
+/// packet, and provenance would stop being checkable from the model path alone.
 ///
 /// Refused BEFORE the channel state is consulted, so the answer does not depend on
 /// whether a channel happens to be open.
 #[test]
-fn a_definition_cannot_claim_the_mcp_reservation() {
+fn a_definition_cannot_claim_a_host_reservation() {
     let s = TESTING.harness();
-    for model in ["mcp/channel/Open", "mcp/supervisor/CpuWarning", "mcp/anything"] {
+    for model in [
+        "mcp/channel/Open",
+        "mcp/supervisor/CpuWarning",
+        "mcp/anything",
+        "remote/channel/Sent",
+        "remote/anything",
+    ] {
         let env = s.execute(&ok_after(&format!("grimm channel send '{model}' {{x: 1}}")), "null");
         assert!(has_error(&env), "`{model}` should be refused; got {env}");
         assert!(

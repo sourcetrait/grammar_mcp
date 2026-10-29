@@ -44,6 +44,7 @@ tokio-rustls.workspace = true
 tokio-tungstenite.workspace = true
 tokio-util.workspace = true
 toml.workspace = true
+toml_edit.workspace = true
 zstd.workspace = true
 
 sourcetrait_common.workspace = true

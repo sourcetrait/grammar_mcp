@@ -8,7 +8,7 @@ bitcode and serde derives the languages carry.
 
 ## enum MsgFrame
 Peer-neutral: either end sends it. Nothing rides back - the sender's own transport
-write is the delivery's ack, and mcp/remote/Sent and Unsent fire from that write.
+write is the delivery's ack, and remote/channel/Sent and Unsent fire from that write.
 
 ## enum InitiatorToAcceptor
 ## enum AcceptorToInitiator

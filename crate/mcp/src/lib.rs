@@ -44,8 +44,10 @@ pub(crate) mod server {
         pub(crate) mod purview_extend;
         pub(crate) mod purviews;
         pub(crate) mod purview;
-        pub(crate) mod remote_channel_open;
         pub(crate) mod remote_channel_close;
+        pub(crate) mod remote_channel_connect;
+        pub(crate) mod remote_channel_listen;
+        pub(crate) mod remote_channel_set;
         pub(crate) mod remote_channels;
         pub(crate) mod rerun;
     }
@@ -61,23 +63,28 @@ pub(crate) mod server {
 #[cfg(test)]
 mod tests {
     mod config;
+    mod remotes;
 }
 pub(crate) mod cli;
 pub(crate) mod config;
 pub(crate) mod consts;
 pub(crate) mod home;
+pub(crate) mod remotes;
 pub(crate) mod scratch;
 pub mod guts;
 
 pub(crate) use crate::{
     config::{
-        AGENT_CONFIG_FILE, CONFIG, Config, DEFAULT_NAMESPACE, DenySet, RemoteConfig,
-        RemoteRole, SpamThresholds, TEST_NAMESPACE, config, default_id, default_work_dir,
-        expand_path,
+        AGENT_CONFIG_FILE, CONFIG, Config, DEFAULT_NAMESPACE, DenySet, SpamThresholds,
+        TEST_NAMESPACE, config, default_id, default_work_dir, expand_path,
     },
     home::{
         TMP_DEFAULT, base_dirs, cache_base_dir, check_base_dirs, data_base_dir, env_dir,
         home_var, uenv_partner, uenv_standard,
+    },
+    remotes::{
+        REMOTES_FILE, RemoteChange, RemoteEntry, bind_address, dial_address, edit_remotes,
+        read_remotes, set_entry, unset_entry,
     },
     scratch::{
         make_channel_dir, make_scratch_dirs, remove_channel_dir, remove_scratch_dirs, tmp_dir,
@@ -93,9 +100,9 @@ pub(crate) use crate::{
             state::{
                 ChannelHandle, ChannelPhase, ChannelSendError, ChannelSyncError,
                 ChannelVerifyError, CloseSignal as ChannelCloseSignal, EVENT_SPILL_DEST,
-                EVENT_SPILL_KEY, MAX_FRAME_BYTES, MCP_RESERVED_PREFIX, SpamVerdict,
+                EVENT_SPILL_KEY, MAX_FRAME_BYTES, REMOTE_RESERVED_PREFIX, SpamVerdict,
                 channel_handle, escape_line, event_overflows, event_spill_pointer, mint_msg_id,
-                render_nuon, render_packet,
+                render_nuon, render_packet, reserved_prefix,
             },
         },
         emergency::{EmergencyTx, spawn_emergency_responder},
@@ -122,8 +129,8 @@ pub(crate) use crate::{
                 RemoteStream,
             },
             link::{
-                RemoteLinkHandle, bound_listeners, close_listener, find_link_send,
-                open_remote_blocking, remote_links, safe_dest,
+                LinkKeys, RemoteLinkHandle, bound_listeners, close_listener, connect_remote,
+                find_link_send, listen_remote, remote_links, safe_dest,
             },
             verify::PublicKeyVerifier,
         },
@@ -148,7 +155,10 @@ pub(crate) use crate::{
             purview_extend::PurviewExtendParams,
             purview::PurviewParams,
             remote_channel_close::RemoteChannelCloseParams,
-            remote_channel_open::RemoteChannelOpenParams,
+            remote_channel_connect::RemoteConnectParams,
+            remote_channel_listen::RemoteListenParams,
+            remote_channel_set::RemoteSetParams,
+            remote_channels::{RemoteAliasParams, RemoteRow, link_keys, remote_entries},
             rerun::RerunParams,
         },
     },
@@ -188,6 +198,7 @@ pub(crate) use std::{
     io::{self, Write},
     hash::{Hash},
     marker::PhantomData,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{PathBuf,Path},
     process,
     sync::{

@@ -3,7 +3,7 @@
 ## fn remote_close
 Removes the link from the registry and cancels its drivers; it does NOT wait or emit.
 The link's own open task (link.rs) observes the cancel, deregisters if still current,
-and emits mcp/remote/Disconnected - so a close and the Disconnected notice share the
+and emits remote/channel/Disconnected - so a close and the Disconnected notice share the
 one lifecycle path rather than each reporting separately.
 
 An alias with no established link may name a listener still awaiting its peer:

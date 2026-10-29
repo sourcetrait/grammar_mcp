@@ -4,8 +4,9 @@
 #
 # This file carries only what is not an argument. The store coordinate (--id,
 # --namespace), the work dir (--workdir) and the deny list (--deny) stay arguments;
-# setting one here is an unknown-field error. It names no `[identity]` and no
-# `[[remote]]`: a host's own key pair and its peers are the agent's file's alone.
+# setting one here is an unknown-field error. It names no `[identity]`: a host's own
+# key pair is the agent's file's alone, and its remote channels live in
+# `remotes.toml` beside that file.
 #
 # Paths are strings so a file stays portable: a leading `~` or `$VAR` expands at
 # load, with an unset XDG home falling back to the XDG spec's default.

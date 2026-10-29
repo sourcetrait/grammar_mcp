@@ -55,9 +55,13 @@ pub(crate) enum CommandKind {
     ChannelReady,
     ChannelClose,
     ChannelConfig,
-    RemoteOpen,
-    RemoteClose,
     RemoteList,
+    RemoteGet,
+    RemoteSet,
+    RemoteUnset,
+    RemoteListen,
+    RemoteConnect,
+    RemoteClose,
     EquipNew,
     EquipInstall,
     EquipCheck,
@@ -202,11 +206,46 @@ const CONFIG_FLAGS: &[ArgSpec] = &[
     },
 ];
 
-const OPEN_ARGS: &[ArgSpec] = &[ArgSpec {
+const ALIAS_ARGS: &[ArgSpec] = &[ArgSpec {
     name: "alias",
     shape: ArgShape::String,
     optional: false,
-    summary: "The `[[remote]]` alias to open, from `.grammar/config.toml`.",
+    summary: "The remote's alias, its `[[channel]]` entry's in `remotes.toml`.",
+}];
+
+const SET_FLAGS: &[ArgSpec] = &[
+    ArgSpec {
+        name: "address",
+        shape: ArgShape::String,
+        optional: true,
+        summary: "The `ip:port` a connect dials by default.",
+    },
+    ArgSpec {
+        name: "listen",
+        shape: ArgShape::String,
+        optional: true,
+        summary: "The `ip` or `ip:port` a listen binds by default.",
+    },
+    ArgSpec {
+        name: "cert",
+        shape: ArgShape::String,
+        optional: true,
+        summary: "The peer's certificate, PEM; a new remote needs it.",
+    },
+];
+
+const LISTEN_FLAGS: &[ArgSpec] = &[ArgSpec {
+    name: "on",
+    shape: ArgShape::String,
+    optional: true,
+    summary: "The `ip` or `ip:port` to bind, in place of the entry's.",
+}];
+
+const CONNECT_FLAGS: &[ArgSpec] = &[ArgSpec {
+    name: "address",
+    shape: ArgShape::String,
+    optional: true,
+    summary: "The `ip:port` to dial, in place of the entry's.",
 }];
 
 const CLOSE_ARGS: &[ArgSpec] = &[ArgSpec {
@@ -357,31 +396,67 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         summary: "Read or adjust the channel's send-rate thresholds at runtime.",
     },
     CommandSpec {
-        kind: CommandKind::RemoteOpen,
-        name: "interface remote open",
+        kind: CommandKind::RemoteList,
+        name: "interface remote channel list",
         topic: "Remote",
-        positionals: OPEN_ARGS,
+        positionals: NO_ARGS,
+        flags: NO_ARGS,
+        result: "table",
+        summary: "List the remote channels, configured and live: each one's entry and state.",
+    },
+    CommandSpec {
+        kind: CommandKind::RemoteGet,
+        name: "interface remote channel get",
+        topic: "Remote",
+        positionals: ALIAS_ARGS,
+        flags: NO_ARGS,
+        result: "record",
+        summary: "One remote channel's entry and state.",
+    },
+    CommandSpec {
+        kind: CommandKind::RemoteSet,
+        name: "interface remote channel set",
+        topic: "Remote",
+        positionals: ALIAS_ARGS,
+        flags: SET_FLAGS,
+        result: "record",
+        summary: "Make or change a remote channel's entry in `remotes.toml`.",
+    },
+    CommandSpec {
+        kind: CommandKind::RemoteUnset,
+        name: "interface remote channel unset",
+        topic: "Remote",
+        positionals: ALIAS_ARGS,
         flags: NO_ARGS,
         result: "nothing",
-        summary: "Open a configured remote link by alias; blocks on bind or connect.",
+        summary: "Remove a remote channel's entry from `remotes.toml`; a live link stays.",
+    },
+    CommandSpec {
+        kind: CommandKind::RemoteListen,
+        name: "interface remote channel listen",
+        topic: "Remote",
+        positionals: ALIAS_ARGS,
+        flags: LISTEN_FLAGS,
+        result: "record",
+        summary: "Listen for a remote channel's peer; blocks on the bind, answers its endpoint.",
+    },
+    CommandSpec {
+        kind: CommandKind::RemoteConnect,
+        name: "interface remote channel connect",
+        topic: "Remote",
+        positionals: ALIAS_ARGS,
+        flags: CONNECT_FLAGS,
+        result: "nothing",
+        summary: "Connect to a remote channel's peer; blocks on the connect.",
     },
     CommandSpec {
         kind: CommandKind::RemoteClose,
-        name: "interface remote close",
+        name: "interface remote channel close",
         topic: "Remote",
         positionals: CLOSE_ARGS,
         flags: NO_ARGS,
         result: "nothing",
         summary: "Close an open mTLS link to a remote grammar host.",
-    },
-    CommandSpec {
-        kind: CommandKind::RemoteList,
-        name: "interface remote list",
-        topic: "Remote",
-        positionals: NO_ARGS,
-        flags: NO_ARGS,
-        result: "record",
-        summary: "List remote grammar-host links: established `channels` and `listening`.",
     },
     CommandSpec {
         kind: CommandKind::EquipNew,

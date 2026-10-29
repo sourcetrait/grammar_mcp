@@ -8,9 +8,9 @@ purviews. The names are User's: `interface <topic> <action>`, or
 `interface <action>` for `info` and `help`, with no underscore in any of them.
 
 ## enum ArgShape
-Three shapes cover every argument the tools take: a string, a list of strings,
-and a whole number. Anything richer would be a value the agent could build with
-an expression, and the contract takes literals alone.
+Three shapes cover every argument the commands take: a string, a list of
+strings, and a whole number. Anything richer would be a value the agent could
+build with an expression, and the contract takes literals alone.
 
 ## struct CommandSpec
 `result` is the result's kind alone, `record`, `table`, or `nothing`, as the
@@ -28,8 +28,9 @@ agent types after the head, never by an invented key.
 ### fn signature
 Optional positionals stay optional in the parse; `config`'s thresholds are flags
 because four optional positionals would make setting the last one mean passing
-nulls for the rest. The category is cosmetic: the decl is never listed anywhere
-but the description.
+nulls for the rest, and the remote commands' optional fields are flags for the
+same reason. The category is cosmetic: the decl is never listed anywhere but the
+description.
 
 ## const COMMANDS
 Ordered as the description lists them, grouped by topic. A topic's commands sit

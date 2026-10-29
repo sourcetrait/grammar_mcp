@@ -23,9 +23,13 @@ pub(crate) enum InterfaceCommand {
     ChannelReady,
     ChannelClose,
     ChannelConfig(ConfigChannelParams),
-    RemoteOpen(RemoteChannelOpenParams),
-    RemoteClose(RemoteChannelCloseParams),
     RemoteList,
+    RemoteGet(RemoteAliasParams),
+    RemoteSet(RemoteSetParams),
+    RemoteUnset(RemoteAliasParams),
+    RemoteListen(RemoteListenParams),
+    RemoteConnect(RemoteConnectParams),
+    RemoteClose(RemoteChannelCloseParams),
     EquipNew(EquipParams),
     EquipInstall(EquipParams),
     EquipCheck(EquipParams),
@@ -246,6 +250,17 @@ fn text(
     }
 }
 
+/// An optional string flag; absent when not given.
+fn optional_text(
+    literals: &mut Literals,
+    name: &str,
+) -> Option<String> {
+    match literals.remove(name) {
+        Some((Literal::Text(text), _)) => Some(text),
+        _ => None,
+    }
+}
+
 /// A list-of-strings argument; an absent optional one is empty.
 fn texts(
     literals: &mut Literals,
@@ -326,13 +341,30 @@ fn command(
             spam_error_window_secs: count(literals, "spam-error-window-secs")?,
             spam_error_rate: count(literals, "spam-error-rate")?,
         }),
-        CommandKind::RemoteOpen => InterfaceCommand::RemoteOpen(RemoteChannelOpenParams {
+        CommandKind::RemoteList => InterfaceCommand::RemoteList,
+        CommandKind::RemoteGet => InterfaceCommand::RemoteGet(RemoteAliasParams {
             alias: text(literals, "alias"),
+        }),
+        CommandKind::RemoteSet => InterfaceCommand::RemoteSet(RemoteSetParams {
+            alias: text(literals, "alias"),
+            address: optional_text(literals, "address"),
+            listen: optional_text(literals, "listen"),
+            cert: optional_text(literals, "cert"),
+        }),
+        CommandKind::RemoteUnset => InterfaceCommand::RemoteUnset(RemoteAliasParams {
+            alias: text(literals, "alias"),
+        }),
+        CommandKind::RemoteListen => InterfaceCommand::RemoteListen(RemoteListenParams {
+            alias: text(literals, "alias"),
+            on: optional_text(literals, "on"),
+        }),
+        CommandKind::RemoteConnect => InterfaceCommand::RemoteConnect(RemoteConnectParams {
+            alias: text(literals, "alias"),
+            address: optional_text(literals, "address"),
         }),
         CommandKind::RemoteClose => InterfaceCommand::RemoteClose(RemoteChannelCloseParams {
             alias: text(literals, "alias"),
         }),
-        CommandKind::RemoteList => InterfaceCommand::RemoteList,
         CommandKind::EquipNew => InterfaceCommand::EquipNew(source(literals)),
         CommandKind::EquipInstall => InterfaceCommand::EquipInstall(source(literals)),
         CommandKind::EquipCheck => InterfaceCommand::EquipCheck(source(literals)),

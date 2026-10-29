@@ -47,12 +47,12 @@ mcp's, and the engine reaches them through this one value.
 Order is deliberate throughout, and each step is placed where it is for a
 reason.
 
-The `mcp/` refusal comes first, before the channel state is even consulted. A
-definition is not the host, so letting it stamp a model under that prefix would
-let it forge a host control packet - and would destroy the property the
-reservation exists for, that provenance is checkable from the path alone. This
-is the one place a non-host picks a model, which is what makes it the right
-place to enforce it.
+The `mcp/` and `remote/` refusal comes first, before the channel state is even
+consulted. A definition is not the host, so letting it stamp a model under
+either prefix would let it forge a host packet - and would destroy the property
+the reservation exists for, that provenance is checkable from the path alone.
+This is where a definition picks a model, which is what makes it the right
+place to enforce it; a peer's relay is held to the same check (`link.rs`).
 
 The phase is checked before any rendering, so a send that cannot happen costs a
 lock and an error rather than a hash and a render.
@@ -78,7 +78,7 @@ pointer names its own spill file, so it is orthogonal to the caller's
 `attached`: a big event and a caller attachment both survive, in separate files.
 
 ### fn remote_send
-The `mcp/` reservation first, as for a Channel send; then the attachments read,
+The reservations first, as for a Channel send; then the attachments read,
 the event rendered, the id minted, any spill made, and the send enqueued on the
 open link to `mcp_nom` (`find_link_send`, link.rs).
 
@@ -107,9 +107,9 @@ rewrite_spill_pointer), so the agent resolves it as
 
 ## fn config_record
 The record `grimm get_config_all` returns mirrors the config file - the same
-tables, the same key names, `[[remote]]` aside - so one shape describes the
-file, the `.nutype` model beside it, and what a definition sees. The peers stay
-out: a definition addresses a linked host by its nom, which `interface remote
+tables, the same key names - so one shape describes the file, the `.nutype`
+model beside it, and what a definition sees. The remotes file stays out: a
+definition addresses a linked host by its nom, which `interface remote channel
 list` reports, never by the file's entry.
 
 `identity` is null when the file names none, rather than absent, so the record's

@@ -1,6 +1,6 @@
 //! RemoteChannel test harness: a reusable simulated rmcp consumer - the existing
 //! stdio `Host` plus a REAL WSS Channel client that trusts a one-off test CA - and
-//! the one-off keys and the `.grammar/config.toml` two linked hosts need.
+//! the one-off keys and the `.grammar/` files two linked hosts need.
 //!
 //! No test seam: the consumer connects to a host's Channel exactly as
 //! claude-code's Monitor does (a real TLS + WebSocket client), so it settles the
@@ -70,35 +70,39 @@ pub fn generate_keys(name: &str, dir: &Path) -> GeneratedKeys {
     }
 }
 
-// ---- the host's config file ----
+// ---- the host's config files ----
 
-/// Write `<cwd>/.grammar/config.toml`: `identity` as its `[identity]`, then
-/// `remote`, a `[[remote]]` entry or nothing. Returns the file's path.
+/// Write `<cwd>/.grammar/config.toml`, `identity` its `[identity]`, and `remote`,
+/// `[[channel]]` entries or nothing, as `remotes.toml` beside it. Returns the
+/// config file's path.
 pub fn write_host_config(cwd: &Path, identity: &GeneratedKeys, remote: &str) -> PathBuf {
     let dir = cwd.join(".grammar");
     std::fs::create_dir_all(&dir).expect("mkdir .grammar");
     let toml = format!(
-        "[identity]\ncert = \"{cert}\"\nkey = \"{key}\"\n{remote}",
+        "[identity]\ncert = \"{cert}\"\nkey = \"{key}\"\n",
         cert = identity.public_key.display(),
         key = identity.private_key.display(),
     );
     let path = dir.join("config.toml");
     std::fs::write(&path, toml).expect("write .grammar/config.toml");
+    if !remote.is_empty() {
+        std::fs::write(dir.join("remotes.toml"), remote).expect("write .grammar/remotes.toml");
+    }
     path
 }
 
-/// A connector `[[remote]]` entry, `peer`, dialing `peer_addr`.
+/// A `[[channel]]` entry, `peer`, its connect dialing `peer_addr`.
 pub fn remote_connector(peer_addr: &str, peer_public: &Path) -> String {
     format!(
-        "\n[[remote]]\nalias = \"peer\"\naddress = \"{peer_addr}\"\ncert = \"{pk}\"\n",
+        "\n[[channel]]\nalias = \"peer\"\naddress = \"{peer_addr}\"\ncert = \"{pk}\"\n",
         pk = peer_public.display(),
     )
 }
 
-/// A listener `[[remote]]` entry, `peer`, binding `listen`.
+/// A `[[channel]]` entry, `peer`, its listen binding `listen`.
 pub fn remote_listener(listen: &str, peer_public: &Path) -> String {
     format!(
-        "\n[[remote]]\nalias = \"peer\"\nlisten = \"{listen}\"\ncert = \"{pk}\"\n",
+        "\n[[channel]]\nalias = \"peer\"\nlisten = \"{listen}\"\ncert = \"{pk}\"\n",
         pk = peer_public.display(),
     )
 }

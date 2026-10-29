@@ -45,6 +45,9 @@ pub enum GrammarMcpError {
         reason: String,
     },
     RemoteChannelUnverified,
+    RemotesFile {
+        reason: String,
+    },
     Internal {
         phase: String,
         reason: String,
@@ -63,11 +66,12 @@ impl GrammarMcpError {
             Self::ChannelNotClaimed { .. } => "channel::not_claimed",
             Self::ChannelWrongMode { .. } => "channel::wrong_mode",
             Self::ChannelPeerGone => "channel::peer_gone",
-            Self::RemoteInvalidParams { .. } => "remote::invalid_params",
-            Self::RemoteAlreadyOpen { .. } => "remote::already_open",
-            Self::RemoteNotOpen { .. } => "remote::not_open",
-            Self::RemoteOpenFailed { .. } => "remote::open_failed",
-            Self::RemoteChannelUnverified => "remote::channel_unverified",
+            Self::RemoteInvalidParams { .. } => "remote::channel::invalid_params",
+            Self::RemoteAlreadyOpen { .. } => "remote::channel::already_open",
+            Self::RemoteNotOpen { .. } => "remote::channel::not_open",
+            Self::RemoteOpenFailed { .. } => "remote::channel::open_failed",
+            Self::RemoteChannelUnverified => "remote::channel::unverified",
+            Self::RemotesFile { .. } => "remote::file",
             Self::Internal { .. } => "internal",
             Self::InterfaceViolations { .. } => {
                 unreachable!("violation variants render via bucket, not kind_str")
@@ -122,6 +126,7 @@ impl GrammarMcpError {
             Self::RemoteChannelUnverified => "the channel is not verified; a remote link's \
                  notices ride it, so open and verify the channel before the link"
                 .to_string(),
+            Self::RemotesFile { reason } => format!("the remotes file: {reason}"),
             Self::Internal { phase, reason } => format!("internal error [{phase}]: {reason}"),
             Self::InterfaceViolations { .. } => {
                 unreachable!("violation variants render via bucket, not message")

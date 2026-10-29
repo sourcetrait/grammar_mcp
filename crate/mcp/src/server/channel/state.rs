@@ -1,7 +1,17 @@
 use crate::*;
 
-/// The model-path prefix RESERVED for host-originated packets.
+/// The model-path prefix RESERVED for the local host's own packets.
 pub(crate) const MCP_RESERVED_PREFIX: &str = "mcp/";
+
+/// The model-path prefix RESERVED for the host's packets about a remote.
+pub(crate) const REMOTE_RESERVED_PREFIX: &str = "remote/";
+
+/// The reserved prefix `model` lies under, if any.
+pub(crate) fn reserved_prefix(model: &str) -> Option<&'static str> {
+    [MCP_RESERVED_PREFIX, REMOTE_RESERVED_PREFIX]
+        .into_iter()
+        .find(|prefix| model.starts_with(prefix))
+}
 
 /// The usable frame maximum.
 pub(crate) const MAX_FRAME_BYTES: usize = 1_048_575;

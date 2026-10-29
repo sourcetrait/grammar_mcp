@@ -112,7 +112,7 @@ fn get_config_all_mirrors_the_toml_tables(_t: &testing::Testable<'_, '_, '_>) {
     assert_eq!(
         env["result"]["tables"],
         json!(["channel", "supervisor", "identity"]),
-        "the record mirrors the TOML's tables but [[remote]]; got {env}",
+        "the record mirrors the TOML's tables; got {env}",
     );
     assert_eq!(
         env["result"]["identity_absent"].as_bool(),
