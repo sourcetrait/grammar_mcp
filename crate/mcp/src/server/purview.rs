@@ -22,19 +22,14 @@ pub(crate) fn purviews_path() -> PathBuf {
 }
 
 
-/// Render the purview table as NUON through the serde Value bridge.
+/// Render the purview table as NUON through nuval, in nushell's default style.
 pub(crate) fn purviews_to_nuon(rows: &[PurviewRow]) -> Result<String, String> {
-    let json = json::to_value(rows).map_err(|e| e.to_string())?;
-    let value = json_value_to_nu_value(&json);
-    nu::to_nuon(&nu::EngineState::new(), &value, nu::ToNuonConfig::default())
-        .map_err(|e| e.to_string())
+    nuval::to_nuon(rows, NuonStyle::Default).map_err(|e| e.to_string())
 }
 
+/// Read the purview table back from its NUON through nuval.
 pub(crate) fn purviews_from_nuon(text: &str) -> Result<Vec<PurviewRow>, String> {
-    let value = nu::from_nuon(text, None).map_err(|e| e.to_string())?;
-    let json_compat = nu::JsonValue::from_value(value).map_err(|e| e.to_string())?;
-    let json = json::to_value(&json_compat).map_err(|e| e.to_string())?;
-    json::from_value(json).map_err(|e| e.to_string())
+    nuval::from_nuon(text).map_err(|e| e.to_string())
 }
 
 /// Every configured purview; None only before startup materialized it.

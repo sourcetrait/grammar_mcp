@@ -209,8 +209,6 @@ pub use crate::{
     template::{build_call_source, build_execute_source},
 };
 
-pub use nuval::json_value_to_nu_value;
-
 pub use sourcetrait_grammar_protocol::{
     BUILTINS, CallDoc, CallRequest, CheckSummary, CommitResult, ControlAnswer, ControlRequest,
     Diagnostic, EngineCommand, EngineError, EngineHealth, EngineResult, ExecuteRequest,

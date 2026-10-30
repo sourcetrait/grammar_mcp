@@ -90,11 +90,12 @@ pub(crate) fn envelope_text(
     Ok(mcp::CallToolResult::success(vec![mcp::ContentBlock::text(text)]))
 }
 
-/// A tool's record as a nu value, through the serde bridge.
+/// A tool's record as a nu value, written by serde as a NuVal through nuval.
 pub(crate) fn serde_to_nu<T: ser::Serialize>(value: &T) -> Result<nu::Value, mcp::ErrorData> {
-    let json = json::to_value(value)
-        .map_err(|e| mcp::ErrorData::internal_error(format!("envelope serialize: {e}"), None))?;
-    Ok(json_value_to_nu_value(&json))
+    nuval::to_nuval(value)
+        .map_err(|e| mcp::ErrorData::internal_error(format!("envelope serialize: {e}"), None))?
+        .try_into_nu(nu::Span::unknown())
+        .map_err(|e| mcp::ErrorData::internal_error(format!("envelope convert: {e}"), None))
 }
 
 /// A success, `{nonce, result}`: the result a nu value the tool built.

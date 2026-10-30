@@ -12,10 +12,9 @@ keywords.workspace   = true
 
 [features]
 default = ["nushell"]
-# nushell's own values and errors, converted to and from nuval's, and the
-# MCP's JSON arguments bridged into them. The data and its NUON text, and
-# every client of them, build without.
-nushell = ["dep:chrono", "dep:miette", "dep:nu-protocol", "dep:serde_json"]
+# nushell's own values and errors, converted to and from nuval's. The data
+# and its NUON text, and every client of them, build without.
+nushell = ["dep:chrono", "dep:miette", "dep:nu-protocol"]
 
 [dependencies]
 bitcode.workspace = true
@@ -24,7 +23,6 @@ miette = { workspace = true, optional = true }
 nu-protocol = { workspace = true, optional = true }
 rkyv.workspace = true
 serde.workspace = true
-serde_json = { workspace = true, optional = true }
 snafu.workspace = true
 
 sourcetrait_common.workspace = true

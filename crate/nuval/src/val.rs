@@ -251,17 +251,22 @@ fn float_range(r: TypedRangeData<f64>) -> ConvertResult<nu::FloatRange> {
     range_from_parts(r.start, r.step, end)
 }
 
-/// A nushell range built exactly from its start, its step, and its end.
+/// A nushell range built exactly from its start, its step, and its end,
+/// carried through a NuVal by nuval's own serde.
 #[cfg(feature = "nushell")]
 fn range_from_parts<T, R>(start: T, step: T, end: Bound<T>) -> ConvertResult<R>
 where
     T: serde::Serialize,
     R: serde::de::DeserializeOwned,
 {
-    let parts = serde_json::json!({ "start": start, "step": step, "end": end });
-    serde_json::from_value(parts).map_err(|e| ConvertError::Range {
-        reason: e.to_string(),
-    })
+    #[derive(serde::Serialize)]
+    struct Parts<T> {
+        start: T,
+        step: T,
+        end: Bound<T>,
+    }
+    let refused = |e: NuonError| ConvertError::Range { reason: e.to_string() };
+    from_nuval(to_nuval(&Parts { start, step, end }).map_err(refused)?).map_err(refused)
 }
 
 #[cfg(feature = "nushell")]

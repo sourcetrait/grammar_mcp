@@ -29,5 +29,5 @@ Everything else is the crate's own.
 
 The engine's requests, commands, and answers, the two lanes, the equips' documents
 and commit result, the builtins, the diagnostics with their cap and positions, and the
-error are the protocol crate's, and the JSON bridge nuval's, re-exported here so every
-caller of the engine names them as it did.
+error are the protocol crate's, re-exported here so every caller of the engine names
+them as it did.

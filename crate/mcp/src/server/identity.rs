@@ -14,12 +14,12 @@ pub(crate) fn process_identity() -> (Arc<datum::NonceGenerator>, datum::NomPair)
     (nonce_gen.clone(), mcp_nom.clone())
 }
 
-/// A call's nonce, minted first from its tool and its parameters.
+/// A call's nonce, minted first from its tool and its parameters' raw NUON.
 pub(crate) fn mint_nonce<P: ser::Serialize>(
     nonce_gen: &datum::NonceGenerator,
     tool: &str,
     params: &P,
 ) -> datum::NoncePair {
-    let payload = json::to_vec(params).unwrap_or_default();
+    let payload = nuval::to_nuon(params, NuonStyle::Raw).unwrap_or_default();
     nonce_gen.generate_with(&(tool, payload)).into_pair()
 }

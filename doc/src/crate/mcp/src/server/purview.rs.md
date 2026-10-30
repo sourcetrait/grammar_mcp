@@ -23,8 +23,9 @@ keeps the `['*']` a new namespace starts with.
 
 
 ## fn purviews_to_nuon
-Through the serde Value bridge - the same one the rig index uses - so ONE bridge covers
-the whole shape and the file cannot drift from the struct as it changes.
+Through nuval's serde support, as the rig index is, so one conversion covers the whole
+shape and the file can't drift from the struct as it changes. nuval's default style is
+nushell's `to nuon`'s, so the table writes as it always has, byte for byte.
 
 ## fn load_purviews
 A DECODE FAILURE IS A LOUD ERROR, never a silent empty: an empty purview table resolves to

@@ -228,7 +228,7 @@ pub(crate) use sourcetrait_grammar_operator::{
     install_child_subreaper, pin,
 };
 
-pub(crate) use nuval::{TryIntoNu, json_value_to_nu_value, wide};
+pub(crate) use nuval::{NuonStyle, TryIntoNu, wide};
 
 pub(crate) use std::{
     collections::{HashMap, HashSet},
@@ -338,7 +338,7 @@ pub(crate) mod tku {
 }
 
 pub(crate) mod json {
-    pub(crate) use serde_json::{Value, from_value, to_value, to_vec};
+    pub(crate) use serde_json::{Value, to_value};
 }
 
 pub use crate::{

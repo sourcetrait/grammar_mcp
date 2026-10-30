@@ -5,10 +5,9 @@ types to and from both, for any crate that wants NUON, with nushell's own
 values beside them behind a feature (User).
 
 ## feature nushell
-nushell's own values and errors, converted to and from nuval's, and the MCP's
-JSON arguments bridged into them, take nu-protocol, miette, chrono, and
-serde_json. The feature is on by default and gates every nushell dependency
-(User). The data and its text take none of them: the workspace takes nuval
+nushell's own values and errors, converted to and from nuval's, take
+nu-protocol, miette, and chrono. The feature is on by default and gates every
+nushell dependency (User). The data and its text take none of them: the workspace takes nuval
 with default features off, so the protocol and the client carry values and
 their text without evaluating anything, and the engine and the MCP crate name
 `nushell`. Each conversion sits beside its data behind
@@ -22,10 +21,6 @@ One file a nushell error type's family of kinds, the error model's tables.
 NUON text without nushell: the reader and the writer port nushell's own, and
 the serde serializer and deserializer carry any type to and from a NuVal and
 so to and from the text.
-
-## mod json
-The serde_json bridge from the MCP's JSON arguments into nushell's values,
-behind `nushell`, shared by the engine and the MCP client.
 
 ## use crate::error::*
 ## use snafu::OptionExt

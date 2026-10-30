@@ -50,10 +50,10 @@ as the result's one text content. There is no structured content and no output s
 the text is the result, NUON the agent reads as it reads its own data.
 
 ## fn success
-A tool's own result struct crosses to nu through the serde bridge
-(`json_value_to_nu_value`, nuval's), the workspace's one JSON-to-Value path. `execute`, `rerun`, and
-`call` hand their checked value to `success_value` as it is, so a duration stays a
-duration. A tool answering nothing carries `{nonce, result: null}`.
+A tool's own result struct crosses to nu through `serde_to_nu`: serde writes it as a
+`NuVal`, nuval's, rebuilt as the nushell value the envelope renders, with no JSON
+between. `execute`, `rerun`, and `call` hand their checked value to `success_value` as
+it is, so a duration stays a duration. A tool answering nothing carries `{nonce, result: null}`.
 
 ## fn answer_value
 An eval's value crosses back as a `NuVal` and is rebuilt here into the nushell value the
