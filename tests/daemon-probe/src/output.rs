@@ -1,10 +1,10 @@
-//! The probe's outputs: JSON files written once, never over an existing file.
+//! The probe's outputs: NUON files written once, never over an existing file.
 use crate::*;
 
-/// Writes a value as JSON to a new file, refusing one that exists.
-pub(crate) fn write_json(path: &Path, value: &impl ser::Serialize) -> ProbeResult<()> {
+/// Writes a value as NUON to a new file, refusing one that exists.
+pub(crate) fn write_nuon(path: &Path, value: &impl ser::Serialize) -> ProbeResult<()> {
     let failed = |e: String| ProbeError::Io { path: path.to_path_buf(), reason: e };
-    let text = json::to_string_pretty(value).map_err(|e| failed(e.to_string()))?;
+    let text = nuval::to_nuon(value, NuonStyle::Spaces(1)).map_err(|e| failed(e.to_string()))?;
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)

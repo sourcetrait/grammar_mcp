@@ -1,0 +1,19 @@
+# Result: one case's run by grammard-probe, as the qualification matrix reads
+# it.
+#
+#     let result: <this type> = (open result.nuon)
+#
+# `status` is `pass`, `fail`, or `unrun`, and `exit` the probe's exit status
+# for the case, 77 for an unrun one. The times are milliseconds since the
+# Unix epoch.
+
+record<
+    case: string,
+    status: string,
+    exit: int,
+    reason: string,
+    probe: string,
+    started_at_ms: int,
+    ended_at_ms: int,
+    assertions: list<string>
+>

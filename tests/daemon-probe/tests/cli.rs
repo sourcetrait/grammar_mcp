@@ -5,9 +5,18 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, Output};
 
+use nutype::NuTypeFile;
+use nuval::NuVal;
 use sourcetrait_common::testing::prelude::*;
 
 static TESTING: testing::Module = testing::module!(Integration, { .using_temp_dir() });
+
+/// A candidate set's manifest its model holds.
+const SET: &str = "{schema_version: 1}";
+
+/// A fixture's descriptor its model holds: a run with no endpoints yet.
+const FIXTURE: &str = "{schema_version: 1, run: r1, lab_admin: {via: ssh, scope: fixture}, \
+     candidates: null, endpoints: [], mtls: null}";
 
 fn probe(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_grammard-probe"))
@@ -22,22 +31,34 @@ fn write(dir: &Path, name: &str, text: &str) -> String {
     path.to_string_lossy().into_owned()
 }
 
-fn read_json(path: &Path) -> serde_json::Value {
-    serde_json::from_str(&fs::read_to_string(path).expect("an output")).expect("JSON")
+/// An output read back and held to its model, `type/<model>`.
+fn read_output(path: &Path, model: &str) -> NuVal {
+    let value = NuVal::from_nuon(&fs::read_to_string(path).expect("an output")).expect("NUON");
+    let model_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("type").join(model);
+    let model_text = fs::read_to_string(&model_path).expect("its model");
+    let model_file = NuTypeFile::from_text(&model_text).expect("a model");
+    model_file.ty.check(&value).unwrap_or_else(|e| panic!("{model}: {e}"));
+    value
+}
+
+/// A record's field.
+fn field<'a>(value: &'a NuVal, name: &str) -> &'a NuVal {
+    let NuVal::Record(fields) = value else { panic!("not a record: {value:?}") };
+    fields.iter().find(|(k, _)| k == name).map(|(_, v)| v).unwrap_or_else(|| panic!("no {name}"))
 }
 
 #[tested]
 fn the_inventory_lists_every_group_unimplemented() {
     let t = testing::test!({ .using_temp_dir() });
-    let out = t.temp_dir().join("inventory.json");
+    let out = t.temp_dir().join("inventory.nuon");
     let run = probe(&["inventory", "--out", out.to_str().unwrap()]);
     assert_eq!(run.status.code(), Some(0), "{run:?}");
-    let inventory = read_json(&out);
-    let groups = inventory["groups"].as_array().expect("groups");
+    let inventory = read_output(&out, "Inventory.nutype");
+    let NuVal::List(groups) = field(&inventory, "groups") else { panic!("groups") };
     assert_eq!(groups.len(), 14);
-    assert!(groups.iter().all(|g| g["implemented"] == false), "{groups:?}");
-    let capabilities = inventory["capabilities"].as_object().expect("capabilities");
-    assert!(!capabilities.is_empty() && capabilities.values().all(|on| on == false));
+    assert!(groups.iter().all(|g| *field(g, "implemented") == NuVal::Bool(false)), "{groups:?}");
+    let NuVal::Record(capabilities) = field(&inventory, "capabilities") else { panic!("capabilities") };
+    assert!(!capabilities.is_empty() && capabilities.iter().all(|(_, on)| *on == NuVal::Bool(false)));
 
     let again = probe(&["inventory", "--out", out.to_str().unwrap()]);
     assert_eq!(again.status.code(), Some(78), "an existing output is never overwritten");
@@ -47,26 +68,26 @@ fn the_inventory_lists_every_group_unimplemented() {
 fn an_unimplemented_case_ends_unrun() {
     let t = testing::test!({ .using_temp_dir() });
     let dir = t.temp_dir();
-    let set = write(dir, "set.json", r#"{"schema_version": 1}"#);
-    let fixture = write(dir, "fixture.json", r#"{"schema_version": 1}"#);
+    let set = write(dir, "set.nuon", SET);
+    let fixture = write(dir, "fixture.nuon", FIXTURE);
     let out = dir.join("wire");
     let run = probe(&[
         "run", "--case", "wire", "--candidate-set", &set, "--fixture", &fixture,
         "--out", out.to_str().unwrap(),
     ]);
     assert_eq!(run.status.code(), Some(77), "{run:?}");
-    let result = read_json(&out.join("result.json"));
-    assert_eq!(result["status"], "unrun");
-    assert_eq!(result["exit"], 77);
-    assert_eq!(result["case"], "wire");
+    let result = read_output(&out.join("result.nuon"), "Result.nutype");
+    assert_eq!(*field(&result, "status"), NuVal::String("unrun".to_string()));
+    assert_eq!(*field(&result, "exit"), NuVal::Int(77));
+    assert_eq!(*field(&result, "case"), NuVal::String("wire".to_string()));
 }
 
 #[tested]
 fn an_unknown_case_is_refused() {
     let t = testing::test!({ .using_temp_dir() });
     let dir = t.temp_dir();
-    let set = write(dir, "set.json", r#"{"schema_version": 1}"#);
-    let fixture = write(dir, "fixture.json", r#"{"schema_version": 1}"#);
+    let set = write(dir, "set.nuon", SET);
+    let fixture = write(dir, "fixture.nuon", FIXTURE);
     let out = dir.join("smoke");
     let run = probe(&[
         "run", "--case", "smoke", "--candidate-set", &set, "--fixture", &fixture,
@@ -80,10 +101,18 @@ fn an_unknown_case_is_refused() {
 fn a_malformed_manifest_is_refused() {
     let t = testing::test!({ .using_temp_dir() });
     let dir = t.temp_dir();
-    let set = write(dir, "set.json", r#"{"schema_version": 1}"#);
-    for (name, text) in [("bad.json", "not json"), ("v2.json", r#"{"schema_version": 2}"#)] {
+    let set = write(dir, "set.nuon", SET);
+    let v2 = FIXTURE.replace("schema_version: 1", "schema_version: 2");
+    let cases = [
+        ("bad.nuon", "{schema_version"),
+        ("v2.nuon", v2.as_str()),
+        ("thin.nuon", SET),
+        ("extra.nuon", "{schema_version: 1, run: r1, lab_admin: {via: ssh, scope: fixture}, \
+             candidates: null, endpoints: [], mtls: null, extra: true}"),
+    ];
+    for (name, text) in cases {
         let fixture = write(dir, name, text);
-        let out = dir.join(name.replace(".json", ""));
+        let out = dir.join(name.replace(".nuon", ""));
         let run = probe(&[
             "run", "--case", "client", "--candidate-set", &set, "--fixture", &fixture,
             "--out", out.to_str().unwrap(),

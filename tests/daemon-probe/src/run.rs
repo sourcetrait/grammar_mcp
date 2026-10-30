@@ -16,7 +16,7 @@ pub fn run_main() -> process::ExitCode {
 /// Runs one command.
 fn run(command: ProbeCmd) -> ProbeResult<()> {
     match command {
-        ProbeCmd::Inventory { out } => write_json(&out, &inventory()),
+        ProbeCmd::Inventory { out } => write_nuon(&out, &inventory()),
         ProbeCmd::Run { case, candidate_set, fixture, out } => {
             run_case(&case, &candidate_set, &fixture, &out)
         }

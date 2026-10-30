@@ -1,0 +1,107 @@
+# IdentityManifest: a fixture run's endpoint descriptor, its endpoints, the
+# identities expected on each, the public trust material by fingerprint, and
+# the credentials by reference.
+#
+#     let manifest: <this type> = (open manifest-redacted.nuon)
+#
+# The fixture tool writes a private copy, naming each credential's `file` and
+# each mTLS peer's `key`, and a redacted copy, where both are null. Neither
+# carries a key's body: a reference names a file, never its contents, and
+# never holds `PRIVATE KEY`.
+#
+# `schema_version` is 1. `run` is 1 to 64 letters, digits, `_`, and `-`,
+# starting with a letter or a digit; a worker's `id` and `namespace` admit `.`
+# as well. `instance_key`, `krl_sha256`, and a certificate's `sha256` are 64
+# lowercase hex digits, an endpoint's `arch` is `amd64` or `riscv64`, and a
+# port runs from 1 to 65535. `candidates` is null until a candidate set
+# exists, and `mtls` is null for a run that minted no mTLS identities.
+#
+# An endpoint's `verified` is its verification, `verdict` one of `pass`,
+# `fail`, `incomplete`, and `unrun`. No verification is unrun, and one missing
+# its verdict's fields incomplete, each field it lacks null. A pass carries a
+# clean state: `passed` and `openssh` set, `failed` and `unhealthy_controls`
+# empty, `restored` and `tunnel_closed` true, and `error` null.
+
+record<
+    schema_version: int,
+    run: string,
+    lab_admin: record<
+        via: string,
+        scope: string
+    >,
+    candidates: oneof<record<>, nothing>,
+    endpoints: table<
+        profile: string,
+        arch: string,
+        route: record<
+            host: string,
+            bind: string,
+            port: int,
+            forward_port: int
+        >,
+        host_key_alias: string,
+        host_key: string,
+        accounts: table<
+            user: string,
+            uid: int,
+            keys: list<string>
+        >,
+        worker: record<
+            id: string,
+            namespace: string,
+            instance_key: string,
+            socket: string
+        >,
+        trust: record<
+            host_ca: string,
+            unknown_ca: string,
+            krl_sha256: string,
+            certs: table<
+                case: string,
+                serial: int,
+                principal: string,
+                ca: string,
+                revoked: bool,
+                sha256: string
+            >
+        >,
+        credentials: table<
+            name: string,
+            file: oneof<path, nothing>,
+            fingerprint: string
+        >,
+        verified: record<
+            verdict: string,
+            passed: oneof<int, nothing>,
+            failed: oneof<list<string>, nothing>,
+            unhealthy_controls: oneof<list<string>, nothing>,
+            restored: oneof<bool, nothing>,
+            tunnel_closed: oneof<bool, nothing>,
+            error: oneof<string, nothing>,
+            openssh: oneof<string, nothing>
+        >
+    >,
+    mtls: oneof<
+        record<
+            identities: table<
+                profile: string,
+                authority: record<
+                    fingerprint: string,
+                    cert: path
+                >,
+                peers: table<
+                    name: string,
+                    fingerprint: string,
+                    cert: path,
+                    key: oneof<path, nothing>
+                >
+            >,
+            outcomes: table<
+                case: string,
+                expect: bool,
+                observed: bool
+            >
+        >,
+        nothing
+    >
+>

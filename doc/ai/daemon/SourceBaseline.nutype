@@ -1,0 +1,28 @@
+# SourceBaseline: the daemon implementation's starting point, each
+# repository's head, tree, and status, the ignored lock's hash, and the
+# toolchain, as taken at `at`.
+#
+#     let baseline: <this type> = (open doc/ai/daemon/source_baseline.nuon)
+#
+# A repository's `status` is its `git status --porcelain` lines, empty for a
+# clean tree.
+
+record<
+    at: string,
+    repositories: table<
+        name: string,
+        head: string,
+        tree: string,
+        status: list<string>
+    >,
+    ignored_lock_sha256: string,
+    toolchain: record<
+        rustc: string,
+        rustc_commit: string,
+        rustc_date: string,
+        llvm: string,
+        host: string,
+        cargo: string,
+        cc: string
+    >
+>

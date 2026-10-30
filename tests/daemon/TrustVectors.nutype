@@ -1,0 +1,52 @@
+# TrustVectors: SSH trust and authentication vectors, each case with the class
+# OpenSSH's own client observed.
+#
+#     let vectors: <this type> = (open tests/daemon/trust_vectors.nuon)
+#
+# `schema_version` is 1, and every name is the placeholder `alias`,
+# `endpoint.invalid`. The keys are test-only and public: the host key, the
+# CAs, a host CA and an untrusted one, the clients', and the host
+# certificates, valid, expired, not yet valid, for the wrong principal,
+# revoked by the KRL, `krl_base64`, and from the untrusted CA, each with its
+# `validity` window. `known_hosts` holds each known_hosts variant's lines. A
+# case names the variant it used, `known`, and its class, `expect` and
+# `observed`, one of `accept`, `host_trust`, `auth`, and `forward`, with
+# `exit`, the client's exit status. A case whose sshd never started is
+# observed `unrun`, its `exit` null. `openssh` names the client.
+
+record<
+    schema_version: int,
+    alias: string,
+    openssh: string,
+    host_key: string,
+    cas: table<
+        name: string,
+        public: string
+    >,
+    clients: table<
+        name: string,
+        public: string,
+        authorized: bool
+    >,
+    certs: table<
+        case: string,
+        ca: string,
+        principal: string,
+        serial: int,
+        revoked: bool,
+        validity: string,
+        cert: string
+    >,
+    krl_base64: string,
+    known_hosts: table<
+        name: string,
+        lines: list<string>
+    >,
+    cases: table<
+        case: string,
+        known: string,
+        expect: string,
+        observed: string,
+        exit: oneof<int, nothing>
+    >
+>

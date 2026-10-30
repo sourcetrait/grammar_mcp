@@ -12,7 +12,7 @@ pub(crate) struct ProbeCli {
 /// grammard-probe's commands.
 #[derive(clap::Subcommand)]
 pub(crate) enum ProbeCmd {
-    /// Write the scenario groups and their assertions as JSON.
+    /// Write the scenario groups and their assertions as NUON.
     Inventory {
         /// The new file the inventory is written to.
         #[arg(long)]
@@ -23,10 +23,10 @@ pub(crate) enum ProbeCmd {
         /// The case, a scenario group's name.
         #[arg(long)]
         case: String,
-        /// The candidate set's JSON manifest.
+        /// The candidate set's NUON manifest.
         #[arg(long)]
         candidate_set: PathBuf,
-        /// The fixture's JSON descriptor.
+        /// The fixture's NUON descriptor, its redacted identity manifest.
         #[arg(long)]
         fixture: PathBuf,
         /// The directory the case's result is written to.

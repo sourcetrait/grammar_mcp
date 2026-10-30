@@ -2,7 +2,13 @@
 use crate::*;
 
 /// The manifest schema version this probe reads.
-const SCHEMA_VERSION: u64 = 1;
+const SCHEMA_VERSION: i64 = 1;
+
+/// A candidate set's manifest, as its model types it.
+const CANDIDATE_SET: &str = include_str!("../type/CandidateSet.nutype");
+
+/// A fixture's descriptor, its redacted identity manifest, as its model types it.
+const FIXTURE: &str = include_str!("../../daemon/IdentityManifest.nutype");
 
 /// A case's result, as the qualification matrix reads it.
 #[derive(ser::Serialize)]
@@ -36,8 +42,8 @@ pub(crate) fn run_case(
     if !GROUPS.contains(&case) {
         return Err(ProbeError::Config { reason: format!("unknown case {case}") });
     }
-    manifest(candidate_set)?;
-    manifest(fixture)?;
+    manifest(candidate_set, CANDIDATE_SET)?;
+    manifest(fixture, FIXTURE)?;
     fs::create_dir_all(out)
         .map_err(|e| ProbeError::Io { path: out.to_path_buf(), reason: e.to_string() })?;
     let reason = format!("the {case} case is not implemented in this build");
@@ -52,19 +58,25 @@ pub(crate) fn run_case(
         ended_at_ms: now_ms(),
         assertions: Vec::new(),
     };
-    write_json(&out.join("result.json"), &result)?;
+    write_nuon(&out.join("result.nuon"), &result)?;
     Err(unrun)
 }
 
-/// Checks a manifest is a JSON object at this probe's schema version.
-fn manifest(path: &Path) -> ProbeResult<()> {
+/// Checks a manifest is NUON its model holds, at this probe's schema version.
+fn manifest(path: &Path, model: &str) -> ProbeResult<()> {
     let refused = |reason: String| ProbeError::Config {
         reason: format!("{}: {reason}", path.display()),
     };
     let text = fs::read_to_string(path).map_err(|e| refused(e.to_string()))?;
-    let value: json::Value = json::from_str(&text).map_err(|e| refused(e.to_string()))?;
-    match value.get("schema_version").and_then(json::Value::as_u64) {
-        Some(SCHEMA_VERSION) => Ok(()),
+    let value = NuVal::from_nuon(&text).map_err(|e| refused(e.to_string()))?;
+    let model = NuTypeFile::from_text(model).map_err(|e| refused(format!("its model: {e}")))?;
+    model.ty.check(&value).map_err(|e| refused(e.to_string()))?;
+    match &value {
+        NuVal::Record(fields)
+            if fields.iter().any(|(k, v)| k == "schema_version" && *v == NuVal::Int(SCHEMA_VERSION)) =>
+        {
+            Ok(())
+        }
         _ => Err(refused(format!("schema_version is not {SCHEMA_VERSION}"))),
     }
 }

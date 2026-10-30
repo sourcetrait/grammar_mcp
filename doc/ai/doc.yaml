@@ -1,6 +1,6 @@
-- doc: daemon/dependencies.json
+- doc: daemon/dependencies.nuon
   summary: The daemon's pinned crates, toolchain, siblings, lock, and update rules
-- doc: daemon/source_baseline.json
+- doc: daemon/source_baseline.nuon
   summary: The implementation's starting revisions, trees, lock, and toolchain
 - doc: daemon/test_map.tsv
   summary: Every baseline test and the client cohort's, with its cohort, profile, and entry

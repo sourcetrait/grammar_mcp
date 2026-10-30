@@ -1,0 +1,25 @@
+# Inventory: grammard-probe's scenario groups, as this build has them.
+#
+#     let inventory: <this type> = (open inventory.nuon)
+#
+# `probe` names the probe and its version, and `capabilities` those of the
+# client it drives. Every group the qualification contract requires is
+# listed in its order, with whether this build implements it and its
+# enumerated assertions, none before its gate defines them.
+
+record<
+    schema_version: int,
+    probe: string,
+    capabilities: record<
+        wire: bool,
+        runtime: bool,
+        client: bool,
+        artifacts: bool,
+        service: bool
+    >,
+    groups: table<
+        case: string,
+        implemented: bool,
+        assertions: list<string>
+    >
+>

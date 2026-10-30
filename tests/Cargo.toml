@@ -33,6 +33,8 @@ nu-engine.workspace = true
 nu-json = { workspace = true, features = ["nu-protocol"] }
 nu-protocol.workspace = true
 nuon.workspace = true
+nutype.workspace = true
+nuval.workspace = true
 serde_json.workspace = true
 srcert_lib.workspace = true
 tokio.workspace = true

@@ -10,7 +10,7 @@ pub(crate) use crate::{
     cli::{ProbeCli, ProbeCmd},
     error::{ProbeError, ProbeResult},
     inventory::{GROUPS, PROBE, inventory},
-    output::write_json,
+    output::write_nuon,
     scenario::run_case,
 };
 
@@ -24,11 +24,11 @@ pub(crate) use std::{
 
 pub(crate) use clap::Parser;
 
-pub(crate) use sourcetrait_grammar_protocol::Capabilities;
+pub(crate) use nutype::NuTypeFile;
 
-pub(crate) mod json {
-    pub(crate) use serde_json::{Value, from_str, to_string_pretty};
-}
+pub(crate) use nuval::{NuVal, NuonStyle};
+
+pub(crate) use sourcetrait_grammar_protocol::Capabilities;
 
 pub(crate) mod ser {
     pub(crate) use ::serde::Serialize;

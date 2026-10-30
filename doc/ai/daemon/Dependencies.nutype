@@ -1,0 +1,74 @@
+# Dependencies: the daemon's pinned crates, the toolchain, the sibling
+# repositories, the lock, and the rules a pin moves by.
+#
+#     let deps: <this type> = (open doc/ai/daemon/dependencies.nuon)
+#
+# Each pin is an exact version with its checksum, license, rust-version, and
+# features, and the packages that consume it now and are planned to.
+# `resolution` is what the pins' first consumers kept and added in the lock,
+# and `nushell` and `remote_channel` the crate sets each takes. `siblings` are
+# the repositories the workspace reaches by path, `package_inputs` those the
+# package carries, and `lock` the committed `Cargo.lock` by its hash.
+
+record<
+    toolchain: record<
+        rustc: string,
+        rustc_commit: string,
+        rustc_date: string,
+        llvm: string,
+        cargo: string,
+        host: string,
+        linker: string,
+        minimum: string,
+        minimum_from: string
+    >,
+    pins: table<
+        crate: string,
+        version: string,
+        requirement: string,
+        checksum_sha256: string,
+        license: string,
+        rust_version: oneof<string, nothing>,
+        default_features: bool,
+        features: list<string>,
+        features_off: list<string>,
+        in_lock: bool,
+        consumers: list<string>,
+        planned_consumers: list<string>,
+        notes: list<string>
+    >,
+    resolution: record<
+        kept: string,
+        added_crates: int,
+        added_versions: list<string>,
+        added_members: list<string>,
+        outside_every_graph: list<string>
+    >,
+    nushell: record<
+        version: string,
+        crates: list<string>
+    >,
+    remote_channel: record<
+        transport: string,
+        crates: list<string>,
+        excludes: list<string>
+    >,
+    lock: record<
+        path: string,
+        sha256: string,
+        committed: bool
+    >,
+    siblings: table<
+        repository: string,
+        path: string,
+        revision: string,
+        packages: list<string>
+    >,
+    package_inputs: table<
+        repository: string,
+        path: string,
+        revision: string,
+        use: string
+    >,
+    update_rules: list<string>
+>

@@ -1,35 +1,69 @@
-//! The repository's `.nutype` files, read and written back as they stand.
-use std::path::Path;
+//! The repository's `.nutype` files, read and written back as they stand, and
+//! its NUON files, each held to its model.
+use std::path::{Path, PathBuf};
 
 use nutype::NuTypeFile;
+use nuval::NuVal;
 
 /// The repository's `.nutype` files, from the workspace's root.
-const FILES: [&str; 5] = [
+const FILES: [&str; 12] = [
     "include/config/Config.nutype",
     "build/type/daemon/feature_matrix.nutype",
     "crate/protocol/schema/Schema.nutype",
     "crate/protocol/tests/vectors/Budget.nutype",
     "crate/protocol/tests/vectors/Vectors.nutype",
+    "doc/ai/daemon/Dependencies.nutype",
+    "doc/ai/daemon/SourceBaseline.nutype",
+    "tests/daemon/IdentityManifest.nutype",
+    "tests/daemon/TrustVectors.nutype",
+    "tests/daemon-probe/type/CandidateSet.nutype",
+    "tests/daemon-probe/type/Inventory.nutype",
+    "tests/daemon-probe/type/Result.nutype",
 ];
 
-/// Each file's path, its text, and its model.
-fn files() -> Vec<(&'static str, String, NuTypeFile)> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    FILES
-        .into_iter()
-        .map(|file| {
-            let text = std::fs::read_to_string(root.join(file)).unwrap_or_else(|e| panic!("read {file}: {e}"));
-            let model = NuTypeFile::from_text(&text).unwrap_or_else(|e| panic!("{file}: {e}"));
-            (file, text, model)
-        })
-        .collect()
+/// The repository's NUON files, each with its model, from the workspace's root.
+const MODELED: [(&str, &str); 9] = [
+    ("build/nuon/daemon/feature_matrix.nuon", "build/type/daemon/feature_matrix.nutype"),
+    ("crate/protocol/schema/v1.nuon", "crate/protocol/schema/Schema.nutype"),
+    ("crate/protocol/tests/vectors/budget.nuon", "crate/protocol/tests/vectors/Budget.nutype"),
+    ("crate/protocol/tests/vectors/engine.nuon", "crate/protocol/tests/vectors/Vectors.nutype"),
+    ("crate/protocol/tests/vectors/runtime.nuon", "crate/protocol/tests/vectors/Vectors.nutype"),
+    ("crate/protocol/tests/vectors/value.nuon", "crate/protocol/tests/vectors/Vectors.nutype"),
+    ("doc/ai/daemon/dependencies.nuon", "doc/ai/daemon/Dependencies.nutype"),
+    ("doc/ai/daemon/source_baseline.nuon", "doc/ai/daemon/SourceBaseline.nutype"),
+    ("tests/daemon/trust_vectors.nuon", "tests/daemon/TrustVectors.nutype"),
+];
+
+/// The workspace's root.
+fn root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// A file's text, from the workspace's root.
+fn read(file: &str) -> String {
+    std::fs::read_to_string(root().join(file)).unwrap_or_else(|e| panic!("read {file}: {e}"))
+}
+
+/// A `.nutype` file's model.
+fn model(file: &str) -> NuTypeFile {
+    NuTypeFile::from_text(&read(file)).unwrap_or_else(|e| panic!("{file}: {e}"))
 }
 
 #[test]
 fn each_repository_nutype_reads_and_writes_back_unchanged() {
-    for (file, text, model) in files() {
+    for file in FILES {
+        let text = read(file);
+        let model = model(file);
         assert!(!model.doc.is_empty(), "{file} keeps its documentation");
         assert_eq!(model.to_text(), text, "{file} writes back as it stands");
+    }
+}
+
+#[test]
+fn each_repository_nuon_holds_to_its_model() {
+    for (file, model_file) in MODELED {
+        let value = NuVal::from_nuon(&read(file)).unwrap_or_else(|e| panic!("{file}: {e}"));
+        model(model_file).ty.check(&value).unwrap_or_else(|e| panic!("{file} against {model_file}: {e}"));
     }
 }
 
@@ -38,7 +72,8 @@ fn each_repository_nutype_reads_and_writes_back_unchanged() {
 #[cfg(feature = "nushell")]
 #[test]
 fn each_repository_nutype_annotates_a_parameter_as_nushell_reads_it() {
-    for (file, _, model) in files() {
+    for file in FILES {
+        let model = model(file);
         let engine = nu_cmd_lang::create_default_context();
         let mut working_set = nu_protocol::engine::StateWorkingSet::new(&engine);
         let source = format!("def t [x: {}] {{}}", model.ty.to_block());

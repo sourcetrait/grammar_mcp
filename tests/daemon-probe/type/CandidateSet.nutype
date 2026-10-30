@@ -1,0 +1,10 @@
+# CandidateSet: a candidate set's manifest, as grammard-probe reads it.
+#
+#     let set: <this type> = (open set.nuon)
+#
+# `schema_version` is 1. The manifest holds its version alone until the
+# candidate set's gate defines its executables.
+
+record<
+    schema_version: int
+>

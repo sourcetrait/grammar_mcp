@@ -6678,8 +6678,9 @@ name = "sourcetrait_grammar_daemon_probe"
 version = "0.0.0-9"
 dependencies = [
  "clap",
+ "nutype",
+ "nuval",
  "serde",
- "serde_json",
  "sourcetrait_common",
  "sourcetrait_grammar_client",
  "sourcetrait_grammar_protocol",
@@ -6825,6 +6826,8 @@ dependencies = [
  "nu-json",
  "nu-protocol",
  "nuon",
+ "nutype",
+ "nuval",
  "serde_json",
  "sourcetrait_common",
  "srcert_lib",
