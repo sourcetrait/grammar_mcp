@@ -2,8 +2,9 @@
 
 The test-only-`pub` convention's landing site. `TestServer` wraps a `NuSh` plus a
 tokio runtime and drives the REAL tool handlers in-process, returning each tool's
-envelope parsed from the NUON text the wire carries into a serde_json Value, so the
-integration tests exercise the handlers without spawning the binary.
+envelope read from the NUON text the wire carries as a NuVal, so the integration
+tests exercise the handlers without spawning the binary and assert on the values
+nushell's own kinds keep: a duration stays a duration and an int never a float.
 
 THE PROCESS-GLOBAL CONSTRAINT is the thing to hold before writing a test here.
 `CONFIG` is a `OnceLock` and the homes `LazyLock`s that read the environment at first
@@ -94,10 +95,15 @@ drives one through `interface` itself.
 ### fn tools
 The router's own listing, each tool serialized as `tools/list` carries it, so a
 test holds a description or the absence of an output schema as a client sees it.
+It stays JSON, the JSON-RPC's own.
 
 ### fn rig_index
-Decodes the NUON index into the JSON shape the assertions are written against, so
-a test checking `source_path` does not have to know the on-disk format.
+Decodes the NUON index and carries it as a NuVal, so a test checking
+`source_path` does not have to know the on-disk format.
+
+## fn nuon
+An expected value is written as the NUON text it is, so a test reads as the
+envelope it compares.
 
 ## struct SupervisedSystem
 mcp's system as the serve path starts it, the operator with the engine, for the one

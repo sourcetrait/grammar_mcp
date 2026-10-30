@@ -25,9 +25,8 @@ The shim re-exporting `schemars::JsonSchema`, reached only through the
 `schema::JsonSchema` path on a derive.
 
 ## mod json
-serde_json's `Value` and `to_value` for `guts` alone, whose envelopes the
-integration tests assert on as JSON values; nothing the host serves converts
-through JSON.
+serde_json's `Value` and `to_value` for `guts` alone, whose tool list is the
+JSON-RPC's own `tools/list`; nothing the host serves converts through JSON.
 
 ## use sourcetrait_grammar_engine
 The engine's public face named bare, as mcp's own items are, and the crate
