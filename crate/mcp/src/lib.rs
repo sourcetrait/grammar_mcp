@@ -109,7 +109,6 @@ pub(crate) use crate::{
         transient_dir,
     },
     mcp::ServiceExt,
-    nu::FromValue,
     error::error_to_call_result,
     server::{
         cert::ensure_cert_profile,
@@ -259,7 +258,7 @@ pub(crate) mod nu {
     pub(crate) use nu_engine::command_prelude::Call;
     pub(crate) use nu_parser::parse;
     pub(crate) use nu_protocol::{
-        Category, FromValue, PipelineData, Record, ShellError, Signature, Span, SyntaxShape,
+        Category, PipelineData, Record, ShellError, Signature, Span, SyntaxShape,
         Type, Value,
         ast::{Argument, Block, Expr, Expression, ListItem},
         engine::{Command, EngineState, Stack, StateWorkingSet},
