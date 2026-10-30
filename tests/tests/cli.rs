@@ -133,7 +133,7 @@ fn cli_output_is_one_nuon_record() {
         trimmed.starts_with("{nonce: ") && trimmed.ends_with('}'),
         "stdout should be exactly one NUON record led by its nonce; got {text:?}",
     );
-    assert!(try_nuon_to_json(trimmed).is_some(), "and it parses as NUON; got {text:?}");
+    assert!(try_nuon(trimmed).is_some(), "and it parses as NUON; got {text:?}");
 }
 
 #[tested]
@@ -146,7 +146,7 @@ fn cli_process_kill_prints_a_null_result_and_exits_zero() {
     assert!(out.status.success(), "cli interface process kill should exit 0; got {out:?}");
     let v = stdout_envelope(&out);
     assert!(
-        v.get("result").is_some_and(|result| result.is_null()),
+        v.get("result").is_some_and(|result| result.is_nothing()),
         "a void command answers a null result; got {v}",
     );
 }
@@ -190,5 +190,5 @@ fn cli_deny_does_not_reach_the_one_shot_path() {
         String::from_utf8_lossy(&out.stderr),
     );
     let v = stdout_envelope(&out);
-    assert!(v["result"]["signatures"].is_string(), "got {v}");
+    assert!(v["result"]["signatures"].as_str().is_some(), "got {v}");
 }

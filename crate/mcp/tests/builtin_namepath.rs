@@ -90,7 +90,7 @@ fn an_uninstalled_builtin_takes_its_bare_patterns_with_it() {
     assert!(!has_error(&removed), "got {removed}");
     let purviews = s.purviews();
     let ids: Vec<&str> = purviews["result"]["purviews"]
-        .as_array()
+        .as_list()
         .expect("purviews list")
         .iter()
         .filter_map(|row| row[0].as_str())

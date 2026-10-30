@@ -2,8 +2,7 @@
 //! on either lane. `tests/lint_rules.rs` covers the rules themselves.
 #![cfg(feature = "embedded-cli")]
 
-use serde_json::json;
-use sourcetrait_grammar_mcp::guts::{TestServer, has_kind};
+use sourcetrait_grammar_mcp::guts::{TestServer, has_kind, nuon};
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
@@ -40,7 +39,7 @@ fn a_clean_definition_runs() {
         "def execute [data: record<x: int>]: nothing -> record<out: int> { { out: ($data.x + 1) } }",
         "{x: 5}",
     );
-    assert_eq!(env["result"], json!({"out": 6}), "got {env}");
+    assert_eq!(env["result"], nuon("{out: 6}"), "got {env}");
 }
 
 #[test]
@@ -76,5 +75,5 @@ fn a_well_known_system_path_passes() {
         "def execute [data: nothing]: nothing -> record<seen: bool> { { seen: ('/dev/null' | path exists) } }",
         "null",
     );
-    assert_eq!(env["result"], json!({"seen": true}), "got {env}");
+    assert_eq!(env["result"], nuon("{seen: true}"), "got {env}");
 }

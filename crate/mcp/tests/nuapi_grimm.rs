@@ -3,8 +3,7 @@
 //! call's body and carry that call's own log dir.
 #![cfg(feature = "embedded-cli")]
 
-use serde_json::json;
-use sourcetrait_grammar_mcp::guts::{TestServer, error_text, has_error, write_tree};
+use sourcetrait_grammar_mcp::guts::{NuVal, TestServer, error_text, has_error, nuon, write_tree};
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
@@ -27,7 +26,7 @@ fn read_back(
     nonce: &str,
     result_type: &str,
     body: &str,
-) -> serde_json::Value {
+) -> NuVal {
     let path = s.execute_log_dir(nonce).join("debug.nuonl");
     s.execute(
         &format!("def execute [data: record<path: string>]: nothing -> {result_type} {{\n{body}\n}}"),
@@ -51,7 +50,7 @@ fn dbg_appends_one_line_per_call() {
     );
     assert_eq!(
         back["result"],
-        json!({"count": 2, "first_a": 1, "second_x": 1}),
+        nuon("{count: 2, first_a: 1, second_x: 1}"),
         "one line per call; got {back}",
     );
 }
@@ -173,7 +172,7 @@ fn a_rig_passing_a_table_to_grimm_commits_and_runs() {
     let committed = s.commit("sourcetrait/grimmrig");
     assert!(!has_error(&committed), "got {committed}");
     let called = s.call("sourcetrait/grimmrig:m:trace", "null");
-    assert_eq!(called["result"], json!({"ok": true}), "got {called}");
+    assert_eq!(called["result"], nuon("{ok: true}"), "got {called}");
 }
 
 #[test]

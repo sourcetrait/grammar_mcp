@@ -15,7 +15,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use serde_json::{Value, json};
+use serde_json::Value;
 use sourcetrait_grammar_tests::*;
 use sourcetrait_common::testing::prelude::*;
 
@@ -238,7 +238,7 @@ fn remote_list_shows_each_remotes_state() {
 
     let closed = remote_row(&mut b, "peer");
     assert_eq!(closed["state"], "closed", "got {closed}");
-    assert!(closed["endpoint"].is_null(), "no endpoint while closed; got {closed}");
+    assert!(closed["endpoint"].is_nothing(), "no endpoint while closed; got {closed}");
 
     let listened = b.host.interface("interface remote channel listen 'peer'");
     assert!(!has_error_path(&listened), "the listen is synchronous on its bind; got {listened}");
@@ -281,7 +281,7 @@ fn remote_entries_are_set_read_and_unset_live() {
         &host_dir,
     );
     let listed = host.interface("interface remote channel list");
-    assert_eq!(envelope(&listed)["result"], json!([]), "no remotes yet; got {listed}");
+    assert_eq!(envelope(&listed)["result"], nuon("[]"), "no remotes yet; got {listed}");
 
     let remotes = host_dir.join(".grammar").join("remotes.toml");
     std::fs::write(&remotes, "# kept\n[[channel]]\nalias = \"kept\"\ncert = \"/k/kept.pem\"\n")
@@ -310,13 +310,13 @@ fn remote_entries_are_set_read_and_unset_live() {
     assert!(!has_error_path(&unset), "the unset holds; got {unset}");
     let gone = host.interface("interface remote channel get 'peer'");
     assert_eq!(err_kind(&gone), "remote::channel::invalid_params", "got {gone}");
-    let aliases: Vec<Value> = envelope(&host.interface("interface remote channel list"))["result"]
-        .as_array()
+    let aliases: Vec<NuVal> = envelope(&host.interface("interface remote channel list"))["result"]
+        .as_list()
         .expect("a table")
         .iter()
         .map(|row| row["alias"].clone())
         .collect();
-    assert_eq!(aliases, vec![json!("kept")], "the other entry stays");
+    assert_eq!(aliases, vec!["kept"], "the other entry stays");
 
     std::fs::write(&remotes, "not [toml").expect("a broken file");
     let broken = host.interface("interface remote channel list");
@@ -502,7 +502,11 @@ fn remote_send_with_returns_its_event_id() {
     std::fs::write(&src, "files-1").expect("write the attachment");
     let resp = a.host.execute(
         "def execute [data: record<nom: string, src: string>]: nothing -> record<id: string> {\n    let sent = (grimm remote_channel_send_with $data.nom 'test/Files' {note: 'files-1'} [[src dest]; [$data.src 'note.txt']])\n    {id: $sent.event_id}\n}",
-        &json!({"nom": nom_b, "src": src.to_str().expect("utf-8 path")}).to_string(),
+        &NuVal::Record(vec![
+            ("nom".to_string(), NuVal::from(nom_b.to_string())),
+            ("src".to_string(), NuVal::from(src.to_str().expect("utf-8 path"))),
+        ])
+        .to_string(),
     );
     assert!(!has_error_path(&resp), "remote_channel_send_with failed: {resp}");
     let send_id = envelope(&resp)["result"]["id"]
@@ -538,7 +542,8 @@ fn remote_send(c: &mut Consumer, peer_nom: &str, model: &str, event_body: &str) 
     let definition = format!(
         "def execute [data: record<nom: string>]: nothing -> record<id: string> {{\n    let sent = (grimm remote channel send $data.nom '{model}' {{{event_body}}})\n    {{id: $sent.event_id}}\n}}",
     );
-    let resp = c.host.execute(&definition, &json!({"nom": peer_nom}).to_string());
+    let data = NuVal::Record(vec![("nom".to_string(), NuVal::from(peer_nom.to_string()))]);
+    let resp = c.host.execute(&definition, &data.to_string());
     assert!(!has_error_path(&resp), "the remote channel send failed: {resp}");
     envelope(&resp)["result"]["id"].as_str().expect("send returns a message id").to_string()
 }
@@ -549,12 +554,12 @@ fn err_kind(resp: &Value) -> String {
 }
 
 /// One remote's row, as `interface remote channel get` answers it.
-fn remote_row(c: &mut Consumer, alias: &str) -> Value {
+fn remote_row(c: &mut Consumer, alias: &str) -> NuVal {
     remote_row_of(&mut c.host, alias)
 }
 
 /// One remote's row from a host with no consumer.
-fn remote_row_of(host: &mut Host, alias: &str) -> Value {
+fn remote_row_of(host: &mut Host, alias: &str) -> NuVal {
     let got = host.interface(&format!("interface remote channel get '{alias}'"));
     assert!(!has_error_path(&got), "the get holds; got {got}");
     envelope(&got)["result"].clone()
@@ -575,7 +580,7 @@ fn attach_bare(root: &Path, name: &str, keys: &GeneratedKeys) -> Consumer {
 /// The inbox-relative spill path from a spill-pointer packet's event.
 #[cfg(feature = "embedded-cli")]
 fn spill_path(pkt: &Packet) -> String {
-    let ev: Value = serde_json::from_str(&pkt.event).expect("event parses as json");
+    let ev = NuVal::from_nuon(&pkt.event).expect("event parses as NUON");
     ev["spilled_event_path"].as_str().expect("a spill pointer carries spilled_event_path").to_string()
 }
 

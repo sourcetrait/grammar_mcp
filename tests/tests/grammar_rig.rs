@@ -2,13 +2,17 @@
 //! call runs by its bare name on the bundled plugins.
 #![cfg(feature = "embedded-cli")]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use serde_json::json;
 use sourcetrait_grammar_tests::*;
 use sourcetrait_common::testing::prelude::*;
 
 static TESTING: testing::Module = testing::module!(Integration, { .using_temp_dir() });
+
+/// A path as a NUON string, quoted as NUON writes one.
+fn nuon_path(path: &Path) -> String {
+    NuVal::from(path.to_string_lossy().into_owned()).to_string()
+}
 
 const PLUGIN_DIR_ENV: &str = "GRAMMAR_MCP_PLUGIN_DIR";
 
@@ -55,7 +59,7 @@ fn each_grammar_call_runs_by_its_bare_name() {
 
     let soaked = host.call_np(
         "grammar:soak:dir",
-        &format!("{{src: {}, dst: {}, fill: {{name: World}}}}", json!(src), json!(out)),
+        &format!("{{src: {}, dst: {}, fill: {{name: World}}}}", nuon_path(&src), nuon_path(&out)),
     );
     assert!(!has_error_path(&soaked), "soak dir runs; got {soaked}");
     assert_eq!(
@@ -63,12 +67,12 @@ fn each_grammar_call_runs_by_its_bare_name() {
         "Hello, World!",
     );
 
-    let dir = envelope(&host.call_np("grammar:eye:dir", &format!("{{dir: {}, ignore: [tmpl], regard: []}}", json!(work))));
+    let dir = envelope(&host.call_np("grammar:eye:dir", &format!("{{dir: {}, ignore: [tmpl], regard: []}}", nuon_path(&work))));
     let tree = dir["result"]["tree"].as_str().expect("eye dir answers a tree");
     assert!(tree.contains(" a.log 3b"), "eye dir lists the ignored file; got {tree}");
     assert!(!tree.contains("hello.txt.liquid"), "eye dir skips an ignore glob; got {tree}");
 
-    let git = envelope(&host.call_np("grammar:eye:git", &format!("{{dir: {}}}", json!(work))));
+    let git = envelope(&host.call_np("grammar:eye:git", &format!("{{dir: {}}}", nuon_path(&work))));
     let tree = git["result"]["tree"].as_str().expect("eye git answers a tree");
     assert!(!tree.contains("a.log"), "eye git skips the ignored file; got {tree}");
     assert!(tree.contains("hello.txt.liquid"), "eye git lists the template; got {tree}");

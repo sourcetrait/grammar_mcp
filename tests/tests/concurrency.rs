@@ -55,7 +55,7 @@ fn concurrent_calls_complete_and_hold_the_semaphore_bound() {
     while Instant::now() < deadline {
         let resp = host.interface("interface process list");
         let in_flight = envelope(&resp)["result"]["processes"]
-            .as_array()
+            .as_list()
             .map(|a| {
                 a.iter()
                     .filter(|e| e.get("tool").and_then(|t| t.as_str()) == Some("execute"))

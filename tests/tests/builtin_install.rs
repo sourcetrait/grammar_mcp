@@ -140,13 +140,13 @@ fn ping(host: &mut Host, name: &str) -> Option<i64> {
 fn purview_rows(host: &mut Host) -> Vec<(String, Vec<String>)> {
     let resp = host.interface("interface purview list");
     envelope(&resp)["result"]["purviews"]
-        .as_array()
+        .as_list()
         .expect("the purview list holds the table")
         .iter()
         .map(|row| {
             let id = row[0].as_str().expect("a purview id").to_string();
             let values = row[1]
-                .as_array()
+                .as_list()
                 .expect("its patterns")
                 .iter()
                 .map(|value| value.as_str().expect("a pattern").to_string())

@@ -32,7 +32,7 @@ fn denied_tool_call_fails_at_protocol_layer() {
         "null",
     );
     assert!(
-        extract_envelope(&resp).is_none() && envelope(&resp).is_null(),
+        extract_envelope(&resp).is_none() && envelope(&resp).is_nothing(),
         "a denied tool must not execute, and answers no envelope at all; got {resp}",
     );
 }
@@ -44,7 +44,7 @@ fn deny_interface_removes_the_tool_whole() {
     assert_eq!(sorted_names(&mut host), vec!["call", "execute", "rerun"]);
     let resp = host.info();
     assert!(
-        envelope(&resp).is_null(),
+        envelope(&resp).is_nothing(),
         "a denied interface answers no envelope at all; got {resp}",
     );
 }

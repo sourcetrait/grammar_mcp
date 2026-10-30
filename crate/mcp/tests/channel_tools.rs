@@ -24,7 +24,7 @@ fn verifying_an_unopened_channel_errors_with_channel_not_open() {
         Some("channel::not_open"),
         "there is nothing to verify until channel_open() runs; got {env}",
     );
-    assert!(env["nonce"].is_string(), "a refusal carries its nonce; got {env}");
+    assert!(env["nonce"].as_str().is_some(), "a refusal carries its nonce; got {env}");
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn closing_an_unopened_channel_is_idempotent_success() {
     let env = s.channel_close();
     assert!(!has_error(&env), "closing what is already closed is the requested state; got {env}");
     assert!(
-        env.get("result").is_some_and(|result| result.is_null()),
+        env.get("result").is_some_and(|result| result.is_nothing()),
         "channel_close is a void tool, so its result is null; got {env}",
     );
     let again = s.channel_close();

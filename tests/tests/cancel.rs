@@ -12,11 +12,11 @@ use sourcetrait_common::testing::prelude::*;
 static TESTING: testing::Module = testing::module!(Integration, { .using_temp_dir() });
 
 /// The in-flight entries `interface process list` lists.
-fn in_flight(host: &mut Host) -> Vec<serde_json::Value> {
+fn in_flight(host: &mut Host) -> Vec<NuVal> {
     let resp = host.interface("interface process list");
     envelope(&resp)["result"]["processes"]
-        .as_array()
-        .cloned()
+        .as_list()
+        .map(<[NuVal]>::to_vec)
         .unwrap_or_default()
 }
 

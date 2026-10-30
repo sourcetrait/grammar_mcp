@@ -80,7 +80,7 @@ fn signatures(
     let env = s.inspect(namepath);
     assert!(!has_error(&env), "inspect {namepath} errored: {env}");
     assert_eq!(
-        env["result"].as_object().expect("a result record").len(),
+        env["result"].as_record().expect("a result record").len(),
         1,
         "the result stays EXACTLY one field for a pattern too; got {env}",
     );

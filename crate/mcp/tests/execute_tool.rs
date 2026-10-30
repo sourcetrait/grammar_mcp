@@ -2,9 +2,8 @@
 //! checks, its timeout, and `rerun` over its definitions.
 #![cfg(feature = "embedded-cli")]
 
-use serde_json::{Value, json};
 use sourcetrait_common::testing::prelude::*;
-use sourcetrait_grammar_mcp::guts::{TestServer, error_kind, error_messages, has_error};
+use sourcetrait_grammar_mcp::guts::{NuVal, TestServer, error_kind, error_messages, has_error, nuon};
 
 static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integration, {
     .using_temp_dir()
@@ -12,18 +11,18 @@ static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integrat
 });
 
 /// A record's field names, sorted.
-fn keys(record: &Value) -> Vec<&str> {
+fn keys(record: &NuVal) -> Vec<&str> {
     let mut keys: Vec<&str> = record
-        .as_object()
+        .as_record()
         .unwrap_or_else(|| panic!("not a record: {record}"))
-        .keys()
-        .map(String::as_str)
+        .iter()
+        .map(|(k, _)| k.as_str())
         .collect();
     keys.sort();
     keys
 }
 
-fn nonce_of(env: &Value) -> String {
+fn nonce_of(env: &NuVal) -> String {
     env["nonce"]
         .as_str()
         .unwrap_or_else(|| panic!("no nonce in {env}"))
@@ -38,7 +37,7 @@ fn a_record_round_trips_on_the_stateless_pool() {
         "{a: 41}",
     );
     assert!(!has_error(&env), "{env}");
-    assert_eq!(env["result"], json!({"b": 42}));
+    assert_eq!(env["result"], nuon("{b: 42}"));
     assert!(!nonce_of(&env).is_empty());
 }
 
@@ -50,7 +49,7 @@ fn a_table_round_trips() {
         "[[n]; [1] [2]]",
     );
     assert!(!has_error(&env), "{env}");
-    assert_eq!(env["result"], json!([{"n": 1, "double": 2}, {"n": 2, "double": 4}]));
+    assert_eq!(env["result"], nuon("[{n: 1, double: 2}, {n: 2, double: 4}]"));
 }
 
 #[test]
@@ -58,7 +57,7 @@ fn a_nothing_definition_takes_null_and_answers_null() {
     let s = TESTING.harness();
     let env = s.execute("def execute [data: nothing]: nothing -> nothing { }", "null");
     assert!(!has_error(&env), "{env}");
-    assert_eq!(env["result"], Value::Null);
+    assert!(env["result"].is_nothing(), "{env}");
 }
 
 #[test]
@@ -73,7 +72,7 @@ fn the_stateful_lane_keeps_env_and_cwd_between_calls() {
         "def --env execute [data: nothing]: nothing -> record<v: string> { {v: $env.NUNU_PROBE} }",
         "null",
     );
-    assert_eq!(get["result"], json!({"v": "kept"}), "{get}");
+    assert_eq!(get["result"], nuon("{v: kept}"), "{get}");
 }
 
 #[test]
@@ -88,7 +87,7 @@ fn the_stateless_pool_keeps_nothing_between_calls() {
         "def execute [data: nothing]: nothing -> record<seen: bool> { {seen: ('NUNU_LOST' in $env)} }",
         "null",
     );
-    assert_eq!(get["result"], json!({"seen": false}), "{get}");
+    assert_eq!(get["result"], nuon("{seen: false}"), "{get}");
 }
 
 #[test]
@@ -186,12 +185,12 @@ fn the_timeout_reaches_a_body_that_declares_it() {
         "null",
         Some("30sec"),
     );
-    assert_eq!(env["result"], json!({"within": true}), "{env}");
+    assert_eq!(env["result"], nuon("{within: true}"), "{env}");
     let env = s.execute(
         "def execute [data: nothing, timeout?: duration]: nothing -> record<within: bool> {\n    {within: ($timeout == 120sec)}\n}",
         "null",
     );
-    assert_eq!(env["result"], json!({"within": true}), "the default reaches it; {env}");
+    assert_eq!(env["result"], nuon("{within: true}"), "the default reaches it; {env}");
 }
 
 #[test]
@@ -227,14 +226,14 @@ fn rerun_evaluates_a_cached_definition_with_fresh_data() {
         "def execute [data: record<a: int>]: nothing -> record<b: int> { {b: ($data.a * 10)} }",
         "{a: 1}",
     );
-    assert_eq!(first["result"], json!({"b": 10}), "{first}");
+    assert_eq!(first["result"], nuon("{b: 10}"), "{first}");
     let source = nonce_of(&first);
     let again = s.rerun(&source, "{a: 7}");
-    assert_eq!(again["result"], json!({"b": 70}), "{again}");
+    assert_eq!(again["result"], nuon("{b: 70}"), "{again}");
     let fresh = nonce_of(&again);
     assert_ne!(fresh, source, "a rerun mints its own nonce");
     let chained = s.rerun(&fresh, "{a: 2}");
-    assert_eq!(chained["result"], json!({"b": 20}), "a rerun's nonce is a handle too; {chained}");
+    assert_eq!(chained["result"], nuon("{b: 20}"), "a rerun's nonce is a handle too; {chained}");
     let refused = s.rerun(&source, "{a: x}");
     assert_eq!(error_kind(&refused), Some("data::invalid"), "{refused}");
 }
@@ -244,11 +243,11 @@ fn a_non_eval_tool_answers_the_same_envelope() {
     let s = TESTING.harness();
     let ok = s.purviews();
     assert_eq!(keys(&ok), vec!["nonce", "result"], "{ok}");
-    assert!(ok["result"]["current"].is_array(), "{ok}");
+    assert!(ok["result"]["current"].as_list().is_some(), "{ok}");
 
     let refused = s.inspect("sourcetrait/nosuchrig");
     assert_eq!(keys(&refused), vec!["error", "nonce"], "{refused}");
-    let rows = refused["error"].as_array().expect("an error table");
+    let rows = refused["error"].as_list().expect("an error table");
     assert_eq!(rows.len(), 1, "{refused}");
     assert_eq!(keys(&rows[0]), vec!["kind", "message", "source"], "{refused}");
     assert_eq!(error_kind(&refused), Some("equip::not_registered"), "{refused}");

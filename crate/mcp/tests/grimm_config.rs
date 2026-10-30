@@ -7,9 +7,8 @@
 //! give it.
 #![cfg(feature = "embedded-cli")]
 
-use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{
-    TestServer, clear_config_pins, error_text, has_error,
+    TestServer, clear_config_pins, error_text, has_error, nuon,
 };
 use sourcetrait_common::testing::prelude::*;
 
@@ -112,7 +111,7 @@ fn get_config_all_mirrors_the_toml_tables(_t: &testing::Testable<'_, '_, '_>) {
     assert!(!has_error(&env), "get_config_all should run; got {env}");
     assert_eq!(
         env["result"]["tables"],
-        json!(["channel", "supervisor", "identity"]),
+        nuon("[channel, supervisor, identity]"),
         "the record mirrors the TOML's tables; got {env}",
     );
     assert_eq!(
@@ -122,23 +121,18 @@ fn get_config_all_mirrors_the_toml_tables(_t: &testing::Testable<'_, '_, '_>) {
     );
     assert_eq!(
         env["result"]["channel_keys"],
-        json!([
-            "port",
-            "spam_warn_window_secs",
-            "spam_warn_rate",
-            "spam_error_window_secs",
-            "spam_error_rate",
-        ]),
+        nuon(
+            "[port, spam_warn_window_secs, spam_warn_rate, spam_error_window_secs, \
+             spam_error_rate]",
+        ),
         "got {env}",
     );
     assert_eq!(
         env["result"]["supervisor_keys"],
-        json!([
-            "cpu_warn_fraction",
-            "ram_warn_fraction",
-            "vram_warn_headroom_mib",
-            "disk_warn_fraction",
-        ]),
+        nuon(
+            "[cpu_warn_fraction, ram_warn_fraction, vram_warn_headroom_mib, \
+             disk_warn_fraction]",
+        ),
         "got {env}",
     );
 }

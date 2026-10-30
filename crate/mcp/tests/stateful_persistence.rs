@@ -1,7 +1,6 @@
 #![cfg(feature = "embedded-cli")]
 
-use serde_json::json;
-use sourcetrait_grammar_mcp::guts::{TestServer, has_error};
+use sourcetrait_grammar_mcp::guts::{TestServer, has_error, nuon};
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary (substrate init must not race
@@ -50,7 +49,7 @@ fn env_mutation_persists_across_stateful_calls(_t: &testing::Testable<'_, '_, '_
         "def --env execute [data: record<value: string>]: nothing -> record<wrote: string> {\n    $env.SHOT_DEMO = $data.value\n    { wrote: $data.value }\n}",
         "{value: alpha}",
     );
-    assert_eq!(first["result"], json!({"wrote": "alpha"}), "got {first}");
+    assert_eq!(first["result"], nuon("{wrote: alpha}"), "got {first}");
 
     let second = s.execute(
         "def --env execute [data: nothing]: nothing -> record<saw: string> { { saw: $env.SHOT_DEMO } }",
@@ -58,7 +57,7 @@ fn env_mutation_persists_across_stateful_calls(_t: &testing::Testable<'_, '_, '_
     );
     assert_eq!(
         second["result"],
-        json!({"saw": "alpha"}),
+        nuon("{saw: alpha}"),
         "the env mutation from call 1 should persist; got {second}",
     );
 }
@@ -74,7 +73,7 @@ fn cd_persists_across_stateful_calls(_t: &testing::Testable<'_, '_, '_>) {
         "def --env execute [data: nothing]: nothing -> record<cwd: string> { { cwd: $env.PWD } }",
         "null",
     );
-    assert_eq!(second["result"], json!({"cwd": "/tmp"}), "cd should propagate; got {second}");
+    assert_eq!(second["result"], nuon(r#"{cwd: "/tmp"}"#), "cd should propagate; got {second}");
 }
 
 /// env and `cd` carry over, which is the stateful lane's purpose; a def made inside
@@ -88,7 +87,7 @@ fn an_inner_def_does_not_persist_across_stateful_calls(_t: &testing::Testable<'_
     );
     assert_eq!(
         first["result"],
-        json!({"seen": true}),
+        nuon("{seen: true}"),
         "the def should be visible within the call that made it; got {first}",
     );
 
@@ -98,7 +97,7 @@ fn an_inner_def_does_not_persist_across_stateful_calls(_t: &testing::Testable<'_
     );
     assert_eq!(
         second["result"],
-        json!({"seen": false}),
+        nuon("{seen: false}"),
         "a def must not persist into the next stateful call; got {second}",
     );
 }
@@ -116,7 +115,7 @@ fn stateful_state_does_not_leak_into_the_pool(_t: &testing::Testable<'_, '_, '_>
     );
     assert_eq!(
         env["result"],
-        json!({"seen": false}),
+        nuon("{seen: false}"),
         "the stateless pool must NOT see the stateful lane's env; got {env}",
     );
 }
@@ -134,7 +133,7 @@ fn a_stateful_cd_does_not_move_the_host_process_cwd(_t: &testing::Testable<'_, '
     );
     assert_eq!(
         env["result"],
-        json!({"pwd": "/etc"}),
+        nuon(r#"{pwd: "/etc"}"#),
         "cd should still set $env.PWD; got {env}",
     );
     let after = std::env::current_dir().expect("read the process cwd");
@@ -151,5 +150,5 @@ fn a_multi_line_definition_with_a_command_then_a_record_parses(_t: &testing::Tes
         "def --env execute [data: record<x: int>]: nothing -> record<y: int, slept_ms: int> {\n    sleep 50ms\n    let doubled = ($data.x * 2)\n    { y: $doubled, slept_ms: 50 }\n}",
         "{x: 7}",
     );
-    assert_eq!(env["result"], json!({"y": 14, "slept_ms": 50}), "got {env}");
+    assert_eq!(env["result"], nuon("{y: 14, slept_ms: 50}"), "got {env}");
 }

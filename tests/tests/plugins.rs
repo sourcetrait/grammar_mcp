@@ -5,7 +5,6 @@
 
 use std::path::{Path, PathBuf};
 
-use serde_json::json;
 use sourcetrait_grammar_tests::*;
 use sourcetrait_common::testing::prelude::*;
 
@@ -146,7 +145,7 @@ fn the_soak_and_eye_plugins_register_list_and_run() {
                  git: (eye git $data.root)\n\
              }\n\
          }",
-        &json!({"root": work.to_str().expect("utf-8 path")}).to_string(),
+        &NuVal::Record(vec![("root".to_string(), NuVal::from(work.to_str().expect("utf-8 path")))]).to_string(),
     );
     assert!(!has_error_path(&resp), "a definition runs the bundled plugins; got {resp}");
     let env = envelope(&resp);
@@ -208,7 +207,7 @@ fn bundle_soak(root: &Path) -> PathBuf {
 fn plugin_names(host: &mut Host) -> Vec<String> {
     let info = envelope(&host.info());
     info["result"]["plugins"]
-        .as_array()
+        .as_list()
         .expect("info carries plugins")
         .iter()
         .filter_map(|entry| entry[0].as_str().map(String::from))

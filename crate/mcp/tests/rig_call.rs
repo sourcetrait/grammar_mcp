@@ -1,8 +1,7 @@
 #![cfg(feature = "embedded-cli")]
 
-use serde_json::json;
 use sourcetrait_grammar_mcp::guts::{
-    TestServer, error_kind, has_error, rig_block, valid_function_source, write_source,
+    TestServer, error_kind, has_error, nuon, rig_block, valid_function_source, write_source,
 };
 use sourcetrait_common::testing::prelude::*;
 
@@ -28,7 +27,12 @@ fn call_after_commit_returns_result() {
     let _ = s.commit("sourcetrait/calc");
     let env = s.call("sourcetrait/calc:math:double", "{x: 7}");
     assert_eq!(env["result"]["out"].as_i64(), Some(14), "got {env}");
-    let fields: Vec<&String> = env.as_object().expect("an envelope record").keys().collect();
+    let fields: Vec<&String> = env
+        .as_record()
+        .expect("an envelope record")
+        .iter()
+        .map(|(k, _)| k)
+        .collect();
     assert_eq!(fields, vec!["nonce", "result"], "a call's envelope is its nonce and result; got {env}");
 }
 
@@ -74,11 +78,11 @@ fn a_call_result_is_held_to_its_type() {
     assert_eq!(error_kind(&scalar), Some("result::invalid"), "a scalar is no record; got {scalar}");
     let quiet = s.call("sourcetrait/heldlib:m:quiet", "null");
     assert!(
-        quiet.get("result").is_some_and(|result| result.is_null()),
+        quiet.get("result").is_some_and(|result| result.is_nothing()),
         "nothing rides as null; got {quiet}",
     );
     let rowset = s.call("sourcetrait/heldlib:m:rowset", "null");
-    assert_eq!(rowset["result"], json!([{"i": 1}, {"i": 2}]), "a declared table rides as it is; got {rowset}");
+    assert_eq!(rowset["result"], nuon("[{i: 1}, {i: 2}]"), "a declared table rides as it is; got {rowset}");
 }
 
 #[tested]
@@ -184,7 +188,7 @@ fn inspect_returns_function_doc() {
     let _ = s.commit("sourcetrait/inspectlib");
     let env = s.inspect("sourcetrait/inspectlib:math:double");
     assert_eq!(
-        env["result"].as_object().expect("a result record").len(),
+        env["result"].as_record().expect("a result record").len(),
         1,
         "the result is EXACTLY one field; got {env}",
     );

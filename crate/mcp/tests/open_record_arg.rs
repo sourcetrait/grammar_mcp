@@ -1,7 +1,8 @@
 #![cfg(feature = "embedded-cli")]
 
-use serde_json::json;
-use sourcetrait_grammar_mcp::guts::{TestServer, error_kind, error_text, has_error, write_tree};
+use sourcetrait_grammar_mcp::guts::{
+    TestServer, error_kind, error_text, has_error, nuon, write_tree,
+};
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
@@ -18,14 +19,14 @@ const EXTRA_COLUMNS: &str = "def execute [data: record<extra: record<>>]: nothin
 fn a_nested_open_record_binds_any_record() {
     let s = TESTING.harness();
     let env = s.execute(EXTRA_COLUMNS, "{extra: {a: 1, b: x}}");
-    assert_eq!(env["result"], json!({"cols": 2}), "an open record field takes any record; got {env}");
+    assert_eq!(env["result"], nuon("{cols: 2}"), "an open record field takes any record; got {env}");
 }
 
 #[test]
 fn a_nested_open_record_binds_an_empty_record() {
     let s = TESTING.harness();
     let env = s.execute(EXTRA_COLUMNS, "{extra: {}}");
-    assert_eq!(env["result"], json!({"cols": 0}), "got {env}");
+    assert_eq!(env["result"], nuon("{cols: 0}"), "got {env}");
 }
 
 #[test]

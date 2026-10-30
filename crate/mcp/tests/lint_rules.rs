@@ -9,8 +9,7 @@
 //! at the `execute` tool's boundary.
 #![cfg(feature = "embedded-cli")]
 
-use serde_json::{Value, json};
-use sourcetrait_grammar_mcp::guts::{analyze_definition, lint_definition};
+use sourcetrait_grammar_mcp::guts::{NuVal, analyze_definition, lint_definition, nuon};
 
 /// A definition around `body`, its data a record of `fields`.
 fn definition(fields: &str, body: &str) -> String {
@@ -18,7 +17,7 @@ fn definition(fields: &str, body: &str) -> String {
 }
 
 /// The rows the contract refuses a definition around `body` with.
-fn refused(fields: &str, body: &str) -> Vec<Value> {
+fn refused(fields: &str, body: &str) -> Vec<NuVal> {
     match analyze_definition(&definition(fields, body)) {
         Ok(summary) => panic!("accepted `{body}` as {summary}"),
         Err(rows) => rows,
@@ -32,23 +31,23 @@ fn accepted(fields: &str, body: &str) {
     }
 }
 
-fn lint(body: &str) -> Vec<Value> {
+fn lint(body: &str) -> Vec<NuVal> {
     lint_definition(&definition("noop: int", body))
 }
 
-fn lint_data(fields: &str, body: &str) -> Vec<Value> {
+fn lint_data(fields: &str, body: &str) -> Vec<NuVal> {
     lint_definition(&definition(fields, body))
 }
 
-fn kinds(v: &[Value]) -> Vec<String> {
+fn kinds(v: &[NuVal]) -> Vec<String> {
     v.iter().map(|d| d["kind"].as_str().expect("kind").to_string()).collect()
 }
 
-fn is_hardcoded(d: &Value) -> bool {
+fn is_hardcoded(d: &NuVal) -> bool {
     d["kind"] == "lint::hardcoded_variable"
 }
 
-fn is_denied(d: &Value) -> bool {
+fn is_denied(d: &NuVal) -> bool {
     d["kind"] == "lint::denied_command"
 }
 
@@ -203,7 +202,7 @@ fn flags_nested_def_body() {
 fn flags_interpolation_behind_hardcoded_root() {
     let v = refused("noop: int", "cd $\"/home/($env.USER)/proj/x\"; { out: 0 }");
     assert_eq!(kinds(&v), vec!["lint::hardcoded_variable"], "the leading literal alone; got {v:?}");
-    assert_eq!(v[0]["source"]["position"], json!([2, 6]), "at `/home/`; got {v:?}");
+    assert_eq!(v[0]["source"]["position"], nuon("[2, 6]"), "at `/home/`; got {v:?}");
 }
 
 #[test]
@@ -323,12 +322,12 @@ fn line_col_within_definition() {
     assert_eq!(v.len(), 1, "got {v:?}");
     assert_eq!(
         v[0]["source"]["position"],
-        json!([2, 4]),
+        nuon("[2, 4]"),
         "the position is the definition's own line and column; got {:?}",
         v[0],
     );
     assert!(
-        v[0]["source"]["path"].is_null(),
+        v[0]["source"]["path"].is_nothing(),
         "a definition's diagnostic has no file; got {:?}",
         v[0]["source"]["path"],
     );

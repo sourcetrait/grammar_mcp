@@ -32,7 +32,7 @@ fn tools_list_and_execute_round_trip() {
         !nonce.is_empty() && nonce.chars().all(|c| c.is_ascii_alphanumeric()),
         "nonce should be base62; got {nonce:?}",
     );
-    assert_eq!(env["result"], json!({"out": 6}), "got {env}");
+    assert_eq!(env["result"], nuon("{out: 6}"), "got {env}");
 }
 
 /// Every tool requires `host`: its schema lists it, any alias but `local` is

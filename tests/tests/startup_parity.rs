@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use nu_config::{CliOverrides, NushellConfigDirs, TestEnv, resolve_paths};
-use serde_json::{Value, json};
 use sourcetrait_grammar_tests::*;
 use sourcetrait_common::testing::prelude::*;
 
@@ -111,7 +110,7 @@ impl Parity {
 
     /// The clean envelope of a `def` (or `def --env`) answering `result_type` from
     /// `body`, panicking on an error.
-    fn eval(&mut self, def: &str, result_type: &str, body: &str) -> Value {
+    fn eval(&mut self, def: &str, result_type: &str, body: &str) -> NuVal {
         let definition =
             format!("{def} execute [data: nothing]: nothing -> {result_type} {{\n{body}\n}}");
         let resp = self.host.execute(&definition, "null");
@@ -119,7 +118,7 @@ impl Parity {
     }
 
     /// The stderr log of the call whose envelope is `env`, under `kind`.
-    fn call_stderr(&self, kind: &str, env: &Value) -> String {
+    fn call_stderr(&self, kind: &str, env: &NuVal) -> String {
         let nonce = env["nonce"].as_str().expect("envelope nonce");
         let log = self.cache_namespace.join(kind).join(nonce).join("stderr");
         std::fs::read_to_string(&log).unwrap_or_else(|e| panic!("read {}: {e}", log.display()))
@@ -140,28 +139,36 @@ impl Parity {
     }
 
     /// `$NU_PLUGIN_DIRS` as nushell sets it: config home's `plugins`, the exe's dir.
-    fn plugin_dirs(&self) -> Value {
+    fn plugin_dirs(&self) -> NuVal {
         let exe = std::fs::canonicalize(grammar_mcp_bin()).expect("canonicalize the host");
         let exe_dir = exe.parent().expect("the host's dir");
-        json!([path_str(&self.dirs.config_home.join("plugins")), path_str(exe_dir)])
+        NuVal::List(vec![
+            NuVal::from(path_str(&self.dirs.config_home.join("plugins"))),
+            NuVal::from(path_str(exe_dir)),
+        ])
     }
 }
 
+/// A record of `fields`, in the order given, as the envelope carries one.
+fn record(fields: Vec<(&str, NuVal)>) -> NuVal {
+    NuVal::Record(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+}
+
 /// `$nu`'s path fields as nushell renders them from `dirs`.
-fn expected_nu(dirs: &NushellConfigDirs) -> Value {
-    json!({
-        "home_dir": shown(&dirs.home_dir),
-        "default_config_dir": shown(&dirs.config_home),
-        "config_path": shown(dirs.config_file.as_path()),
-        "env_path": shown(dirs.env_file.as_path()),
-        "history_path": shown(&dirs.config_home.join("history.txt")),
-        "loginshell_path": shown(&dirs.config_home.join("login.nu")),
-        "plugin_path": shown(dirs.plugin_file.as_path()),
-        "data_dir": shown(&dirs.data_home),
-        "cache_dir": shown(&dirs.cache_home),
-        "vendor_autoload_dirs": listed(&dirs.vendor_autoload_dirs),
-        "user_autoload_dirs": listed(&dirs.user_autoload_dirs),
-    })
+fn expected_nu(dirs: &NushellConfigDirs) -> NuVal {
+    record(vec![
+        ("home_dir", NuVal::from(shown(&dirs.home_dir))),
+        ("default_config_dir", NuVal::from(shown(&dirs.config_home))),
+        ("config_path", NuVal::from(shown(dirs.config_file.as_path()))),
+        ("env_path", NuVal::from(shown(dirs.env_file.as_path()))),
+        ("history_path", NuVal::from(shown(&dirs.config_home.join("history.txt")))),
+        ("loginshell_path", NuVal::from(shown(&dirs.config_home.join("login.nu")))),
+        ("plugin_path", NuVal::from(shown(dirs.plugin_file.as_path()))),
+        ("data_dir", NuVal::from(shown(&dirs.data_home))),
+        ("cache_dir", NuVal::from(shown(&dirs.cache_home))),
+        ("vendor_autoload_dirs", listed(&dirs.vendor_autoload_dirs)),
+        ("user_autoload_dirs", listed(&dirs.user_autoload_dirs)),
+    ])
 }
 
 /// The type of `NU_PATHS`'s record.
@@ -185,8 +192,8 @@ fn shown(path: &Path) -> String {
 }
 
 /// A list of paths as `$nu` shows it, each as given.
-fn listed(paths: &[PathBuf]) -> Value {
-    Value::Array(paths.iter().map(|p| Value::String(path_str(p))).collect())
+fn listed(paths: &[PathBuf]) -> NuVal {
+    NuVal::List(paths.iter().map(|p| NuVal::String(path_str(p))).collect())
 }
 
 fn path_str(path: &Path) -> String {
@@ -209,17 +216,17 @@ fn the_pool_sees_nushells_startup_env() {
     let t = testing::test!({ .using_temp_dir() });
     let mut p = Parity::spawn(t.temp_dir());
     let env = p.eval("def", STARTUP_ENV_TYPE, STARTUP_ENV);
-    let lib_dirs = json!([path_str(&p.namespace)]);
-    let expected = json!({
-        "config": true,
-        "env_conversions": "record",
-        "path": "list<string>",
-        "nu_lib_dirs_env": lib_dirs,
-        "nu_lib_dirs_const": lib_dirs,
-        "nu_plugin_dirs_env": [],
-        "nu_plugin_dirs_const": p.plugin_dirs(),
-        "nu_version": p.engine_version(),
-    });
+    let lib_dirs = NuVal::List(vec![NuVal::from(path_str(&p.namespace))]);
+    let expected = record(vec![
+        ("config", NuVal::from(true)),
+        ("env_conversions", NuVal::from("record")),
+        ("path", NuVal::from("list<string>")),
+        ("nu_lib_dirs_env", lib_dirs.clone()),
+        ("nu_lib_dirs_const", lib_dirs),
+        ("nu_plugin_dirs_env", nuon("[]")),
+        ("nu_plugin_dirs_const", p.plugin_dirs()),
+        ("nu_version", NuVal::from(p.engine_version())),
+    ]);
     assert_eq!(env["result"], expected, "the definition's startup env; got {env}");
     assert_ne!(env["result"]["nu_version"], PARENT_NU_VERSION, "NU_VERSION is the engine's");
 }
@@ -266,7 +273,11 @@ fn the_stateful_lane_sees_the_same_startup() {
                 { home: $nu.home-dir, path: ($env.PATH | describe), \
                 config: ($env.config | describe | str starts-with 'record<') }";
     let env = p.eval("def --env", "record<home: string, path: string, config: bool>", body);
-    let expected = json!({"home": shown(&p.dirs.home_dir), "path": "list<string>", "config": true});
+    let expected = record(vec![
+        ("home", NuVal::from(shown(&p.dirs.home_dir))),
+        ("path", NuVal::from("list<string>")),
+        ("config", NuVal::from(true)),
+    ]);
     assert_eq!(env["result"], expected, "the stateful definition's startup; got {env}");
     assert_eq!(p.call_stderr("execute", &env), "PRINTMARK stateful\n", "the call's log");
 }
@@ -289,12 +300,12 @@ fn a_reserved_main_is_still_refused() {
          }\n",
     );
     let committed = p.host.commit("sourcetrait/reserved");
-    let reserved: Vec<Value> = envelope_error(&committed)
-        .and_then(|error| error.as_array().cloned())
+    let reserved: Vec<NuVal> = envelope_error(&committed)
+        .and_then(|error| error.as_list().map(<[NuVal]>::to_vec))
         .map(|rows| rows.into_iter().filter(|row| row["kind"] == "rig::reserved").collect())
         .unwrap_or_default();
     assert_eq!(reserved.len(), 1, "one reserved `main`; got {committed}");
-    assert_eq!(reserved[0]["source"]["position"], json!([2, 0]), "at its line; got {committed}");
+    assert_eq!(reserved[0]["source"]["position"], nuon("[2, 0]"), "at its line; got {committed}");
 }
 
 /// A rig reading `$nu.home-dir` in a constant and using std passes the
@@ -322,11 +333,11 @@ fn a_rigs_call_sees_the_same_startup() {
     assert!(!has_error_path(&committed), "the validator takes the rig; got {committed}");
     let resp = p.host.call_np("sourcetrait/parity:m:probe", "{noop: 0}");
     let env = extract_envelope(&resp).unwrap_or_else(|| panic!("the call should succeed; got {resp}"));
-    let expected = json!({
-        "home": shown(&p.dirs.home_dir),
-        "path": "list<string>",
-        "plugin_dirs": p.plugin_dirs(),
-    });
+    let expected = record(vec![
+        ("home", NuVal::from(shown(&p.dirs.home_dir))),
+        ("path", NuVal::from("list<string>")),
+        ("plugin_dirs", p.plugin_dirs()),
+    ]);
     assert_eq!(env["result"], expected, "the call's startup; got {env}");
     assert_eq!(p.call_stderr("calls", &env), "PRINTMARK call\n", "the call's log");
 }

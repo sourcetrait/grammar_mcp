@@ -1,22 +1,21 @@
 //! The execute contract over `execute` definitions, through `guts::analyze_definition`.
 #![cfg(feature = "embedded-cli")]
 
-use serde_json::Value;
-use sourcetrait_grammar_mcp::guts::analyze_definition;
+use sourcetrait_grammar_mcp::guts::{NuVal, analyze_definition};
 
-fn accepted(definition: &str) -> Value {
+fn accepted(definition: &str) -> NuVal {
     analyze_definition(definition)
         .unwrap_or_else(|rows| panic!("refused `{definition}`: {rows:?}"))
 }
 
-fn refused(definition: &str) -> Vec<Value> {
+fn refused(definition: &str) -> Vec<NuVal> {
     match analyze_definition(definition) {
         Ok(summary) => panic!("accepted `{definition}` as {summary}"),
         Err(rows) => rows,
     }
 }
 
-fn kinds(rows: &[Value]) -> Vec<&str> {
+fn kinds(rows: &[NuVal]) -> Vec<&str> {
     rows.iter().map(|row| row["kind"].as_str().expect("kind")).collect()
 }
 

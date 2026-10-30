@@ -3,8 +3,8 @@
 use std::os::unix::fs::PermissionsExt;
 
 use sourcetrait_grammar_mcp::guts::{
-    TestServer, equip_source, error_kind, error_kinds, has_error, has_kind, valid_function_source,
-    write_source,
+    NuVal, TestServer, equip_source, error_kind, error_kinds, has_error, has_kind,
+    valid_function_source, write_source,
 };
 use sourcetrait_common::testing::prelude::*;
 
@@ -40,11 +40,11 @@ fn install_brings_shipped_source_into_mcp() {
     let env = s.equip("install", eq.to_str().unwrap());
     assert!(!has_error(&env), "install should succeed; got {env}");
     assert!(
-        !env["result"]["summary"]["added"].as_array().expect("added").is_empty(),
+        !env["result"]["summary"]["added"].as_list().expect("added").is_empty(),
         "install summary should report added paths; got {env}",
     );
     assert!(
-        env["result"]["summary"]["warnings"].as_array().expect("warnings").is_empty(),
+        env["result"]["summary"]["warnings"].as_list().expect("warnings").is_empty(),
         "a clean source raises no warnings; got {env}",
     );
     assert!(
@@ -305,11 +305,11 @@ fn check_reports_ok_for_clean_source() {
     let summary = &env["result"]["summary"];
     assert_eq!(summary["ok"].as_bool(), Some(true), "got {summary}");
     assert!(
-        summary["errors"].as_array().expect("errors").is_empty(),
+        summary["errors"].as_list().expect("errors").is_empty(),
         "got {summary}"
     );
     assert!(
-        summary["warnings"].as_array().expect("warnings").is_empty(),
+        summary["warnings"].as_list().expect("warnings").is_empty(),
         "got {summary}"
     );
 }
@@ -330,7 +330,7 @@ fn check_reports_structural_errors() {
     let summary = &env["result"]["summary"];
     assert_eq!(summary["ok"].as_bool(), Some(false), "got {summary}");
     let err_kinds: Vec<&str> = summary["errors"]
-        .as_array()
+        .as_list()
         .expect("errors array")
         .iter()
         .filter_map(|e| e["kind"].as_str())
@@ -439,10 +439,12 @@ fn install_and_commit_carry_the_validators_warnings() {
     write_source(&rig, "mod.nu", &format!("# {long}\nexport module m\n"));
     let installed = s.equip("install", eq.to_str().unwrap());
     assert!(!has_error(&installed), "a warning never refuses an install; got {installed}");
-    let warned = |env: &serde_json::Value, at: &str| {
-        let kinds: Vec<&str> = env
-            .pointer(at)
-            .and_then(|warnings| warnings.as_array())
+    let warned = |env: &NuVal, at: &str| {
+        let kinds: Vec<&str> = at
+            .split('/')
+            .skip(1)
+            .try_fold(env, |value, key| value.get(key))
+            .and_then(|warnings| warnings.as_list())
             .unwrap_or_else(|| panic!("no warnings at {at}; got {env}"))
             .iter()
             .filter_map(|warning| warning["kind"].as_str())

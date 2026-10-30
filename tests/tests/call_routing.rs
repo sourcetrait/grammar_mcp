@@ -4,7 +4,6 @@
 
 use std::path::Path;
 
-use serde_json::Value;
 use sourcetrait_grammar_tests::*;
 use sourcetrait_common::testing::prelude::*;
 
@@ -14,14 +13,14 @@ const ID: &str = "routing";
 const NAMESPACE: &str = "default";
 
 /// The clean envelope of a stateful `execute` call running `body`, panicking on an error.
-fn stateful(host: &mut Host, body: &str) -> Value {
+fn stateful(host: &mut Host, body: &str) -> NuVal {
     let definition = format!("def --env execute [data: nothing]: nothing -> record<ok: bool> {{\n{body}\n}}");
     let resp = host.execute(&definition, "null");
     extract_envelope(&resp).unwrap_or_else(|| panic!("the stateful call should succeed; got {resp}"))
 }
 
 /// The file `name` in the log dir of the call whose envelope is `env`.
-fn call_log(host: &Host, env: &Value, name: &str) -> String {
+fn call_log(host: &Host, env: &NuVal, name: &str) -> String {
     let nonce = env["nonce"].as_str().expect("envelope nonce");
     let log = namespace_dir(host.cache_home(), ID, NAMESPACE)
         .join("execute")

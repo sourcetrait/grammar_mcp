@@ -176,7 +176,7 @@ fn a_rig_carrying_a_cycle_fails_validation_and_the_host_lives() {
     // `equip check` reports through its SUCCESS summary rather than an error envelope, so
     // the diagnostic lives in summary.errors rather than where the other cases carry it.
     let kinds: Vec<String> = envelope(&resp)["result"]["summary"]["errors"]
-        .as_array()
+        .as_list()
         .map(|rows| {
             rows.iter()
                 .filter_map(|e| e["kind"].as_str().map(str::to_string))

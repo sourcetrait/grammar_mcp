@@ -1,7 +1,6 @@
 #![cfg(feature = "embedded-cli")]
 
-use serde_json::json;
-use sourcetrait_grammar_mcp::guts::{TestServer, lint_engine_reuses_until_the_registry_moves};
+use sourcetrait_grammar_mcp::guts::{TestServer, lint_engine_reuses_until_the_registry_moves, nuon};
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
@@ -35,7 +34,7 @@ fn the_stateless_pool_has_extra_and_lacks_plugin() {
     );
     assert_eq!(
         env["result"],
-        json!({"bits": true, "snake": true, "plugin": false, "bits_and": 1}),
+        nuon("{bits: true, snake: true, plugin: false, bits_and: 1}"),
         "the pool has `bits and` and `str snake-case`, never `plugin *`; got {env}",
     );
 }
@@ -49,7 +48,7 @@ fn the_stateful_lane_has_extra_and_plugin() {
     );
     assert_eq!(
         env["result"],
-        json!({"bits": true, "plugin": true}),
+        nuon("{bits: true, plugin: true}"),
         "the stateful lane has `bits and` and `plugin *`; got {env}",
     );
 }

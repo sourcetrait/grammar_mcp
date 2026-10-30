@@ -6739,7 +6739,6 @@ dependencies = [
  "futures-util",
  "nix",
  "nu-engine",
- "nu-json",
  "nu-parser",
  "nu-protocol",
  "nuon",

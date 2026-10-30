@@ -5,9 +5,8 @@
 //! process's one, so every case reads or changes the same state.
 #![cfg(feature = "embedded-cli")]
 
-use serde_json::{Value, json};
 use sourcetrait_common::testing::prelude::*;
-use sourcetrait_grammar_mcp::guts::{TestServer, error_kind, error_messages, has_error};
+use sourcetrait_grammar_mcp::guts::{NuVal, TestServer, error_kind, error_messages, has_error, nuon};
 
 static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integration, {
     .using_temp_dir()
@@ -15,12 +14,12 @@ static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integrat
 });
 
 /// The one packet a sync answered, every field the wire line carries.
-fn one_packet(env: &Value) -> &Value {
+fn one_packet(env: &NuVal) -> &NuVal {
     let packets = env["result"]["packets"]
-        .as_array()
+        .as_list()
         .unwrap_or_else(|| panic!("a packet table; got {env}"));
     assert_eq!(packets.len(), 1, "{env}");
-    assert_eq!(env["result"]["dropped"], json!(0), "{env}");
+    assert_eq!(env["result"]["dropped"], 0, "{env}");
     &packets[0]
 }
 
@@ -34,10 +33,10 @@ fn a_sync_open_binds_no_endpoint() {
     let s = TESTING.harness();
     let env = s.interface("interface channel open sync");
     assert!(!has_error(&env), "{env}");
-    assert_eq!(env["result"]["status"], json!("new"), "{env}");
-    assert_eq!(env["result"]["mode"], json!("sync"), "{env}");
-    assert_eq!(env["result"]["wss"], Value::Null, "{env}");
-    assert!(env["result"]["inbox"].is_string(), "{env}");
+    assert_eq!(env["result"]["status"], "new", "{env}");
+    assert_eq!(env["result"]["mode"], "sync", "{env}");
+    assert!(env["result"]["wss"].is_nothing(), "{env}");
+    assert!(env["result"]["inbox"].as_str().is_some(), "{env}");
 }
 
 fn ready_waits_for_the_first_sync() {
@@ -51,11 +50,11 @@ fn the_first_sync_delivers_the_greeting() {
     let s = TESTING.harness();
     let env = s.interface("interface channel sync");
     let packet = one_packet(&env);
-    assert_eq!(packet["from"], json!("mcp"), "{env}");
-    assert_eq!(packet["model"], json!("mcp/channel/Open"), "{env}");
-    assert!(packet["event"]["mcp_nom"].is_string(), "{env}");
-    assert!(packet["id"].is_string(), "{env}");
-    assert_eq!(packet["attached"], Value::Null, "{env}");
+    assert_eq!(packet["from"], "mcp", "{env}");
+    assert_eq!(packet["model"], "mcp/channel/Open", "{env}");
+    assert!(packet["event"]["mcp_nom"].as_str().is_some(), "{env}");
+    assert!(packet["id"].as_str().is_some(), "{env}");
+    assert!(packet["attached"].is_nothing(), "{env}");
     let ready = s.interface("interface channel ready");
     assert!(!has_error(&ready), "the sync claimed the channel; {ready}");
 }
@@ -71,11 +70,11 @@ fn a_body_send_waits_for_the_next_sync() {
     let nonce = sent["nonce"].as_str().expect("a nonce");
     let env = s.interface("interface channel sync");
     let packet = one_packet(&env);
-    assert_eq!(packet["from"], json!(format!("thread/{nonce}")), "{env}");
-    assert_eq!(packet["model"], json!("example/Ping"), "{env}");
-    assert_eq!(packet["event"], json!({"n": 1}), "{env}");
+    assert_eq!(packet["from"], format!("thread/{nonce}"), "{env}");
+    assert_eq!(packet["model"], "example/Ping", "{env}");
+    assert_eq!(packet["event"], nuon("{n: 1}"), "{env}");
     let again = s.interface("interface channel sync");
-    assert_eq!(again["result"]["packets"], json!([]), "the sync emptied the queue; {again}");
+    assert_eq!(again["result"]["packets"], nuon("[]"), "the sync emptied the queue; {again}");
 }
 
 fn the_other_mode_is_refused_while_open() {
@@ -95,10 +94,10 @@ fn the_other_mode_is_refused_while_open() {
 fn reopening_reports_it_and_greets_again() {
     let s = TESTING.harness();
     let env = s.interface("interface channel open sync");
-    assert_eq!(env["result"]["status"], json!("existing"), "{env}");
-    assert_eq!(env["result"]["wss"], Value::Null, "{env}");
+    assert_eq!(env["result"]["status"], "existing", "{env}");
+    assert!(env["result"]["wss"].is_nothing(), "{env}");
     let synced = s.interface("interface channel sync");
-    assert_eq!(one_packet(&synced)["model"], json!("mcp/channel/Open"), "{synced}");
+    assert_eq!(one_packet(&synced)["model"], "mcp/channel/Open", "{synced}");
 }
 
 fn a_close_ends_it() {

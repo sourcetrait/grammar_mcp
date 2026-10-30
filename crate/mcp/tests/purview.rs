@@ -11,7 +11,7 @@
 use std::path::Path;
 
 use sourcetrait_grammar_mcp::guts::{
-    TestServer, equip_source, error_kind, has_error, rig_block, valid_function_source,
+    NuVal, TestServer, equip_source, error_kind, has_error, rig_block, valid_function_source,
     write_source,
 };
 use sourcetrait_common::testing::prelude::*;
@@ -135,13 +135,13 @@ fn commit_rig(
 fn table(s: &TestServer) -> Vec<(String, Vec<String>)> {
     let listed = s.purviews();
     listed["result"]["purviews"]
-        .as_array()
+        .as_list()
         .expect("purviews")
         .iter()
         .map(|row| {
             let id = row[0].as_str().unwrap_or_default().to_string();
             let patterns = row[1]
-                .as_array()
+                .as_list()
                 .map(|a| {
                     a.iter()
                         .filter_map(|v| v.as_str().map(str::to_string))
@@ -168,7 +168,7 @@ fn reset_purviews(s: &TestServer) {
     let _ = s.purview(&[]);
 }
 
-fn signatures(env: &serde_json::Value) -> &str {
+fn signatures(env: &NuVal) -> &str {
     env["result"]["signatures"].as_str().expect("signatures block")
 }
 
@@ -363,7 +363,7 @@ fn extending_is_additive_and_reveals_only_what_was_not_visible(t: &testing::Test
         "`revealed` is what came INTO view, not the whole new view; got {env}",
     );
     assert_eq!(
-        env["result"]["current"].as_array().map(|a| a.len()),
+        env["result"]["current"].as_list().map(|a| a.len()),
         Some(2),
         "additive: nothing already in view is disturbed; got {env}",
     );
@@ -575,7 +575,7 @@ fn a_purview_an_uninstall_empties_leaves_the_view(t: &testing::Testable<'_, '_, 
     );
     let info = s.info();
     let ids: Vec<&str> = info["result"]["purview"]
-        .as_array()
+        .as_list()
         .expect("the view")
         .iter()
         .filter_map(|pair| pair[0].as_str())

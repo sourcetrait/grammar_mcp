@@ -2,9 +2,8 @@
 //! alias is refused as `host::unknown` before the tool does anything.
 #![cfg(feature = "embedded-cli")]
 
-use serde_json::json;
 use sourcetrait_common::testing::prelude::*;
-use sourcetrait_grammar_mcp::guts::{TestServer, error_kind, error_messages};
+use sourcetrait_grammar_mcp::guts::{TestServer, error_kind, error_messages, nuon};
 
 static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integration, {
     .using_temp_dir()
@@ -17,7 +16,7 @@ const DEFINITION: &str = "def execute [data: nothing]: nothing -> record<ok: boo
 fn local_runs_on_this_host() {
     let s = TESTING.harness();
     let env = s.execute_on("local", DEFINITION, "null", None);
-    assert_eq!(env["result"], json!({"ok": true}), "{env}");
+    assert_eq!(env["result"], nuon("{ok: true}"), "{env}");
 }
 
 /// The check precedes each tool's own: a rerun of no cached definition, a call of

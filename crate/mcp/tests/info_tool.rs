@@ -64,16 +64,16 @@ fn info_returns_static_server_state() {
         "nu_version should be non-empty + semver-shaped; got {nu_version:?}",
     );
 
-    let plugins = env["plugins"].as_array().expect("plugins should be an array");
+    let plugins = env["plugins"].as_list().expect("plugins should be an array");
     for p in plugins {
         let entry = p
-            .as_array()
+            .as_list()
             .expect("each plugin is a positional [name, version] pair");
         assert_eq!(entry.len(), 2, "plugin entry is a 2-element [name, version]; got {entry:?}");
         let name = entry[0].as_str().expect("plugin name is a string");
         assert!(!name.is_empty(), "plugin name should be non-empty");
         assert!(
-            entry[1].is_string() || entry[1].is_null(),
+            entry[1].as_str().is_some() || entry[1].is_nothing(),
             "plugin version slot should be string-or-null; got {:?}",
             entry[1],
         );
@@ -83,7 +83,7 @@ fn info_returns_static_server_state() {
         env.get("rigs").is_none(),
         "the structured hierarchy is gone; `signatures` replaces it. got {env}",
     );
-    assert!(env["signatures"].is_string(), "signatures is a text block; got {env}");
+    assert!(env["signatures"].as_str().is_some(), "signatures is a text block; got {env}");
 }
 
 #[tested]

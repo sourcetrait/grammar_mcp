@@ -43,7 +43,7 @@ fn every_result_is_one_nuon_text_led_by_its_nonce() {
     );
     let text = the_text(&ok);
     assert!(text.starts_with("{nonce: "), "the nonce leads; got {text}");
-    assert_eq!(nuon_to_json(&text)["result"], json!({"out": 6}), "got {text}");
+    assert_eq!(nuon(&text)["result"], nuon("{out: 6}"), "got {text}");
 
     let failed = host.execute(
         "def execute [data: nothing]: nothing -> record<x: string> { { x: '/tmp/x' } }",

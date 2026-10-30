@@ -3,11 +3,10 @@
 //! and the refusals the contract makes.
 #![cfg(feature = "embedded-cli")]
 
-use serde_json::{Value, json};
 use sourcetrait_common::testing::prelude::*;
 use sourcetrait_grammar_mcp::guts::{
-    TestServer, equip_source, error_kind, error_messages, has_error, valid_function_source,
-    write_source,
+    NuVal, TestServer, equip_source, error_kind, error_messages, has_error, nuon,
+    valid_function_source, write_source,
 };
 
 static TESTING: testing::ModuleWith<TestServer> = testing::module_with!(Integration, {
@@ -22,7 +21,7 @@ fn quoted(text: &str) -> String {
 }
 
 /// A successful envelope's result, panicking on an error envelope.
-fn result_of(env: &Value) -> &Value {
+fn result_of(env: &NuVal) -> &NuVal {
     assert!(!has_error(env), "got {env}");
     &env["result"]
 }
@@ -57,45 +56,45 @@ fn every_command_answers_through_the_interface() {
     let s = TESTING.harness();
 
     let info = s.interface("interface info");
-    assert_eq!(result_of(&info)["name"], json!("grammar"), "got {info}");
-    assert!(info["nonce"].is_string(), "the interface call mints the nonce; got {info}");
+    assert_eq!(result_of(&info)["name"], "grammar", "got {info}");
+    assert!(info["nonce"].as_str().is_some(), "the interface call mints the nonce; got {info}");
 
     let listed = s.interface("interface process list");
-    assert_eq!(result_of(&listed)["processes"], json!([]), "got {listed}");
+    assert_eq!(result_of(&listed)["processes"], nuon("[]"), "got {listed}");
     let killed = s.interface("interface process kill 'noSuchNonce1'");
-    assert_eq!(result_of(&killed), &Value::Null, "got {killed}");
+    assert!(result_of(&killed).is_nothing(), "got {killed}");
 
     let source = equip_source(t.temp_dir(), "sourcetrait/ifprobe");
     let source_text = quoted(&source.to_string_lossy());
     let created = s.interface(&format!("interface equip new {source_text}"));
-    assert!(result_of(&created)["summary"]["created"].is_array(), "got {created}");
+    assert!(result_of(&created)["summary"]["created"].as_list().is_some(), "got {created}");
     let scaffolded = s.interface("interface equip scaffold ['sourcetrait/ifprobe:m:go']");
-    assert!(result_of(&scaffolded)["created"].is_array(), "got {scaffolded}");
+    assert!(result_of(&scaffolded)["created"].as_list().is_some(), "got {scaffolded}");
     write_source(
         &source.join("rig"),
         "m/go/mod.nu",
         &valid_function_source("x: int", "out: int", "{ out: ($data.x * 2) }"),
     );
     let committed = s.interface("interface equip commit 'sourcetrait/ifprobe'");
-    assert!(result_of(&committed)["added"].is_array(), "got {committed}");
-    assert_eq!(result_of(&committed)["warnings"], json!([]), "got {committed}");
+    assert!(result_of(&committed)["added"].as_list().is_some(), "got {committed}");
+    assert_eq!(result_of(&committed)["warnings"], nuon("[]"), "got {committed}");
     let called = s.call("sourcetrait/ifprobe:m:go", "{x: 21}");
-    assert_eq!(result_of(&called)["out"], json!(42), "got {called}");
+    assert_eq!(result_of(&called)["out"], 42, "got {called}");
     let checked = s.interface(&format!("interface equip check {source_text}"));
-    assert_eq!(result_of(&checked)["summary"]["ok"], json!(true), "got {checked}");
+    assert_eq!(result_of(&checked)["summary"]["ok"], true, "got {checked}");
     let helped = s.interface("interface help 'sourcetrait/ifprobe:m:go'");
     assert_eq!(
         result_of(&helped)["doc"]["signature"],
-        json!("sourcetrait/ifprobe:m:go <x:int> <out:int>"),
+        "sourcetrait/ifprobe:m:go <x:int> <out:int>",
         "got {helped}",
     );
 
     let configured = s.interface("interface purview configure 'iface/probe' ['sourcetrait/ifprobe:']");
-    assert!(result_of(&configured)["signatures"].is_string(), "got {configured}");
+    assert!(result_of(&configured)["signatures"].as_str().is_some(), "got {configured}");
     let extended = s.interface("interface purview extend ['iface/probe']");
     assert_eq!(
         result_of(&extended)["current"],
-        json!(["default", "iface/probe"]),
+        nuon(r#"[default, "iface/probe"]"#),
         "got {extended}",
     );
     let set = s.interface("interface purview set []");
@@ -104,23 +103,23 @@ fn every_command_answers_through_the_interface() {
     assert_eq!(result_of(&purviews), &s.purviews()["result"], "got {purviews}");
 
     let uninstalled = s.interface(&format!("interface equip uninstall {source_text}"));
-    assert_eq!(result_of(&uninstalled), &json!({}), "got {uninstalled}");
+    assert_eq!(result_of(&uninstalled), &nuon("{}"), "got {uninstalled}");
     let installed = s.interface(&format!("interface equip install {source_text}"));
-    assert!(result_of(&installed)["summary"]["added"].is_array(), "got {installed}");
+    assert!(result_of(&installed)["summary"]["added"].as_list().is_some(), "got {installed}");
     let _ = s.interface(&format!("interface equip uninstall {source_text}"));
 
     let config = s.interface("interface channel config");
     assert_eq!(result_of(&config), &s.config_channel(None, None, None, None)["result"]);
     let tuned = s.interface("interface channel config --spam-warn-rate 11");
-    assert_eq!(result_of(&tuned)["spam_warn_rate"], json!(11), "got {tuned}");
+    assert_eq!(result_of(&tuned)["spam_warn_rate"], 11, "got {tuned}");
     let _ = s.interface("interface channel config --spam-warn-rate 10");
     let ready = s.interface("interface channel ready");
     assert_eq!(error_kind(&ready), Some("channel::not_open"), "got {ready}");
     let closed = s.interface("interface channel close");
-    assert_eq!(result_of(&closed), &Value::Null, "got {closed}");
+    assert!(result_of(&closed).is_nothing(), "got {closed}");
 
     let remotes = s.interface("interface remote channel list");
-    assert_eq!(result_of(&remotes), &json!([]), "got {remotes}");
+    assert_eq!(result_of(&remotes), &nuon("[]"), "got {remotes}");
     let connected = s.interface("interface remote channel connect 'nopeer'");
     assert_eq!(error_kind(&connected), Some("remote::channel::unverified"), "got {connected}");
     let missing = s.interface("interface remote channel get 'nopeer'");
@@ -144,7 +143,7 @@ fn a_refusal_names_the_contract_and_carries_the_nonce() {
     ] {
         let env = s.interface(command);
         assert_eq!(error_kind(&env), Some("interface::invalid"), "`{command}`: {env}");
-        assert!(env["nonce"].is_string(), "`{command}`: {env}");
+        assert!(env["nonce"].as_str().is_some(), "`{command}`: {env}");
     }
 }
 

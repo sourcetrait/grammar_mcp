@@ -4,8 +4,9 @@
 //! nu / processes / kill actually DO.
 #![cfg(feature = "embedded-cli")]
 
-use serde_json::json;
-use sourcetrait_grammar_mcp::guts::{TestServer, error_kind, error_messages, error_text, has_error};
+use sourcetrait_grammar_mcp::guts::{
+    TestServer, error_kind, error_messages, error_text, has_error, nuon,
+};
 use sourcetrait_common::testing::prelude::*;
 
 /// One shared in-process server per test binary: constructing a TestServer runs
@@ -42,7 +43,7 @@ fn external_command_runs() {
         "def execute [data: nothing]: nothing -> record<out: string> { { out: (^printf hello | str trim) } }",
         "null",
     );
-    assert_eq!(env["result"], json!({"out": "hello"}), "got {env}");
+    assert_eq!(env["result"], nuon("{out: hello}"), "got {env}");
 }
 
 #[test]
@@ -78,7 +79,7 @@ fn timeout_fires_then_recovers() {
     assert!(timed["nonce"].as_str().is_some(), "expected a nonce; got {timed}");
 
     let env = s.execute(PLUS_ONE, "{x: 7}");
-    assert_eq!(env["result"], json!({"out": 8}), "a fresh call after a timeout should work; got {env}");
+    assert_eq!(env["result"], nuon("{out: 8}"), "a fresh call after a timeout should work; got {env}");
 }
 
 #[test]
@@ -90,7 +91,7 @@ fn processes_empty_when_idle() {
     let s = TestServer::new();
     let env = s.processes();
     assert!(
-        env["result"]["processes"].as_array().expect("processes array").is_empty(),
+        env["result"]["processes"].as_list().expect("processes array").is_empty(),
         "expected empty in-flight; got {env}",
     );
 }
@@ -101,7 +102,7 @@ fn kill_unknown_nonce_is_silent_ok() {
     let env = s.kill("doesnotexist");
     assert!(!has_error(&env), "got {env}");
     assert!(
-        env.get("result").is_some_and(|result| result.is_null()),
+        env.get("result").is_some_and(|result| result.is_nothing()),
         "a void kill of an unknown nonce answers a null result; got {env}",
     );
 }

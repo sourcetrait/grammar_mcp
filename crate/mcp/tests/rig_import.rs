@@ -1,8 +1,8 @@
 #![cfg(feature = "embedded-cli")]
 
 use sourcetrait_grammar_mcp::guts::{
-    TestServer, equip_source, error_kind, error_kinds, error_messages, error_text, has_error,
-    valid_function_source, write_source,
+    NuVal, TestServer, equip_source, error_kind, error_kinds, error_messages, error_text,
+    has_error, valid_function_source, write_source,
 };
 use sourcetrait_common::testing::prelude::*;
 
@@ -345,7 +345,7 @@ fn commit_caps_structural_violations() {
     );
     write_source(&src, "a/mod.nu", "");
     let env = s.commit("sourcetrait/caplib");
-    let errors = env["error"].as_array().expect("an error table");
+    let errors = env["error"].as_list().expect("an error table");
     assert_eq!(errors.len(), 3, "errors should cap at 3; got {errors:?}");
 }
 
@@ -393,7 +393,7 @@ fn commit_succeeds_then_check_warns_long_summary() {
     );
     assert!(
         committed["result"]["warnings"]
-            .as_array()
+            .as_list()
             .expect("the commit's warnings")
             .iter()
             .any(|warning| warning["kind"] == "lint::summary_length"),
@@ -408,7 +408,7 @@ fn commit_succeeds_then_check_warns_long_summary() {
         "warnings don't fail check; got {check}"
     );
     let warn_kinds: Vec<&str> = summary["warnings"]
-        .as_array()
+        .as_list()
         .expect("warnings array")
         .iter()
         .filter_map(|w| w["kind"].as_str())
@@ -814,9 +814,9 @@ fn scaffold_names_only_the_files_it_wrote() {
 }
 
 /// A scaffold's answer, its created paths.
-fn created(env: &serde_json::Value) -> Vec<std::path::PathBuf> {
+fn created(env: &NuVal) -> Vec<std::path::PathBuf> {
     env["result"]["created"]
-        .as_array()
+        .as_list()
         .expect("a created list")
         .iter()
         .map(|path| std::path::PathBuf::from(path.as_str().expect("a path")))
@@ -900,9 +900,9 @@ fn commit_validates_and_upserts_source() {
     assert!(!has_error(&env2), "no-change commit should succeed; got {env2}");
     let changed = &env2["result"];
     assert!(
-        changed["added"].as_array().expect("added").is_empty()
-            && changed["modified"].as_array().expect("modified").is_empty()
-            && changed["removed"].as_array().expect("removed").is_empty(),
+        changed["added"].as_list().expect("added").is_empty()
+            && changed["modified"].as_list().expect("modified").is_empty()
+            && changed["removed"].as_list().expect("removed").is_empty(),
         "no-change commit should report nothing changed; got {env2}",
     );
 }
