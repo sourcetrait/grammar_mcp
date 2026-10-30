@@ -257,7 +257,6 @@ pub(crate) mod dirs {
 
 pub(crate) mod nu {
     pub(crate) use nu_engine::command_prelude::Call;
-    pub(crate) use nu_json::Value as JsonValue;
     pub(crate) use nu_parser::parse;
     pub(crate) use nu_protocol::{
         Category, FromValue, PipelineData, Record, ShellError, Signature, Span, SyntaxShape,

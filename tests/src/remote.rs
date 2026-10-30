@@ -8,8 +8,7 @@
 //! one-off and trusted directly via a private root store - never the OS trust
 //! store, so the whole thing runs unattended with no OS-level install / sudo.
 //!
-//! Wire packets are NUON, parsed by this crate's own `nuon`, the crate the host
-//! renders them with.
+//! Wire packets are NUON, read through nuval.
 
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
@@ -23,7 +22,7 @@ use srcert_lib as lib_cert;
 use tokio_rustls::rustls::pki_types::CertificateDer;
 use tokio_rustls::rustls::pki_types::pem::PemObject;
 
-use crate::{Host, envelope, has_error_path, try_nuon_to_json};
+use crate::{Host, NuVal, envelope, has_error_path, try_nuon};
 
 // ---- one-off keys (trusted directly; never the OS trust store) ----
 
@@ -116,8 +115,8 @@ pub fn free_port() -> u16 {
 
 // ---- the packet ----
 
-/// One Channel packet: the scalar envelope fields, plus `event` rendered as JSON
-/// for coarse `contains` assertions.
+/// One Channel packet: the scalar envelope fields, plus `event` rendered as its
+/// raw NUON for coarse `contains` assertions.
 #[derive(Debug, Clone)]
 pub struct Packet {
     pub id: String,
@@ -132,8 +131,8 @@ pub struct Packet {
 
 /// Parse one NUON wire line. Returns None when the line is not a packet.
 fn parse_line(line: &str) -> Option<Packet> {
-    let packet = try_nuon_to_json(line)?;
-    let field = |k: &str| packet.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let packet = try_nuon(line)?;
+    let field = |k: &str| packet.get(k).and_then(NuVal::as_str).unwrap_or("").to_string();
     let model = field("model");
     if model.is_empty() {
         return None;
@@ -248,7 +247,7 @@ impl Consumer {
             first.model, "mcp/channel/Open",
             "the first packet must be the handshake; got {first:?}",
         );
-        let nom = serde_json::from_str::<serde_json::Value>(&first.event)
+        let nom = NuVal::from_nuon(&first.event)
             .ok()
             .and_then(|event| event["mcp_nom"].as_str().map(str::to_string))
             .unwrap_or_else(|| panic!("the Open packet carries the host's nom; got {first:?}"));

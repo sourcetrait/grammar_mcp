@@ -34,7 +34,6 @@ directories.workspace = true
 futures-util.workspace = true
 nix = { workspace = true, optional = true }
 nu-engine.workspace = true
-nu-json.workspace = true
 nu-parser.workspace = true
 nu-protocol.workspace = true
 nuon.workspace = true

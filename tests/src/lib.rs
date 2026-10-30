@@ -22,6 +22,8 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
+pub use nuval::NuVal;
+
 pub mod remote;
 pub use remote::*;
 
@@ -89,9 +91,9 @@ pub fn stdout_str(out: &Output) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
-/// The envelope the `cli` surface printed, its NUON text read as JSON.
-pub fn stdout_envelope(out: &Output) -> Value {
-    nuon_to_json(stdout_str(out).trim())
+/// The envelope the `cli` surface printed, read from its NUON text.
+pub fn stdout_envelope(out: &Output) -> NuVal {
+    nuon(stdout_str(out).trim())
 }
 
 /// A `grammar-mcp` server child driven over JSON-RPC stdio, killed on drop.
@@ -665,32 +667,25 @@ pub fn execute_args(definition: &str, data: &str) -> Value {
     json!({"definition": definition, "data": data})
 }
 
-/// A NUON text as JSON, through the converter `to json` uses.
-///
-/// `None` when the text is not NUON.
-pub fn try_nuon_to_json(text: &str) -> Option<Value> {
-    let value = nuon::from_nuon(text, None).ok()?;
-    let converted = <nu_json::Value as nu_protocol::FromValue>::from_value(value).ok()?;
-    serde_json::to_value(&converted).ok()
+/// A NUON text as a NuVal, `None` when the text is not NUON.
+pub fn try_nuon(text: &str) -> Option<NuVal> {
+    NuVal::from_nuon(text).ok()
 }
 
-/// A NUON text as JSON, panicking on text that is not NUON.
-pub fn nuon_to_json(text: &str) -> Value {
-    try_nuon_to_json(text).unwrap_or_else(|| panic!("not NUON that converts to JSON: {text:?}"))
+/// A NUON text as a NuVal, panicking on text that is not NUON.
+pub fn nuon(text: &str) -> NuVal {
+    NuVal::from_nuon(text).unwrap_or_else(|e| panic!("not NUON: {text:?}: {e}"))
 }
 
 /// A `tools/call` response's envelope, read from its one NUON text content.
 ///
-/// Null when it carries none, as a JSON-RPC error does.
-pub fn envelope(resp: &Value) -> Value {
-    resp["result"]["content"][0]["text"]
-        .as_str()
-        .map(nuon_to_json)
-        .unwrap_or(Value::Null)
+/// Nothing when it carries none, as a JSON-RPC error does.
+pub fn envelope(resp: &Value) -> NuVal {
+    resp["result"]["content"][0]["text"].as_str().map(nuon).unwrap_or(NuVal::Nothing)
 }
 
 /// The envelope's error table, when it holds one.
-pub fn envelope_error(resp: &Value) -> Option<Value> {
+pub fn envelope_error(resp: &Value) -> Option<NuVal> {
     envelope(resp).get("error").cloned()
 }
 
@@ -706,10 +701,12 @@ pub fn envelope_error_kind(resp: &Value) -> Option<String> {
 /// Every error row's `kind`.
 pub fn error_kinds(resp: &Value) -> Vec<String> {
     envelope_error(resp)
-        .and_then(|error| error.as_array().cloned())
-        .map(|rows| {
-            rows.iter()
-                .filter_map(|row| row.get("kind").and_then(|k| k.as_str()).map(str::to_string))
+        .map(|error| {
+            error
+                .as_list()
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|row| row.get("kind").and_then(NuVal::as_str).map(str::to_string))
                 .collect()
         })
         .unwrap_or_default()
@@ -719,6 +716,8 @@ pub fn has_kind(resp: &Value, kind: &str) -> bool {
     error_kinds(resp).iter().any(|k| k == kind)
 }
 
+/// The envelope's error table as its raw NUON, or the whole response's JSON
+/// when it carries none.
 pub fn error_message(resp: &Value) -> String {
     envelope_error(resp)
         .map(|e| e.to_string())
@@ -726,9 +725,9 @@ pub fn error_message(resp: &Value) -> String {
 }
 
 /// The success envelope, or `None` when the response carries an `error` or none.
-pub fn extract_envelope(resp: &Value) -> Option<Value> {
+pub fn extract_envelope(resp: &Value) -> Option<NuVal> {
     let envelope = envelope(resp);
-    if envelope.is_null() || envelope.get("error").is_some() {
+    if envelope.is_nothing() || envelope.get("error").is_some() {
         return None;
     }
     Some(envelope)

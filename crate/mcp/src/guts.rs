@@ -4,6 +4,8 @@ use crate::*;
 
 use std::sync::Once;
 
+pub use nuval::NuVal;
+
 static TEST_CONFIG: Once = Once::new();
 
 const INPROC_PREFIX: &str = "grammar_inproc_";
@@ -88,11 +90,11 @@ impl TestServer {
         Self { rt, nush }
     }
 
-    /// A tool's envelope as JSON, read from its NUON text.
-    fn envelope(r: Result<mcp::CallToolResult, mcp::ErrorData>) -> json::Value {
+    /// A tool's envelope, read from its NUON text.
+    fn envelope(r: Result<mcp::CallToolResult, mcp::ErrorData>) -> NuVal {
         let ctr = r.unwrap_or_else(|e| panic!("unexpected rmcp-boundary error: {e:?}"));
         match ctr.content.first() {
-            Some(mcp::ContentBlock::Text(text)) => nuon_to_json(&text.text),
+            Some(mcp::ContentBlock::Text(text)) => nuon(&text.text),
             other => panic!("a result without its envelope text: {other:?}"),
         }
     }
@@ -102,7 +104,7 @@ impl TestServer {
         &self,
         definition: &str,
         data: &str,
-    ) -> json::Value {
+    ) -> NuVal {
         self.execute_timeout(definition, data, None)
     }
 
@@ -112,7 +114,7 @@ impl TestServer {
         definition: &str,
         data: &str,
         timeout: Option<&str>,
-    ) -> json::Value {
+    ) -> NuVal {
         self.execute_on(LOCAL_HOST, definition, data, timeout)
     }
 
@@ -123,7 +125,7 @@ impl TestServer {
         definition: &str,
         data: &str,
         timeout: Option<&str>,
-    ) -> json::Value {
+    ) -> NuVal {
         let p = ExecuteParams {
             host: host.to_string(),
             definition: definition.to_string(),
@@ -138,7 +140,7 @@ impl TestServer {
         &self,
         nonce: &str,
         data: &str,
-    ) -> json::Value {
+    ) -> NuVal {
         self.rerun_timeout(nonce, data, None)
     }
 
@@ -148,7 +150,7 @@ impl TestServer {
         nonce: &str,
         data: &str,
         timeout: Option<&str>,
-    ) -> json::Value {
+    ) -> NuVal {
         self.rerun_on(LOCAL_HOST, nonce, data, timeout)
     }
 
@@ -159,7 +161,7 @@ impl TestServer {
         nonce: &str,
         data: &str,
         timeout: Option<&str>,
-    ) -> json::Value {
+    ) -> NuVal {
         let p = RerunParams {
             host: host.to_string(),
             nonce: nonce.to_string(),
@@ -174,7 +176,7 @@ impl TestServer {
         &self,
         namepath: &str,
         data: &str,
-    ) -> json::Value {
+    ) -> NuVal {
         self.call_timeout(namepath, data, None)
     }
 
@@ -184,7 +186,7 @@ impl TestServer {
         namepath: &str,
         data: &str,
         timeout: Option<&str>,
-    ) -> json::Value {
+    ) -> NuVal {
         self.call_on(LOCAL_HOST, namepath, data, timeout)
     }
 
@@ -195,7 +197,7 @@ impl TestServer {
         namepath: &str,
         data: &str,
         timeout: Option<&str>,
-    ) -> json::Value {
+    ) -> NuVal {
         let p = CallParams {
             host: host.to_string(),
             namepath: namepath.to_string(),
@@ -211,7 +213,7 @@ impl TestServer {
     }
 
     /// One `interface` command, through the tool's parse and dispatch.
-    pub fn interface(&self, command: &str) -> json::Value {
+    pub fn interface(&self, command: &str) -> NuVal {
         self.interface_on(LOCAL_HOST, command)
     }
 
@@ -220,7 +222,7 @@ impl TestServer {
         &self,
         host: &str,
         command: &str,
-    ) -> json::Value {
+    ) -> NuVal {
         let p = InterfaceParams {
             host: host.to_string(),
             command: command.to_string(),
@@ -228,7 +230,7 @@ impl TestServer {
         Self::envelope(self.rt.block_on(self.nush.interface(mcp::Parameters(p))))
     }
 
-    pub fn commit(&self, namepath: &str) -> json::Value {
+    pub fn commit(&self, namepath: &str) -> NuVal {
         let p = CommitParams {
             namepath: namepath.to_string(),
         };
@@ -237,7 +239,7 @@ impl TestServer {
     }
 
     /// An `interface equip` action on a source; an unknown one goes to the parse.
-    pub fn equip(&self, action: &str, source_dir: &str) -> json::Value {
+    pub fn equip(&self, action: &str, source_dir: &str) -> NuVal {
         let p = EquipParams {
             source: source_dir.to_string(),
         };
@@ -264,7 +266,7 @@ impl TestServer {
         source.join("rig")
     }
 
-    pub fn scaffold(&self, namepaths: &[&str]) -> json::Value {
+    pub fn scaffold(&self, namepaths: &[&str]) -> NuVal {
         let p = NewParams {
             namepaths: namepaths.iter().map(|s| s.to_string()).collect(),
         };
@@ -273,7 +275,7 @@ impl TestServer {
     }
 
     /// `interface help` on a namepath or a pattern.
-    pub fn inspect(&self, namepath: &str) -> json::Value {
+    pub fn inspect(&self, namepath: &str) -> NuVal {
         let p = InspectParams {
             namepath: namepath.to_string(),
         };
@@ -282,13 +284,13 @@ impl TestServer {
     }
 
     /// `interface info`, the current view's.
-    pub fn info(&self) -> json::Value {
+    pub fn info(&self) -> NuVal {
         let nonce = self.interface_nonce(&"info");
         Self::envelope(self.rt.block_on(self.nush.info(nonce)))
     }
 
     /// `interface purview list`.
-    pub fn purviews(&self) -> json::Value {
+    pub fn purviews(&self) -> NuVal {
         let nonce = self.interface_nonce(&"purview list");
         Self::envelope(self.rt.block_on(self.nush.purview_list(nonce)))
     }
@@ -298,7 +300,7 @@ impl TestServer {
         &self,
         purview: &str,
         namepaths: &[&str],
-    ) -> json::Value {
+    ) -> NuVal {
         let p = PurviewConfigureParams {
             purview: purview.to_string(),
             namepaths: namepaths.iter().map(|s| s.to_string()).collect(),
@@ -310,7 +312,7 @@ impl TestServer {
     pub fn purview_extend(
         &self,
         purviews: &[&str],
-    ) -> json::Value {
+    ) -> NuVal {
         let p = PurviewExtendParams {
             purviews: purviews.iter().map(|s| s.to_string()).collect(),
         };
@@ -322,7 +324,7 @@ impl TestServer {
     pub fn purview(
         &self,
         purviews: &[&str],
-    ) -> json::Value {
+    ) -> NuVal {
         let p = PurviewParams {
             purviews: purviews.iter().map(|s| (*s).to_string()).collect(),
         };
@@ -336,13 +338,13 @@ impl TestServer {
     }
 
     /// `interface process list`.
-    pub fn processes(&self) -> json::Value {
+    pub fn processes(&self) -> NuVal {
         let nonce = self.interface_nonce(&"process list");
         Self::envelope(self.rt.block_on(self.nush.process_list(nonce)))
     }
 
     /// `interface process kill`; its result is null on success.
-    pub fn kill(&self, nonce: &str) -> json::Value {
+    pub fn kill(&self, nonce: &str) -> NuVal {
         let p = KillParams {
             nonce: nonce.to_string(),
         };
@@ -351,7 +353,7 @@ impl TestServer {
     }
 
     /// `interface channel ready`; its result is null.
-    pub fn channel_verified(&self) -> json::Value {
+    pub fn channel_verified(&self) -> NuVal {
         let nonce = self.interface_nonce(&"channel ready");
         Self::envelope(self.rt.block_on(self.nush.face.channel_ready(nonce)))
     }
@@ -363,7 +365,7 @@ impl TestServer {
         warn_rate: Option<u32>,
         error_window_secs: Option<u64>,
         error_rate: Option<u32>,
-    ) -> json::Value {
+    ) -> NuVal {
         let p = ConfigChannelParams {
             spam_warn_window_secs: warn_window_secs,
             spam_warn_rate: warn_rate,
@@ -375,7 +377,7 @@ impl TestServer {
     }
 
     /// `interface channel close`; closing a closed channel succeeds.
-    pub fn channel_close(&self) -> json::Value {
+    pub fn channel_close(&self) -> NuVal {
         let nonce = self.interface_nonce(&"channel close");
         Self::envelope(self.rt.block_on(self.nush.face.channel_close(nonce)))
     }
@@ -420,14 +422,14 @@ impl TestServer {
         crate::lib_dir(name)
     }
 
-    /// A rig's committed index, decoded into the JSON shape assertions use.
-    pub fn rig_index(&self, name: &str) -> json::Value {
+    /// A rig's committed index, decoded and carried as a NuVal.
+    pub fn rig_index(&self, name: &str) -> NuVal {
         let path = crate::rig_meta_path(name);
         let text = fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("read index {}: {e}", path.display()));
         let index = crate::index_from_nuon(&text)
             .unwrap_or_else(|e| panic!("decode index {}: {e}", path.display()));
-        json::to_value(&index).expect("index serializes")
+        nuval::to_nuval(&index).expect("the index converts")
     }
 }
 
@@ -480,56 +482,50 @@ pub fn clear_config_pins() {
     clear_pins();
 }
 
-/// A NUON text as JSON, through the converter `to json` uses.
-pub fn nuon_to_json(text: &str) -> json::Value {
-    let value = nu::from_nuon(text, None).unwrap_or_else(|e| panic!("NUON `{text}`: {e}"));
-    let converted =
-        nu::JsonValue::from_value(value).unwrap_or_else(|e| panic!("NUON `{text}` as JSON: {e}"));
-    json::to_value(&converted).expect("a JSON value serializes")
+/// A NUON text as a NuVal, panicking on text that isn't NUON.
+pub fn nuon(text: &str) -> NuVal {
+    NuVal::from_nuon(text).unwrap_or_else(|e| panic!("NUON `{text}`: {e}"))
 }
 
 /// True when the envelope is the failure shape, `{nonce, error}`.
-pub fn has_error(env: &json::Value) -> bool {
+pub fn has_error(env: &NuVal) -> bool {
     env.get("error").is_some()
 }
 
 /// The envelope's error rows, none on a success.
-fn error_rows(env: &json::Value) -> &[json::Value] {
-    env.get("error")
-        .and_then(|e| e.as_array())
-        .map(Vec::as_slice)
-        .unwrap_or_default()
+fn error_rows(env: &NuVal) -> &[NuVal] {
+    env.get("error").and_then(NuVal::as_list).unwrap_or_default()
 }
 
 /// The first error row's `kind`, if any.
-pub fn error_kind(env: &json::Value) -> Option<&str> {
+pub fn error_kind(env: &NuVal) -> Option<&str> {
     error_rows(env).first()?.get("kind")?.as_str()
 }
 
 /// Every error row's `kind`.
-pub fn error_kinds(env: &json::Value) -> Vec<String> {
+pub fn error_kinds(env: &NuVal) -> Vec<String> {
     error_rows(env)
         .iter()
-        .filter_map(|row| row.get("kind").and_then(|k| k.as_str()))
+        .filter_map(|row| row.get("kind").and_then(NuVal::as_str))
         .map(str::to_string)
         .collect()
 }
 
-pub fn has_kind(env: &json::Value, kind: &str) -> bool {
+pub fn has_kind(env: &NuVal, kind: &str) -> bool {
     error_kinds(env).iter().any(|k| k == kind)
 }
 
 /// Every error row's `message`.
-pub fn error_messages(env: &json::Value) -> Vec<String> {
+pub fn error_messages(env: &NuVal) -> Vec<String> {
     error_rows(env)
         .iter()
-        .filter_map(|row| row.get("message").and_then(|m| m.as_str()))
+        .filter_map(|row| row.get("message").and_then(NuVal::as_str))
         .map(str::to_string)
         .collect()
 }
 
-/// The whole error object rendered to a string.
-pub fn error_text(env: &json::Value) -> String {
+/// The whole error table as its raw NUON.
+pub fn error_text(env: &NuVal) -> String {
     env.get("error").map(|e| e.to_string()).unwrap_or_default()
 }
 
@@ -589,8 +585,9 @@ pub fn valid_function_source(data_fields: &str, result_fields: &str, body: &str)
     )
 }
 
-/// Lint a definition as `execute`'s contract does, parse errors aside, as JSON.
-pub fn lint_definition(definition: &str) -> Vec<json::Value> {
+/// Lint a definition as `execute`'s contract does, parse errors aside, each
+/// diagnostic a NuVal.
+pub fn lint_definition(definition: &str) -> Vec<NuVal> {
     ensure_test_config();
     let engine = ParseEngine::new_full();
     let mut ws = nu::StateWorkingSet::new(engine.engine_state());
@@ -598,7 +595,7 @@ pub fn lint_definition(definition: &str) -> Vec<json::Value> {
     let start = file_start(&ws, LINT_FILE);
     crate::lint_block(&block, &ws, definition, start)
         .iter()
-        .map(|d| json::to_value(d).expect("diagnostic serializes"))
+        .map(|d| nuval::to_nuval(d).expect("a diagnostic converts"))
         .collect()
 }
 
@@ -606,19 +603,19 @@ pub fn lint_definition(definition: &str) -> Vec<json::Value> {
 const LINT_FILE: &str = "definition.nu";
 
 /// The execute contract's verdict on a definition: its summary, or its rows.
-pub fn analyze_definition(definition: &str) -> Result<json::Value, Vec<json::Value>> {
+pub fn analyze_definition(definition: &str) -> Result<NuVal, Vec<NuVal>> {
     ensure_test_config();
     let engine = ParseEngine::new_full();
     match crate::analyze_definition(&engine, definition, true) {
-        Ok(def) => Ok(serde_json::json!({
-            "lane": def.lane.as_str(),
-            "data_type": typedef_text(&def.data_type),
-            "result_type": typedef_text(&def.result_type),
-            "takes_timeout": def.takes_timeout,
-        })),
+        Ok(def) => Ok(NuVal::Record(vec![
+            ("lane".to_string(), NuVal::from(def.lane.as_str())),
+            ("data_type".to_string(), NuVal::from(typedef_text(&def.data_type))),
+            ("result_type".to_string(), NuVal::from(typedef_text(&def.result_type))),
+            ("takes_timeout".to_string(), NuVal::from(def.takes_timeout)),
+        ])),
         Err(rows) => Err(rows
             .iter()
-            .map(|d| json::to_value(d).expect("diagnostic serializes"))
+            .map(|d| nuval::to_nuval(d).expect("a diagnostic converts"))
             .collect()),
     }
 }
