@@ -1,3 +1,4 @@
+pub(crate) mod access;
 pub(crate) mod error;
 pub(crate) mod kind {
     pub(crate) mod compile;
@@ -19,6 +20,7 @@ pub(crate) mod val_error;
 pub(crate) mod width;
 #[cfg(all(test, feature = "nushell"))]
 mod tests {
+    mod access;
     mod text;
     mod val;
     mod val_error;
