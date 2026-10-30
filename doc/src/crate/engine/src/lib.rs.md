@@ -9,10 +9,9 @@ The system's own data is cereal data, so the engine takes `::serde`,
 `::bitcode`, and `::rkyv` as dependencies of its own, the paths
 `cereal::derived` emits, as nuval does.
 
-## mod json
-serde_json's `to_value` and `from_value`, the middle of the indices' NUON
-round-trip: an index's types serialize through serde, and NUON is the format
-they are written in.
+## use nutype
+The contract's types are nutype's, as its values are nuval's; the indices are
+written and read as NUON through nuval's serde support.
 
 ## mod equip
 The equips by concept, so no file holds them all: `store`, the repository, its
@@ -23,8 +22,8 @@ block and `interface help`; `validate`, the validator.
 ## pub use
 What a host may name: the engine's start, its parameters, and its host; its system
 and its handle; the stateless pool's executor and the stateful engine; the
-definition's contract, the lint, and the parse engines; the contract's typedefs and
-their check; the source templates; the plugin registry's read; the call cache's
+definition's contract, the lint, and the parse engines; the contract's type check
+and its text; the source templates; the plugin registry's read; the call cache's
 paths; the equips' store, lifecycle, signatures, and validation; and the namepaths.
 Everything else is the crate's own.
 

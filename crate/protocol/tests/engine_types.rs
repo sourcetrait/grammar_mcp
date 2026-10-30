@@ -3,7 +3,6 @@
 //! trips, the conversions to and from the system's messages, and the kinds.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
 
 use sourcetrait_common::{
     datum::{Nom, Nonce},
@@ -11,8 +10,11 @@ use sourcetrait_common::{
 };
 use sourcetrait_grammar_protocol::*;
 
+#[path = "support/golden.rs"]
+mod golden;
+
 /// The golden vectors' file, every vector's bitcode bytes in hex.
-const GOLDEN: &str = "tests/vectors/engine.json";
+const GOLDEN: &str = "tests/vectors/engine.nuon";
 
 /// One operation's public nonce, fixed so the vectors are.
 const NONCE: Nonce = Nonce::new_unchecked(0x0123_4567_89ab_cdef);
@@ -219,11 +221,6 @@ fn answers() -> Vec<(String, FromEngineSys)> {
     out
 }
 
-/// Bytes as lowercase hex.
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
 /// Every vector's name and its encoding.
 fn encoded() -> BTreeMap<String, Vec<u8>> {
     let requests = requests().into_iter().map(|(n, r)| (n, bitcode::encode(&r)));
@@ -233,17 +230,9 @@ fn encoded() -> BTreeMap<String, Vec<u8>> {
 
 #[test]
 fn every_vector_encodes_to_its_golden_bytes() {
-    let actual: BTreeMap<String, String> =
-        encoded().into_iter().map(|(name, bytes)| (name, hex(&bytes))).collect();
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(GOLDEN);
-    if std::env::var("BLESS").as_deref() == Ok("1") {
-        let text = serde_json::to_string_pretty(&actual).expect("JSON");
-        std::fs::write(&path, format!("{text}\n")).expect("the golden written");
-    }
-    let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {GOLDEN}: {e}; BLESS=1 writes it"));
-    let golden: BTreeMap<String, String> = serde_json::from_str(&text).expect("the golden's JSON");
-    assert_eq!(actual, golden, "an encoding moved; a deliberate change re-blesses {GOLDEN}");
+    let actual = golden::hex_table(encoded());
+    let golden = golden::read(GOLDEN, golden::VECTORS_MODEL, &actual);
+    assert_eq!(golden, actual, "an encoding moved; a deliberate change re-blesses {GOLDEN}");
 }
 
 #[test]
@@ -442,8 +431,10 @@ fn a_diagnostic_keeps_its_severity_in_bitcode_and_not_in_its_envelope() {
     assert_ne!(bitcode::encode(&warning()), bitcode::encode(&error));
     let back: Diagnostic = bitcode::decode(&bitcode::encode(&warning())).expect("decoded");
     assert_eq!(back.severity, Severity::Warning);
-    let envelope = serde_json::to_value(warning()).expect("JSON");
-    assert!(envelope.get("severity").is_none(), "{envelope}");
+    let NuVal::Record(envelope) = nuval::to_nuval(&warning()).expect("its serde value") else {
+        panic!("a diagnostic serializes as a record");
+    };
+    assert!(!envelope.iter().any(|(key, _)| key == "severity"), "{envelope:?}");
 }
 
 #[test]

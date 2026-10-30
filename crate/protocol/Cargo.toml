@@ -22,7 +22,7 @@ sourcetrait_common.workspace = true
 
 [dev-dependencies]
 futures-util.workspace = true
-serde_json.workspace = true
+nutype.workspace = true
 sha2.workspace = true
 syn.workspace = true
 

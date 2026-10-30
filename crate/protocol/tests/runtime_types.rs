@@ -9,8 +9,11 @@ use std::path::PathBuf;
 use sourcetrait_common::datum::{Nom, Nonce};
 use sourcetrait_grammar_protocol::*;
 
+#[path = "support/golden.rs"]
+mod golden;
+
 /// The golden vectors' file, every vector's bitcode bytes in hex.
-const GOLDEN: &str = "tests/vectors/runtime.json";
+const GOLDEN: &str = "tests/vectors/runtime.nuon";
 
 const OPERATION: OperationId = OperationId([0x11; 16]);
 const ARTIFACT: ArtifactId = ArtifactId([0x22; 16]);
@@ -403,11 +406,6 @@ fn misc() -> Vec<(&'static str, Vec<u8>)> {
     ]
 }
 
-/// Bytes as lowercase hex.
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
 /// Every vector's name and its encoding.
 fn encoded() -> BTreeMap<String, Vec<u8>> {
     let mut out = BTreeMap::new();
@@ -444,17 +442,9 @@ fn encoded() -> BTreeMap<String, Vec<u8>> {
 
 #[test]
 fn every_vector_encodes_to_its_golden_bytes() {
-    let actual: BTreeMap<String, String> =
-        encoded().into_iter().map(|(name, bytes)| (name, hex(&bytes))).collect();
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(GOLDEN);
-    if std::env::var("BLESS").as_deref() == Ok("1") {
-        let text = serde_json::to_string_pretty(&actual).expect("JSON");
-        std::fs::write(&path, format!("{text}\n")).expect("the golden written");
-    }
-    let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {GOLDEN}: {e}; BLESS=1 writes it"));
-    let golden: BTreeMap<String, String> = serde_json::from_str(&text).expect("the golden's JSON");
-    assert_eq!(actual, golden, "an encoding moved; a deliberate change re-blesses {GOLDEN}");
+    let actual = golden::hex_table(encoded());
+    let golden = golden::read(GOLDEN, golden::VECTORS_MODEL, &actual);
+    assert_eq!(golden, actual, "an encoding moved; a deliberate change re-blesses {GOLDEN}");
 }
 
 /// A value's bitcode round trip, compared whole.
@@ -585,10 +575,17 @@ fn a_transport_failure_keeps_authentication_apart_from_an_unknown_outcome() {
 
 #[test]
 fn a_mode_and_a_link_state_serialize_as_their_words() {
-    assert_eq!(serde_json::to_value(ChannelMode::Async).expect("JSON"), "async");
-    assert_eq!(serde_json::to_value(RemoteLinkState::Listening).expect("JSON"), "listening");
-    assert_eq!(serde_json::to_value(PluginInfo("p".into(), None)).expect("JSON"), serde_json::json!(["p", null]));
-    assert_eq!(serde_json::to_value(PurviewView("core".into(), vec![])).expect("JSON"), serde_json::json!(["core", []]));
+    let word = |s: &str| NuVal::String(s.into());
+    assert_eq!(nuval::to_nuval(&ChannelMode::Async).expect("a value"), word("async"));
+    assert_eq!(nuval::to_nuval(&RemoteLinkState::Listening).expect("a value"), word("listening"));
+    assert_eq!(
+        nuval::to_nuval(&PluginInfo("p".into(), None)).expect("a value"),
+        NuVal::List(vec![word("p"), NuVal::Nothing]),
+    );
+    assert_eq!(
+        nuval::to_nuval(&PurviewView("core".into(), vec![])).expect("a value"),
+        NuVal::List(vec![word("core"), NuVal::List(vec![])]),
+    );
 }
 
 #[test]

@@ -5,9 +5,16 @@ targets are the indexed "bins", but EVERY export - a rig's call target or helper
 module - is importable from a body and from external nu scripting.
 
 ## struct IndexFunction
-The call's contract as typed data, the typedefs `contract_signature` read from `main` at
+The call's contract as typed data, the types `contract_signature` read from `main` at
 commit, so a call holds its data and result to them and the signature block renders them
-without parsing the rig's source again.
+without parsing the rig's source again. Each type is written as its text.
+
+## enum StoredType / enum EarlierType / fn stored_type
+The build before nutype wrote each type as the serde structure of its own model,
+`{Record: {fields: [...]}}`. An entry reads either form, the earlier converted, so a
+namespace's installed rigs keep answering after an upgrade; the next commit writes the
+text. The forms can't collide: no type text is a record, and the earlier form's one
+string, `Nothing`, names no type.
 
 ## struct IndexSource
 The index's source path alone, which an older build's index carries as this one's does.

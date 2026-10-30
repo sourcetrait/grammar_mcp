@@ -7,9 +7,9 @@ pub const PREFACE: [u8; 8] = *b"GRAMD001";
 /// The codec both ends must name in their hellos.
 pub const CODEC_ID: &str = "bitcode-0.6.9";
 
-/// The SHA-256 of `schema/v1.json`'s canonical form, named by both hellos.
+/// The SHA-256 of `schema/v1.nuon`'s canonical form, named by both hellos.
 pub const SCHEMA_ID: [u8; 32] =
-    schema_id("35b319eda68a6b24cf25486cd41b1b77c56e5e76b520e95f1374b8b60655d41b");
+    schema_id("71923254e41bb6aa9451799698698dbff417405e322722dbd639c02e5996d235");
 
 /// An ID's 32 bytes from its 64 lowercase hex digits, checked as it builds.
 const fn schema_id(hex: &str) -> [u8; 32] {

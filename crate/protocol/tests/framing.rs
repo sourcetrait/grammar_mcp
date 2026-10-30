@@ -1,15 +1,19 @@
 //! The wire's framing: the preface, the length-prefixed frames, their ceilings,
 //! how a stream may end, the bounded decode's refusals, and the schema and its ID.
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use futures_util::{SinkExt, StreamExt};
 use sourcetrait_grammar_protocol::{
     CODEC_ID, EVENT_FRAME_MAX, EmergencyKind, FrameCodec, FrameError, FrameStage, HELLO_FRAME_MAX,
-    Lane, OperationId, PREFACE, RPC_FRAME_DEFAULT, RPC_FRAME_HARD, SCHEMA_ID, StreamRole,
+    Lane, NuVal, OperationId, PREFACE, RPC_FRAME_DEFAULT, RPC_FRAME_HARD, SCHEMA_ID, StreamRole,
     TransportError, check_codec, decode_payload, framed, payload,
 };
 use tokio_util::bytes::{Bytes, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
+
+#[path = "support/golden.rs"]
+mod golden;
 
 /// The wire bytes of `frames`, the preface first.
 fn wire(frames: &[&[u8]]) -> Vec<u8> {
@@ -256,19 +260,178 @@ async fn the_adapter_carries_frames_over_a_byte_stream_a_byte_at_a_time() {
     assert_eq!(got, vec![OperationId([1; 16]), OperationId([2; 16])]);
 }
 
+/// A small deterministic generator, so a property case reruns from its seed.
+struct XorShift(u64);
+
+impl XorShift {
+    fn next(&mut self) -> u64 {
+        let mut x = self.0;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.0 = x;
+        x
+    }
+
+    /// A value below `n`.
+    fn below(&mut self, n: u64) -> u64 {
+        self.next() % n
+    }
+}
+
+/// The seeds the property cases run from, kept so a failure reruns exactly.
+const SEEDS: [u64; 8] = [
+    1,
+    2,
+    3,
+    0x9e37_79b9_7f4a_7c15,
+    0xd1b5_4a32_d192_ed03,
+    0x2545_f491_4f6c_dd1d,
+    0x5851_f42d_4c95_7f2d,
+    0xbf58_476d_1ce4_e5b9,
+];
+
+#[test]
+fn any_split_of_a_valid_stream_yields_the_same_frames() {
+    for seed in SEEDS {
+        let mut rng = XorShift(seed);
+        let frames: Vec<Vec<u8>> = (0..1 + rng.below(8))
+            .map(|_| (0..1 + rng.below(512)).map(|_| rng.next() as u8).collect())
+            .collect();
+        let bytes = wire(&frames.iter().map(Vec::as_slice).collect::<Vec<_>>());
+        let mut codec = FrameCodec::new();
+        let mut buf = BytesMut::new();
+        let mut got = Vec::new();
+        let mut at = 0;
+        while at < bytes.len() {
+            let end = (at + 1 + rng.below(64) as usize).min(bytes.len());
+            buf.extend_from_slice(&bytes[at..end]);
+            at = end;
+            while let Some(frame) = codec.decode(&mut buf).expect("a valid stream") {
+                got.push(frame.to_vec());
+            }
+        }
+        assert!(codec.decode_eof(&mut buf).expect("a clean end").is_none(), "seed {seed:#x}");
+        assert_eq!(got, frames, "seed {seed:#x}");
+    }
+}
+
+#[test]
+fn random_frames_never_pass_the_ceiling_or_reserve_past_it() {
+    for seed in SEEDS {
+        let mut rng = XorShift(seed);
+        let mut bytes = PREFACE.to_vec();
+        for _ in 0..1 + rng.below(16) {
+            // Lengths near the ceiling and zero turn up as often as small ones.
+            let len = match rng.below(4) {
+                0 => 0,
+                1 => HELLO_FRAME_MAX - 2 + rng.below(4) as u32,
+                _ => rng.below(256) as u32,
+            };
+            bytes.extend_from_slice(&len.to_be_bytes());
+            let body = len.min(4096) as usize - rng.below(2) as usize * (len.min(4096) as usize / 2);
+            bytes.extend((0..body).map(|_| rng.next() as u8));
+        }
+        let mut codec = FrameCodec::new();
+        let mut buf = BytesMut::from(bytes.as_slice());
+        let ended = loop {
+            match codec.decode(&mut buf) {
+                Ok(Some(frame)) => assert!(frame.len() <= HELLO_FRAME_MAX as usize, "seed {seed:#x}"),
+                Ok(None) => break codec.decode_eof(&mut buf),
+                Err(e) => break Err(e),
+            }
+            let bound = bytes.len() + HELLO_FRAME_MAX as usize;
+            assert!(buf.capacity() <= bound, "seed {seed:#x}: capacity {}", buf.capacity());
+        };
+        if let Err(e) = ended {
+            assert!(
+                matches!(e, FrameError::ZeroLength | FrameError::Oversize { .. } | FrameError::Truncated { .. }),
+                "seed {seed:#x}: {e}",
+            );
+        }
+    }
+}
+
+/// The payloads DecodeBudget decodes: small encodings of values far larger
+/// once decoded, one past each of the contract's decoded budgets, and one deep
+/// enough to exhaust a recursive decoder's stack. They are encoded here from
+/// real values and never decoded; the pinned bitcode makes them the same
+/// bytes everywhere, so their lengths and hashes retain them.
+fn budget_vectors() -> BTreeMap<String, Vec<u8>> {
+    /// The contract's decoded collection budget.
+    const ELEMENTS: usize = 100_000;
+    /// The contract's decoded depth budget.
+    const DEPTH: usize = 64;
+    let nested = |depth: usize| {
+        let mut value = NuVal::Nothing;
+        for _ in 0..depth {
+            value = NuVal::List(vec![value]);
+        }
+        value
+    };
+    let vectors = [
+        ("list_past_elements", NuVal::List(vec![NuVal::Nothing; ELEMENTS + 1])),
+        ("record_past_elements", NuVal::Record(vec![(String::new(), NuVal::Nothing); ELEMENTS + 1])),
+        ("list_past_depth", nested(DEPTH + 1)),
+        ("list_deep", nested(10_000)),
+    ];
+    vectors.into_iter().map(|(name, value)| (name.to_string(), bitcode::encode(&value))).collect()
+}
+
+#[test]
+fn the_budget_vectors_are_retained_small_and_never_decoded_here() {
+    // A deep value's encoding and drop recurse, so they run on a large stack.
+    let vectors = std::thread::Builder::new()
+        .stack_size(256 << 20)
+        .spawn(budget_vectors)
+        .expect("a thread")
+        .join()
+        .expect("the vectors");
+    let pinned = NuVal::List(
+        vectors
+            .iter()
+            .map(|(name, bytes)| {
+                use sha2::{Digest, Sha256};
+                let sha256: String = Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect();
+                golden::row([
+                    ("name", NuVal::String(name.clone())),
+                    ("bytes", NuVal::Int(bytes.len() as i64)),
+                    ("sha256", NuVal::String(sha256)),
+                ])
+            })
+            .collect(),
+    );
+    let retained = golden::read(BUDGET_VECTORS, "tests/vectors/Budget.nutype", &pinned);
+    assert_eq!(retained, pinned, "a vector moved; a deliberate change re-blesses {BUDGET_VECTORS}");
+    // Every one fits a single RPC frame, so the frame's byte ceiling alone
+    // stops none of them.
+    for (name, bytes) in &vectors {
+        assert!(bytes.len() <= RPC_FRAME_DEFAULT as usize, "{name}: {} bytes", bytes.len());
+    }
+}
+
+/// The retained budget vectors, each payload's length and SHA-256.
+const BUDGET_VECTORS: &str = "tests/vectors/budget.nuon";
+
 /// The wire's schema: every public type bitcode encodes in the protocol and
-/// nuval, read from their source, with the canonical form its ID hashes.
+/// nuval, read from their source as the NUON tables `Schema.nutype` types,
+/// with the canonical form its ID hashes.
 mod schema {
     use std::collections::BTreeMap;
     use std::path::Path;
 
-    use serde_json::{Value, json};
+    use nuval::{NuVal, NuonStyle};
     use sha2::{Digest, Sha256};
     use syn::punctuated::Punctuated;
     use syn::{Meta, Token};
 
+    use super::golden::row;
+
     /// The checked-in schema, under the protocol crate.
-    pub const FILE: &str = "schema/v1.json";
+    pub const FILE: &str = "schema/v1.nuon";
+
+    /// The schema's model, beside it.
+    pub const MODEL: &str = "schema/Schema.nutype";
 
     /// The crates whose source declares the wire's own types, by directory.
     const CRATES: [&str; 2] = ["protocol", "nuval"];
@@ -277,12 +440,23 @@ mod schema {
     /// where a field names them.
     const DATUM: &str = "../../../common/crates/sourcetrait_datum/src";
 
+    /// A field: its name, a tuple's by position, and its type as written.
+    type Field = (String, String);
+
+    /// What the source declares under a name.
+    #[derive(Clone)]
+    enum Shape {
+        Struct { generics: Vec<String>, fields: Vec<Field> },
+        Enum { generics: Vec<String>, variants: Vec<(String, Vec<Field>)> },
+        Alias { generics: Vec<String>, ty: String },
+    }
+
     /// A schema's records by name.
-    type Records = BTreeMap<String, Value>;
+    type Records = BTreeMap<String, Shape>;
 
     /// The schema as the source declares it: each type, and each alias and
-    /// datum type the types' fields reach.
-    pub fn generate() -> Value {
+    /// datum type the types' fields reach, as `Schema.nutype`'s tables.
+    pub fn generate() -> NuVal {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut types = Records::new();
         let mut reachable = Records::new();
@@ -298,90 +472,94 @@ mod schema {
         }
         let mut aliases = Records::new();
         for (name, shape) in reach(&types, &reachable) {
-            match shape.get("kind") {
-                Some(_) => record(&mut types, name, shape),
-                None => record(&mut aliases, name, shape),
+            match shape {
+                Shape::Alias { .. } => record(&mut aliases, name, shape),
+                _ => record(&mut types, name, shape),
             }
         }
-        json!({
-            "aliases": Value::Object(aliases.into_iter().collect()),
-            "types": Value::Object(types.into_iter().collect()),
-        })
+        tables(&types, &aliases)
+    }
+
+    /// The four tables: aliases, types, enums' variants, and every field.
+    fn tables(types: &Records, aliases: &Records) -> NuVal {
+        let text = |s: &str| NuVal::String(s.to_string());
+        let alias_rows = aliases
+            .iter()
+            .filter_map(|(name, shape)| match shape {
+                Shape::Alias { generics, ty } => {
+                    Some(row([("name", text(name)), ("generics", text(&generics.join(","))), ("type", text(ty))]))
+                }
+                _ => None,
+            })
+            .collect();
+        let field_row = |owner: &str, variant: Option<&str>, index: usize, (name, ty): &Field| {
+            row([
+                ("owner", text(owner)),
+                ("variant", variant.map_or(NuVal::Nothing, text)),
+                ("index", NuVal::Int(index as i64)),
+                ("name", text(name)),
+                ("type", text(ty)),
+            ])
+        };
+        let (mut type_rows, mut variant_rows, mut field_rows) = (Vec::new(), Vec::new(), Vec::new());
+        for (name, shape) in types {
+            let type_row = |kind: &str, generics: &[String]| {
+                row([("name", text(name)), ("kind", text(kind)), ("generics", text(&generics.join(",")))])
+            };
+            match shape {
+                Shape::Struct { generics, fields } => {
+                    type_rows.push(type_row("struct", generics));
+                    field_rows.extend(fields.iter().enumerate().map(|(i, f)| field_row(name, None, i, f)));
+                }
+                Shape::Enum { generics, variants } => {
+                    type_rows.push(type_row("enum", generics));
+                    for (index, (variant, fields)) in variants.iter().enumerate() {
+                        variant_rows.push(row([
+                            ("owner", text(name)),
+                            ("index", NuVal::Int(index as i64)),
+                            ("name", text(variant)),
+                        ]));
+                        field_rows
+                            .extend(fields.iter().enumerate().map(|(i, f)| field_row(name, Some(variant), i, f)));
+                    }
+                }
+                Shape::Alias { .. } => {}
+            }
+        }
+        NuVal::Record(vec![
+            ("aliases".into(), NuVal::List(alias_rows)),
+            ("types".into(), NuVal::List(type_rows)),
+            ("variants".into(), NuVal::List(variant_rows)),
+            ("fields".into(), NuVal::List(field_rows)),
+        ])
     }
 
     /// The SHA-256 of a schema text's canonical form.
     pub fn id(text: &str) -> [u8; 32] {
-        let value: Value = serde_json::from_str(text).expect("the schema's JSON");
+        let value = NuVal::from_nuon(text).expect("the schema's NUON");
         let mut id = [0u8; 32];
         id.copy_from_slice(&Sha256::digest(canonical(&value).as_bytes()));
         id
     }
 
-    /// The form the ID hashes: keys sorted, no whitespace, UTF-8.
-    pub fn canonical(value: &Value) -> String {
-        let mut out = String::new();
-        write(value, false, 0, &mut out);
-        out
+    /// The form the ID hashes: raw NUON with every record's keys sorted, the
+    /// text nushell's `to nuon --raw` writes for the same value.
+    pub fn canonical(value: &NuVal) -> String {
+        sorted(value).to_nuon(NuonStyle::Raw)
     }
 
-    /// The checked-in form: the canonical order, two-space indents, LF, and
-    /// a record holding nothing nested on one line.
-    pub fn pretty(value: &Value) -> String {
-        let mut out = String::new();
-        write(value, true, 0, &mut out);
-        out.push('\n');
-        out
-    }
-
-    /// One value, its objects' keys sorted.
-    fn write(value: &Value, pretty: bool, depth: usize, out: &mut String) {
-        let entries: Vec<(Option<&String>, &Value)> = match value {
-            Value::Object(map) => {
-                let mut keys: Vec<&String> = map.keys().collect();
-                keys.sort();
-                keys.into_iter().map(|k| (Some(k), &map[k])).collect()
+    /// The value with every record's keys sorted.
+    fn sorted(value: &NuVal) -> NuVal {
+        match value {
+            NuVal::Record(entries) => {
+                let mut entries: Vec<(String, NuVal)> =
+                    entries.iter().map(|(key, value)| (key.clone(), sorted(value))).collect();
+                entries.sort_by(|a, b| a.0.cmp(&b.0));
+                NuVal::Record(entries)
             }
-            Value::Array(items) => items.iter().map(|v| (None, v)).collect(),
-            scalar => {
-                out.push_str(&serde_json::to_string(scalar).expect("a scalar"));
-                return;
-            }
-        };
-        let (open, close) = if value.is_object() { ('{', '}') } else { ('[', ']') };
-        let filled = |v: &Value| match v {
-            Value::Object(map) => !map.is_empty(),
-            Value::Array(items) => !items.is_empty(),
-            _ => false,
-        };
-        let lines = pretty && entries.iter().any(|(_, v)| filled(v));
-        let indent = |out: &mut String, depth: usize| {
-            out.push('\n');
-            out.push_str(&"  ".repeat(depth));
-        };
-        out.push(open);
-        for (i, (key, item)) in entries.iter().enumerate() {
-            if i > 0 {
-                out.push(',');
-                if pretty && !lines {
-                    out.push(' ');
-                }
-            }
-            if lines {
-                indent(out, depth + 1);
-            }
-            if let Some(key) = key {
-                out.push_str(&serde_json::to_string(key).expect("a key"));
-                out.push(':');
-                if pretty {
-                    out.push(' ');
-                }
-            }
-            write(item, pretty, depth + 1, out);
+            NuVal::List(items) => NuVal::List(items.iter().map(sorted).collect()),
+            other => other.clone(),
         }
-        if lines {
-            indent(out, depth);
-        }
-        out.push(close);
     }
 
     /// The file's items, its child modules' files under `dir`.
@@ -409,33 +587,24 @@ mod schema {
                 }
                 syn::Item::Struct(s) if is_public(&s.vis) && on_wire(&s.attrs) => {
                     let name = s.ident.to_string();
-                    let shape = json!({
-                        "kind": "struct",
-                        "generics": generics(&s.generics),
-                        "fields": fields(&s.fields, &name),
-                    });
+                    let shape = Shape::Struct { generics: generics(&s.generics), fields: fields(&s.fields, &name) };
                     record(types, name, shape);
                 }
                 syn::Item::Enum(e) if is_public(&e.vis) && on_wire(&e.attrs) => {
                     let name = e.ident.to_string();
-                    let variants: Vec<Value> = e
+                    let variants = e
                         .variants
                         .iter()
                         .map(|v| {
                             let variant = format!("{name}::{}", v.ident);
                             fixed(&v.attrs, &variant);
-                            json!({"name": v.ident.to_string(), "fields": fields(&v.fields, &variant)})
+                            (v.ident.to_string(), fields(&v.fields, &variant))
                         })
                         .collect();
-                    let shape = json!({
-                        "kind": "enum",
-                        "generics": generics(&e.generics),
-                        "variants": variants,
-                    });
-                    record(types, name, shape);
+                    record(types, name, Shape::Enum { generics: generics(&e.generics), variants });
                 }
                 syn::Item::Type(t) if is_public(&t.vis) => {
-                    let shape = json!({"generics": generics(&t.generics), "type": render(&t.ty)});
+                    let shape = Shape::Alias { generics: generics(&t.generics), ty: render(&t.ty) };
                     record(aliases, t.ident.to_string(), shape);
                 }
                 _ => {}
@@ -444,7 +613,7 @@ mod schema {
     }
 
     /// Records a type or an alias by its name, which the schema keeps unique.
-    fn record(records: &mut Records, name: String, shape: Value) {
+    fn record(records: &mut Records, name: String, shape: Shape) {
         if records.insert(name.clone(), shape).is_some() {
             panic!("{name} is declared twice; the schema names each type once");
         }
@@ -469,15 +638,13 @@ mod schema {
     }
 
     /// Every type a record names: an alias's own, a type's fields'.
-    fn named(shape: &Value) -> Vec<String> {
-        let types = |fields: &Value| -> Vec<String> {
-            let fields = fields.as_array().expect("fields");
-            fields.iter().map(|f| f["type"].as_str().expect("a type").to_string()).collect()
-        };
-        match (&shape["type"], &shape["variants"]) {
-            (Value::String(ty), _) => vec![ty.clone()],
-            (_, Value::Array(variants)) => variants.iter().flat_map(|v| types(&v["fields"])).collect(),
-            _ => types(&shape["fields"]),
+    fn named(shape: &Shape) -> Vec<String> {
+        match shape {
+            Shape::Alias { ty, .. } => vec![ty.clone()],
+            Shape::Struct { fields, .. } => fields.iter().map(|(_, ty)| ty.clone()).collect(),
+            Shape::Enum { variants, .. } => {
+                variants.iter().flat_map(|(_, fields)| fields.iter().map(|(_, ty)| ty.clone())).collect()
+            }
         }
     }
 
@@ -565,7 +732,7 @@ mod schema {
     }
 
     /// Each field bitcode encodes, in order, by name or by position.
-    fn fields(fields: &syn::Fields, owner: &str) -> Vec<Value> {
+    fn fields(fields: &syn::Fields, owner: &str) -> Vec<Field> {
         fields
             .iter()
             .enumerate()
@@ -573,7 +740,7 @@ mod schema {
                 let name = f.ident.as_ref().map_or_else(|| i.to_string(), ToString::to_string);
                 let what = format!("{owner}.{name}");
                 fixed(&f.attrs, &what);
-                (!skipped(&f.attrs, &what)).then(|| json!({"name": name, "type": render(&f.ty)}))
+                (!skipped(&f.attrs, &what)).then(|| (name, render(&f.ty)))
             })
             .collect()
     }
@@ -655,14 +822,7 @@ mod schema {
 #[test]
 fn the_schema_records_every_public_wire_type_as_the_source_declares_it() {
     let generated = schema::generate();
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(schema::FILE);
-    if std::env::var("BLESS").as_deref() == Ok("1") {
-        std::fs::create_dir_all(path.parent().expect("the schema's directory")).expect("created");
-        std::fs::write(&path, schema::pretty(&generated)).expect("the schema written");
-    }
-    let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {}: {e}; BLESS=1 writes it", schema::FILE));
-    let file: serde_json::Value = serde_json::from_str(&text).expect("the schema's JSON");
+    let file = golden::read(schema::FILE, schema::MODEL, &generated);
     assert_eq!(
         schema::canonical(&file),
         schema::canonical(&generated),
@@ -676,11 +836,11 @@ fn the_schema_id_is_the_hash_of_the_schema_s_canonical_form() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(schema::FILE);
     let text = std::fs::read_to_string(&path).expect("the schema");
     let id = schema::id(&text);
-    // A checkout's line endings, and the file's spacing and key order, change
-    // its bytes but never its ID.
+    // A checkout's line endings, and the file's layout, change its bytes but
+    // never its ID.
     assert_eq!(schema::id(&text.replace('\n', "\r\n")), id);
-    let file: serde_json::Value = serde_json::from_str(&text).expect("the schema's JSON");
-    assert_eq!(schema::id(&serde_json::to_string(&file).expect("compact")), id);
+    let file = NuVal::from_nuon(&text).expect("the schema's NUON");
+    assert_eq!(schema::id(&file.to_nuon(nuval::NuonStyle::Raw)), id);
     let hex: String = id.iter().map(|b| format!("{b:02x}")).collect();
     assert_eq!(SCHEMA_ID, id, "the checked-in schema's ID is {hex}");
 }

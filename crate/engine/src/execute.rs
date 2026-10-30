@@ -29,8 +29,8 @@ const KIND_CIRCULAR_IMPORT: &str = "module::circular_import";
 #[derive(Debug, Clone)]
 pub struct ExecuteDef {
     pub lane: Lane,
-    pub data_type: NuTypedef,
-    pub result_type: NuTypedef,
+    pub data_type: NuType,
+    pub result_type: NuType,
     pub takes_timeout: bool,
 }
 
@@ -185,8 +185,8 @@ pub fn analyze_definition(
 /// What a signature holding to the contract declares: its data, return, timeout.
 #[derive(Debug, Clone)]
 pub struct SignatureContract {
-    pub data_type: NuTypedef,
-    pub result_type: NuTypedef,
+    pub data_type: NuType,
+    pub result_type: NuType,
     pub takes_timeout: bool,
 }
 

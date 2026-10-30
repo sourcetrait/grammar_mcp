@@ -17,12 +17,14 @@ the identity changes with it, and an old peer refuses the new one.
 
 ## const SCHEMA_ID
 The hellos name it, and v1 requires exact agreement, as with the codec. It is
-the SHA-256 of the schema's canonical form, keys sorted and no whitespace, not
-of the file's bytes, so a checkout's line endings and the file's spacing never
-change it. `tests/framing.rs` generates `schema/v1.json` from source with syn:
-every public type bitcode encodes in the protocol and nuval, each struct's
-fields and each enum's variants in order with their types, then the aliases
-and datum's types those fields reach, a field bitcode skips left out. The
+the SHA-256 of the schema's raw NUON with every record's keys sorted, the text
+nushell's `to nuon --raw` writes for the same value, not of the file's bytes,
+so a checkout's line endings and the file's layout never change it, and
+nushell checks it in one line. `tests/framing.rs` generates `schema/v1.nuon`
+from source with syn, as the four flat tables `schema/Schema.nutype` types:
+every public type bitcode encodes in the protocol and nuval, its variants and
+every field in declaration order with their types, then the aliases and
+datum's types those fields reach, a field bitcode skips left out. The
 generator refuses what would let the layout change unseen: a cfg on a field
 or a variant, an array length other than a literal, and a hand-written bitcode
 impl. `BLESS=1` rewrites the file, and the constant then takes the new ID. It

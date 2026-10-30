@@ -15,7 +15,7 @@ fn table(fields: Vec<(&str, nu::SyntaxShape)>) -> nu::SyntaxShape {
     nu::SyntaxShape::Table(columns(fields))
 }
 
-fn data(shape: nu::SyntaxShape) -> NuTypedef {
+fn data(shape: nu::SyntaxShape) -> NuType {
     data_typedef(&shape).expect("a data type")
 }
 
@@ -132,7 +132,7 @@ fn a_signature_group_spells_its_typedef_compactly() {
     assert_eq!(signature_group(&refs), "<refs:list<string>>");
     let rows = data(table(vec![("n", nu::SyntaxShape::Int), ("p", nu::SyntaxShape::Filepath)]));
     assert_eq!(signature_group(&rows), "<table<n:int,p:path>>");
-    assert_eq!(signature_group(&NuTypedef::Nothing), "<nothing>");
+    assert_eq!(signature_group(&NuType::Nothing), "<nothing>");
     let nested = data(record(vec![
         (
             "u",
@@ -161,7 +161,7 @@ fn the_contract_refuses_an_open_top_any_and_a_list_of_tables() {
 /// data: `nothing` stands as the return itself and nested in one.
 #[test]
 fn a_return_is_nothing_a_record_or_a_table() {
-    assert_eq!(result_typedef(&nu::Type::Nothing), Ok(NuTypedef::Nothing));
+    assert_eq!(result_typedef(&nu::Type::Nothing), Ok(NuType::Nothing));
     let nullable = nu::Type::Record(
         vec![("u".to_string(), nu::Type::one_of([nu::Type::Int, nu::Type::Nothing]))].into(),
     );
@@ -171,7 +171,7 @@ fn a_return_is_nothing_a_record_or_a_table() {
     );
     let quiet = signature(nu::SyntaxShape::Nothing, nu::Type::Nothing);
     let held = contract_signature(&quiet, "main").expect("a nothing return holds");
-    assert_eq!(held.result_type, NuTypedef::Nothing);
+    assert_eq!(held.result_type, NuType::Nothing);
     assert_eq!(
         result_typedef(&nu::Type::List(Box::new(nu::Type::Int))),
         Err("typed `nothing`, `record<...>`, or `table<...>`, not `list<int>`".to_string()),

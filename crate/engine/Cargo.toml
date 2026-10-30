@@ -25,16 +25,15 @@ nu-cmd-plugin.workspace = true
 nu-command.workspace = true
 nu-config.workspace = true
 nu-engine.workspace = true
-nu-json.workspace = true
 nu-parser.workspace = true
 nu-plugin-engine.workspace = true
 nu-protocol.workspace = true
 nu-std.workspace = true
 nuon.workspace = true
+nutype = { workspace = true, features = ["nushell"] }
 nuval = { workspace = true, features = ["nushell"] }
 rkyv.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 tokio.workspace = true
 
 sourcetrait_common.workspace = true

@@ -98,7 +98,7 @@ fn prepare_execute(
 /// A request's data held to its typedef, answered as its source's literal.
 fn hold_data(
     data: &str,
-    typedef: &NuTypedef,
+    typedef: &NuType,
     holder: &str,
 ) -> EngineResult<String> {
     let invalid = |reason: String| EngineError::DataInvalid { reason };

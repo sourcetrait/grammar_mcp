@@ -2,12 +2,14 @@
 //! the round trips, malformed bytes refused, and the wire's bounds.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 use sourcetrait_grammar_protocol::*;
 
+#[path = "support/golden.rs"]
+mod golden;
+
 /// The golden vectors' file, every vector's bitcode bytes in hex.
-const GOLDEN: &str = "tests/vectors/value.json";
+const GOLDEN: &str = "tests/vectors/value.nuon";
 
 fn int_range(start: i64, step: i64, end: Bounded<i64>) -> NuVal {
     NuVal::Range(RangeData::Int(TypedRangeData { start, step, end }))
@@ -168,11 +170,6 @@ fn errors() -> Vec<(&'static str, NuValError)> {
     ]
 }
 
-/// Bytes as lowercase hex.
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
 /// Every vector's name and its encoding.
 fn encoded() -> BTreeMap<String, Vec<u8>> {
     let values = values().into_iter().map(|(n, v)| (format!("value/{n}"), bitcode::encode(&v)));
@@ -182,17 +179,9 @@ fn encoded() -> BTreeMap<String, Vec<u8>> {
 
 #[test]
 fn every_vector_encodes_to_its_golden_bytes() {
-    let actual: BTreeMap<String, String> =
-        encoded().into_iter().map(|(name, bytes)| (name, hex(&bytes))).collect();
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(GOLDEN);
-    if std::env::var("BLESS").as_deref() == Ok("1") {
-        let text = serde_json::to_string_pretty(&actual).expect("JSON");
-        std::fs::write(&path, format!("{text}\n")).expect("the golden written");
-    }
-    let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {GOLDEN}: {e}; BLESS=1 writes it"));
-    let golden: BTreeMap<String, String> = serde_json::from_str(&text).expect("the golden's JSON");
-    assert_eq!(actual, golden, "an encoding moved; a deliberate change re-blesses {GOLDEN}");
+    let actual = golden::hex_table(encoded());
+    let golden = golden::read(GOLDEN, golden::VECTORS_MODEL, &actual);
+    assert_eq!(golden, actual, "an encoding moved; a deliberate change re-blesses {GOLDEN}");
 }
 
 #[test]

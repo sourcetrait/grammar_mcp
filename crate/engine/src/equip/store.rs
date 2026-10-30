@@ -9,13 +9,100 @@ pub struct RigIndex {
     pub modules: Vec<IndexModule>,
 }
 
-/// A call's index entry: its name and its contract's typedefs.
+/// A call's index entry: its name and its contract's types.
 #[derive(Debug, Clone, ser::Serialize, ser::Deserialize)]
 pub struct IndexFunction {
     pub name: String,
-    pub data_type: NuTypedef,
-    pub result_type: NuTypedef,
+    #[serde(deserialize_with = "stored_type")]
+    pub data_type: NuType,
+    #[serde(deserialize_with = "stored_type")]
+    pub result_type: NuType,
     pub takes_timeout: bool,
+}
+
+/// A stored type: its text, or the structure an earlier build wrote.
+#[derive(ser::Deserialize)]
+#[serde(untagged)]
+enum StoredType {
+    Text(NuType),
+    Earlier(EarlierType),
+}
+
+/// An index type as an earlier build wrote it, read so its index loads
+/// until the rig is committed again.
+#[derive(ser::Deserialize)]
+enum EarlierType {
+    Scalar(EarlierScalar),
+    Nothing,
+    Record { fields: Vec<EarlierField> },
+    Oneof { members: Vec<EarlierType> },
+    Table { columns: Vec<EarlierField> },
+    List { element: Box<EarlierType> },
+}
+
+/// An earlier build's scalar.
+#[derive(ser::Deserialize)]
+enum EarlierScalar {
+    Int,
+    Float,
+    String,
+    Bool,
+    Datetime,
+    Duration,
+    Filesize,
+    Binary,
+    Range,
+    Number,
+    Glob,
+    CellPath,
+    Path,
+    Directory,
+}
+
+/// An earlier build's field or column.
+#[derive(ser::Deserialize)]
+struct EarlierField {
+    name: String,
+    typedef: EarlierType,
+}
+
+impl From<EarlierType> for NuType {
+    fn from(earlier: EarlierType) -> Self {
+        let fields = |fields: Vec<EarlierField>| -> Vec<NuField> {
+            fields.into_iter().map(|f| NuField::new(f.name, f.typedef.into())).collect()
+        };
+        match earlier {
+            EarlierType::Nothing => NuType::Nothing,
+            EarlierType::Record { fields: f } => NuType::Record(fields(f)),
+            EarlierType::Table { columns } => NuType::Table(fields(columns)),
+            EarlierType::Oneof { members } => NuType::OneOf(members.into_iter().map(Into::into).collect()),
+            EarlierType::List { element } => NuType::List(Box::new((*element).into())),
+            EarlierType::Scalar(scalar) => match scalar {
+                EarlierScalar::Int => NuType::Int,
+                EarlierScalar::Float => NuType::Float,
+                EarlierScalar::String => NuType::String,
+                EarlierScalar::Bool => NuType::Bool,
+                EarlierScalar::Datetime => NuType::Date,
+                EarlierScalar::Duration => NuType::Duration,
+                EarlierScalar::Filesize => NuType::Filesize,
+                EarlierScalar::Binary => NuType::Binary,
+                EarlierScalar::Range => NuType::Range,
+                EarlierScalar::Number => NuType::Number,
+                EarlierScalar::Glob => NuType::Glob,
+                EarlierScalar::CellPath => NuType::CellPath,
+                EarlierScalar::Path => NuType::Path,
+                EarlierScalar::Directory => NuType::Directory,
+            },
+        }
+    }
+}
+
+/// An index entry's type, its text or an earlier build's structure.
+fn stored_type<'de, D: ser::Deserializer<'de>>(deserializer: D) -> Result<NuType, D::Error> {
+    Ok(match <StoredType as ser::Deserialize>::deserialize(deserializer)? {
+        StoredType::Text(ty) => ty,
+        StoredType::Earlier(earlier) => earlier.into(),
+    })
 }
 
 #[derive(Debug, Clone, ser::Serialize, ser::Deserialize)]
@@ -376,18 +463,12 @@ pub(crate) fn is_valid_module_path(s: &str) -> bool {
 
 /// Render a kind's index as NUON - the house format for anything we persist.
 pub(crate) fn meta_to_nuon<T: ser::Serialize>(meta: &T) -> Result<String, String> {
-    let json = json::to_value(meta).map_err(|e| e.to_string())?;
-    let value = json_value_to_nu_value(&json);
-    nu::to_nuon(&nu::EngineState::new(), &value, nu::ToNuonConfig::default())
-        .map_err(|e| e.to_string())
+    nuval::to_nuon(meta, NuonStyle::Default).map_err(|e| e.to_string())
 }
 
 /// Parse a kind's index back out of NUON, the mirror of `meta_to_nuon`.
 fn meta_from_nuon<T: ser::DeserializeOwned>(text: &str) -> Result<T, String> {
-    let value = nu::from_nuon(text, None).map_err(|e| e.to_string())?;
-    let json_compat = nu::JsonValue::from_value(value).map_err(|e| e.to_string())?;
-    let json = json::to_value(&json_compat).map_err(|e| e.to_string())?;
-    json::from_value(json).map_err(|e| e.to_string())
+    nuval::from_nuon(text).map_err(|e| e.to_string())
 }
 
 pub(crate) fn index_to_nuon(index: &RigIndex) -> Result<String, String> {

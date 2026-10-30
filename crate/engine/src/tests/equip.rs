@@ -11,7 +11,7 @@ fn columns(fields: Vec<(&str, nu::SyntaxShape)>) -> nu::CollectionColumns<nu::Sy
 }
 
 /// A data typedef with a path, an open record, and a oneof holding `nothing`.
-fn wide_data() -> NuTypedef {
+fn wide_data() -> NuType {
     data_typedef(&nu::SyntaxShape::Record(columns(vec![
         ("n", nu::SyntaxShape::Int),
         ("p", nu::SyntaxShape::Filepath),
@@ -25,7 +25,7 @@ fn wide_data() -> NuTypedef {
 }
 
 /// A return typedef with a table, a list column, and a nested record.
-fn wide_result() -> NuTypedef {
+fn wide_result() -> NuType {
     let row = vec![
         ("name".to_string(), nu::Type::String),
         ("tags".to_string(), nu::Type::List(Box::new(nu::Type::String))),
@@ -56,8 +56,8 @@ fn the_index_round_trips_through_nuon_across_the_type_grammar() {
             functions: vec![
                 IndexFunction {
                     name: "quiet".to_string(),
-                    data_type: NuTypedef::Nothing,
-                    result_type: NuTypedef::Nothing,
+                    data_type: NuType::Nothing,
+                    result_type: NuType::Nothing,
                     takes_timeout: false,
                 },
                 IndexFunction {
@@ -88,8 +88,8 @@ fn the_index_round_trips_through_nuon_across_the_type_grammar() {
     let m = &back.modules[0];
     assert_eq!(m.name, "m");
     assert_eq!(m.modules[0].name, "deep", "module nesting survives");
-    assert_eq!(m.functions[0].data_type, NuTypedef::Nothing, "`nothing` survives as data");
-    assert_eq!(m.functions[0].result_type, NuTypedef::Nothing, "and as a return");
+    assert_eq!(m.functions[0].data_type, NuType::Nothing, "`nothing` survives as data");
+    assert_eq!(m.functions[0].result_type, NuType::Nothing, "and as a return");
     assert!(!m.functions[0].takes_timeout);
     assert_eq!(
         m.functions[1].data_type,
@@ -110,6 +110,22 @@ fn the_index_round_trips_through_nuon_across_the_type_grammar() {
 fn a_malformed_index_fails_to_parse() {
     assert!(index_from_nuon("{not: valid").is_err(), "truncated NUON");
     assert!(index_from_nuon("[1 2 3]").is_err(), "a list is not an index record");
+}
+
+/// An index the previous build wrote, its types in the structure it
+/// serialized, loads with them read as nutype's, so a rig keeps answering
+/// until it is committed again.
+#[test]
+fn an_earlier_typed_index_still_loads() {
+    let earlier = "{source_path: \"/tmp/proj/thing/rig\", functions: \
+                   [[name, data_type, result_type, takes_timeout]; \
+                   [log, {Record: {fields: [[name, typedef]; [refs, {List: {element: {Scalar: String}}}]]}}, \
+                   Nothing, false]], modules: []}";
+    let index = index_from_nuon(earlier).expect("an earlier index loads");
+    assert_eq!(index.functions[0].data_type.to_inline(), "record<refs: list<string>>");
+    assert_eq!(index.functions[0].result_type, NuType::Nothing);
+    let again = index_from_nuon(&index_to_nuon(&index).expect("written")).expect("read back");
+    assert_eq!(again.functions[0].data_type, index.functions[0].data_type, "rewritten as type text");
 }
 
 /// An index an older build wrote, its entries carrying JSON schemas, as a

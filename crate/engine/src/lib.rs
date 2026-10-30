@@ -128,13 +128,12 @@ pub(crate) mod nu {
     pub(crate) use nu_engine::eval_block;
     pub(crate) use nu_engine::CallExt;
     pub(crate) use nu_engine::command_prelude::Call;
-    pub(crate) use nu_json::Value as JsonValue;
     pub(crate) use nu_parser::parse;
     pub(crate) use nu_parser::{FlatShape, flatten_block};
     pub(crate) use nu_plugin_engine::load_plugin_file;
     pub(crate) use nu_protocol::{
         BlockId, ByteStreamSource, ByteStreamType, Category, CollectionColumns, Config, DeclId,
-        FromValue, IntoValue, Module, PipelineData, PluginRegistryFile, Example,
+        IntoValue, Module, PipelineData, PluginRegistryFile, Example,
         PluginRegistryItemData, Record, ShellError, Signals, Signature, Span, SyntaxShape, Type,
         Value, record, write_all_and_flush,
         ast::{
@@ -150,14 +149,16 @@ pub(crate) mod nu {
     pub(crate) use nuon::{ToNuonConfig, from_nuon, to_nuon};
 }
 
-pub(crate) use nu::{CallExt, FromValue, IntoValue};
+pub(crate) use nu::{CallExt, IntoValue};
 
-pub(crate) use nuval::{NuVal, TryFromNu, wide};
+pub(crate) use nutype::{NuField, NuType, NuTypeError};
+
+pub(crate) use nuval::{NuVal, NuonStyle, TryFromNu, wide};
 
 pub(crate) use sourcetrait_common::{agnostic, cereal, datum, subsys};
 
 pub(crate) mod ser {
-    pub(crate) use ::serde::{Deserialize, Serialize, de::DeserializeOwned};
+    pub(crate) use ::serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned};
 }
 
 pub(crate) mod tk {
@@ -170,10 +171,6 @@ pub(crate) mod tk {
         },
         time::{Duration as TkDuration, timeout},
     };
-}
-
-pub(crate) mod json {
-    pub(crate) use serde_json::{from_value, to_value};
 }
 
 pub use crate::{
@@ -207,7 +204,7 @@ pub use crate::{
     params::{EngineParams, init},
     parse_engine::{LintEngine, ParseEngine, file_start, span_text, wrap_as_module},
     plugins::{ensure_plugin_registry, list_registered_plugins},
-    schema::{NuTypedef, check_value, typedef_text},
+    schema::{check_value, typedef_text},
     system::{EngineHandle, EngineSysConfig, EngineSysParams, EngineSysPaths, EngineSystem},
     template::{build_call_source, build_execute_source},
 };
