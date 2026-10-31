@@ -94,8 +94,9 @@ fn bitcode_codec_round_trips_the_send_frames() {
 /// is on the wire.
 #[test]
 fn bitcode_codec_refuses_a_frame_inflating_past_its_cap() {
+    use crate::server::remote::codec::REMOTE_INFLATED_MAX;
     use crate::tku::{Bytes, BytesMut, Decoder, Encoder, LengthDelimitedCodec};
-    use crate::{BitcodeCodec, InitiatorToAcceptor, REMOTE_INFLATED_MAX};
+    use crate::{BitcodeCodec, InitiatorToAcceptor};
 
     let zeros = vec![0u8; REMOTE_INFLATED_MAX as usize + 1];
     let compressed = zstd::encode_all(zeros.as_slice(), 19).expect("compressed");
@@ -161,7 +162,8 @@ fn both_wire_enums_encode_the_shared_frames_alike() {
 /// before any of its frames is queued.
 #[test]
 fn a_send_past_the_inflated_cap_is_refused_before_it_is_queued() {
-    use crate::{REMOTE_INFLATED_MAX, push_frames, tk};
+    use crate::server::remote::{codec::REMOTE_INFLATED_MAX, link::push_frames};
+    use crate::tk;
 
     let (msg_tx, mut msg_rx) = tk::unbounded_channel();
     let (file_tx, mut file_rx) = tk::unbounded_channel();
@@ -186,7 +188,8 @@ fn a_send_past_the_inflated_cap_is_refused_before_it_is_queued() {
 /// before any of its frames is queued.
 #[test]
 fn a_send_past_the_decode_budget_is_refused_before_it_is_queued() {
-    use crate::{DECODE_BUDGET_DEFAULT, push_frames, tk};
+    use crate::server::remote::link::push_frames;
+    use crate::{DECODE_BUDGET_DEFAULT, tk};
 
     let (msg_tx, mut msg_rx) = tk::unbounded_channel();
     let (file_tx, mut file_rx) = tk::unbounded_channel();
@@ -212,8 +215,9 @@ fn a_send_past_the_decode_budget_is_refused_before_it_is_queued() {
 /// cap: the wire's ceiling is zstd's bound for the inflated cap.
 #[test]
 fn a_frame_the_check_passes_crosses_the_codec_whole() {
+    use crate::server::remote::codec::REMOTE_INFLATED_MAX;
     use crate::tku::{BytesMut, Decoder, Encoder};
-    use crate::{BitcodeCodec, FileFrame, InitiatorToAcceptor, REMOTE_INFLATED_MAX, check_outbound};
+    use crate::{BitcodeCodec, FileFrame, InitiatorToAcceptor, check_outbound};
 
     let mut state = 0x9e37_79b9_7f4a_7c15u64;
     let bytes: Vec<u8> = (0..REMOTE_INFLATED_MAX as usize - 64)
