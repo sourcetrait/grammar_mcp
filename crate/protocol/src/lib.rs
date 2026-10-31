@@ -90,8 +90,9 @@ pub use crate::{
         HungEngineThreadEmergency, Observation, RamWarningEmergency, VramWarningEmergency,
     },
     peer::{
-        MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT, RemoteChannelEvent,
-        RemoteChannelRow, RemoteFailure, RemoteLinkState, RemoteListenResult,
+        MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT, PEER_ID_MAX, REMOTE_COMMANDS,
+        RemoteChannelEvent, RemoteChannelRow, RemoteFailure, RemoteLinkState, RemoteListenResult,
+        RemotePacket, RemoteResult, valid_peer_id,
     },
     operation::{
         Admission, AdmissionOutcome, Execute, OperationEvent, OperationState, OperationStatus,

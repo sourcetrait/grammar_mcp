@@ -332,6 +332,7 @@ fn replies() -> Vec<(&'static str, RuntimeReply)> {
         ),
         ("artifact", RuntimeReply::Artifact(ArtifactReply::Described(description()))),
         ("refused", RuntimeReply::Refused(RuntimeError::ChannelNotOpen)),
+        ("remote", RuntimeReply::Remote(RemoteResult::Listening(RemoteListenResult { endpoint: "127.0.0.1:7000".into() }))),
     ]
 }
 
@@ -524,9 +525,10 @@ fn every_variant_has_its_vector() {
             RuntimeReply::Channel(_) => "channel",
             RuntimeReply::Artifact(_) => "artifact",
             RuntimeReply::Refused(_) => "refused",
+            RuntimeReply::Remote(_) => "remote",
         })
         .collect();
-    assert_eq!(replies.len(), 8);
+    assert_eq!(replies.len(), 9);
     let notices: BTreeSet<_> = channel()
         .iter()
         .map(|(_, n)| match n {

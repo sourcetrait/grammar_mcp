@@ -47,6 +47,7 @@
   [reply/operation,                         "03000911000001"],
   [reply/policy,                            "040000"],
   [reply/refused,                           "0705"],
+  [reply/remote,                            "08020e3132372e302e302e313a37303030"],
   [request/artifact,                        "0600000767656f2e7461720601093300000000"],
   [request/cancel,                          "0709110000"],
   [request/channel,                         "050000ffffffffffffffff00"],

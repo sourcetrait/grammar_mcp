@@ -15,6 +15,10 @@ pub enum EventPayload {
     Host(HostEvent),
     Emergency(Emergency),
     Lease(LeaseNotice),
+    /// A remote link's lifecycle, or a send's delivery.
+    Remote(RemoteChannelEvent),
+    /// A peer's message, its files the record's artifacts.
+    Relayed(RemotePacket),
 }
 
 /// An artifact an event refers to, and where its frontend delivers it.
@@ -108,6 +112,15 @@ impl EventBacklog {
         payload: EventPayload,
         artifacts: Vec<EventArtifact>,
     ) -> Result<u64, TransportError> {
+        match &payload {
+            EventPayload::Relayed(packet) => packet.check()?,
+            EventPayload::Host(host) if [&host.from, &host.model].iter().any(|s| s.starts_with(REMOTE_RESERVED_PREFIX)) => {
+                return Err(TransportError::InvalidFrame {
+                    reason: "a remote link's packet rides Remote or Relayed, never Host".to_string(),
+                });
+            }
+            _ => {}
+        }
         for artifact in &artifacts {
             check_dest(&artifact.dest).map_err(|e| TransportError::InvalidFrame { reason: e.message() })?;
         }

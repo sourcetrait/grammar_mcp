@@ -126,4 +126,6 @@ pub enum RuntimeReply {
     Artifact(ArtifactReply),
     /// The runtime's refusal, outside the engine.
     Refused(RuntimeError),
+    /// A remote Channel command's typed result.
+    Remote(RemoteResult),
 }

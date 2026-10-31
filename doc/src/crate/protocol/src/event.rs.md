@@ -9,6 +9,11 @@ A generation and the last sequence held contiguously. Sequences start at 1
 each generation, so a cursor's sequence of 0 holds nothing.
 
 ## enum EventPayload
+A host's packet, an operator's emergency, a lease's loss, a remote link's
+lifecycle or delivery report, or a peer's relayed message. The remote two are
+typed, so a frontend renders each in its 0.0.0-9 shape (peer.rs), and appended
+last, so the variants before them keep their wire indices.
+
 ## struct EventArtifact
 ## struct EventRecord
 A record names the Channel epoch it was emitted under, so events left
@@ -31,7 +36,10 @@ Held to the hello's `event_records` and `event_bytes`, the oldest dropped past
 either, apart from the frontend's 1000-packet sync queue. A record past the
 1 MiB event frame is refused when pushed, numbering nothing, and so is one
 whose attachment destination fails `check_dest` (artifact.rs): no event is
-numbered that a frontend on any OS couldn't materialize beneath its inbox.
+numbered that a frontend on any OS couldn't materialize beneath its inbox. A
+relay is held to `RemotePacket::check`, and a host packet whose origin or model
+lies under `remote/` is refused: a remote link's packets ride `Remote` or
+`Relayed`, so none poses as another.
 ### fn read
 A cursor of another generation reads a reset and then the new generation from
 its oldest; one whose next sequence was dropped reads a gap first; one past

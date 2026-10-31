@@ -206,7 +206,7 @@ pub(crate) use sourcetrait_grammar_protocol::{
     MODEL_UNSENT,
     NOTIFICATION_CAP, PurviewRow, PurviewView, RuntimeError, TransportError,
     REMOTE_RESERVED_PREFIX, RemoteChannelRow, RemoteLinkState, RemoteListenResult,
-    SYNC_QUEUE_CAP, decode_payload, reserved_prefix,
+    SYNC_QUEUE_CAP, decode_payload, reserved_prefix, valid_peer_id,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{

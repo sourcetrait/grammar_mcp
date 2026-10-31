@@ -1,11 +1,5 @@
 #![allow(dead_code)]
 //! Remote links: two known-public-key mTLS connections to one peer.
-//!
-//! One connection carries messages and control, the other files.
-//! `interface remote channel listen` and `connect` open a link on demand; its open
-//! task emits remote/channel/Connected once both connections handshake and
-//! remote/channel/Disconnected when the link ends. A sent packet is emitted on the
-//! receiver's Channel from `remote/channel/<sender_nom>`, its files alongside.
 use crate::*;
 
 /// The client handshake's server name, which the known-public-key match ignores.
@@ -96,6 +90,17 @@ pub(crate) fn safe_dest(dest: &str) -> bool {
             .all(|c| matches!(c, std::path::Component::Normal(_)))
 }
 
+/// A delivery's file beneath `inbox`, none where a peer-named part isn't plain.
+pub(crate) fn delivery_path(
+    inbox: &std::path::Path,
+    peer_nom: &str,
+    id: &str,
+    dest: &str,
+) -> Option<PathBuf> {
+    (valid_peer_id(peer_nom) && valid_peer_id(id) && safe_dest(dest))
+        .then(|| inbox.join(peer_nom).join(id).join(dest))
+}
+
 /// How long a connector's dial may take before the open fails.
 const CONNECT_TIMEOUT: tk::TkDuration = tk::TkDuration::from_secs(20);
 
@@ -132,8 +137,6 @@ pub(crate) async fn connect_remote(
 }
 
 /// Listen for `alias`'s peer on `bind`, answering the address bound.
-///
-/// The pairing goes on behind.
 pub(crate) async fn listen_remote(
     self_mcp_nom: &datum::NomPair,
     alias: String,
@@ -339,8 +342,7 @@ impl RemoteLinkHandle {
     }
 }
 
-/// Queue one send's file chunks, then its Deliver, each checked first as its
-/// peer will read it; a refused frame or a closed queue is an error.
+/// Queue one send's chunks, then its Deliver, each checked as its peer reads it.
 pub(crate) fn push_frames(
     msg_out_tx: &tk::UnboundedSender<MsgFrame>,
     file_out_tx: &tk::UnboundedSender<FileFrame>,
@@ -795,7 +797,8 @@ fn land_file_chunk(
     let inbox = channel_handle()
         .inbox()
         .ok_or_else(|| io::Error::other("the Channel has no inbox"))?;
-    let path = inbox.join(&ctx.peer_nom).join(id).join(dest);
+    let path = delivery_path(&inbox, &ctx.peer_nom, id, dest)
+        .ok_or_else(|| io::Error::other("a delivery's path that isn't beneath the inbox"))?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -920,6 +923,14 @@ fn handle_msg_frame(
         event_nuon,
         files,
     } = frame;
+    if !valid_peer_id(&id) {
+        eprintln!("grammar: remote delivery whose id isn't base62; dropped");
+        return;
+    }
+    if let Some(dest) = files.iter().find(|dest| !safe_dest(dest)) {
+        eprintln!("grammar: remote delivery `{id}` names unsafe dest `{dest}`; dropped");
+        return;
+    }
     record_deliver(recv, &id, DeliverInfo { model, event_nuon }, files);
 }
 
@@ -935,6 +946,10 @@ fn handle_file_frame(
         bytes,
         last,
     } = frame;
+    if !valid_peer_id(&id) {
+        eprintln!("grammar: remote file chunk whose delivery id isn't base62; dropped");
+        return;
+    }
     if !safe_dest(&dest) {
         eprintln!("grammar: remote file chunk for `{id}` has unsafe dest `{dest}`; dropped");
         return;
@@ -976,6 +991,9 @@ async fn connect_conn(
         Some(Err(e)) => return Err(e),
         None => return Err(io_other("peer closed during handshake")),
     };
+    if !valid_peer_id(&remote) {
+        return Err(io_other("peer named a nom that isn't base62"));
+    }
     Ok((remote, framed_read, framed_write))
 }
 
@@ -1117,6 +1135,9 @@ async fn accept_conn(
         Some(Err(e)) => return Err(e),
         None => return Err(io_other("peer closed during handshake")),
     };
+    if !valid_peer_id(&remote) {
+        return Err(io_other("peer named a nom that isn't base62"));
+    }
     framed_write
         .send(AcceptorToInitiator::Hello {
             mcp_nom: self_mcp_nom.as_str().to_string(),

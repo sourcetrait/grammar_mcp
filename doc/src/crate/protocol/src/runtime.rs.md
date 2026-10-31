@@ -43,4 +43,5 @@ the worker it reaches, under the lease that admitted it.
 ## enum RuntimeReply
 `Interface` carries the command's result as typed data the frontend renders as it
 always has; `Refused` carries the runtime's refusal, which the frontend's envelope
-renders through its rows.
+renders through its rows. A remote Channel command answers `Remote` instead, its
+result typed by its shape (peer.rs); it goes last, keeping the indices before it.
