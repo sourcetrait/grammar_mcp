@@ -6,8 +6,8 @@ operator's `emergency.rs`).
 
 ## type EmergencyTx
 Unbounded so no producer ever blocks or back-pressures - the operator's router and the
-Channel's spam classifier both push here, and the volume is low because emission is
-edge-triggered.
+face's pump, which carries the Channel's spam pair, both push here, and the volume is
+low because emission is edge-triggered.
 
 ## fn emergency_model
 `mcp/` IS A RESERVATION. Every host-originated model lives beneath it, which is what
@@ -43,10 +43,12 @@ Open-append-close per line: low volume, and robust against an external truncatio
 between writes. Nothing is buffered to lose.
 
 ## fn announce
-Through `emit`, so it is VERIFICATION-GATED like any other telemetry - an unproven peer
-must not receive host state. A closed or unverified channel silently DROPS the
-announcement, which is correct rather than an error: channels are optional and the log
-already holds the record.
+Through the Channel's gated emit (`EmitRequest`), so it is VERIFICATION-GATED like any
+other telemetry - an unproven peer must not receive host state. A closed or unverified
+channel silently DROPS the announcement, which is correct rather than an error: channels
+are optional and the log already holds the record. The Channel is the running face's,
+reached through the bridge (`server/channel/bridge.rs`) until EmergencyPolicy makes
+the responder its controller's.
 
 No rate limiting is applied or needed. The operator's level gates upstream already bound
 each condition to roughly one report per episode.

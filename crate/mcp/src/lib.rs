@@ -5,9 +5,9 @@ pub(crate) mod run;
 pub(crate) mod server {
     pub(crate) mod cert;
     pub(crate) mod channel {
+        pub(crate) mod bridge;
         pub(crate) mod face;
         pub(crate) mod hub;
-        pub(crate) mod state;
     }
     pub(crate) mod client;
     pub(crate) mod emergency;
@@ -68,8 +68,8 @@ pub(crate) mod server {
     }
     #[cfg(test)]
     mod tests {
-        mod channel;
         mod client;
+        mod face;
         mod emergency;
         mod interface;
         mod remote;
@@ -93,8 +93,8 @@ pub mod guts;
 
 pub(crate) use crate::{
     config::{
-        AGENT_CONFIG_FILE, CONFIG, Config, DEFAULT_NAMESPACE, DenySet, SpamThresholds,
-        TEST_NAMESPACE, config, default_id, default_work_dir, expand_path,
+        AGENT_CONFIG_FILE, CONFIG, Config, DEFAULT_NAMESPACE, DenySet, TEST_NAMESPACE, config,
+        default_id, default_work_dir, expand_path,
     },
     home::{
         TMP_DEFAULT, base_dirs, cache_base_dir, check_base_dirs, data_base_dir, env_dir,
@@ -113,13 +113,12 @@ pub(crate) use crate::{
     server::{
         cert::ensure_cert_profile,
         channel::{
-            face::{ChannelFace, close_channel_for_shutdown, spawn_signal_sweep},
-            hub::{FROM_MCP, open_packet, start as start_channel_hub},
-            state::{
-                ChannelHandle, ChannelSendError, ChannelSyncError, ChannelVerifyError,
-                CloseSignal as ChannelCloseSignal, SpamVerdict, channel_handle, escape_line,
-                event_overflows, event_spill_pointer, mint_msg_id, render_nuon, render_packet,
+            bridge::{Post, host_channel, set_host_channel},
+            face::{
+                ChannelFace, CloseSignal as ChannelCloseSignal, Hub, HubSlot, channel_failed,
+                spawn_signal_sweep,
             },
+            hub::{FROM_MCP, open_packet, start as start_channel_hub},
         },
         client::serve_client,
         emergency::{EmergencyTx, spawn_emergency_responder},
@@ -200,13 +199,21 @@ pub(crate) use sourcetrait_grammar_engine::{
     registered_rig_names, rig_dir, rig_meta_path, typedef_text,
 };
 
+pub(crate) use sourcetrait_grammar_channel::{
+    ChannelHandle, ChannelSendError, ChannelStatus, ChannelSyncError, ChannelSysParams,
+    ChannelSysPaths, ChannelSystem, ChannelVerifyError, CloseHub, CloseRequest, EmitError,
+    EmitRequest, ExpireRequest, FromChannelSys, HostRequest, HubNotice, Line, OpenRequest,
+    ReadyRequest, SendRequest, SendVerdict, SpamThresholds, StatusRequest, StoppedNotice,
+    SyncRequest, ThresholdsRequest, escape_line, event_overflows, event_spill_pointer, mint_msg_id,
+    render_nuon, render_packet,
+};
+
 pub(crate) use sourcetrait_grammar_protocol::{
-    ArtifactError, ChannelPhase, DECODE_BUDGET_DEFAULT, EVENT_BYTES_KEY, EVENT_SPILL_DEST,
-    EVENT_SPILL_KEY, LOCAL_HOST, MAX_FRAME_BYTES, MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT,
-    MODEL_UNSENT,
-    NOTIFICATION_CAP, PurviewRow, PurviewView, RuntimeError, TransportError,
-    REMOTE_RESERVED_PREFIX, RemoteChannelRow, RemoteLinkState, RemoteListenResult,
-    SYNC_QUEUE_CAP, decode_payload, reserved_prefix, valid_peer_id,
+    ArtifactError, ChannelEpoch, ChannelPhase, ChannelSendData, DECODE_BUDGET_DEFAULT,
+    EVENT_SPILL_DEST, EVENT_SPILL_KEY, LOCAL_HOST, MAX_FRAME_BYTES, MODEL_CONNECTED,
+    MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT, PurviewRow, PurviewView, RuntimeError,
+    SpamThresholdsData, TransportError, REMOTE_RESERVED_PREFIX, RemoteChannelRow,
+    RemoteLinkState, RemoteListenResult, decode_payload, reserved_prefix, valid_peer_id,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
@@ -218,7 +225,7 @@ pub(crate) use sourcetrait_grammar_protocol::{
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
-    ChannelSpamErrorEmergency, ChannelSpamWarningEmergency, Emergency, EmergencyKind, Observation,
+    ChannelSpamErrorEmergency, Emergency, EmergencyKind, Observation,
 };
 
 #[cfg(feature = "embedded-cli")]
@@ -228,21 +235,20 @@ pub(crate) use sourcetrait_grammar_operator::{
     install_child_subreaper, pin,
 };
 
-pub(crate) use nuval::{NuonStyle, TryIntoNu, wide};
+pub(crate) use nuval::{NuVal, NuonStyle, TryFromNu, TryIntoNu, wide};
 
 pub(crate) use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
     fs,
     io::{self, Write},
-    hash::{Hash},
     marker::PhantomData,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{PathBuf,Path},
     process,
     sync::{
         Arc, LazyLock, OnceLock,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicU64, Ordering},
     },
     time::{Instant, SystemTime, UNIX_EPOCH},
 };

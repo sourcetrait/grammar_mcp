@@ -2,7 +2,10 @@
 
 The serving MCP of every build. The bare entry serves through it with or
 without `embedded-cli` and under `--test` alike; only `test-driver` reaches the
-in-process engine (`run.rs`, `server/run.rs`).
+in-process engine (`run.rs`, `server/run.rs`). A runtime-owned tool or interface
+command answers the existing envelope with `daemon::unavailable` until the
+native client reaches a runtime; serving never starts an engine or makes engine
+or equip state.
 
 ## struct ClientSh
 The frontend's state alone: the nonce generator, the interface parse's engine,
@@ -15,9 +18,9 @@ to the parse on either entry and a malformed command is refused with the same
 diagnostics.
 
 ### field face
-The Channel's commands and the remote channels', on the process's one Channel
-and its links, through the face the test driver uses too
-(`server/channel/face.rs`).
+The Channel's commands and the remote channels', on the Channel's system the
+face started and the process's links, through the face the test driver uses
+too (`server/channel/face.rs`).
 
 ## fn ClientSh::tool_router
 The same four tools as the test driver's, with the same parameters and the
@@ -53,4 +56,6 @@ configured.
 The scratch directories are made first, because the Channel's inbox goes beside
 the transient one (`scratch.rs`), and the cert profile is shipped as the test
 driver ships it (`server/cert.rs`); no engine, substrate, or equip directory is
-made. The signal sweep has no server shutdown of its own to run.
+made. The face starts the Channel's system before the server is built, and its
+closer is kept apart from the server the service takes, for the end and the
+signal sweep. The signal sweep has no server shutdown of its own to run.

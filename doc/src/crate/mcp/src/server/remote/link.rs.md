@@ -155,16 +155,19 @@ A delivered message becomes a normal Channel packet (a relay, never an
 sets the model, the event, and the expected dest set, each file's last chunk
 marks a dest done, and try_finalize fires once (the map remove), from whichever
 driver completed the condition, when the Deliver is in and every dest has
-landed, relaying through the verification-gated emit. The receiver sends
-nothing back - its Sent already fired from the sender's write, and a refused
-relay (an unverified Channel among the causes) is logged on the receiver alone,
-never reported to the sender as Unsent. The slot-map is what makes the files
-exist on disk before the agent observes the emission. land_file_chunk appends
-under <inbox>/<peer_nom>/<id>/<dest> - the same inbox the Channel's own
-attachments use, so a relayed packet's `attached` ref resolves for the local
-agent. The inbox is read as each chunk lands, since every open makes a new
-one: a closed Channel has none and lands nothing, and a delivery that spans a
-close and an open loses its earlier chunks with the inbox the close removed.
+landed, relaying through the verification-gated emit. The relay is posted to
+the bridge's ordered queue (`server/channel/bridge.rs`), so these synchronous
+paths never await the Channel's system, and one task emits the posts in their
+order. The receiver sends nothing back - its Sent already fired from the
+sender's write, and a refused relay (an unverified Channel among the causes) is
+logged on the receiver alone, never reported to the sender as Unsent. The
+slot-map is what makes the files exist on disk before the agent observes the
+emission. land_file_chunk appends under <inbox>/<peer_nom>/<id>/<dest> - the
+same inbox the Channel's own attachments use, so a relayed packet's `attached`
+ref resolves for the local agent. The inbox is read from the Channel's system
+as each chunk lands, since every open makes a new one: a closed Channel has
+none and lands nothing, and a delivery that spans a close and an open loses its
+earlier chunks with the inbox the close removed.
 
 relay_to_channel refuses a model under `mcp/` or `remote/` first, `reserved_model`, as the
 sending grimm commands do (`reject_reserved_model`): the reservation is what
@@ -180,7 +183,9 @@ event or a path already carrying a `/`.
 
 ## fn push_report
 Best effort: the local agent drove the send or the open, so its Channel is
-verified, and a packet dropped on a channel closed since is no loss.
+verified, and a packet dropped on a channel closed since is no loss. It rides
+the relays' ordered queue, so a report and a relay reach the agent in the order
+they were made.
 
 ## the McpNom handshake
 A Hello variant in each language (codec.rs), exchanged over the same Framed

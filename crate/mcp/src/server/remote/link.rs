@@ -785,19 +785,27 @@ fn try_finalize(
     }
 }
 
+/// The running Channel's inbox, read at each chunk since each open makes its own.
+async fn channel_inbox() -> io::Result<PathBuf> {
+    let host = host_channel().ok_or_else(|| io::Error::other("the Channel has no inbox"))?;
+    let status = host.channel.request(StatusRequest).await.map_err(io::Error::other)?;
+    status
+        .inbox
+        .map(PathBuf::from)
+        .ok_or_else(|| io::Error::other("the Channel has no inbox"))
+}
+
 /// Append one chunk to `<inbox>/<peer_nom>/<id>/<dest>`; true iff `last`.
 fn land_file_chunk(
     ctx: &RecvContext,
+    inbox: &Path,
     id: &str,
     dest: &str,
     seq: u32,
     bytes: &[u8],
     last: bool,
 ) -> io::Result<bool> {
-    let inbox = channel_handle()
-        .inbox()
-        .ok_or_else(|| io::Error::other("the Channel has no inbox"))?;
-    let path = delivery_path(&inbox, &ctx.peer_nom, id, dest)
+    let path = delivery_path(inbox, &ctx.peer_nom, id, dest)
         .ok_or_else(|| io::Error::other("a delivery's path that isn't beneath the inbox"))?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -827,22 +835,20 @@ fn relay_to_channel(
     let event = nu::from_nuon(&info.event_nuon, None)
         .map_err(|e| ("event_unparseable".to_string(), e.to_string()))?;
     let event = rewrite_spill_pointer(event, &ctx.peer_nom, id);
-    let event_nuon = render_nuon(&event).map_err(|e| ("render".to_string(), e))?;
-    let from = format!("{REMOTE_RESERVED_PREFIX}channel/{}", ctx.peer_nom);
-    let attached = has_files.then(|| format!("{}/{}", ctx.peer_nom, id));
-    let channel = channel_handle();
-    let msg_id = mint_msg_id(
-        channel.nonce_gen(),
-        &from,
-        &info.model,
-        &event_nuon,
-        attached.as_deref(),
-    );
-    let line = render_packet(msg_id, &from, &info.model, &event, attached.as_deref())
-        .map_err(|e| ("render".to_string(), e))?;
-    channel
-        .emit(line)
-        .map_err(|e| ("channel".to_string(), e.message().to_string()))
+    let event = NuVal::try_from_nu(event).map_err(|e| ("render".to_string(), e.to_string()))?;
+    let host = host_channel().ok_or_else(|| {
+        ("channel".to_string(), ChannelSendError::NotOpen.message().to_string())
+    })?;
+    host.post(Post {
+        emit: EmitRequest {
+            from: format!("{REMOTE_RESERVED_PREFIX}channel/{}", ctx.peer_nom),
+            model: info.model.clone(),
+            event,
+            attached: has_files.then(|| format!("{}/{}", ctx.peer_nom, id)),
+        },
+        delivery: Some(id.to_string()),
+    });
+    Ok(())
 }
 
 /// A spill pointer's dest made inbox-relative, under this delivery's directory.
@@ -902,14 +908,18 @@ fn push_report(
     model: &str,
     event: nu::Value,
 ) {
-    let channel = channel_handle();
-    let Ok(event_nuon) = render_nuon(&event) else {
+    let (Some(host), Ok(event)) = (host_channel(), NuVal::try_from_nu(event)) else {
         return;
     };
-    let msg_id = mint_msg_id(channel.nonce_gen(), FROM_MCP, model, &event_nuon, None);
-    if let Ok(line) = render_packet(msg_id, FROM_MCP, model, &event, None) {
-        let _ = channel.emit(line);
-    }
+    host.post(Post {
+        emit: EmitRequest {
+            from: FROM_MCP.to_string(),
+            model: model.to_string(),
+            event,
+            attached: None,
+        },
+        delivery: None,
+    });
 }
 
 /// Handle one inbound message-connection frame (a Deliver to relay).
@@ -935,7 +945,7 @@ fn handle_msg_frame(
 }
 
 /// Handle one inbound file-connection frame (receiver side).
-fn handle_file_frame(
+async fn handle_file_frame(
     recv: &RecvContext,
     frame: FileFrame,
 ) {
@@ -954,7 +964,11 @@ fn handle_file_frame(
         eprintln!("grammar: remote file chunk for `{id}` has unsafe dest `{dest}`; dropped");
         return;
     }
-    match land_file_chunk(recv, &id, &dest, seq, &bytes, last) {
+    let landed = match channel_inbox().await {
+        Ok(inbox) => land_file_chunk(recv, &inbox, &id, &dest, seq, &bytes, last),
+        Err(e) => Err(e),
+    };
+    match landed {
         Ok(true) => record_file_done(recv, &id, &dest),
         Ok(false) => {}
         Err(e) => eprintln!("grammar: remote file chunk write failed for `{id}`/`{dest}`: {e}"),
@@ -1079,7 +1093,7 @@ async fn run_initiator_file(
                 None => break,
             },
             incoming = framed_read.next() => match incoming {
-                Some(Ok(AcceptorToInitiator::File(frame))) => handle_file_frame(&recv, frame),
+                Some(Ok(AcceptorToInitiator::File(frame))) => handle_file_frame(&recv, frame).await,
                 Some(Ok(AcceptorToInitiator::Close)) => {
                     let _ = framed_write.send(InitiatorToAcceptor::Close).await;
                     break;
@@ -1228,7 +1242,7 @@ async fn run_acceptor_file(
                 None => break,
             },
             incoming = framed_read.next() => match incoming {
-                Some(Ok(InitiatorToAcceptor::File(frame))) => handle_file_frame(&recv, frame),
+                Some(Ok(InitiatorToAcceptor::File(frame))) => handle_file_frame(&recv, frame).await,
                 Some(Ok(InitiatorToAcceptor::Close)) => {
                     let _ = framed_write.send(AcceptorToInitiator::Close).await;
                     break;

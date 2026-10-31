@@ -8,6 +8,11 @@ The test driver's server, reached by `grammar-mcp test-driver` under
 `install_child_subreaper` comes first so an eval's orphaned grandchildren stay on
 our /proc ppid chain for the tree-kill. Everything after it can spawn externals.
 
+The face starts the Channel's system before mcp's system does
+(`server/channel/face.rs`), so the emergency lane mcp's system builds finds the
+face's hub slot to install into, and the bridge holds the Channel the engine's
+host sends on.
+
 Mcp's system starts after the substrate: its engine hydrates the equips' locks
 from the store the substrate makes, builtins included, so an engine started first
 would answer a call to a builtin `equip::not_registered`. It brings up the
@@ -32,6 +37,6 @@ that is the client's error to report, never a host panic. Claude Code's
 either protocol era.
 
 The shutdown path runs once the service ends, whatever ended it: the channel is
-told we are going away (`close_channel_for_shutdown`), then mcp's system stops
+told we are going away (`ChannelCloser::close_for_shutdown`), then mcp's system stops
 its components in order, every in-flight eval cancelled and reaped first, so a
 disconnect mid-eval leaks no process tree.

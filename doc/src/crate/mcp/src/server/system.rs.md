@@ -54,7 +54,9 @@ the shutdown's own and goes unsaid.
 ## fn McpSystem::init
 The emergency lane is built here, before the operator, because the operator's
 emergencies are routed onto it and there is nothing to push onto until it exists. The
-Channel's spam classifier is installed onto the same lane.
+lane is installed into the running face's hub slot (`server/channel/bridge.rs`), whose
+pump puts the Channel's spam pair on it; the face starts before the system, so the slot
+is there to take it.
 
 ## fn McpSystem::on_channel_recv
 A request for the engine is answered from a task of its own, so a long eval holds no

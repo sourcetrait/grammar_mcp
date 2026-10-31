@@ -32,7 +32,7 @@ impl ChannelFace {
         &self,
         p: RemoteListenParams,
     ) -> Result<SocketAddr, GrammarMcpError> {
-        let entry = self.remote_to_open(&p.alias)?;
+        let entry = self.remote_to_open(&p.alias).await?;
         let bind = match &p.on {
             Some(on) => {
                 bind_address(on).map_err(|reason| GrammarMcpError::RemoteInvalidParams { reason })?

@@ -4,7 +4,7 @@
 A sync channel's whole delivery, User's design for a harness with no channel mechanism:
 the agent calls it when it chooses and takes every packet queued since its last call,
 oldest first, with `dropped`, the packets the cap pushed out meanwhile. The first call
-also claims the channel (`take_sync`, `server/channel/state.rs`).
+also claims the channel (`take_sync`, crate/channel's `state.rs`).
 
 An async channel refuses it as `channel::wrong_mode`, its packets going to its Monitor,
 and a closed one as `channel::not_open`, as a send would be.

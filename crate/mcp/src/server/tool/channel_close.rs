@@ -10,9 +10,17 @@ impl ChannelFace {
         &self,
         nonce: datum::Nonce,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        self.channel.close(CLOSE_PLANNED, PLANNED_REASON);
-        if let Some(inbox) = self.channel.take_inbox() {
-            remove_channel_dir(&inbox);
+        let close = CloseRequest {
+            code: CLOSE_PLANNED,
+            reason: PLANNED_REASON.to_string(),
+            prune: true,
+        };
+        let closed = match self.channel.request(close).await {
+            Ok(closed) => closed,
+            Err(reason) => return error_to_call_result(channel_failed(reason), nonce),
+        };
+        if let Some(inbox) = closed.inbox {
+            remove_channel_dir(Path::new(&inbox));
         }
         success_void(nonce)
     }

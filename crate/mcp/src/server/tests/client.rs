@@ -1,19 +1,21 @@
-//! The serving client in process: its four tools, and the runtime's operations
-//! answered unavailable in the existing envelope.
+//! The client in process: its four tools, and the runtime's answering unavailable.
 use crate::server::client::ClientSh;
 use crate::*;
 
 /// The kind a runtime-owned operation answers while no runtime is reachable.
 const UNAVAILABLE: &str = "daemon::unavailable";
 
-/// A client on the default config, seeded once for the binary.
-fn client() -> ClientSh {
+/// A client on the default config, its Channel's system running on `rt`.
+fn client(rt: &tokio::runtime::Runtime) -> ClientSh {
     CONFIG.get_or_init(Config::default);
     let (nonce_gen, mcp_nom) = process_identity();
-    ClientSh::new(nonce_gen, mcp_nom, &config().deny)
+    let face = rt
+        .block_on(ChannelFace::start(nonce_gen.clone(), mcp_nom))
+        .expect("the Channel's system starts");
+    ClientSh::new(face, nonce_gen, &config().deny)
 }
 
-/// A runtime for a tool's future.
+/// A runtime for a client and its tools' futures.
 fn runtime() -> tokio::runtime::Runtime {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -34,17 +36,18 @@ fn error_kind(result: Result<mcp::CallToolResult, mcp::ErrorData>) -> Option<Str
 }
 
 /// An `interface` call's first error kind.
-fn interface_kind(client: &ClientSh, command: &str) -> Option<String> {
+fn interface_kind(rt: &tokio::runtime::Runtime, client: &ClientSh, command: &str) -> Option<String> {
     let p = InterfaceParams {
         host: LOCAL_HOST.to_string(),
         command: command.to_string(),
     };
-    error_kind(runtime().block_on(client.interface(mcp::Parameters(p))))
+    error_kind(rt.block_on(client.interface(mcp::Parameters(p))))
 }
 
 #[test]
 fn the_client_routes_the_four_tools() {
-    let _client = client();
+    let rt = runtime();
+    let _client = client(&rt);
     let mut names: Vec<String> = ClientSh::tool_router()
         .list_all()
         .into_iter()
@@ -56,8 +59,8 @@ fn the_client_routes_the_four_tools() {
 
 #[test]
 fn each_runtime_owned_tool_answers_unavailable() {
-    let client = client();
     let rt = runtime();
+    let client = client(&rt);
     let executed = rt.block_on(client.execute(mcp::Parameters(ExecuteParams {
         host: LOCAL_HOST.to_string(),
         definition: "def execute [data: nothing]: nothing -> nothing { null }".to_string(),
@@ -83,26 +86,28 @@ fn each_runtime_owned_tool_answers_unavailable() {
 
 #[test]
 fn the_runtime_owned_commands_answer_unavailable() {
-    let client = client();
+    let rt = runtime();
+    let client = client(&rt);
     for command in [
         "interface info",
         "interface help interface",
         "interface process list",
         "interface equip check 'equip/sourcetrait/geo'",
     ] {
-        assert_eq!(interface_kind(&client, command).as_deref(), Some(UNAVAILABLE), "{command}");
+        assert_eq!(interface_kind(&rt, &client, command).as_deref(), Some(UNAVAILABLE), "{command}");
     }
 }
 
 #[test]
 fn the_channel_and_the_remote_channels_are_the_clients_own() {
-    let client = client();
-    assert_eq!(interface_kind(&client, "interface channel config"), None);
+    let rt = runtime();
+    let client = client(&rt);
+    assert_eq!(interface_kind(&rt, &client, "interface channel config"), None);
     assert_eq!(
-        interface_kind(&client, "interface channel sync").as_deref(),
+        interface_kind(&rt, &client, "interface channel sync").as_deref(),
         Some("channel::not_open"),
     );
-    let remote = interface_kind(&client, "interface remote channel get 'nobody'");
+    let remote = interface_kind(&rt, &client, "interface remote channel get 'nobody'");
     assert!(
         remote.as_deref().is_some_and(|kind| kind.starts_with("remote::")),
         "the client reads its own remotes; got {remote:?}",
@@ -111,8 +116,9 @@ fn the_channel_and_the_remote_channels_are_the_clients_own() {
 
 #[test]
 fn an_unknown_host_and_a_broken_command_are_refused_as_before() {
-    let client = client();
-    let executed = runtime().block_on(client.execute(mcp::Parameters(ExecuteParams {
+    let rt = runtime();
+    let client = client(&rt);
+    let executed = rt.block_on(client.execute(mcp::Parameters(ExecuteParams {
         host: "elsewhere".to_string(),
         definition: "def execute [data: nothing]: nothing -> nothing { null }".to_string(),
         data: "null".to_string(),
@@ -120,7 +126,7 @@ fn an_unknown_host_and_a_broken_command_are_refused_as_before() {
     })));
     assert_eq!(error_kind(executed).as_deref(), Some("host::unknown"));
     assert_eq!(
-        interface_kind(&client, "interface info | interface purview list").as_deref(),
+        interface_kind(&rt, &client, "interface info | interface purview list").as_deref(),
         Some("interface::invalid"),
     );
 }

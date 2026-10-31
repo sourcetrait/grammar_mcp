@@ -120,17 +120,21 @@ pub(crate) fn append_line(
 }
 
 /// Put one Emergency on the channel under its reserved `mcp/` model.
-fn announce(emergency: &Emergency) {
-    let channel = channel_handle();
-    let event = nu::Value::record(emergency_record(emergency), nu::Span::unknown());
-    let Ok(event_nuon) = render_nuon(&event) else {
+async fn announce(emergency: &Emergency) {
+    let Some(host) = host_channel() else {
         return;
     };
-    let model = emergency_model(emergency);
-    let id = mint_msg_id(channel.nonce_gen(), FROM_MCP, model, &event_nuon, None);
-    if let Ok(line) = render_packet(id, FROM_MCP, model, &event, None) {
-        let _ = channel.emit(line);
-    }
+    let event = nu::Value::record(emergency_record(emergency), nu::Span::unknown());
+    let Ok(event) = NuVal::try_from_nu(event) else {
+        return;
+    };
+    let emit = EmitRequest {
+        from: FROM_MCP.to_string(),
+        model: emergency_model(emergency).to_string(),
+        event,
+        attached: None,
+    };
+    let _ = host.channel.request(emit).await;
 }
 
 /// Spawn the sole responder: log each Emergency, then announce it.
@@ -152,7 +156,7 @@ pub(crate) fn spawn_emergency_responder(
                 }
                 Err(e) => eprintln!("grammar: emergency serialize failed: {e}"),
             }
-            announce(&emergency);
+            announce(&emergency).await;
         }
     });
 }

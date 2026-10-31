@@ -364,7 +364,9 @@ impl subsys::System for McpSystem {
         let (operator, observer) = if params.supervise {
             let (emergency_tx, emergency_rx) = tk::unbounded_channel::<Emergency>();
             spawn_emergency_responder(emergency_rx, params.mcp_nom.clone());
-            channel_handle().install_emergency(emergency_tx.clone());
+            if let Some(host) = host_channel() {
+                host.hub.install_emergency(emergency_tx.clone());
+            }
             let paths = OperatorSysPaths::new(
                 inner.paths.data_home.clone(),
                 inner.paths.cache_home.clone(),

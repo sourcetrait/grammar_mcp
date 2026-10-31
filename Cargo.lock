@@ -6651,6 +6651,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sourcetrait_grammar_channel"
+version = "0.0.0-9"
+dependencies = [
+ "bitcode",
+ "nu-engine",
+ "nu-protocol",
+ "nuon",
+ "nuval",
+ "rkyv",
+ "serde",
+ "sourcetrait_common",
+ "sourcetrait_grammar_protocol",
+ "tokio",
+]
+
+[[package]]
 name = "sourcetrait_grammar_client"
 version = "0.0.0-9"
 dependencies = [
@@ -6747,6 +6763,7 @@ dependencies = [
  "serde_json",
  "shellexpand",
  "sourcetrait_common",
+ "sourcetrait_grammar_channel",
  "sourcetrait_grammar_client",
  "sourcetrait_grammar_engine",
  "sourcetrait_grammar_operator",

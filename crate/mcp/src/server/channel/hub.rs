@@ -57,12 +57,22 @@ fn server_config() -> Result<Arc<tls::ServerConfig>, GrammarMcpError> {
     Ok(Arc::new(config))
 }
 
-/// Bind the hub and hand back the URL to advertise.
+/// What the hub's peer task greets with and tells its Channel through.
+#[derive(Clone)]
+struct PeerContext {
+    channel: Arc<ChannelHandle>,
+    epoch: ChannelEpoch,
+    mcp_nom: datum::NomPair,
+    nonce_gen: Arc<datum::NonceGenerator>,
+}
+
+/// Bind the open of `epoch`'s hub and hand back its endpoint and senders.
 pub(crate) async fn start(
-    handle: &ChannelHandle,
+    channel: Arc<ChannelHandle>,
+    epoch: ChannelEpoch,
     mcp_nom: &datum::NomPair,
     nonce_gen: Arc<datum::NonceGenerator>,
-) -> Result<String, GrammarMcpError> {
+) -> Result<Hub, GrammarMcpError> {
     let tls_config = server_config()?;
     let listener = tk::TcpListener::bind((BIND, config().channel.port.unwrap_or(0)))
         .await
@@ -79,70 +89,77 @@ pub(crate) async fn start(
     let (packet_tx, packet_rx) = tk::unbounded_channel::<String>();
     let (close_tx, close_rx) = tk::oneshot::channel::<ChannelCloseSignal>();
     let (shutdown_tx, shutdown_rx) = tk::oneshot::channel::<()>();
-    let claimed = Arc::new(AtomicBool::new(false));
+    let peer = PeerContext {
+        channel,
+        epoch,
+        mcp_nom: mcp_nom.clone(),
+        nonce_gen,
+    };
     tk::spawn(accept_loop(
         listener,
         tls::TlsAcceptor::from(tls_config),
-        packet_rx,
-        close_rx,
+        (packet_rx, close_rx),
         shutdown_rx,
-        claimed.clone(),
-        mcp_nom.clone(),
-        nonce_gen,
+        peer,
     ));
-    handle.install(url.clone(), packet_tx, close_tx, shutdown_tx, claimed);
-    Ok(url)
+    Ok(Hub {
+        epoch,
+        url,
+        packets: packet_tx,
+        close: close_tx,
+        _shutdown: shutdown_tx,
+    })
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The first connection claims the hub, its Channel told; each later is refused.
 async fn accept_loop(
     listener: tk::TcpListener,
     acceptor: tls::TlsAcceptor,
-    packet_rx: tk::UnboundedReceiver<String>,
-    close_rx: tk::oneshot::Receiver<ChannelCloseSignal>,
+    lanes: (tk::UnboundedReceiver<String>, tk::oneshot::Receiver<ChannelCloseSignal>),
     shutdown_rx: tk::oneshot::Receiver<()>,
-    claimed: Arc<AtomicBool>,
-    mcp_nom: datum::NomPair,
-    nonce_gen: Arc<datum::NonceGenerator>,
+    peer: PeerContext,
 ) {
-    let mut peer_slot = Some((packet_rx, close_rx));
+    let mut peer_slot = Some(lanes);
     let mut shutdown_rx = shutdown_rx;
     loop {
         tokio::select! {
             _ = &mut shutdown_rx => break,
             accepted = listener.accept() => {
                 let Ok((tcp, _peer)) = accepted else { continue };
-                let won = claimed
-                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                    .is_ok();
                 let acceptor = acceptor.clone();
-                if won {
-                    if let Some((packet_rx, close_rx)) = peer_slot.take() {
-                        tk::spawn(serve_peer(
-                            tcp,
-                            acceptor,
-                            packet_rx,
-                            close_rx,
-                            mcp_nom.clone(),
-                            nonce_gen.clone(),
-                        ));
+                match peer_slot.take() {
+                    Some((packet_rx, close_rx)) => {
+                        let _ = peer.channel.notify(HubNotice::Claimed(peer.epoch)).await;
+                        tk::spawn(serve_peer(tcp, acceptor, packet_rx, close_rx, peer.clone()));
                     }
-                } else {
-                    tk::spawn(refuse_peer(tcp, acceptor));
+                    None => {
+                        tk::spawn(refuse_peer(tcp, acceptor));
+                    }
                 }
             }
         }
     }
 }
 
-/// Serve the one claiming peer for the channel's life.
+/// Serve the one claiming peer for the channel's life, its end told after.
 async fn serve_peer(
+    tcp: tk::TcpStream,
+    acceptor: tls::TlsAcceptor,
+    packets: tk::UnboundedReceiver<String>,
+    close_rx: tk::oneshot::Receiver<ChannelCloseSignal>,
+    peer: PeerContext,
+) {
+    serve(tcp, acceptor, packets, close_rx, &peer).await;
+    let _ = peer.channel.notify(HubNotice::PeerGone(peer.epoch)).await;
+}
+
+/// The peer's greeting, then its packets until a close, its leaving, or a failure.
+async fn serve(
     tcp: tk::TcpStream,
     acceptor: tls::TlsAcceptor,
     mut packets: tk::UnboundedReceiver<String>,
     close_rx: tk::oneshot::Receiver<ChannelCloseSignal>,
-    mcp_nom: datum::NomPair,
-    nonce_gen: Arc<datum::NonceGenerator>,
+    peer: &PeerContext,
 ) {
     let Ok(tls_stream) = acceptor.accept(tcp).await else {
         return;
@@ -151,7 +168,7 @@ async fn serve_peer(
         return;
     };
 
-    if let Ok(line) = open_packet(&nonce_gen, &mcp_nom)
+    if let Ok(line) = open_packet(&peer.nonce_gen, &peer.mcp_nom)
         && socket.send(ws::Message::text(line)).await.is_err()
     {
         return;

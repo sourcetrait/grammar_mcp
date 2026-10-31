@@ -15,9 +15,10 @@ Plain `mcp`, not `mcp/<id>`: the channel is 1:1, so there is no second MCP to
 tell apart.
 
 ## fn open_packet
-Built in one place because it has two emitters: the hub greets a freshly
-connected peer with it, and `interface channel open` re-sends it on an existing
-channel, where a failing send is what reveals a peer that has actually gone.
+Built in one place because it has three emitters: the hub greets a freshly
+connected peer with it, a sync open queues it as its first line, and `interface
+channel open` re-sends it on an existing channel, where a gone peer is what a
+re-greeting reveals.
 
 ## fn server_config
 The certificate and key are the host's `[identity]`, the same pair its remote
@@ -45,22 +46,35 @@ The port is read back from `local_addr` rather than trusted from config: with 0
 it is the only way to know it, and with a pinned one it confirms what was
 actually bound.
 
+The hub is one open's: its epoch rides every notice its tasks send the
+Channel's system, so a notice from a hub since closed concerns nothing.
+
+## struct PeerContext
+What the peer task needs beyond its lanes: the Channel's system it tells, the
+open's epoch, and the identity its greeting carries.
+
 ## fn accept_loop
-First connection claims, via `compare_exchange` rather than a load followed by a
-store, so two simultaneous connections cannot both read "unclaimed" and both
-win.
+The first connection takes the peer's lanes and with them the claim. The loop is
+one task, so two simultaneous connections cannot both win. The claim reaches the
+Channel's system before the peer task starts, so it precedes the Open packet and
+any `ready` the agent sends after seeing it.
 
 Dropping the shutdown sender counts as shutdown, which is why a torn-down
 channel ends this loop even though nothing is ever sent on that oneshot.
 
 ## fn serve_peer
+However the peer task ends - a close, the peer leaving, a failed handshake - the
+Channel's system hears it, so a send after the peer left answers that the hub
+is gone, as it did when the push itself failed.
+
+## fn serve
 The winner receives `channel/Open` immediately, because the verification step is
 that the agent sees a real packet - there is no separate ack channel by design.
 
-The loop is `biased;` and the arm order is load-bearing. `close_locked` signals
-the close and drops the packet sender in the same breath, so the close arm and
-the `None` arm go ready together - and `tokio::select!` picks among ready arms
-at random unless told otherwise. The `None` arm breaks the loop without writing
+The loop is `biased;` and the arm order is load-bearing. The face's hub close
+signals the close and drops the packet sender in the same breath, so the close
+arm and the `None` arm go ready together - and `tokio::select!` picks among
+ready arms at random unless told otherwise. The `None` arm breaks the loop without writing
 a frame, so without the bias a planned close would carry our code and reason
 only about half the time and otherwise leave the bare 1006 the lanes exist to
 prevent. Biasing makes the precedence structural instead of probabilistic, and

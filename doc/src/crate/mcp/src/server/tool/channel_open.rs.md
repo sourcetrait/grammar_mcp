@@ -9,15 +9,26 @@ A distinct code because close codes and reasons reach the agent verbatim, so the
 three teardowns - refused 1013, planned 1000, unverified 1008 - stay tellable
 apart.
 
+## const CLOSE_UNSTARTED
+A hub that fails to bind closes the open it was for; no peer hears it, so the
+code is for the record.
+
 ## fn resend_open_packet
-A failing send is the only way to learn the connection has gone. Nothing else
-reports a peer that simply went away, which is why an `existing` open re-greets
-rather than trusting its own state.
+A gone peer is the only way to learn the connection has gone: the peer task's
+lane closed, read here first, or the peer's end the Channel's system already
+heard. Nothing else reports a peer that simply went away, which is why an
+`existing` open re-greets rather than trusting its own state.
 
 ## fn arm_verify_timer
-Expiry tears the hub down; verification or a close drops the sender, which
+Expiry asks the Channel to close the open of its epoch while still unverified,
+which sends the hub its frame; verification or a close drops the sender, which
 stands this task down instead. That is why cancellation is a drop rather than a
 message - it cannot be missed.
+
+## fn start_open
+The Channel opens before the hub binds, so the hub's claim can never reach the
+system ahead of the open it belongs to. A hub that fails to start closes the
+open again, the inbox taken back for the caller to remove.
 
 ## struct ChannelOpenResult
 `wss` is null for a sync channel rather than absent, so the result keeps one

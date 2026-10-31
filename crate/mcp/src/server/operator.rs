@@ -33,6 +33,17 @@ async fn engine_health(engine: &EngineHandle) -> Option<EngineHealth> {
     }
 }
 
+/// Whether the running face's Channel is open; with no face, it is closed.
+async fn channel_open() -> bool {
+    let Some(host) = host_channel() else {
+        return false;
+    };
+    match host.channel.request(StatusRequest).await {
+        Ok(status) => !matches!(status.state.phase, ChannelPhase::Closed),
+        Err(_) => false,
+    }
+}
+
 /// Each interval, pass the operator the engine's health and the Channel's state.
 pub(crate) fn spawn_observer(
     engine: Arc<EngineHandle>,
@@ -42,7 +53,7 @@ pub(crate) fn spawn_observer(
         loop {
             tk::sleep(SAMPLE_INTERVAL).await;
             let reading = engine_health(&engine).await;
-            let listening = !matches!(channel_handle().status().phase, ChannelPhase::Closed);
+            let listening = channel_open().await;
             let observation = Observation {
                 engine: reading,
                 listening,

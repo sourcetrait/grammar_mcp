@@ -1,13 +1,7 @@
 //! The engine's start and its host: what an eval asks of mcp, on its thread.
 use crate::*;
 
-/// RFC 6455 policy violation - the peer was emitted to before verifying.
-const CLOSE_UNVERIFIED_EMIT: u16 = 1008;
-const UNVERIFIED_EMIT_REASON: &str = "emit before verification";
-
 /// Start the engine on the config's id, namespace, and homes, mcp its host.
-///
-/// Its scratch directories are made first, since parameters carry them.
 pub(crate) fn init_engine() -> Result<(), String> {
     let cfg = config();
     let scratch = make_scratch_dirs()?;
@@ -53,86 +47,33 @@ impl EngineHost for McpHost {
             attached,
             stop,
         } = send;
-        reject_reserved_model(&model)?;
-        let channel = channel_handle();
-        match channel.status().phase {
-            ChannelPhase::Closed => {
-                return Err(ChannelSendError::NotOpen.message().to_string());
-            }
-            ChannelPhase::Open => {
-                channel.close(CLOSE_UNVERIFIED_EMIT, UNVERIFIED_EMIT_REASON);
-                return Err(ChannelSendError::NotVerified.message().to_string());
-            }
-            ChannelPhase::Verified => {}
-        }
-
-        match channel.record_send(&from) {
-            SpamVerdict::Clear => {}
-            SpamVerdict::Warn { hits, window_secs } => {
-                let rate = channel.thresholds().warn_rate;
-                channel.fire_emergency(Emergency::ChannelSpamWarning(
-                    ChannelSpamWarningEmergency {
-                        origin: from.clone(),
-                        hits,
-                        window_secs,
-                        rate,
-                    },
-                ));
-            }
-            SpamVerdict::Stop {
-                hits,
-                window_secs,
-                notify,
-            } => {
-                let rate = channel.thresholds().error_rate;
+        let Some(host) = host_channel() else {
+            return Err(ChannelSendError::NotOpen.message().to_string());
+        };
+        let data = ChannelSendData {
+            from: from.clone(),
+            model,
+            event: sendable(event)?,
+            attached: attached.map(sendable).transpose()?,
+        };
+        match host.channel.request_blocking(SendRequest(data))? {
+            SendVerdict::Sent(id) => Ok(id),
+            SendVerdict::Refused(reason) => Err(reason),
+            SendVerdict::Stop(spam) => {
                 let action = stop();
-                if notify {
-                    channel.fire_emergency(Emergency::ChannelSpamError(
-                        ChannelSpamErrorEmergency {
-                            origin: from.clone(),
-                            hits,
-                            window_secs,
-                            rate,
-                            action: action.clone(),
-                        },
-                    ));
+                if spam.notify {
+                    let stopped = ChannelSpamErrorEmergency {
+                        origin: from,
+                        hits: spam.hits,
+                        window_secs: spam.window_secs,
+                        rate: spam.rate,
+                        action,
+                    };
+                    let _ = host.channel.notify_blocking(StoppedNotice(stopped));
                 }
-                return Err(format!(
-                    "channel send rate exceeded: {hits} in {window_secs}s from {from} \
-                     (limit {rate}); the channel carries STATE SUMMARIES, not data - \
-                     put bulk in `attached`, or write a nuon file",
-                ));
+                Err(spam.reason)
             }
         }
-
-        let event_nuon = render_nuon(&event)?;
-        let attached_nuon = match &attached {
-            Some(value) => Some(render_nuon(value)?),
-            None => None,
-        };
-        let id = mint_msg_id(
-            channel.nonce_gen(),
-            &from,
-            &model,
-            &event_nuon,
-            attached_nuon.as_deref(),
-        );
-
-        let attached_name = match &attached_nuon {
-            Some(nuon) => Some(write_inbox_file(&channel, &format!("{id}.nuon"), nuon)?),
-            None => None,
-        };
-
-        let wire_event = if event_overflows(&event_nuon) {
-            let rel = write_inbox_file(&channel, &format!("{id}.event.nuon"), &event_nuon)?;
-            event_spill_pointer(&rel, event_nuon.len())
-        } else {
-            event
-        };
-
-        let line = render_packet(id, &from, &model, &wire_event, attached_name.as_deref())?;
-        channel.emit(line).map_err(|e| e.message().to_string())?;
-        Ok(id.to_string())
     }
 
     fn remote_send(
@@ -182,19 +123,12 @@ fn reject_reserved_model(model: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Write `nuon` to the Channel's inbox as `name`, the name the wire carries.
-fn write_inbox_file(
-    channel: &ChannelHandle,
-    name: &str,
-    nuon: &str,
-) -> Result<String, String> {
-    let dir = channel.inbox().ok_or_else(|| {
-        "the channel has no inbox; run `interface channel open` first".to_string()
-    })?;
-    fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
-    let path = dir.join(name);
-    fs::write(&path, nuon.as_bytes()).map_err(|e| format!("write {}: {e}", path.display()))?;
-    Ok(name.to_string())
+/// A value as the data a send carries; one nuval can't carry fails as its render.
+fn sendable(value: nu::Value) -> Result<NuVal, String> {
+    NuVal::try_from_nu(value.clone()).map_err(|e| match render_nuon(&value) {
+        Err(render) => render,
+        Ok(_) => e.to_string(),
+    })
 }
 
 /// Read each `{src, dest}` row into `(dest, bytes)`, its dest checked first.
@@ -226,18 +160,16 @@ fn read_attachments(value: &nu::Value) -> Result<Vec<(String, Vec<u8>)>, String>
     Ok(out)
 }
 
-/// Mint the send's message id off the shared channel NonceGen (a unique base62).
+/// Mint the send's message id off the process's nonce generator, a unique base62.
 fn mint_remote_id(
     model: &str,
     event_nuon: &str,
 ) -> String {
-    mint_msg_id(channel_handle().nonce_gen(), "remote/send", model, event_nuon, None).to_string()
+    let (nonce_gen, _) = process_identity();
+    mint_msg_id(&nonce_gen, "remote/send", model, event_nuon, None).to_string()
 }
 
 /// Spill an event the receiver's cap would truncate into a transferred file.
-///
-/// Returns the wire event's NUON, a pointer when it spilled, and the payloads,
-/// the spill among them.
 fn spill_remote_event(
     event_nuon: String,
     mut payloads: Vec<(String, Vec<u8>)>,
@@ -254,7 +186,7 @@ fn spill_remote_event(
 fn config_record() -> nu::Value {
     let span = nu::Span::unknown();
     let cfg = config();
-    let spam = channel_handle().thresholds();
+    let spam = live_thresholds();
     let supervisor = effective_supervisor(cfg.supervisor);
 
     let mut channel = nu::Record::new();
@@ -267,12 +199,12 @@ fn config_record() -> nu::Value {
     );
     channel.insert(
         "spam_warn_window_secs",
-        nu::Value::int(spam.warn_window.as_secs() as i64, span),
+        nu::Value::int(spam.warn_window_secs as i64, span),
     );
     channel.insert("spam_warn_rate", nu::Value::int(spam.warn_rate as i64, span));
     channel.insert(
         "spam_error_window_secs",
-        nu::Value::int(spam.error_window.as_secs() as i64, span),
+        nu::Value::int(spam.error_window_secs as i64, span),
     );
     channel.insert(
         "spam_error_rate",
@@ -313,4 +245,12 @@ fn config_record() -> nu::Value {
     root.insert("supervisor", nu::Value::record(sup, span));
     root.insert("identity", identity);
     nu::Value::record(root, span)
+}
+
+/// The spam thresholds in force: the running Channel's, else the config's start.
+fn live_thresholds() -> SpamThresholdsData {
+    host_channel()
+        .and_then(|host| host.channel.request_blocking(ThresholdsRequest::default()).ok())
+        .and_then(Result::ok)
+        .unwrap_or_else(|| config().channel.spam.data())
 }

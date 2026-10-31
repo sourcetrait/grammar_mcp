@@ -2,7 +2,8 @@
 
 ## fn run_oneshot
 Builds the SAME substrate the serve path builds, starts mcp's system of its own on it,
-its engine alone, without the serve path's supervision, and dispatches ONE invocation
+its engine alone, without the serve path's supervision, and a face of its own for the
+Channel's commands, and dispatches ONE invocation
 straight to the `pub(crate)` handler methods on `NuSh` - no rmcp transport anywhere.
 That is what makes this the operator's no-agent contribution loop rather than a
 parallel implementation to keep in step.

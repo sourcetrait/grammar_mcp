@@ -44,6 +44,9 @@ would only repeat the same two paths. Both fields are optional here so a
 missing one is refused by its name at resolve rather than by serde's generic
 message.
 
+## struct SupervisorConfigToml
+The operator reads it; a build without one accepts the table and ignores it.
+
 ## struct ChannelConfigToml
 The port is the only structural key, because everything else about the
 channel is fixed by design rather than configured. It is a loopback socket
@@ -83,17 +86,13 @@ moves the remotes with it.
 ## struct ChannelConfig
 
 ### field spam
-Runtime changes go through `interface channel config`, which mutates the
-channel's live copy rather than this. `CONFIG` is set once, so anything
-adjustable at runtime needs its own live layer; the operator's pins are the
-same shape applied to `[supervisor]`.
+The starting policy, the Channel's own thresholds type (`crate/channel`'s
+`spam.rs`). Runtime changes go through `interface channel config`, which
+updates the Channel's system rather than this. `CONFIG` is set once, so
+anything adjustable at runtime needs its own live layer; the operator's pins
+are the same shape applied to `[supervisor]`.
 
-## struct SpamThresholds
-Two independent (window, rate) pairs so warn and error can measure different
-things - a short window catches a burst, a longer one catches sustained
-misbehaviour.
-
-These values are initial. There is no basis for them beyond reasoning; only
+The starting values are initial. There is no basis for them beyond reasoning; only
 production traffic will say what a normal producer actually does. The gap
 between legitimate and runaway is enormous rather than marginal - a state lane
 emits single digits per burst, a loop emits thousands per second - so the

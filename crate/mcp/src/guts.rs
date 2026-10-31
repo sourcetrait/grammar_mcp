@@ -83,10 +83,13 @@ impl TestServer {
             .expect("tokio runtime");
         rt.block_on(ensure_substrate()).expect("ensure_substrate");
         let (nonce_gen, mcp_nom) = process_identity();
+        let face = rt
+            .block_on(ChannelFace::start(nonce_gen.clone(), mcp_nom.clone()))
+            .expect("the Channel's system starts");
         let system = rt
             .block_on(start_system(&mcp_nom, false))
             .expect("mcp's system starts");
-        let nush = NuSh::new(nonce_gen, mcp_nom, Arc::new(system), &config().deny);
+        let nush = NuSh::new(face, nonce_gen, mcp_nom, Arc::new(system), &config().deny);
         Self { rt, nush }
     }
 
@@ -585,8 +588,7 @@ pub fn valid_function_source(data_fields: &str, result_fields: &str, body: &str)
     )
 }
 
-/// Lint a definition as `execute`'s contract does, parse errors aside, each
-/// diagnostic a NuVal.
+/// Lint a definition as `execute`'s contract does, each diagnostic a NuVal.
 pub fn lint_definition(definition: &str) -> Vec<NuVal> {
     ensure_test_config();
     let engine = ParseEngine::new_full();

@@ -118,11 +118,11 @@ impl ChannelFace {
     }
 
     /// The entry a listen or a connect opens: its Channel verified, the alias idle.
-    pub(crate) fn remote_to_open(
+    pub(crate) async fn remote_to_open(
         &self,
         alias: &str,
     ) -> Result<RemoteEntry, GrammarMcpError> {
-        if !matches!(self.channel.status().phase, ChannelPhase::Verified) {
+        if !matches!(self.status().await?.state.phase, ChannelPhase::Verified) {
             return Err(GrammarMcpError::RemoteChannelUnverified);
         }
         if self.live_remotes().contains_key(alias) {

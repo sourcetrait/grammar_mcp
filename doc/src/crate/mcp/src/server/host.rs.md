@@ -35,50 +35,28 @@ they hold the builtins installed a moment before (`run.rs`).
 ## struct McpHost
 What an eval asks of mcp runs here, on the eval's thread, inside the `grimm`
 command that asked: the Channel, the remote links, the config, and the pins are
-mcp's, and the engine reaches them through this one value.
+mcp's, and the engine reaches them through this one value. The Channel it
+reaches through the bridge (`server/channel/bridge.rs`), blocking on the
+Channel's runtime from the eval's thread, until HostRoute routes the engine's
+asks through its controller.
 
 ### fn channel_send
-Order is deliberate throughout, and each step is placed where it is for a
-reason.
+The Channel's system takes the send whole, each step in its order there
+(`crate/channel`'s `plan_send`): the reservation, the gate and its unverified
+teardown, the spam count, the files and the spill, and the emit. What stays
+here is the eval's side: the event made data, and on a stop verdict the
+offender stopped through `stop`, its signals and its job, the action it reports
+sent back for the error's emergency. With no face running there is no Channel
+to send on, the same refusal a closed one gives.
 
-The `mcp/` and `remote/` refusal comes first, before the channel state is even
-consulted. A definition is not the host, so letting it stamp a model under
-either prefix would let it forge a host packet - and would destroy the property
-the reservation exists for, that provenance is checkable from the path alone.
-This is where a definition picks a model, which is what makes it the right
-place to enforce it; a peer's relay is held to the same check (`link.rs`).
-
-The phase is checked before any rendering, so a send that cannot happen costs a
-lock and an error rather than a hash and a render.
-
-Open-but-unverified does not merely refuse - it tears the channel down.
-Telemetry must not reach a peer that has not proven it owns the stdio session,
-and a peer that has been emitted to unproven is not a peer we keep.
-
-The phase is read here, at send time, never captured: a job outliving its eval
-keeps its decl and everything it closed over, so a spawn-time snapshot would let
-work started before verification emit to an unproven peer.
-
-On the hard threshold the engine stops the offender through `stop`, its signals
-and its job, and the action it reports rides the emergency.
-
-The id is minted before the attachment write because the filename derives from
-it, which is also why the hash covers the attached content rather than its path.
-
-After the id and the caller's attachment, the rendered event is checked against
-the notification cap (event_overflows, state.rs); an oversized event spills to
-<inbox>/<id>.event.nuon and a compact pointer rides the wire in its place. The
-pointer names its own spill file, so it is orthogonal to the caller's
-`attached`: a big event and a caller attachment both survive, in separate files.
+## fn sendable
+A value nuval can't carry is refused with its render's error, the words the
+send gave before the Channel took its event as data.
 
 ### fn remote_send
 The reservations first, as for a Channel send; then the attachments read,
 the event rendered, the id minted, any spill made, and the send enqueued on the
 open link to `mcp_nom` (`find_link_send`, link.rs).
-
-## fn write_inbox_file
-The one writer for both of a send's files: the caller's attachment, `<id>.nuon`,
-and an auto-spilled event, `<id>.event.nuon`.
 
 ## fn read_attachments
 Reads each {src, dest} row into (dest, bytes) synchronously, before the id is
@@ -87,9 +65,16 @@ at the call, not as a later async Unsent. safe_dest guards every dest (relative,
 no `..`) here too, so a bad dest fails the send outright rather than being
 caught only on the receiver.
 
+## fn mint_remote_id
+On the process's generator, the one the Channel's greeting is minted on: a
+send's id needs only be unique, and the Channel's own counter is its system's.
+
 ## fn spill_remote_event
+It returns the wire event's NUON, a pointer when it spilled, and the payloads,
+the spill among them.
+
 The sender's half of the event spill: an event that would overflow the
-receiver's notification cap (event_overflows, state.rs) moves to a transferred
+receiver's notification cap (event_overflows, crate/channel) moves to a transferred
 file - the reserved EVENT_SPILL_DEST, pushed beside any caller files - and a
 compact pointer replaces it on the wire, for both decls. It is the sender's act,
 through the file connection, rather than the receiver's render choice, because
@@ -114,10 +99,11 @@ absent: they are not config-file settings, and a definition already reads them
 ambiently as the `EQUIP_*` trio.
 
 Values are live rather than as-launched. The channel's spam thresholds come from
-the channel handle, which `interface channel config` mutates, and the supervisor
-lines come through the pin layer - so what a definition reads is what is
-actually in force rather than the startup seed. A startup seed nobody is using
-would be a lie with a timestamp.
+the running Channel's system (`live_thresholds`), which `interface channel
+config` updates, and the supervisor lines come through the pin layer - so what a
+definition reads is what is actually in force rather than the startup seed. A
+startup seed nobody is using would be a lie with a timestamp; with no Channel
+running, the config's start is what is in force.
 
 It reads through the operator's `effective_supervisor`, the config's lines its
 base, rather than `config().supervisor` alone, which is what keeps a pin from

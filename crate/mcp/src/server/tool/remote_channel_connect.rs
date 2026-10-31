@@ -27,7 +27,7 @@ impl ChannelFace {
         &self,
         p: RemoteConnectParams,
     ) -> Result<(), GrammarMcpError> {
-        let entry = self.remote_to_open(&p.alias)?;
+        let entry = self.remote_to_open(&p.alias).await?;
         let addr = match &p.address {
             Some(address) => dial_address(address)
                 .map_err(|reason| GrammarMcpError::RemoteInvalidParams { reason })?,

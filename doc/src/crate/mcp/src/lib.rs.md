@@ -5,7 +5,7 @@ what a reader of it could reasonably get wrong.
 
 ## cfg_attr allow(dead_code, unused_imports)
 A build without `embedded-cli` serves a narrow surface over the shared facade:
-the Channel's send path, the emergency lines, and the interface catalog compile
+the Channel's bridge, the emergency lines, and the interface catalog compile
 whole, their breadth serving the test driver. The allow is that build's alone.
 The `embedded-cli` build compiles every module with both lints, and clippy runs
 over it, so code dead there still fails.

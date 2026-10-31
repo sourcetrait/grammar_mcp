@@ -18,5 +18,6 @@ active conditions across an absent reading.
 ## fn spawn_observer
 One observation an interval, the operator's own cadence. The Channel's phase rides with
 it because the Channel is mcp's: a `--test` host's operator samples only while it is
-open. A send that fails means the operator's system is gone, and the observer ends with
+open. The phase is read from the running face's Channel (`server/channel/bridge.rs`),
+and no face reads as closed. A send that fails means the operator's system is gone, and the observer ends with
 it. Its handle is mcp's system's, which aborts it first when it shuts down.

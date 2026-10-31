@@ -1,10 +1,15 @@
 //! The Channel's and the remote channels' commands, served by either server.
 use crate::*;
 
-/// The Channel's face to a server: its handle, open lock, identity, and links.
+/// What a planned close carries: the code, the reason, and an optional ack.
+pub(crate) type CloseSignal = (u16, String, Option<tk::oneshot::Sender<()>>);
+
+/// The Channel's face to a server: its system, hub, open lock, identity, and links.
 pub(crate) struct ChannelFace {
-    /// The host's single packet channel; present but CLOSED at startup.
+    /// The Channel's system, which this face started and holds.
     pub(crate) channel: Arc<ChannelHandle>,
+    /// The open's async hub and what the face's pump and timer share with it.
+    pub(crate) hub: Arc<HubSlot>,
     /// Serializes `channel_open`'s decide-then-start across its await.
     pub(crate) channel_open_lock: Arc<tk::AsyncMutex<()>>,
     pub(crate) nonce_gen: Arc<datum::NonceGenerator>,
@@ -15,14 +20,213 @@ pub(crate) struct ChannelFace {
 }
 
 impl ChannelFace {
-    pub(crate) fn new(nonce_gen: Arc<datum::NonceGenerator>, mcp_nom: datum::NomPair) -> Self {
-        Self {
-            channel: channel_handle(),
+    /// Starts the Channel's system for a server, the face its controller.
+    pub(crate) async fn start(
+        nonce_gen: Arc<datum::NonceGenerator>,
+        mcp_nom: datum::NomPair,
+    ) -> Result<Self, String> {
+        let hub = Arc::new(HubSlot::default());
+        let paths = ChannelSysPaths::new(data_base_dir(), cache_base_dir());
+        let params = ChannelSysParams {
+            spam: config().channel.spam.data(),
+        };
+        let pump = HubPump { hub: hub.clone() };
+        let channel = Arc::new(ChannelHandle::start(paths, params, pump).await?);
+        set_host_channel(&channel, &hub);
+        Ok(Self {
+            channel,
+            hub,
             channel_open_lock: Arc::new(tk::AsyncMutex::new(())),
             nonce_gen,
             mcp_nom,
             remote_links: remote_links(),
+        })
+    }
+
+    /// What a server's end and its signal sweep close the Channel through.
+    pub(crate) fn closer(&self) -> ChannelCloser {
+        ChannelCloser {
+            channel: self.channel.clone(),
+            hub: self.hub.clone(),
         }
+    }
+
+    /// The Channel's state, or the internal error its system's end is.
+    pub(crate) async fn status(&self) -> GrammarMcpResult<ChannelStatus> {
+        self.channel.request(StatusRequest).await.map_err(channel_failed)
+    }
+}
+
+/// The internal error a Channel request's failed system is.
+pub(crate) fn channel_failed(reason: String) -> GrammarMcpError {
+    GrammarMcpError::Internal {
+        phase: "channel".to_string(),
+        reason,
+    }
+}
+
+/// One open's async hub: its endpoint and the senders to its tasks.
+pub(crate) struct Hub {
+    pub(crate) epoch: ChannelEpoch,
+    pub(crate) url: String,
+    pub(crate) packets: tk::UnboundedSender<String>,
+    pub(crate) close: tk::oneshot::Sender<CloseSignal>,
+    /// Held for its drop, which ends the accept loop.
+    pub(crate) _shutdown: tk::oneshot::Sender<()>,
+}
+
+/// The face's async hub, its verify timer, and the emergency lane its pump feeds.
+#[derive(Default)]
+pub(crate) struct HubSlot {
+    hub: std::sync::Mutex<Option<Hub>>,
+    verify: std::sync::Mutex<Option<(ChannelEpoch, tk::oneshot::Sender<()>)>>,
+    emergencies: std::sync::Mutex<Option<EmergencyTx>>,
+    epochs: AtomicU64,
+}
+
+/// A slot's lock, a poisoned one taken as it stands.
+fn held<T>(slot: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    slot.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+impl HubSlot {
+    /// A fresh epoch for the next open.
+    pub(crate) fn next_epoch(&self) -> ChannelEpoch {
+        ChannelEpoch(self.epochs.fetch_add(1, Ordering::SeqCst) + 1)
+    }
+
+    /// Install an open's hub.
+    pub(crate) fn install(
+        &self,
+        hub: Hub,
+    ) {
+        *held(&self.hub) = Some(hub);
+    }
+
+    /// The endpoint of the open of `epoch`'s hub.
+    pub(crate) fn url(
+        &self,
+        epoch: ChannelEpoch,
+    ) -> Option<String> {
+        held(&self.hub)
+            .as_ref()
+            .filter(|hub| hub.epoch == epoch)
+            .map(|hub| hub.url.clone())
+    }
+
+    /// Whether the open of `epoch`'s hub has lost its peer, or has no hub.
+    pub(crate) fn peer_gone(
+        &self,
+        epoch: ChannelEpoch,
+    ) -> bool {
+        match held(&self.hub).as_ref() {
+            Some(hub) if hub.epoch == epoch => hub.packets.is_closed(),
+            _ => true,
+        }
+    }
+
+    /// A line into the open of `epoch`'s hub; a line for another is dropped.
+    pub(crate) fn deliver(
+        &self,
+        epoch: ChannelEpoch,
+        line: String,
+    ) {
+        if let Some(hub) = held(&self.hub).as_ref()
+            && hub.epoch == epoch
+        {
+            let _ = hub.packets.send(line);
+        }
+    }
+
+    /// The open of `epoch`'s hub closed with its frame, its timer stood down.
+    pub(crate) fn close(
+        &self,
+        epoch: ChannelEpoch,
+        code: u16,
+        reason: String,
+    ) {
+        let taken = {
+            let mut slot = held(&self.hub);
+            match slot.as_ref() {
+                Some(hub) if hub.epoch == epoch => slot.take(),
+                _ => None,
+            }
+        };
+        if let Some(hub) = taken {
+            let _ = hub.close.send((code, reason, None));
+        }
+        self.disarm_verify(epoch);
+    }
+
+    /// Close the current hub now, an ack for when its frame is on the wire.
+    pub(crate) fn close_now(
+        &self,
+        code: u16,
+        reason: &str,
+    ) -> Option<tk::oneshot::Receiver<()>> {
+        let hub = held(&self.hub).take()?;
+        let (done_tx, done_rx) = tk::oneshot::channel::<()>();
+        let _ = hub.close.send((code, reason.to_string(), Some(done_tx)));
+        Some(done_rx)
+    }
+
+    /// Arm the verify timer of `epoch`, standing any previous one down.
+    pub(crate) fn arm_verify(
+        &self,
+        epoch: ChannelEpoch,
+        cancel: tk::oneshot::Sender<()>,
+    ) {
+        *held(&self.verify) = Some((epoch, cancel));
+    }
+
+    /// Stand the verify timer of `epoch` down.
+    pub(crate) fn disarm_verify(
+        &self,
+        epoch: ChannelEpoch,
+    ) {
+        let mut verify = held(&self.verify);
+        if verify.as_ref().is_some_and(|(armed, _)| *armed == epoch) {
+            *verify = None;
+        }
+    }
+
+    /// Install the emergency lane the pump feeds.
+    pub(crate) fn install_emergency(
+        &self,
+        tx: EmergencyTx,
+    ) {
+        *held(&self.emergencies) = Some(tx);
+    }
+
+    /// An emergency onto the lane, if one is installed.
+    pub(crate) fn raise(
+        &self,
+        emergency: Emergency,
+    ) {
+        if let Some(tx) = held(&self.emergencies).as_ref() {
+            let _ = tx.send(emergency);
+        }
+    }
+}
+
+/// The face's handler of its Channel: lines into the hub, its frames, emergencies.
+struct HubPump {
+    hub: Arc<HubSlot>,
+}
+
+impl subsys::Handler<ChannelSystem> for HubPump {
+    fn on_packet(&mut self, pkt: subsys::Packet<FromChannelSys>) -> impl Future<Output = Option<subsys::Packet<FromChannelSys>>> + 'static + Send {
+        match pkt.take_msg() {
+            FromChannelSys::Line(Line { epoch, line }) => self.hub.deliver(epoch, line),
+            FromChannelSys::CloseHub(CloseHub {
+                epoch,
+                code,
+                reason,
+            }) => self.hub.close(epoch, code, reason),
+            FromChannelSys::Emergency(emergency) => self.hub.raise(emergency),
+            _ => {}
+        }
+        std::future::ready(None)
     }
 }
 
@@ -33,21 +237,35 @@ const SHUTDOWN_REASON: &str = "host shutting down";
 /// How long a shutdown waits for the close frame to reach the wire.
 const CLOSE_FLUSH_GRACE: tk::TkDuration = tk::TkDuration::from_millis(500);
 
-/// Tell the channel's peer we are going away, and wait for the flush.
-pub(crate) async fn close_channel_for_shutdown() {
-    if let Some(done) = channel_handle().close_and_await(CLOSE_GOING_AWAY, SHUTDOWN_REASON) {
-        let _ = tk::timeout(CLOSE_FLUSH_GRACE, done).await;
+/// What a server's end closes its Channel through, its peer told first.
+#[derive(Clone)]
+pub(crate) struct ChannelCloser {
+    channel: Arc<ChannelHandle>,
+    hub: Arc<HubSlot>,
+}
+
+impl ChannelCloser {
+    /// Tell the Channel's peer we are going away, and wait for the flush.
+    pub(crate) async fn close_for_shutdown(&self) {
+        let done = self.hub.close_now(CLOSE_GOING_AWAY, SHUTDOWN_REASON);
+        let close = CloseRequest {
+            code: CLOSE_GOING_AWAY,
+            reason: SHUTDOWN_REASON.to_string(),
+            prune: false,
+        };
+        let _ = self.channel.request(close).await;
+        if let Some(done) = done {
+            let _ = tk::timeout(CLOSE_FLUSH_GRACE, done).await;
+        }
     }
 }
 
 /// Sweep on TERM, INT, or HUP, then exit with the conventional `128 + signo`.
-///
-/// The Channel closes first, then the server's own shutdown runs.
-///
-/// The scratch directory goes last: the exit skips the ordinary end's removal.
 #[cfg(unix)]
-pub(crate) fn spawn_signal_sweep<F, Fut>(shutdown: F)
-where
+pub(crate) fn spawn_signal_sweep<F, Fut>(
+    closer: ChannelCloser,
+    shutdown: F,
+) where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + Send,
 {
@@ -78,7 +296,7 @@ where
             _ = interrupt.recv() => tk::SignalKind::interrupt().as_raw_value(),
             _ = hangup.recv() => tk::SignalKind::hangup().as_raw_value(),
         };
-        close_channel_for_shutdown().await;
+        closer.close_for_shutdown().await;
         shutdown().await;
         remove_scratch_dirs();
         process::exit(128 + signo);
@@ -87,8 +305,10 @@ where
 
 /// Off Unix no signal is swept; the ordinary end closes and cleans up.
 #[cfg(not(unix))]
-pub(crate) fn spawn_signal_sweep<F, Fut>(_shutdown: F)
-where
+pub(crate) fn spawn_signal_sweep<F, Fut>(
+    _closer: ChannelCloser,
+    _shutdown: F,
+) where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + Send,
 {

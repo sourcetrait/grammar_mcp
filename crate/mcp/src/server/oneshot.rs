@@ -8,6 +8,13 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
             return 1;
         }
         let (nonce_gen, mcp_nom) = process_identity();
+        let face = match ChannelFace::start(nonce_gen.clone(), mcp_nom.clone()).await {
+            Ok(face) => face,
+            Err(e) => {
+                eprintln!("{e}");
+                return 1;
+            }
+        };
         let system = match start_system(&mcp_nom, false).await {
             Ok(system) => Arc::new(system),
             Err(e) => {
@@ -15,7 +22,7 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
                 return 1;
             }
         };
-        let server = NuSh::new(nonce_gen, mcp_nom, system, &DenySet::default());
+        let server = NuSh::new(face, nonce_gen, mcp_nom, system, &DenySet::default());
         let host = LOCAL_HOST.to_string();
         let result = match tool {
             CliTool::Call {

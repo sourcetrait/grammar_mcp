@@ -30,6 +30,10 @@ const VERIFY_WINDOW: tk::TkDuration = tk::TkDuration::from_secs(300);
 const CLOSE_UNVERIFIED: u16 = 1008;
 const UNVERIFIED_REASON: &str = "verification window expired";
 
+/// RFC 6455 internal error - the open's hub never started.
+const CLOSE_UNSTARTED: u16 = 1011;
+const UNSTARTED_REASON: &str = "the channel hub did not start";
+
 /// The host's `channel/Open` packet, rendered.
 fn greeting(
     nonce_gen: &datum::NonceGenerator,
@@ -41,32 +45,8 @@ fn greeting(
     })
 }
 
-/// Re-greet an existing channel's peer.
-fn resend_open_packet(
-    channel: &ChannelHandle,
-    nonce_gen: &datum::NonceGenerator,
-    mcp_nom: &datum::NomPair,
-) -> Result<(), GrammarMcpError> {
-    let line = greeting(nonce_gen, mcp_nom)?;
-    channel.send_control(line).map_err(|e| match e {
-        ChannelSendError::NotOpen => GrammarMcpError::ChannelNotOpen,
-        _ => GrammarMcpError::ChannelPeerGone,
-    })
-}
-
-/// Start the verify window.
-fn arm_verify_timer(channel: Arc<ChannelHandle>) {
-    let (cancel_tx, cancel_rx) = tk::oneshot::channel::<()>();
-    channel.arm_verify(cancel_tx);
-    tk::spawn(async move {
-        tokio::select! {
-            _ = cancel_rx => {}
-            _ = tk::sleep(VERIFY_WINDOW) => {
-                channel.close_if_unverified(CLOSE_UNVERIFIED, UNVERIFIED_REASON);
-            }
-        }
-    });
-}
+/// What an open came to: its label, its epoch, its endpoint, and its inbox.
+type OpenedChannel = (&'static str, ChannelEpoch, Option<String>, PathBuf);
 
 impl ChannelFace {
     /// `interface channel open`: open the packet channel in its mode.
@@ -76,12 +56,11 @@ impl ChannelFace {
         p: ChannelOpenParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         let _opening = self.channel_open_lock.lock().await;
-        let opened = match self.open_or_report(p.mode).await {
+        let (label, epoch, wss, inbox) = match self.open_or_report(p.mode).await {
             Ok(opened) => opened,
             Err(error) => return error_to_call_result(error, nonce),
         };
-        arm_verify_timer(self.channel.clone());
-        let (label, wss, inbox) = opened;
+        self.arm_verify_timer(epoch);
         success(
             nonce,
             &ChannelOpenResult {
@@ -97,53 +76,131 @@ impl ChannelFace {
     async fn open_or_report(
         &self,
         mode: ChannelMode,
-    ) -> Result<(&'static str, Option<String>, PathBuf), GrammarMcpError> {
-        let status = self.channel.status();
-        if matches!(status.phase, ChannelPhase::Closed) {
+    ) -> Result<OpenedChannel, GrammarMcpError> {
+        let status = self.status().await?;
+        if matches!(status.state.phase, ChannelPhase::Closed) {
             let inbox = make_channel_dir(self.mcp_nom.as_str())
                 .map_err(|reason| GrammarMcpError::ChannelStart { reason })?;
-            self.channel.set_inbox(inbox.clone());
-            let started = match mode {
-                ChannelMode::Async => {
-                    start_channel_hub(&self.channel, &self.mcp_nom, self.nonce_gen.clone())
-                        .await
-                        .map(Some)
-                }
-                ChannelMode::Sync => greeting(&self.nonce_gen, &self.mcp_nom).map(|line| {
-                    self.channel.install_sync(line);
-                    None
-                }),
-            };
-            return match started {
-                Ok(wss) => Ok((STATUS_NEW, wss, inbox)),
+            let epoch = self.hub.next_epoch();
+            return match self.start_open(epoch, mode, &inbox).await {
+                Ok(wss) => Ok((STATUS_NEW, epoch, wss, inbox)),
                 Err(error) => {
-                    if let Some(dir) = self.channel.take_inbox() {
-                        remove_channel_dir(&dir);
-                    }
+                    remove_channel_dir(&inbox);
                     Err(error)
                 }
             };
         }
-        let open = status.mode.ok_or_else(|| GrammarMcpError::Internal {
+        let open = status.state.mode.ok_or_else(|| GrammarMcpError::Internal {
             phase: "channel_open::mode".to_string(),
             reason: "an open channel carries no mode".to_string(),
         })?;
         if open != mode {
             return Err(GrammarMcpError::ChannelWrongMode { open, asked: mode });
         }
-        if open == ChannelMode::Async && status.url.is_none() {
-            return Err(GrammarMcpError::Internal {
-                phase: "channel_open::url".to_string(),
-                reason: "an open channel carries no url".to_string(),
-            });
+        let epoch = status.state.epoch;
+        let wss = match open {
+            ChannelMode::Async => Some(self.hub.url(epoch).ok_or_else(|| {
+                GrammarMcpError::Internal {
+                    phase: "channel_open::url".to_string(),
+                    reason: "an open channel carries no url".to_string(),
+                }
+            })?),
+            ChannelMode::Sync => None,
+        };
+        if status.state.claimed {
+            self.resend_open_packet(open, epoch).await?;
         }
-        if status.claimed {
-            resend_open_packet(&self.channel, &self.nonce_gen, &self.mcp_nom)?;
-        }
-        let inbox = self.channel.inbox().ok_or_else(|| GrammarMcpError::Internal {
+        let inbox = status.inbox.map(PathBuf::from).ok_or_else(|| GrammarMcpError::Internal {
             phase: "channel_open::inbox".to_string(),
             reason: "an open channel carries no inbox".to_string(),
         })?;
-        Ok((STATUS_EXISTING, status.url, inbox))
+        Ok((STATUS_EXISTING, epoch, wss, inbox))
+    }
+
+    /// Open the Channel on `inbox`, then start its hub; a hub that fails closes it.
+    async fn start_open(
+        &self,
+        epoch: ChannelEpoch,
+        mode: ChannelMode,
+        inbox: &Path,
+    ) -> Result<Option<String>, GrammarMcpError> {
+        let inbox = inbox
+            .to_str()
+            .ok_or_else(|| GrammarMcpError::ChannelStart {
+                reason: format!("the inbox {} is not UTF-8", inbox.display()),
+            })?
+            .to_string();
+        let greeting = match mode {
+            ChannelMode::Sync => Some(greeting(&self.nonce_gen, &self.mcp_nom)?),
+            ChannelMode::Async => None,
+        };
+        let open = OpenRequest {
+            epoch,
+            mode,
+            inbox,
+            greeting,
+        };
+        self.channel.request(open).await.map_err(channel_failed)?;
+        if mode == ChannelMode::Sync {
+            return Ok(None);
+        }
+        match start_channel_hub(self.channel.clone(), epoch, &self.mcp_nom, self.nonce_gen.clone())
+            .await
+        {
+            Ok(hub) => {
+                let url = hub.url.clone();
+                self.hub.install(hub);
+                Ok(Some(url))
+            }
+            Err(error) => {
+                let close = CloseRequest {
+                    code: CLOSE_UNSTARTED,
+                    reason: UNSTARTED_REASON.to_string(),
+                    prune: true,
+                };
+                let _ = self.channel.request(close).await;
+                Err(error)
+            }
+        }
+    }
+
+    /// Re-greet an existing channel's peer.
+    async fn resend_open_packet(
+        &self,
+        mode: ChannelMode,
+        epoch: ChannelEpoch,
+    ) -> Result<(), GrammarMcpError> {
+        if mode == ChannelMode::Async && self.hub.peer_gone(epoch) {
+            return Err(GrammarMcpError::ChannelPeerGone);
+        }
+        let line = greeting(&self.nonce_gen, &self.mcp_nom)?;
+        match self.channel.request(HostRequest { line }).await.map_err(channel_failed)? {
+            Ok(()) => Ok(()),
+            Err(ChannelSendError::NotOpen) => Err(GrammarMcpError::ChannelNotOpen),
+            Err(_) => Err(GrammarMcpError::ChannelPeerGone),
+        }
+    }
+
+    /// Start the verify window of the open of `epoch`.
+    fn arm_verify_timer(
+        &self,
+        epoch: ChannelEpoch,
+    ) {
+        let (cancel_tx, cancel_rx) = tk::oneshot::channel::<()>();
+        self.hub.arm_verify(epoch, cancel_tx);
+        let channel = self.channel.clone();
+        tk::spawn(async move {
+            tokio::select! {
+                _ = cancel_rx => {}
+                _ = tk::sleep(VERIFY_WINDOW) => {
+                    let expire = ExpireRequest {
+                        epoch,
+                        code: CLOSE_UNVERIFIED,
+                        reason: UNVERIFIED_REASON.to_string(),
+                    };
+                    let _ = channel.request(expire).await;
+                }
+            }
+        });
     }
 }

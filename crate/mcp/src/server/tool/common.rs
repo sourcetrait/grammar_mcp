@@ -20,12 +20,12 @@ pub struct NuSh {
 #[cfg(feature = "embedded-cli")]
 impl NuSh {
     pub(crate) fn new(
+        face: ChannelFace,
         nonce_gen: Arc<datum::NonceGenerator>,
         mcp_nom: datum::NomPair,
         system: Arc<McpHandle>,
         deny: &DenySet,
     ) -> Self {
-        let face = ChannelFace::new(nonce_gen.clone(), mcp_nom.clone());
         Self {
             system,
             nonce_gen,

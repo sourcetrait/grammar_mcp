@@ -1,8 +1,4 @@
 //! The serving MCP of every build, a client of its runtime.
-//!
-//! A runtime-owned tool or interface command answers the existing envelope with
-//! `daemon::unavailable` until the native client reaches a runtime; serving never
-//! starts an engine or makes engine or equip state.
 use crate::*;
 
 /// User's envelope schema, heading the server's instructions.
@@ -23,12 +19,12 @@ pub struct ClientSh {
 
 impl ClientSh {
     pub(crate) fn new(
+        face: ChannelFace,
         nonce_gen: Arc<datum::NonceGenerator>,
-        mcp_nom: datum::NomPair,
         deny: &DenySet,
     ) -> Self {
         Self {
-            face: ChannelFace::new(nonce_gen.clone(), mcp_nom),
+            face,
             nonce_gen,
             interface_engine: Arc::new(interface_engine(deny)),
             tool_router: Self::tool_router(),
@@ -184,20 +180,20 @@ impl mcp::ServerHandler for ClientSh {
 }
 
 /// Serve MCP over stdio as a client until the agent leaves; no engine starts.
-///
-/// Its scratch directories are made first, since the Channel's inbox goes beside them.
 pub(crate) async fn serve_client() -> Result<(), String> {
     make_scratch_dirs()?;
     ensure_cert_profile();
     let (nonce_gen, mcp_nom) = process_identity();
-    let server = ClientSh::new(nonce_gen, mcp_nom, &config().deny);
-    spawn_signal_sweep(|| async {});
+    let face = ChannelFace::start(nonce_gen.clone(), mcp_nom).await?;
+    let closer = face.closer();
+    let server = ClientSh::new(face, nonce_gen, &config().deny);
+    spawn_signal_sweep(closer.clone(), || async {});
     let service = server
         .serve(mcp::stdio())
         .await
         .map_err(|e| format!("serve stdio: {e}"))?;
     let served = service.waiting().await;
-    close_channel_for_shutdown().await;
+    closer.close_for_shutdown().await;
     served
         .map(|_| ())
         .map_err(|e| format!("the stdio service: {e}"))

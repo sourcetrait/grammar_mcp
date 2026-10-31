@@ -9,12 +9,12 @@ impl ChannelFace {
         &self,
         nonce: datum::Nonce,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let (lines, dropped) = match self.channel.take_sync() {
-            Ok(taken) => taken,
-            Err(ChannelSyncError::NotOpen) => {
+        let synced = match self.channel.request(SyncRequest).await {
+            Ok(Ok(synced)) => synced,
+            Ok(Err(ChannelSyncError::NotOpen)) => {
                 return error_to_call_result(GrammarMcpError::ChannelNotOpen, nonce);
             }
-            Err(ChannelSyncError::WrongMode(open)) => {
+            Ok(Err(ChannelSyncError::WrongMode(open))) => {
                 return error_to_call_result(
                     GrammarMcpError::ChannelWrongMode {
                         open,
@@ -23,8 +23,9 @@ impl ChannelFace {
                     nonce,
                 );
             }
+            Err(reason) => return error_to_call_result(channel_failed(reason), nonce),
         };
-        let packets = match lines.iter().map(|line| packet_record(line)).collect() {
+        let packets = match synced.lines.iter().map(|line| packet_record(line)).collect() {
             Ok(packets) => packets,
             Err(reason) => {
                 return error_to_call_result(
@@ -39,7 +40,7 @@ impl ChannelFace {
         let span = nu::Span::unknown();
         let mut result = nu::Record::new();
         result.insert("packets", nu::Value::list(packets, span));
-        result.insert("dropped", nu::Value::int(dropped as i64, span));
+        result.insert("dropped", nu::Value::int(synced.dropped as i64, span));
         success_value(nonce, nu::Value::record(result, span))
     }
 }

@@ -27,8 +27,6 @@ pub(crate) struct ConfigToml {
 }
 
 /// The `[identity]` table (file layer): the host's own key pair.
-///
-/// The Channel presents it, and so does every remote channel's link.
 #[derive(Debug, Clone, Default, ser::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct IdentityConfigToml {
@@ -39,8 +37,6 @@ pub(crate) struct IdentityConfigToml {
 }
 
 /// The `[supervisor]` table: when a resource level is worth one warning.
-///
-/// The operator reads it; a build without one accepts the table and ignores it.
 #[derive(Debug, Clone, Default, ser::Deserialize)]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(not(feature = "embedded-cli"), allow(dead_code))]
@@ -99,26 +95,6 @@ pub(crate) struct ChannelConfig {
     pub port: Option<u16>,
     /// The starting spam policy.
     pub spam: SpamThresholds,
-}
-
-/// How much one origin may emit before it is warned, then stopped.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct SpamThresholds {
-    pub warn_window: tk::TkDuration,
-    pub warn_rate: u32,
-    pub error_window: tk::TkDuration,
-    pub error_rate: u32,
-}
-
-impl SpamThresholds {
-    /// The longer of the two windows.
-    pub(crate) fn retention(&self) -> tk::TkDuration {
-        if self.warn_window > self.error_window {
-            self.warn_window
-        } else {
-            self.error_window
-        }
-    }
 }
 
 /// Merge one `[channel]` table over the embedded base, then the code defaults.
