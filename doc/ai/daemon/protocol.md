@@ -104,6 +104,10 @@ On the commit that froze this receipt:
 - `cargo clippy --locked -p sourcetrait_grammar_protocol --all-targets`: clean.
 - `grammard-probe run --case wire`: its six assertions pass against the
   vectors and manifest compiled into it.
+- The workspace battery at `64c31e9`, both cohorts' builds, tests, and lints,
+  passes on a Linux host and a macOS guest: the client cohort's 399 crate tests
+  over 81 targets and 29 system tests, the embedded cohort's 378 crate tests
+  and 112 system tests on Linux and 109 on macOS, and clippy at its baseline.
 
 ## The fixture driver
 
