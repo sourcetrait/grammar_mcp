@@ -14,6 +14,8 @@ fn uid() -> u32 {
 /// A scratch tree of homes: each made, and the environment naming them.
 struct Homes {
     root: tempfile::TempDir,
+    /// The runtime home, short enough for a socket under macOS's 104-byte sockaddr.
+    run: tempfile::TempDir,
     env: BTreeMap<String, String>,
 }
 
@@ -21,6 +23,7 @@ impl Homes {
     /// Homes named by their UENV variables, every one made.
     fn new() -> Self {
         let root = tempfile::tempdir().expect("a scratch root");
+        let run = tempfile::Builder::new().prefix("g").tempdir_in("/tmp").expect("a runtime home");
         let mut env = BTreeMap::new();
         for (var, dir) in [
             ("UENV_USR_CONFIG", "config"),
@@ -28,14 +31,14 @@ impl Homes {
             ("UENV_USR_CACHE", "cache"),
             ("UENV_USR_STATE", "state"),
             ("UENV_USR_TMP", "tmp"),
-            ("UENV_USR_TRANSIENT", "run"),
         ] {
             let path = root.path().join(dir);
             std::fs::create_dir_all(&path).expect("a home");
             env.insert(var.to_string(), path.to_string_lossy().into_owned());
         }
+        env.insert("UENV_USR_TRANSIENT".to_string(), run.path().to_string_lossy().into_owned());
         env.insert("HOME".to_string(), root.path().to_string_lossy().into_owned());
-        Self { root, env }
+        Self { root, run, env }
     }
 
     fn path(&self, rel: &str) -> PathBuf {
@@ -140,7 +143,7 @@ fn the_instance_file_loads_once_its_owner_mode_and_identity_hold() {
     assert_eq!(loaded.workdir, workdir);
     assert_eq!(loaded.paths.state, homes.path("state").join("grammar").join("grammard").join(key.as_str()));
     assert_eq!(loaded.paths.data, homes.path("data").join("grammar").join("mcp").join("two").join("default"));
-    assert_eq!(loaded.paths.socket, Some(homes.path("run").join("grammard").join(format!("{key}.sock"))));
+    assert_eq!(loaded.paths.socket, Some(homes.run.path().join("grammard").join(format!("{key}.sock"))));
     let reloaded = InstanceConfig::load(uid(), "two", "default", &homes.env).unwrap();
     assert_eq!(loaded, reloaded, "the same file, the same instance");
 }
