@@ -1,4 +1,5 @@
 //! The face's hub slot: its verify timer, hub lanes, shutdown ack, and policy.
+use crate::server::channel::face::HubSlot;
 use crate::*;
 use sourcetrait_grammar_protocol::ChannelSpamWarningEmergency;
 

@@ -5,14 +5,12 @@ use crate::*;
 /// The kind a runtime-owned operation answers while no runtime is reachable.
 const UNAVAILABLE: &str = "daemon::unavailable";
 
-/// A client on the default config, its Channel's system running on `rt`.
+/// A client on the default config, its controller's systems running on `rt`.
 fn client(rt: &tokio::runtime::Runtime) -> ClientSh {
-    CONFIG.get_or_init(Config::default);
-    let (nonce_gen, mcp_nom) = process_identity();
-    let face = rt
-        .block_on(ChannelFace::start(nonce_gen.clone(), mcp_nom))
-        .expect("the Channel's system starts");
-    ClientSh::new(face, nonce_gen, &config().deny)
+    let controller = rt
+        .block_on(McpController::client(Arc::new(Config::default())))
+        .expect("the face's systems start");
+    ClientSh::new(controller)
 }
 
 /// A runtime for a client and its tools' futures.
@@ -48,7 +46,7 @@ fn interface_kind(rt: &tokio::runtime::Runtime, client: &ClientSh, command: &str
 fn the_client_routes_the_four_tools() {
     let rt = runtime();
     let _client = client(&rt);
-    let mut names: Vec<String> = ClientSh::tool_router()
+    let mut names: Vec<String> = ClientSh::tool_router(&DenySet::default())
         .list_all()
         .into_iter()
         .map(|tool| tool.name.to_string())

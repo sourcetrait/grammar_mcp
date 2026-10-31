@@ -7,10 +7,11 @@ tests exercise the handlers without spawning the binary and assert on the values
 nushell's own kinds keep: a duration stays a duration and an int never a float.
 
 The process-global constraint is the thing to hold before writing a test here.
-`CONFIG` is a `OnceLock` and the homes `LazyLock`s that read the environment at first
-access, so every `TestServer` in one test binary shares one namespace: one id and
-namespace, one data home, one equip git repo, and one host nom, the process's
-(`process_identity`, `server/identity.rs`), which its engine exports. The module
+The engine starts once a process and the homes are `LazyLock`s that read the
+environment at first access, so every `TestServer` in one test binary shares one
+namespace: one id and namespace, one data home, one equip git repo, and one host
+nom, the process's (`process_identity`, `server/identity.rs`), which its engine
+exports. The module
 is `embedded-cli`'s alone, as every test reaching it is. Per-file isolation is therefore free
 (each `tests/*.rs` is its own process) while within a file tests must use unique
 equip names and must not rely on a pristine namespace. A test that genuinely needs
@@ -40,25 +41,31 @@ a no-op rather than a guess: without a liveness check it could delete a live
 concurrent binary's namespace. Best-effort throughout, since a failed sweep must never
 fail a test. Pid reuse only defers a removal by one round.
 
-## fn ensure_test_config
+## fn namespace_config
+Built over `Config::default()` rather than field-by-field so the harness picks
+up every embedded default, `[channel]` included, without restating them; only
+the id, namespace, work dir, and remotes file are test-specific. It reads no
+home, so building it before the environment is set is safe.
+
+## fn ensure_test_env
 The `unsafe` block is sound because the `Once` serializes it and it runs before
-the first read of the homes - they are only touched inside `ensure_substrate`
-and the cache paths, all of which are reached through a `TestServer` constructed
-after this. That ordering is the entire safety argument, so a future caller
-reaching a home earlier would break it.
+the first read of the homes - they are only touched inside `init_engine`,
+`ensure_substrate`, and the cache paths, all of which are reached after this.
+That ordering is the entire safety argument, so a future caller reaching a home
+earlier would break it.
 
 The UENV homes are set beside the XDG ones because the host reads a home's UENV
 variable first (`home.rs`): a runner whose login sets the UENV tree would
 otherwise put every in-process test's state in the user's real data home.
 
-The config is built from `Config::default()` rather than field-by-field so the
-harness picks up every embedded default, `[channel]` included, without restating
-them; only the id, namespace and work dir are test-specific.
-
 The engine is initialized here, once a process, since its parameters are
-process-wide: `init_engine` resolves nushell's config dirs as the host does at startup,
-which every engine reads, so the lint and template drivers below call this first,
-because they build an engine without a `TestServer`.
+process-wide: `init_engine` resolves nushell's config dirs as the host does at
+startup, which every engine reads, so the lint and template drivers below call
+this first, because they build an engine without a `TestServer`.
+
+## fn test_config
+Each server takes a config of its own, equal to every other the binary builds,
+since a controller holds the config it starts on.
 
 ## struct TestServer
 
@@ -68,9 +75,9 @@ and the rig validator parse inline on a worker, and a pathological module graph
 overflows the 2 MB default and aborts - which in-process would take the test
 binary down rather than just a host.
 
-A fresh `TestServer` per test builds a fresh `NuSh` on an mcp system of its own, its
-engine alone, which is roughly the spawned binary's startup cost minus the process
-spawn. That is what makes the in-process tier fast and cleanly isolated - each test gets
+A fresh `TestServer` per test builds a fresh `NuSh` on a controller of its own, the
+face's systems and the engine, which is roughly the spawned binary's startup cost minus
+the process spawn. That is what makes the in-process tier fast and cleanly isolated - each test gets
 its own stateful engine on its own runtime, with no subprocess. It leaves the serve
 path's supervision out: an operator would take the namespace's host lock and sample the
 test process.
@@ -106,10 +113,9 @@ An expected value is written as the NUON text it is, so a test reads as the
 envelope it compares.
 
 ## struct SupervisedSystem
-mcp's system as the serve path starts it, the operator with the engine, for the one
-test of its whole lifecycle; that test is a binary of its own, since the host lock it
-holds is the namespace's. A face starts beside it, as on the serve path, since mcp's
-system's controller routes the engine's host asks to the face's systems.
+mcp's controller as the serve path starts it, supervising, the operator with the
+engine, for the one test of its whole lifecycle; that test is a binary of its own,
+since the host lock it holds is the namespace's.
 
 ### fn host_lock_held
 Tried, not read: a non-blocking lock on a fresh open of the file conflicts with the

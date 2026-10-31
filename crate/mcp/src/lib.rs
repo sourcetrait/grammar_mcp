@@ -5,11 +5,11 @@ pub(crate) mod run;
 pub(crate) mod server {
     pub(crate) mod cert;
     pub(crate) mod channel {
-        pub(crate) mod bridge;
         pub(crate) mod face;
         pub(crate) mod hub;
     }
     pub(crate) mod client;
+    pub(crate) mod controller;
     pub(crate) mod emergency;
     #[cfg(feature = "embedded-cli")]
     pub(crate) mod host;
@@ -22,8 +22,6 @@ pub(crate) mod server {
     pub(crate) mod purview;
     #[cfg(feature = "embedded-cli")]
     pub(crate) mod run;
-    #[cfg(feature = "embedded-cli")]
-    pub(crate) mod system;
     pub(crate) mod tool {
         pub(crate) mod call;
         pub(crate) mod channel_close;
@@ -79,12 +77,12 @@ pub mod guts;
 
 pub(crate) use crate::{
     config::{
-        AGENT_CONFIG_FILE, CONFIG, Config, DEFAULT_NAMESPACE, DenySet, TEST_NAMESPACE, config,
-        default_id, default_work_dir, expand_defaults, expand_path,
+        AGENT_CONFIG_FILE, Config, DEFAULT_NAMESPACE, DenySet, TEST_NAMESPACE, default_id,
+        default_work_dir, expand_defaults, expand_path,
     },
     home::{
-        TMP_DEFAULT, base_dirs, cache_base_dir, check_base_dirs, data_base_dir, env_dir,
-        home_var, home_vars, uenv_partner, uenv_standard,
+        TMP_DEFAULT, base_dirs, check_base_dirs, env_dir, home_var, home_vars, uenv_partner,
+        uenv_standard,
     },
     scratch::{
         make_channel_dir, make_scratch_dirs, remove_channel_dir, remove_scratch_dirs, tmp_dir,
@@ -95,14 +93,14 @@ pub(crate) use crate::{
     server::{
         cert::ensure_cert_profile,
         channel::{
-            bridge::{host_channel, set_host_channel},
             face::{
-                ChannelFace, CloseSignal as ChannelCloseSignal, Hub, HubSlot, channel_failed,
-                peer_failed, spawn_signal_sweep,
+                ChannelFace, CloseSignal as ChannelCloseSignal, Hub, channel_failed, peer_failed,
+                spawn_signal_sweep,
             },
             hub::{FROM_MCP, open_packet, start as start_channel_hub},
         },
         client::serve_client,
+        controller::{McpController, log_closed, log_status},
         emergency::{EmergencyPolicy, emergency_log_path},
         identity::{mint_nonce, process_identity},
         tool::{
@@ -131,7 +129,6 @@ pub(crate) use crate::server::{
     operator::{OperatorWatch, spawn_observer},
     purview::{CurrentPurview, pattern_delta, unknown_purview},
     run::run_server,
-    system::{FromMcpSys, McpHandle, McpSystem, Notice, ToMcpSys, notice_status, start_system},
     tool::common::{NuSh, answer_value, unexpected},
 };
 
@@ -139,9 +136,9 @@ pub(crate) use crate::server::{
 pub(crate) use sourcetrait_grammar_engine::{
     self as engine, EVAL_STACK_SIZE, EngineHandle, EngineParams, EngineSystem, FromEngine,
     GRIMM, HostAnswer, HostAsk, HostStop, LintEngine, NU_VERSION, NamepathPattern,
-    NamepathStr, PURVIEW_ALL, PURVIEW_DEFAULT, ParseEngine, PinAsk, PluginInfo, PurviewAnswer,
-    PurviewConfigureRequest, PurviewListRequest, PurviewRequest, PurviewResolution,
-    PurviewResolveRequest, PurviewRigRequest, ToEngine, analyze_definition, build_call_source,
+    NamepathStr, PURVIEW_ALL, PURVIEW_DEFAULT, ParseEngine, PinAsk, PluginInfo,
+    PurviewConfigureRequest, PurviewListRequest, PurviewResolution, PurviewResolveRequest,
+    PurviewRigRequest, ToEngine, analyze_definition, build_call_source,
     build_execute_source, definition_file, ensure_default_purview, ensure_equip_store,
     ensure_plugin_registry, equip_root, file_start, grimm_signatures, index_from_nuon,
     install_builtins, lib_dir, lint_block, list_registered_plugins, purview_ref,
@@ -178,10 +175,9 @@ pub(crate) use sourcetrait_grammar_protocol::{
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
-    COMMANDS, CallRequest, CheckSummary, CommitResult, ControlAnswer, ControlRequest, Diagnostic,
-    EngineCommand, EngineError, EngineHealth, EngineResult, ExecuteRequest, FromEngineSys, Host,
-    INTERFACE, InspectDoc, RerunRequest, SignaturesDoc, ToEngineSys, ValueAnswer,
-    command_by_words,
+    COMMANDS, CallRequest, CheckSummary, CommitResult, ControlAnswer, Diagnostic, EngineCommand,
+    EngineError, EngineHealth, EngineResult, ExecuteRequest, Host, INTERFACE, InspectDoc,
+    RerunRequest, SignaturesDoc, ValueAnswer, command_by_words,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{Emergency, EmergencyKind, Observation};
@@ -203,7 +199,7 @@ pub(crate) use std::{
     process,
     sync::{
         Arc, LazyLock, OnceLock,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
@@ -225,7 +221,7 @@ pub(crate) mod nu {
     pub(crate) use nuon::{ToNuonConfig, from_nuon, to_nuon};
 }
 
-pub(crate) use sourcetrait_common::{agnostic, cereal, datum, subsys};
+pub(crate) use sourcetrait_common::{datum, subsys};
 
 pub(crate) mod ser {
     pub(crate) use ::serde::{Deserialize, Serialize};
@@ -264,12 +260,12 @@ pub(crate) use tokio_rustls::rustls::pki_types::pem::PemObject;
 
 pub(crate) mod tk {
     pub(crate) use tokio::{
-        select, spawn,
+        spawn,
         net::{TcpListener, TcpStream},
         task::{JoinHandle, spawn_blocking},
         sync::{
             Mutex as AsyncMutex, oneshot,
-            mpsc::{Sender, UnboundedReceiver, UnboundedSender, unbounded_channel},
+            mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
         },
         time::{Duration as TkDuration, sleep, timeout},
     };

@@ -35,7 +35,8 @@ quietly moving the files.
 Read once, as `BASE_DIRS` is, so a relative variable is reported once rather
 than at every path built under it, and every path agrees with the first.
 
-## fn cache_base_dir
-ID FIRST, then namespace, so an agent's whole state across every namespace is ONE
-subtree to wipe or back up. The vendor and app segments above that keep the tree
-from colliding with anything else under the home.
+## fn Config::cache_home
+The config's id first, then its namespace, so an agent's whole state across
+every namespace is one subtree to wipe or back up. The vendor and app segments
+above that keep the tree from colliding with anything else under the home. The
+data home is built the same way under its own root (`Config::data_home`).

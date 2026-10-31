@@ -381,9 +381,3 @@ impl DenySet {
             .any(|tool| matches!(tool, DeniableTool::Command(denied) if *denied == words))
     }
 }
-
-pub(crate) static CONFIG: OnceLock<Config> = OnceLock::new();
-
-pub(crate) fn config() -> &'static Config {
-    CONFIG.get().expect("CONFIG set at startup")
-}

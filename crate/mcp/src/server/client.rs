@@ -9,31 +9,27 @@ const UNAVAILABLE_REASON: &str = "no runtime endpoint is configured for this cli
 
 /// The serving MCP: the four tools on no engine, the Channel on its own hub.
 pub struct ClientSh {
+    /// The controller of the face's systems, whose Channel commands are the client's.
+    controller: Arc<McpController>,
     nonce_gen: Arc<datum::NonceGenerator>,
     /// The engine an interface command parses on: its commands, nothing else.
     interface_engine: Arc<nu::EngineState>,
-    /// The Channel's and the remote channels' commands, the frontend's own.
-    face: ChannelFace,
     tool_router: mcp::ToolRouter<ClientSh>,
 }
 
 impl ClientSh {
-    pub(crate) fn new(
-        face: ChannelFace,
-        nonce_gen: Arc<datum::NonceGenerator>,
-        deny: &DenySet,
-    ) -> Self {
+    pub(crate) fn new(controller: Arc<McpController>) -> Self {
+        let deny = &controller.config.deny;
         Self {
-            face,
-            nonce_gen,
+            nonce_gen: controller.face.nonce_gen.clone(),
             interface_engine: Arc::new(interface_engine_for(deny)),
-            tool_router: Self::tool_router(),
+            tool_router: Self::tool_router(deny),
+            controller,
         }
     }
 
     /// The four tools the deny set leaves, `interface`'s description its commands.
-    pub(crate) fn tool_router() -> mcp::ToolRouter<Self> {
-        let deny = &config().deny;
+    pub(crate) fn tool_router(deny: &DenySet) -> mcp::ToolRouter<Self> {
         let mut router = mcp::ToolRouter::new();
         if !deny.denies(DeniableTool::Execute) {
             router += Self::execute_router();
@@ -78,9 +74,10 @@ impl ClientSh {
         nonce: datum::Nonce,
         command: InterfaceCommand,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let face = &self.controller.face;
         match command {
-            InterfaceCommand::Channel(command) => self.face.run_channel(nonce, command).await,
-            InterfaceCommand::Peer(command) => self.face.run_peer(nonce, command).await,
+            InterfaceCommand::Channel(command) => face.run_channel(nonce, command).await,
+            InterfaceCommand::Peer(command) => face.run_peer(nonce, command).await,
             InterfaceCommand::Engine(_) => Self::unavailable(nonce),
         }
     }
@@ -148,8 +145,8 @@ impl ClientSh {
 #[mcp::tool_handler(router = self.tool_router)]
 impl mcp::ServerHandler for ClientSh {
     fn get_info(&self) -> mcp::ServerConfig {
-        let id = &config().id;
-        let namespace = &config().namespace;
+        let id = &self.controller.config.id;
+        let namespace = &self.controller.config.namespace;
         let title = if namespace == "default" {
             "grammar".to_string()
         } else {
@@ -170,20 +167,18 @@ impl mcp::ServerHandler for ClientSh {
 }
 
 /// Serve MCP over stdio as a client until the agent leaves; no engine starts.
-pub(crate) async fn serve_client() -> Result<(), String> {
+pub(crate) async fn serve_client(config: Arc<Config>) -> Result<(), String> {
     make_scratch_dirs()?;
     ensure_cert_profile();
-    let (nonce_gen, mcp_nom) = process_identity();
-    let face = ChannelFace::start(nonce_gen.clone(), mcp_nom).await?;
-    let closer = face.closer();
-    let server = ClientSh::new(face, nonce_gen, &config().deny);
-    spawn_signal_sweep(closer.clone(), || async {});
+    let controller = McpController::client(config).await?;
+    controller.sweep_signals();
+    let server = ClientSh::new(controller.clone());
     let service = server
         .serve(mcp::stdio())
         .await
         .map_err(|e| format!("serve stdio: {e}"))?;
     let served = service.waiting().await;
-    closer.close_for_shutdown().await;
+    controller.shutdown().await;
     served
         .map(|_| ())
         .map_err(|e| format!("the stdio service: {e}"))

@@ -138,9 +138,14 @@ impl ChannelFace {
         if mode == ChannelMode::Sync {
             return Ok(None);
         }
-        match start_channel_hub(self.channel.clone(), epoch, &self.mcp_nom, self.nonce_gen.clone())
-            .await
-        {
+        let hub = start_channel_hub(
+            &self.config,
+            self.channel.clone(),
+            epoch,
+            &self.mcp_nom,
+            self.nonce_gen.clone(),
+        );
+        match hub.await {
             Ok(hub) => {
                 let url = hub.url.clone();
                 self.hub.install(hub);

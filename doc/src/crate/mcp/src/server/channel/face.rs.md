@@ -9,20 +9,25 @@ lines into the hub, and hands the links' relays and reports to the Channel.
 
 ## struct ChannelFace
 What a server needs of the Channel and the remote channels: their two systems,
-the open's hub, the lock that serializes an open, and the identity its greeting
-carries. Both servers serve every Channel command and every remote channel
-command through it (`server/client.rs`, `server/tool/interface.rs`).
+the open's hub, the lock that serializes an open, the config each open binds
+by, and the identity its greeting carries. mcp's controller starts and holds it
+(`server/controller.rs`), and both servers serve every Channel command and every
+remote channel command through it (`server/client.rs`,
+`server/tool/interface.rs`).
+
+### field config
+The process's config, which the controller hands the face: each open's hub binds
+its port and presents its identity (`hub.rs`).
 
 ### field channel
-The system this face started. An eval's send reaches the same one through mcp's
-system's controller (`server/host.rs`'s `HostRoute`), so what a body emits on is
-what the face serves; the bridge (`bridge.rs`), which the face's start fills,
-holds it for the readers not yet handed it.
+The system this face started. An eval's send reaches the same one through the
+engine's handler (`server/host.rs`'s `HostRoute`), so what a body emits on is
+what the face serves; the observer reads its phase (`server/operator.rs`).
 
 ### field peer
 The peer links' system this face started. A body's remote send reaches it
-through mcp's system's controller (`server/host.rs`'s `HostRoute`), which holds
-it beside the Channel's.
+through the engine's handler (`server/host.rs`'s `HostRoute`), which holds it
+beside the Channel's.
 
 ### field channel_open_lock
 Async because it is held across the open's requests and its hub's bind.
@@ -30,8 +35,7 @@ Async because it is held across the open's requests and its hub's bind.
 ## fn ChannelFace::start
 The Channel's system starts first, on the config's thresholds, its handler the
 face's hub pump; the peer links' after it, their handler holding the Channel,
-so a link's first relay has a Channel to reach. The bridge takes the Channel at
-once, so the code not yet handed the face reaches the one the agent opens.
+so a link's first relay has a Channel to reach.
 
 ## fn peer_params
 The links take the config's values as plain strings, every path expanded: the
@@ -90,9 +94,9 @@ why re-opening cannot leave two timers racing one channel. The epoch rides with
 the sender, so standing one open's timer down leaves another's armed.
 
 ### fn install_policy
-Supervision's (`server/host.rs`'s `HostRoute::supervise`): until a policy is
-installed, the Channel's spam pair goes unanswered, as on a host that starts no
-operator.
+Supervision's, at the controller's start (`server/controller.rs`): until a
+policy is installed, the Channel's spam pair goes unanswered, as on a host that
+starts no operator.
 
 ### fn raise
 Each emergency is answered on a task of its own. The pump raises it on the
@@ -129,9 +133,11 @@ It is also what makes the handler observable. A swept host reports
 default action reports `code() == None` and `signal() == Some(signo)`. Only the
 former proves the sweep ran, which is what the system test measures.
 
-The Channel closes first, then the server's own shutdown runs: the test
-driver's stops mcp's system, and the client has nothing to stop. The signal's
-number is tokio's raw value, so the portable frontend takes no nix.
+The shutdown is the controller's stop, which closes the Channel first and then
+stops the engine's side, if any (`server/controller.rs`). The signal's number is
+tokio's raw value, so the portable frontend takes no nix. The sweep's task is
+handed back, so the controller that owns it can stand it down at an ordinary
+end.
 
 The scratch directories go last, after the components that write into them have
 stopped: `process::exit` never returns to `serve_or_oneshot`, whose ordinary end

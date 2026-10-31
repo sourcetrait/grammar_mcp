@@ -1,31 +1,31 @@
 //! The operator's handler and observer: its emergencies routed, the engine seen.
 use crate::*;
 
-/// The operator's emergencies sent up; its status and end to mcp's loop.
+/// The controller's handler of the operator: its emergencies to the policy.
 pub(crate) struct OperatorWatch {
-    /// mcp's system's way up, which carries each emergency to its controller's policy.
-    pub up: tk::Sender<subsys::MsgFromSys<FromMcpSys>>,
-    pub notices: tk::UnboundedSender<Notice>,
+    /// The controller's policy, which logs and announces each emergency.
+    pub(crate) policy: EmergencyPolicy,
+    /// The controller's shutdown flag, under which the operator's end goes unsaid.
+    pub(crate) stopping: Arc<AtomicBool>,
 }
 
 impl subsys::Handler<OperatorSystem> for OperatorWatch {
     fn on_packet(&mut self, pkt: subsys::Packet<FromOperatorSys>) -> impl Future<Output = Option<subsys::Packet<FromOperatorSys>>> + 'static + Send {
-        let up = self.up.clone();
+        let policy = self.policy.clone();
         async move {
             let FromOperatorSys::Emergency(emergency) = pkt.take_msg();
-            let packet = subsys::Packet::singular(FromMcpSys::Emergency(emergency));
-            let _ = up.send(subsys::MsgFromSys::Packet(packet)).await;
+            policy.respond(emergency).await;
             None
         }
     }
 
     fn on_sub(&mut self, sub: subsys::FromSub) -> impl Future<Output = ()> + Send {
-        notice_status(&self.notices, "operator", sub);
+        log_status("operator", sub, &self.stopping);
         std::future::ready(())
     }
 
     fn on_closed(&mut self) -> impl Future<Output = ()> + Send {
-        let _ = self.notices.send(Notice::Closed { component: "operator" });
+        log_closed("operator", &self.stopping);
         std::future::ready(())
     }
 }
@@ -38,12 +38,9 @@ async fn engine_health(engine: &EngineHandle) -> Option<EngineHealth> {
     }
 }
 
-/// Whether the running face's Channel is open; with no face, it is closed.
-async fn channel_open() -> bool {
-    let Some(host) = host_channel() else {
-        return false;
-    };
-    match host.channel.request(StatusRequest).await {
+/// Whether the Channel is open, its system unanswering read as closed.
+async fn channel_open(channel: &ChannelHandle) -> bool {
+    match channel.request(StatusRequest).await {
         Ok(status) => !matches!(status.state.phase, ChannelPhase::Closed),
         Err(_) => false,
     }
@@ -53,12 +50,13 @@ async fn channel_open() -> bool {
 pub(crate) fn spawn_observer(
     engine: Arc<EngineHandle>,
     operator: Arc<OperatorHandle>,
+    channel: Arc<ChannelHandle>,
 ) -> tk::JoinHandle<()> {
     tk::spawn(async move {
         loop {
             tk::sleep(SAMPLE_INTERVAL).await;
             let reading = engine_health(&engine).await;
-            let listening = channel_open().await;
+            let listening = channel_open(&channel).await;
             let observation = Observation {
                 engine: reading,
                 listening,

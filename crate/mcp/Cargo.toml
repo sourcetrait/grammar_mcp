@@ -28,7 +28,6 @@ embedded-cli = [
 ]
 
 [dependencies]
-bitcode.workspace = true
 clap.workspace = true
 directories.workspace = true
 futures-util.workspace = true
@@ -38,7 +37,6 @@ nu-parser.workspace = true
 nu-protocol.workspace = true
 nuon.workspace = true
 nuval = { workspace = true, features = ["nushell"] }
-rkyv.workspace = true
 rmcp.workspace = true
 rustls.workspace = true
 schemars.workspace = true

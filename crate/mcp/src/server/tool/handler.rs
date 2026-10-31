@@ -4,8 +4,8 @@ use crate::*;
 const MCP_DOC: &str = include_str!("../../../../../include/human/mcp/mcp.md");
 
 impl NuSh {
-    pub(crate) fn tool_router() -> mcp::ToolRouter<Self> {
-        let deny = &config().deny;
+    /// The four tools the deny set leaves, `interface`'s description its commands.
+    pub(crate) fn tool_router(deny: &DenySet) -> mcp::ToolRouter<Self> {
         let mut router = mcp::ToolRouter::new();
         if !deny.denies(DeniableTool::Execute) {
             router += Self::execute_router();
@@ -30,8 +30,9 @@ impl NuSh {
 #[mcp::tool_handler(router = self.tool_router)]
 impl mcp::ServerHandler for NuSh {
     fn get_info(&self) -> mcp::ServerConfig {
-        let id = &config().id;
-        let namespace = &config().namespace;
+        let config = &self.controller.config;
+        let id = &config.id;
+        let namespace = &config.namespace;
         let title = if namespace == "default" {
             "grammar".to_string()
         } else {
@@ -53,8 +54,8 @@ impl mcp::ServerHandler for NuSh {
                  {data}/equip/; signing keypair at \
                  {data}/keypair/. \
                  This server's namespace: id `{id}`, namespace `{namespace}`.",
-                cache = cache_base_dir().display(),
-                data = data_base_dir().display(),
+                cache = config.cache_home().display(),
+                data = config.data_home().display(),
             ))
     }
 }

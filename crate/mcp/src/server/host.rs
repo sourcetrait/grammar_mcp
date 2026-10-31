@@ -2,19 +2,18 @@
 use crate::*;
 
 /// Start the engine on the config's id, namespace, and homes.
-pub(crate) fn init_engine() -> Result<(), String> {
-    let cfg = config();
+pub(crate) fn init_engine(config: &Config) -> Result<(), String> {
     let scratch = make_scratch_dirs()?;
     let (_, mcp_nom) = process_identity();
     let params = EngineParams {
-        id: cfg.id.clone(),
-        namespace: cfg.namespace.clone(),
-        work_dir: cfg.work_dir.clone(),
+        id: config.id.clone(),
+        namespace: config.namespace.clone(),
+        work_dir: config.work_dir.clone(),
         tmp_dir: scratch.tmp,
         transient_dir: scratch.transient,
         mcp_nom: mcp_nom.as_str().to_string(),
-        data_home: data_base_dir(),
-        cache_home: cache_base_dir(),
+        data_home: config.data_home(),
+        cache_home: config.cache_home(),
     };
     engine::init(params).map_err(|e| e.to_string())
 }
@@ -32,35 +31,18 @@ pub(crate) async fn ensure_substrate() -> io::Result<()> {
     Ok(())
 }
 
-/// mcp's controller: the engine's asks routed to their systems, and its policy.
+/// The controller's handler of the engine: its host asks routed to their systems.
 #[derive(Clone)]
 pub(crate) struct HostRoute {
     pub(crate) channel: Arc<ChannelHandle>,
     pub(crate) peer: Arc<PeerHandle>,
-    /// The face's hub, through which the Channel's own emergencies reach the policy.
-    hub: Arc<HubSlot>,
-    /// The policy over the systems' emergencies.
-    policy: EmergencyPolicy,
+    /// The runtime config, which `grimm get_config_all` reads.
+    pub(crate) config: Arc<Config>,
+    /// The controller's shutdown flag, under which the engine's end goes unsaid.
+    pub(crate) stopping: Arc<AtomicBool>,
 }
 
 impl HostRoute {
-    /// The route to a face's systems.
-    pub(crate) fn of(face: &ChannelFace) -> Self {
-        let mcp_nom = face.mcp_nom.as_str();
-        let log = emergency_log_path(mcp_nom);
-        Self {
-            channel: face.channel.clone(),
-            peer: face.peer.clone(),
-            hub: face.hub.clone(),
-            policy: EmergencyPolicy::new(face.channel.clone(), mcp_nom, log),
-        }
-    }
-
-    /// Supervision's start: the Channel's own emergencies answered by the policy too.
-    pub(crate) fn supervise(&self) {
-        self.hub.install_policy(self.policy.clone());
-    }
-
     /// An eval's ask, answered by the system it is for.
     pub(crate) async fn answer(
         &self,
@@ -73,7 +55,7 @@ impl HostRoute {
                 HostAnswer::Noted
             }
             HostAsk::RemoteSend(data) => self.remote_send(data).await,
-            HostAsk::Config => match config_record(&self.channel).await {
+            HostAsk::Config => match config_record(&self.channel, &self.config).await {
                 Ok(record) => HostAnswer::Config(record),
                 Err(reason) => HostAnswer::Refused(reason),
             },
@@ -131,25 +113,29 @@ impl HostRoute {
     }
 }
 
-impl subsys::Handler<McpSystem> for HostRoute {
-    fn on_packet(&mut self, pkt: subsys::Packet<FromMcpSys>) -> impl Future<Output = Option<subsys::Packet<FromMcpSys>>> + 'static + Send {
-        let policy = self.policy.clone();
+impl subsys::Handler<EngineSystem> for HostRoute {
+    fn on_packet(&mut self, pkt: subsys::Packet<FromEngine>) -> impl Future<Output = Option<subsys::Packet<FromEngine>>> + 'static + Send {
+        std::future::ready(Some(pkt))
+    }
+
+    fn on_request(&mut self, pkt: subsys::Packet<FromEngine>) -> impl Future<Output = Option<ToEngine>> + 'static + Send {
+        let route = self.clone();
         async move {
-            if let FromMcpSys::Emergency(emergency) = pkt.take_msg() {
-                policy.respond(emergency).await;
-            }
-            None
+            let FromEngine::Host(ask) = pkt.take_msg() else {
+                return None;
+            };
+            Some(ToEngine::Host(route.answer(ask).await))
         }
     }
 
-    fn on_request(&mut self, pkt: subsys::Packet<FromMcpSys>) -> impl Future<Output = Option<ToMcpSys>> + 'static + Send {
-        let route = self.clone();
-        async move {
-            match pkt.take_msg() {
-                FromMcpSys::Host(ask) => Some(ToMcpSys::Host(route.answer(ask).await)),
-                _ => None,
-            }
-        }
+    fn on_sub(&mut self, sub: subsys::FromSub) -> impl Future<Output = ()> + Send {
+        log_status("engine", sub, &self.stopping);
+        std::future::ready(())
+    }
+
+    fn on_closed(&mut self) -> impl Future<Output = ()> + Send {
+        log_closed("engine", &self.stopping);
+        std::future::ready(())
     }
 }
 
@@ -200,10 +186,12 @@ fn read_attachments(value: &nu::Value) -> Result<Vec<Payload>, String> {
 }
 
 /// The whole config as a record mirroring the TOML's tables, with what is in force.
-async fn config_record(handle: &ChannelHandle) -> Result<NuVal, String> {
+async fn config_record(
+    handle: &ChannelHandle,
+    cfg: &Config,
+) -> Result<NuVal, String> {
     let span = nu::Span::unknown();
-    let cfg = config();
-    let spam = live_thresholds(handle).await;
+    let spam = live_thresholds(handle, cfg).await;
     let supervisor = effective_supervisor(cfg.supervisor);
 
     let mut channel = nu::Record::new();
@@ -265,9 +253,12 @@ async fn config_record(handle: &ChannelHandle) -> Result<NuVal, String> {
 }
 
 /// The spam thresholds in force: the running Channel's, else the config's start.
-async fn live_thresholds(handle: &ChannelHandle) -> SpamThresholdsData {
+async fn live_thresholds(
+    handle: &ChannelHandle,
+    cfg: &Config,
+) -> SpamThresholdsData {
     match handle.request(ThresholdsRequest::default()).await {
         Ok(Ok(thresholds)) => thresholds,
-        _ => config().channel.spam.data(),
+        _ => cfg.channel.spam.data(),
     }
 }

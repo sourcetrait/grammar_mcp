@@ -95,9 +95,12 @@ pub(crate) fn emergency_line(
     .map_err(|e| e.to_string())
 }
 
-/// The per-process emergency log path.
-pub(crate) fn emergency_log_path(mcp_nom: &str) -> PathBuf {
-    cache_base_dir().join("log").join(mcp_nom).join("emergency.nuonl")
+/// The per-process emergency log path under the namespace's cache home.
+pub(crate) fn emergency_log_path(
+    cache_home: &Path,
+    mcp_nom: &str,
+) -> PathBuf {
+    cache_home.join("log").join(mcp_nom).join("emergency.nuonl")
 }
 
 /// Append one already-rendered NUON line, creating the parent dir on demand.

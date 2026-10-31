@@ -30,19 +30,19 @@ original characters, a compact render's raw newlines sitting only inside quoted
 strings.
 
 ## fn emergency_log_path
-`mcp_nom` namespaces it per process because the cache root is only
-`(id, namespace)`-scoped, so two concurrent hosts on one namespace would
-otherwise clobber each other's log.
+Under the namespace's cache home, the config's. `mcp_nom` namespaces it per
+process because the cache home is only `(id, namespace)`-scoped, so two
+concurrent hosts on one namespace would otherwise clobber each other's log.
 
 ## fn append_line
 Open-append-close per line: low volume, and robust against an external truncation
 between writes. Nothing is buffered to lose.
 
 ## struct EmergencyPolicy
-mcp's controller holds it (`host.rs`'s `HostRoute`). mcp's system sends the
-operator's emergencies up to the controller, and the face's hub slot raises the
-Channel's spam pair to it once supervision installs it (`channel/face.rs`), so
-one policy answers both sources, into one log and onto one Channel. It holds
+mcp's controller makes it (`controller.rs`). The operator's handler answers the
+operator's emergencies with it (`operator.rs`), and the face's hub slot raises
+the Channel's spam pair to it once supervision installs it (`channel/face.rs`),
+so one policy answers both sources, into one log and onto one Channel. It holds
 nothing beyond its handles, so each source holds a clone.
 
 ### fn new

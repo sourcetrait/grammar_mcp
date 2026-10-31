@@ -1,10 +1,9 @@
 //! The `grimm` config surface, driven from real `execute` definitions.
 //!
 //! In-process is the right tier for these, and not merely the cheap one: the pin
-//! registry and `CONFIG` are process-globals, and `TestServer` shares the very
-//! process the eval runs in, so a test can pin to its own pid and know for
-//! certain the process is alive - which is the one thing a spawned host could not
-//! give it.
+//! registry is a process-global, and `TestServer` shares the very process the
+//! eval runs in, so a test can pin to its own pid and know for certain the
+//! process is alive - which is the one thing a spawned host could not give it.
 #![cfg(feature = "embedded-cli")]
 
 use sourcetrait_grammar_mcp::guts::{

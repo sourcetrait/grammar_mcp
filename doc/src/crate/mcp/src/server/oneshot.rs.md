@@ -1,12 +1,14 @@
 # oneshot.rs
 
 ## fn run_oneshot
-Builds the same substrate the serve path builds, starts mcp's system of its own on it,
-its engine alone, without the serve path's supervision, and a face of its own for the
-Channel's commands and the engine's host asks, and dispatches one invocation straight
-to the `pub(crate)` handler methods on `NuSh` - no rmcp transport anywhere.
-That is what makes this the operator's no-agent contribution loop rather than a
-parallel implementation to keep in step.
+Builds the same substrate the serve path builds, starts a controller of its own on it
+(`server/controller.rs`), the face's systems and the engine without the serve path's
+supervision, and dispatches one invocation straight to the `pub(crate)` handler
+methods on `NuSh` - no rmcp transport anywhere. That is what makes this the operator's
+no-agent contribution loop rather than a parallel implementation to keep in step.
+
+The invocation ends with its process: no shutdown runs, and its systems end with the
+process.
 
 The invocation is its own host, its engine in its own process, so every tool it drives
 names `local`: it takes no host of the operator's, since it reaches no other.

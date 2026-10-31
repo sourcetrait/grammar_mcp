@@ -33,7 +33,7 @@ impl NuSh {
         nonce: datum::Nonce,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        match self.system.control(EngineCommand::EquipNew { source: p.source }).await {
+        match self.controller.control(EngineCommand::EquipNew { source: p.source }).await {
             Ok(ControlAnswer::Created(created)) => success(
                 nonce,
                 &EquipResult {
@@ -51,7 +51,7 @@ impl NuSh {
         nonce: datum::Nonce,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        match self.system.control(EngineCommand::EquipInstall { source: p.source }).await {
+        match self.controller.control(EngineCommand::EquipInstall { source: p.source }).await {
             Ok(ControlAnswer::Installed { equip, result }) => {
                 self.purview_rig(equip, true).await;
                 success(
@@ -72,7 +72,7 @@ impl NuSh {
         nonce: datum::Nonce,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        match self.system.control(EngineCommand::EquipCheck { source: p.source }).await {
+        match self.controller.control(EngineCommand::EquipCheck { source: p.source }).await {
             Ok(ControlAnswer::Checked(summary)) => success(
                 nonce,
                 &EquipResult {
@@ -90,7 +90,7 @@ impl NuSh {
         nonce: datum::Nonce,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        match self.system.control(EngineCommand::EquipUninstall { source: p.source }).await {
+        match self.controller.control(EngineCommand::EquipUninstall { source: p.source }).await {
             Ok(ControlAnswer::Uninstalled { equip }) => {
                 if let Some(equip) = equip {
                     self.purview_rig(equip, false).await;
@@ -116,7 +116,7 @@ impl NuSh {
             installed,
             current: self.current_purview.ids(),
         };
-        match self.system.request(adjust).await {
+        match self.controller.request(adjust).await {
             Ok(Ok(rows)) if !installed => self.current_purview.retain_known(&rows),
             Ok(Ok(_)) => {}
             Ok(Err(e)) => eprintln!("grammar: purview not updated for {rig}: {e:?}"),

@@ -103,6 +103,6 @@ impl NuSh {
         &self,
         ids: Vec<String>,
     ) -> GrammarMcpResult<PurviewResolution> {
-        Ok(self.system.request(PurviewResolveRequest { ids }).await??)
+        Ok(self.controller.request(PurviewResolveRequest { ids }).await??)
     }
 }

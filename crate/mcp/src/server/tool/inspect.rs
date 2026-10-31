@@ -17,7 +17,7 @@ impl NuSh {
         p: InspectParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         let words = match p.namepath.as_str() {
-            INTERFACE => Some(render_signatures(&config().deny)),
+            INTERFACE => Some(render_signatures(&self.controller.config.deny)),
             GRIMM => Some(grimm_signatures()),
             _ => None,
         };
@@ -35,7 +35,7 @@ impl NuSh {
                 let command = EngineCommand::Help {
                     namepath: p.namepath,
                 };
-                return match self.system.control(command).await {
+                return match self.controller.control(command).await {
                     Ok(ControlAnswer::Help(doc)) => success(nonce, &InspectResult { doc }),
                     Ok(_) => error_to_call_result(unexpected("help"), nonce),
                     Err(error) => error_to_call_result(error, nonce),

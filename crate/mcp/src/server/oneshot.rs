@@ -1,28 +1,24 @@
 use crate::*;
 
-pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
+/// One tool call on an unsupervised controller, its envelope printed.
+pub(crate) async fn run_oneshot(
+    config: Arc<Config>,
+    tool: CliTool,
+) -> process::ExitCode {
     let exit_code = async move {
         install_child_subreaper();
         if let Err(e) = ensure_substrate().await {
             eprintln!("grammar: the equip substrate: {e}");
             return 1;
         }
-        let (nonce_gen, mcp_nom) = process_identity();
-        let face = match ChannelFace::start(nonce_gen.clone(), mcp_nom.clone()).await {
-            Ok(face) => face,
+        let controller = match McpController::embedded(config, false).await {
+            Ok(controller) => controller,
             Err(e) => {
                 eprintln!("{e}");
                 return 1;
             }
         };
-        let system = match start_system(&mcp_nom, false, HostRoute::of(&face)).await {
-            Ok(system) => Arc::new(system),
-            Err(e) => {
-                eprintln!("{e}");
-                return 1;
-            }
-        };
-        let server = NuSh::new(face, nonce_gen, mcp_nom, system, &DenySet::default());
+        let server = NuSh::new(controller, &DenySet::default());
         let host = LOCAL_HOST.to_string();
         let result = match tool {
             CliTool::Call {

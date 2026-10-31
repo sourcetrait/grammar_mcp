@@ -5,19 +5,20 @@ what a reader of it could reasonably get wrong.
 
 ## cfg_attr allow(dead_code, unused_imports)
 A build without `embedded-cli` serves a narrow surface over the shared facade:
-the Channel's bridge, the emergency lines, and the interface catalog compile
-whole, their breadth serving the test driver. The allow is that build's alone.
+the controller, the emergency lines, and the interface catalog compile whole,
+their breadth serving the test driver. The allow is that build's alone.
 The `embedded-cli` build compiles every module with both lints, and clippy runs
 over it, so code dead there still fails.
 
 ## cfg embedded-cli
 The engine, the operator, nix, and every module that reaches them - the host,
-the system, the operator's watch, the purviews, the one-shot, the test driver's
-server, and `guts` - compile under `embedded-cli` alone, as does each tool's
-engine-side method; each tool's parameters stay in every build, since the
-interface parse carries them. The client, the face of the Channel and the remote
-channels, the cert profile, the interface parse, the config, and the scratch
-directories compile in every build, as do the Channel's and the peer links'
+the operator's watch, the purviews, the one-shot, the test driver's server, and
+`guts` - compile under `embedded-cli` alone, as do each tool's engine-side
+method and the controller's engine side; each tool's parameters stay in every
+build, since the interface parse carries them. The client, the controller, the
+face of the Channel and the remote channels, the cert profile, the interface
+parse, the config, and the scratch directories compile in every build, as do
+the Channel's and the peer links'
 systems (`crate/channel`, `crate/peer`): the Channel and the remote channels
 are the MCP's own, never the runtime's (User).
 

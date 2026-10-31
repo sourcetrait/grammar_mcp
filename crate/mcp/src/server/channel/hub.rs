@@ -28,8 +28,8 @@ pub(crate) fn open_packet(
 }
 
 /// The hub's TLS: the host's `[identity]` certificate and key, which it presents.
-fn server_config() -> Result<Arc<tls::ServerConfig>, GrammarMcpError> {
-    let Some(identity) = config().identity.as_ref() else {
+fn server_config(config: &Config) -> Result<Arc<tls::ServerConfig>, GrammarMcpError> {
+    let Some(identity) = config.identity.as_ref() else {
         return Err(GrammarMcpError::ChannelStart {
             reason: format!(
                 "the Channel presents the host's [identity]; name its `cert` and \
@@ -66,15 +66,16 @@ struct PeerContext {
     nonce_gen: Arc<datum::NonceGenerator>,
 }
 
-/// Bind the open of `epoch`'s hub and hand back its endpoint and senders.
+/// Bind the hub of `epoch`'s open on the config's port, presenting its identity.
 pub(crate) async fn start(
+    config: &Config,
     channel: Arc<ChannelHandle>,
     epoch: ChannelEpoch,
     mcp_nom: &datum::NomPair,
     nonce_gen: Arc<datum::NonceGenerator>,
 ) -> Result<Hub, GrammarMcpError> {
-    let tls_config = server_config()?;
-    let listener = tk::TcpListener::bind((BIND, config().channel.port.unwrap_or(0)))
+    let tls_config = server_config(config)?;
+    let listener = tk::TcpListener::bind((BIND, config.channel.port.unwrap_or(0)))
         .await
         .map_err(|e| GrammarMcpError::ChannelStart {
             reason: format!("bind {BIND}: {e}"),

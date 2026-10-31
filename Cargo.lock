@@ -6757,7 +6757,6 @@ dependencies = [
 name = "sourcetrait_grammar_mcp"
 version = "0.0.0-9"
 dependencies = [
- "bitcode",
  "clap",
  "directories",
  "futures-util",
@@ -6767,7 +6766,6 @@ dependencies = [
  "nu-protocol",
  "nuon",
  "nuval",
- "rkyv",
  "rmcp",
  "rustls",
  "schemars",

@@ -101,9 +101,10 @@ impl NuSh {
         nonce: datum::Nonce,
         command: InterfaceCommand,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        let face = &self.controller.face;
         match command {
-            InterfaceCommand::Channel(command) => self.face.run_channel(nonce, command).await,
-            InterfaceCommand::Peer(command) => self.face.run_peer(nonce, command).await,
+            InterfaceCommand::Channel(command) => face.run_channel(nonce, command).await,
+            InterfaceCommand::Peer(command) => face.run_peer(nonce, command).await,
             InterfaceCommand::Engine(command) => self.run_engine(nonce, command).await,
         }
     }

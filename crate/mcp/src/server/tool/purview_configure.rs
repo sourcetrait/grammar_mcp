@@ -20,7 +20,7 @@ impl NuSh {
             id: p.purview.clone(),
             patterns: p.namepaths,
         };
-        let rows = match self.system.request(configure).await {
+        let rows = match self.controller.request(configure).await {
             Ok(Ok(rows)) => rows,
             Ok(Err(error)) => return error_to_call_result(error, nonce),
             Err(error) => return error_to_call_result(error, nonce),

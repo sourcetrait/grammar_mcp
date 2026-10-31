@@ -88,9 +88,9 @@ moves the remotes with it.
 ### field spam
 The starting policy, the Channel's own thresholds type (`crate/channel`'s
 `spam.rs`). Runtime changes go through `interface channel config`, which
-updates the Channel's system rather than this. `CONFIG` is set once, so
-anything adjustable at runtime needs its own live layer; the operator's pins
-are the same shape applied to `[supervisor]`.
+updates the Channel's system rather than this. The config is resolved once and
+shared read-only (`run.rs`), so anything adjustable at runtime needs its own
+live layer; the operator's pins are the same shape applied to `[supervisor]`.
 
 The starting values are initial. There is no basis for them beyond reasoning; only
 production traffic will say what a normal producer actually does. The gap

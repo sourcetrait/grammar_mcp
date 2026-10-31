@@ -51,8 +51,9 @@ The home directory is checked first, before the config reads it for the default
 work dir, and its absence exits 2. This is `BASE_DIRS`'s first touch, after
 `set_cli_env`'s overrides have landed (`home.rs`).
 
-`CONFIG` is set before any dispatch, and before any reader, because `config()`
-panics when read early - a startup-order bug rather than a runtime condition.
+The config is resolved once here and handed down whole, one `Arc` each entry
+passes to its controller (`server/controller.rs`), so every reader reaches it
+through what it was handed and none can meet it unset.
 
 The bare entry serves as a client in every build (`server/client.rs`): no
 engine starts on it, with or without `embedded-cli` and under `--test` alike,

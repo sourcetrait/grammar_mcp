@@ -3,37 +3,32 @@ use crate::*;
 /// The test driver's server: the four tools on the in-process engine.
 #[cfg(feature = "embedded-cli")]
 pub struct NuSh {
-    /// mcp's system, which the engine's requests go through.
-    pub(crate) system: Arc<McpHandle>,
+    /// mcp's controller: the engine's requests and the face's commands go to it.
+    pub(crate) controller: Arc<McpController>,
     pub(crate) nonce_gen: Arc<datum::NonceGenerator>,
-    /// This host process's identity, minted once at construction.
+    /// This host process's identity, minted once at startup.
     pub(crate) mcp_nom: datum::NomPair,
     /// The engine an interface command parses on: its commands, nothing else.
     pub(crate) interface_engine: Arc<nu::EngineState>,
-    /// The Channel's and the remote channels' commands, the client's too.
-    pub(crate) face: ChannelFace,
-    /// Which purview ids this host has in view; SESSION-resident.
+    /// Which purview ids this host has in view, the session's own.
     pub(crate) current_purview: Arc<CurrentPurview>,
     pub(crate) tool_router: mcp::ToolRouter<NuSh>,
 }
 
 #[cfg(feature = "embedded-cli")]
 impl NuSh {
+    /// The server over `controller`, its interface engine denying `deny`'s commands.
     pub(crate) fn new(
-        face: ChannelFace,
-        nonce_gen: Arc<datum::NonceGenerator>,
-        mcp_nom: datum::NomPair,
-        system: Arc<McpHandle>,
+        controller: Arc<McpController>,
         deny: &DenySet,
     ) -> Self {
         Self {
-            system,
-            nonce_gen,
-            mcp_nom,
+            nonce_gen: controller.face.nonce_gen.clone(),
+            mcp_nom: controller.face.mcp_nom.clone(),
             interface_engine: Arc::new(interface_engine_for(deny)),
-            face,
             current_purview: Arc::new(CurrentPurview::new()),
-            tool_router: Self::tool_router(),
+            tool_router: Self::tool_router(&controller.config.deny),
+            controller,
         }
     }
 
@@ -48,7 +43,7 @@ impl NuSh {
 
     /// The signature block within pattern strings, as the engine renders it.
     pub(crate) async fn signatures(&self, patterns: Vec<String>) -> GrammarMcpResult<String> {
-        match self.system.control(EngineCommand::Signatures { patterns }).await? {
+        match self.controller.control(EngineCommand::Signatures { patterns }).await? {
             ControlAnswer::Signatures(block) => Ok(block),
             _ => Err(unexpected("signatures")),
         }

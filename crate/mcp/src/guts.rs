@@ -6,7 +6,7 @@ use std::sync::Once;
 
 pub use nuval::NuVal;
 
-static TEST_CONFIG: Once = Once::new();
+static TEST_ENV: Once = Once::new();
 
 const INPROC_PREFIX: &str = "grammar_inproc_";
 
@@ -33,12 +33,27 @@ fn sweep_dead_test_namespaces(temp: &std::path::Path) {
     }
 }
 
-/// Point the homes at a per-binary temp dir and seed CONFIG, once.
-fn ensure_test_config() {
-    TEST_CONFIG.call_once(|| {
-        let temp = std::env::temp_dir();
-        sweep_dead_test_namespaces(&temp);
-        let root = temp.join(format!("{INPROC_PREFIX}{}", process::id()));
+/// This test binary's own root under the temporary directory.
+fn test_root() -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{INPROC_PREFIX}{}", process::id()))
+}
+
+/// The test namespace's config, its homes under the binary's root.
+fn namespace_config(root: &std::path::Path) -> Config {
+    Config {
+        id: "test".to_string(),
+        namespace: "default".to_string(),
+        work_dir: root.join("work"),
+        remotes_file: root.join(".grammar").join(REMOTES_FILE),
+        ..Config::default()
+    }
+}
+
+/// Point the homes at the binary's root and start the engine on them, once.
+fn ensure_test_env() {
+    TEST_ENV.call_once(|| {
+        sweep_dead_test_namespaces(&std::env::temp_dir());
+        let root = test_root();
         let _ = fs::create_dir_all(root.join("data"));
         let _ = fs::create_dir_all(root.join("cache"));
         let _ = fs::create_dir_all(root.join("tmp"));
@@ -51,14 +66,14 @@ fn ensure_test_config() {
             std::env::set_var("UENV_USR_TMP", root.join("tmp"));
             std::env::set_var("UENV_USR_TRANSIENT", root.join("run"));
         }
-        let mut config = Config::default();
-        config.id = "test".to_string();
-        config.namespace = "default".to_string();
-        config.work_dir = root.join("work");
-        config.remotes_file = root.join(".grammar").join(REMOTES_FILE);
-        let _ = CONFIG.set(config);
-        init_engine().expect("the engine starts for the tests");
+        init_engine(&namespace_config(&root)).expect("the engine starts for the tests");
     });
+}
+
+/// The test namespace's config, its environment and engine made first.
+fn test_config() -> Arc<Config> {
+    ensure_test_env();
+    Arc::new(namespace_config(&test_root()))
 }
 
 /// An in-process handle to the grammar tool surface.
@@ -75,21 +90,17 @@ impl Default for TestServer {
 
 impl TestServer {
     pub fn new() -> Self {
-        ensure_test_config();
+        let config = test_config();
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .thread_stack_size(EVAL_STACK_SIZE)
             .build()
             .expect("tokio runtime");
         rt.block_on(ensure_substrate()).expect("ensure_substrate");
-        let (nonce_gen, mcp_nom) = process_identity();
-        let face = rt
-            .block_on(ChannelFace::start(nonce_gen.clone(), mcp_nom.clone()))
-            .expect("the Channel's system starts");
-        let system = rt
-            .block_on(start_system(&mcp_nom, false, HostRoute::of(&face)))
-            .expect("mcp's system starts");
-        let nush = NuSh::new(face, nonce_gen, mcp_nom, Arc::new(system), &config().deny);
+        let controller = rt
+            .block_on(McpController::embedded(config.clone(), false))
+            .expect("mcp's controller starts its systems");
+        let nush = NuSh::new(controller, &config.deny);
         Self { rt, nush }
     }
 
@@ -358,7 +369,7 @@ impl TestServer {
     /// `interface channel ready`; its result is null.
     pub fn channel_verified(&self) -> NuVal {
         let nonce = self.interface_nonce(&"channel ready");
-        Self::envelope(self.rt.block_on(self.nush.face.channel_ready(nonce)))
+        Self::envelope(self.rt.block_on(self.nush.controller.face.channel_ready(nonce)))
     }
 
     /// A PARTIAL update; pass `None` for anything that should not move.
@@ -376,13 +387,13 @@ impl TestServer {
             spam_error_rate: error_rate,
         };
         let nonce = self.interface_nonce(&p);
-        Self::envelope(self.rt.block_on(self.nush.face.channel_config(nonce, p)))
+        Self::envelope(self.rt.block_on(self.nush.controller.face.channel_config(nonce, p)))
     }
 
     /// `interface channel close`; closing a closed channel succeeds.
     pub fn channel_close(&self) -> NuVal {
         let nonce = self.interface_nonce(&"channel close");
-        Self::envelope(self.rt.block_on(self.nush.face.channel_close(nonce)))
+        Self::envelope(self.rt.block_on(self.nush.controller.face.channel_close(nonce)))
     }
 
     /// Each routed tool as `tools/list` carries it.
@@ -436,55 +447,48 @@ impl TestServer {
     }
 }
 
-/// mcp's system on the test namespace with both its components, the operator too.
+/// mcp's controller on the test namespace, supervising: the operator runs too.
 pub struct SupervisedSystem {
     rt: tokio::runtime::Runtime,
-    system: McpHandle,
-    _face: ChannelFace,
+    controller: Arc<McpController>,
 }
 
 impl SupervisedSystem {
+    /// The controller's systems started on the test namespace, supervised.
     pub fn start() -> Self {
-        ensure_test_config();
+        let config = test_config();
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .thread_stack_size(EVAL_STACK_SIZE)
             .build()
             .expect("tokio runtime");
         rt.block_on(ensure_substrate()).expect("ensure_substrate");
-        let (nonce_gen, mcp_nom) = process_identity();
-        let face = rt
-            .block_on(ChannelFace::start(nonce_gen, mcp_nom.clone()))
-            .expect("the face's systems start");
-        let system = rt
-            .block_on(start_system(&mcp_nom, true, HostRoute::of(&face)))
-            .expect("mcp's system starts");
-        Self {
-            rt,
-            system,
-            _face: face,
-        }
+        let controller = rt
+            .block_on(McpController::embedded(config, true))
+            .expect("mcp's controller starts its systems");
+        Self { rt, controller }
     }
 
-    /// Whether the engine answers a process list through mcp's system.
+    /// Whether the engine answers a process list through mcp's controller.
     pub fn engine_answers(&self) -> bool {
         matches!(
-            self.rt.block_on(self.system.control(EngineCommand::Processes)),
+            self.rt.block_on(self.controller.control(EngineCommand::Processes)),
             Ok(ControlAnswer::Processes(_)),
         )
     }
 
     /// Whether the namespace's host lock is held, tried without blocking.
     pub fn host_lock_held(&self) -> bool {
-        let Ok(file) = fs::File::open(data_base_dir().join("host.lock")) else {
+        let lock = self.controller.config.data_home().join("host.lock");
+        let Ok(file) = fs::File::open(lock) else {
             return false;
         };
         nix::fcntl::Flock::lock(file, nix::fcntl::FlockArg::LockExclusiveNonblock).is_err()
     }
 
-    /// The components stopped in order.
+    /// The systems stopped in order.
     pub fn shutdown(&self) {
-        self.rt.block_on(self.system.shutdown());
+        self.rt.block_on(self.controller.shutdown());
     }
 }
 
@@ -598,7 +602,7 @@ pub fn valid_function_source(data_fields: &str, result_fields: &str, body: &str)
 
 /// Lint a definition as `execute`'s contract does, each diagnostic a NuVal.
 pub fn lint_definition(definition: &str) -> Vec<NuVal> {
-    ensure_test_config();
+    ensure_test_env();
     let engine = ParseEngine::new_full();
     let mut ws = nu::StateWorkingSet::new(engine.engine_state());
     let block = nu::parse(&mut ws, Some(LINT_FILE), definition.as_bytes(), false);
@@ -614,7 +618,7 @@ const LINT_FILE: &str = "definition.nu";
 
 /// The execute contract's verdict on a definition: its summary, or its rows.
 pub fn analyze_definition(definition: &str) -> Result<NuVal, Vec<NuVal>> {
-    ensure_test_config();
+    ensure_test_env();
     let engine = ParseEngine::new_full();
     match crate::analyze_definition(&engine, definition, true) {
         Ok(def) => Ok(NuVal::Record(vec![
@@ -632,7 +636,7 @@ pub fn analyze_definition(definition: &str) -> Result<NuVal, Vec<NuVal>> {
 
 /// Are two `current()` handles off ONE `LintEngine` the same instance?
 pub fn lint_engine_reuses_until_the_registry_moves() -> bool {
-    ensure_test_config();
+    ensure_test_env();
     let engine = LintEngine::new();
     let first = engine.current();
     let second = engine.current();
@@ -641,7 +645,7 @@ pub fn lint_engine_reuses_until_the_registry_moves() -> bool {
 
 /// True if `src` parses clean on a full-shell ParseEngine.
 pub fn parses_clean(src: &str) -> bool {
-    ensure_test_config();
+    ensure_test_env();
     let engine = ParseEngine::new_full();
     let mut ws = nu::StateWorkingSet::new(engine.engine_state());
     let _ = nu::parse(&mut ws, Some("golden.nu"), src.as_bytes(), false);

@@ -6,6 +6,8 @@ pub(crate) type CloseSignal = (u16, String, Option<tk::oneshot::Sender<()>>);
 
 /// The Channel's face to a server: its systems, hub, open lock, and identity.
 pub(crate) struct ChannelFace {
+    /// The runtime config, which each open's hub binds and presents by.
+    pub(crate) config: Arc<Config>,
     /// The Channel's system, which this face started and holds.
     pub(crate) channel: Arc<ChannelHandle>,
     /// The peer links' system, which this face started and holds.
@@ -22,24 +24,25 @@ pub(crate) struct ChannelFace {
 impl ChannelFace {
     /// Starts the Channel's and the peer links' systems, the face their controller.
     pub(crate) async fn start(
+        config: Arc<Config>,
         nonce_gen: Arc<datum::NonceGenerator>,
         mcp_nom: datum::NomPair,
     ) -> Result<Self, String> {
         let hub = Arc::new(HubSlot::default());
         let params = ChannelSysParams {
-            spam: config().channel.spam.data(),
+            spam: config.channel.spam.data(),
         };
         let pump = HubPump { hub: hub.clone() };
-        let paths = ChannelSysPaths::new(data_base_dir(), cache_base_dir());
+        let paths = ChannelSysPaths::new(config.data_home(), config.cache_home());
         let channel = Arc::new(ChannelHandle::start(paths, params, pump).await?);
-        let params = peer_params(&mcp_nom);
+        let params = peer_params(&config, &mcp_nom);
         let pump = PeerPump {
             channel: channel.clone(),
         };
-        let paths = PeerSysPaths::new(data_base_dir(), cache_base_dir());
+        let paths = PeerSysPaths::new(config.data_home(), config.cache_home());
         let peer = Arc::new(PeerHandle::start(paths, params, pump).await?);
-        set_host_channel(&channel);
         Ok(Self {
+            config,
             channel,
             peer,
             hub,
@@ -80,8 +83,10 @@ pub(crate) fn peer_failed(reason: String) -> GrammarMcpError {
 }
 
 /// The peer links' parameters: the host's nom, its key pair, and its remotes file.
-fn peer_params(mcp_nom: &datum::NomPair) -> PeerSysParams {
-    let cfg = config();
+fn peer_params(
+    cfg: &Config,
+    mcp_nom: &datum::NomPair,
+) -> PeerSysParams {
     let path = |file: &Path| file.to_string_lossy().into_owned();
     PeerSysParams {
         mcp_nom: mcp_nom.as_str().to_string(),
@@ -345,14 +350,12 @@ impl ChannelCloser {
 
 /// Sweep on TERM, INT, or HUP, then exit with the conventional `128 + signo`.
 #[cfg(unix)]
-pub(crate) fn spawn_signal_sweep<F, Fut>(
-    closer: ChannelCloser,
-    shutdown: F,
-) where
+pub(crate) fn spawn_signal_sweep<F, Fut>(shutdown: F) -> Option<tk::JoinHandle<()>>
+where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + Send,
 {
-    tk::spawn(async move {
+    let sweep = tk::spawn(async move {
         let mut term = match tk::signal(tk::SignalKind::terminate()) {
             Ok(s) => s,
             Err(e) => {
@@ -379,20 +382,19 @@ pub(crate) fn spawn_signal_sweep<F, Fut>(
             _ = interrupt.recv() => tk::SignalKind::interrupt().as_raw_value(),
             _ = hangup.recv() => tk::SignalKind::hangup().as_raw_value(),
         };
-        closer.close_for_shutdown().await;
         shutdown().await;
         remove_scratch_dirs();
         process::exit(128 + signo);
     });
+    Some(sweep)
 }
 
 /// Off Unix no signal is swept; the ordinary end closes and cleans up.
 #[cfg(not(unix))]
-pub(crate) fn spawn_signal_sweep<F, Fut>(
-    _closer: ChannelCloser,
-    _shutdown: F,
-) where
+pub(crate) fn spawn_signal_sweep<F, Fut>(_shutdown: F) -> Option<tk::JoinHandle<()>>
+where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + Send,
 {
+    None
 }

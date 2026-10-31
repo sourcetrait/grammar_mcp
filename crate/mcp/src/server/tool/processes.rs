@@ -6,7 +6,7 @@ impl NuSh {
         &self,
         nonce: datum::Nonce,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let rows = match self.system.control(EngineCommand::Processes).await {
+        let rows = match self.controller.control(EngineCommand::Processes).await {
             Ok(ControlAnswer::Processes(rows)) => rows,
             Ok(_) => return error_to_call_result(unexpected("processes"), nonce),
             Err(error) => return error_to_call_result(error, nonce),

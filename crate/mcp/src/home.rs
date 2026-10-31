@@ -72,20 +72,22 @@ static DATA_ROOT: LazyLock<PathBuf> = LazyLock::new(|| {
     env_dir("UENV_USR_DATA").unwrap_or_else(|| base_dirs().data_dir().to_path_buf())
 });
 
-/// The namespace's cache home.
-pub(crate) fn cache_base_dir() -> PathBuf {
-    CACHE_ROOT
-        .join(consts::GRAMMAR)
-        .join(consts::MCP)
-        .join(&config().id)
-        .join(&config().namespace)
-}
+impl Config {
+    /// The namespace's cache home.
+    pub(crate) fn cache_home(&self) -> PathBuf {
+        CACHE_ROOT
+            .join(consts::GRAMMAR)
+            .join(consts::MCP)
+            .join(&self.id)
+            .join(&self.namespace)
+    }
 
-/// The namespace's data home.
-pub(crate) fn data_base_dir() -> PathBuf {
-    DATA_ROOT
-        .join(consts::GRAMMAR)
-        .join(consts::MCP)
-        .join(&config().id)
-        .join(&config().namespace)
+    /// The namespace's data home.
+    pub(crate) fn data_home(&self) -> PathBuf {
+        DATA_ROOT
+            .join(consts::GRAMMAR)
+            .join(consts::MCP)
+            .join(&self.id)
+            .join(&self.namespace)
+    }
 }

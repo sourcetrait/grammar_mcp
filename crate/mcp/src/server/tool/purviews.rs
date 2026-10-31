@@ -15,7 +15,7 @@ impl NuSh {
         &self,
         nonce: datum::Nonce,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let purviews = match self.system.request(PurviewListRequest).await {
+        let purviews = match self.controller.request(PurviewListRequest).await {
             Ok(Ok(purviews)) => purviews,
             Ok(Err(error)) => return error_to_call_result(error, nonce),
             Err(error) => return error_to_call_result(error, nonce),

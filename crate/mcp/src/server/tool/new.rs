@@ -18,7 +18,7 @@ impl NuSh {
         let command = EngineCommand::EquipScaffold {
             namepaths: p.namepaths,
         };
-        match self.system.control(command).await {
+        match self.controller.control(command).await {
             Ok(ControlAnswer::Created(created)) => success(nonce, &NewResult { created }),
             Ok(_) => error_to_call_result(unexpected("equip_scaffold"), nonce),
             Err(e) => error_to_call_result(e, nonce),

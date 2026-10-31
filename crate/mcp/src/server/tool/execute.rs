@@ -30,7 +30,7 @@ impl NuSh {
             Err(error) => return error_to_call_result(error, nonce),
         };
         let answer = self
-            .system
+            .controller
             .request(ExecuteRequest {
                 host,
                 nonce,

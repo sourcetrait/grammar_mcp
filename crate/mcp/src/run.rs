@@ -81,18 +81,18 @@ async fn serve_or_oneshot(cli: Cli) -> process::ExitCode {
             return process::ExitCode::from(2);
         }
     };
-    CONFIG.set(config).expect("CONFIG set once at startup");
+    let config = Arc::new(config);
     let code = match command {
-        None => match serve_client().await {
+        None => match serve_client(config).await {
             Ok(()) => process::ExitCode::SUCCESS,
             Err(reason) => {
                 eprintln!("grammar: {reason}");
                 process::ExitCode::FAILURE
             }
         },
-        Some(CliCmd::Cli { tool }) => run_cli(tool).await,
+        Some(CliCmd::Cli { tool }) => run_cli(config, tool).await,
         #[cfg(feature = "embedded-cli")]
-        Some(CliCmd::TestDriver) => run_test_driver().await,
+        Some(CliCmd::TestDriver) => run_test_driver(config).await,
     };
     remove_scratch_dirs();
     code
@@ -100,17 +100,23 @@ async fn serve_or_oneshot(cli: Cli) -> process::ExitCode {
 
 /// The local CLI: one tool call on the in-process engine, its envelope printed.
 #[cfg(feature = "embedded-cli")]
-async fn run_cli(tool: CliTool) -> process::ExitCode {
-    if let Err(reason) = init_engine() {
+async fn run_cli(
+    config: Arc<Config>,
+    tool: CliTool,
+) -> process::ExitCode {
+    if let Err(reason) = init_engine(&config) {
         eprintln!("{reason}");
         return process::ExitCode::from(2);
     }
-    run_oneshot(tool).await
+    run_oneshot(config, tool).await
 }
 
 /// Without the in-process engine there is no local CLI; say what carries one.
 #[cfg(not(feature = "embedded-cli"))]
-async fn run_cli(_tool: CliTool) -> process::ExitCode {
+async fn run_cli(
+    _config: Arc<Config>,
+    _tool: CliTool,
+) -> process::ExitCode {
     eprintln!(
         "grammar: the local CLI is not in this build: it runs on the in-process engine, \
          which only a build with the embedded-cli feature carries"
@@ -120,12 +126,12 @@ async fn run_cli(_tool: CliTool) -> process::ExitCode {
 
 /// The test driver: MCP over stdio on the in-process engine, for legacy tests.
 #[cfg(feature = "embedded-cli")]
-async fn run_test_driver() -> process::ExitCode {
-    if let Err(reason) = init_engine() {
+async fn run_test_driver(config: Arc<Config>) -> process::ExitCode {
+    if let Err(reason) = init_engine(&config) {
         eprintln!("{reason}");
         return process::ExitCode::from(2);
     }
-    match run_server().await {
+    match run_server(config).await {
         Ok(()) => process::ExitCode::SUCCESS,
         Err(reason) => {
             eprintln!("grammar: {reason}");
