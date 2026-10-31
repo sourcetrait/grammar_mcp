@@ -6,7 +6,7 @@ const ENGINE_RELEASE_GRACE: tk::TkDuration = tk::TkDuration::from_secs(1);
 
 /// A system's status change, logged unless a shutdown is running.
 pub(crate) fn log_status(
-    component: &str,
+    system: &str,
     sub: subsys::FromSub,
     stopping: &AtomicBool,
 ) {
@@ -14,17 +14,17 @@ pub(crate) fn log_status(
         return;
     }
     if let subsys::FromSub::StatusChange(change) = sub {
-        eprintln!("grammar: the {component}'s system: {:?}", change.msg().0);
+        eprintln!("grammar: {system}: {:?}", change.msg().0);
     }
 }
 
 /// A system's end its control did not ask for, logged unless a shutdown is running.
 pub(crate) fn log_closed(
-    component: &str,
+    system: &str,
     stopping: &AtomicBool,
 ) {
     if !stopping.load(Ordering::SeqCst) {
-        eprintln!("grammar: the {component}'s system ended unasked");
+        eprintln!("grammar: {system} ended unasked");
     }
 }
 

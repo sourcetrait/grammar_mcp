@@ -32,12 +32,12 @@ impl subsys::Handler<RemoteSystem> for RemoteRoute {
     }
 
     fn on_sub(&mut self, sub: subsys::FromSub) -> impl Future<Output = ()> + Send {
-        log_status("remote engines", sub, &self.route.stopping);
+        log_status("the remote engines' system", sub, &self.route.stopping);
         std::future::ready(())
     }
 
     fn on_closed(&mut self) -> impl Future<Output = ()> + Send {
-        log_closed("remote engines", &self.route.stopping);
+        log_closed("the remote engines' system", &self.route.stopping);
         std::future::ready(())
     }
 }

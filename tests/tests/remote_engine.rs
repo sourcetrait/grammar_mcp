@@ -14,9 +14,8 @@ const FIRST_CALL: Duration = Duration::from_secs(90);
 /// How long a worker may take to end once the MCP does.
 const END_WAIT: Duration = Duration::from_secs(30);
 
-/// A definition answering where it ran: its working directory and its process.
-const WHERE: &str =
-    "def execute [data: nothing]: nothing -> record<work_dir: string, pid: int> { {work_dir: $env.EQUIP_WORK_DIR, pid: $nu.pid} }";
+/// A definition answering where it ran: its workdir, its working directory, and its process.
+const WHERE: &str = "def execute [data: nothing]: nothing -> record<work_dir: string, pwd: string, pid: int> { {work_dir: $env.EQUIP_WORK_DIR, pwd: $env.PWD, pid: $nu.pid} }";
 
 /// A host started in an agent directory under `root` whose config names `engines`.
 fn host_with(root: &Path, engines: &[Endpoint]) -> Host {
@@ -25,16 +24,17 @@ fn host_with(root: &Path, engines: &[Endpoint]) -> Host {
     Host::spawn_in(&root.join("scratch"), &[], &agent)
 }
 
-/// Where `WHERE` ran by its response: the working directory and the process.
-fn place(resp: &Value) -> (String, i64) {
+/// Where `WHERE` ran by its response: the workdir, the working directory, and the process.
+fn place(resp: &Value) -> (String, String, i64) {
     let envelope = extract_envelope(resp).unwrap_or_else(|| panic!("a result: {}", error_message(resp)));
     let result = &envelope["result"];
     let work_dir = result["work_dir"].as_str().expect("its work_dir").to_string();
+    let pwd = result["pwd"].as_str().expect("its pwd").to_string();
     let pid = match result.get("pid") {
         Some(NuVal::Int(pid)) => *pid,
         other => panic!("a pid, not {other:?}"),
     };
-    (work_dir, pid)
+    (work_dir, pwd, pid)
 }
 
 /// The envelope's nonce.
@@ -51,12 +51,14 @@ fn the_tools_run_on_a_configured_engines_worker_until_the_mcp_ends() {
 
     let id = host.request("execute", json!({"host": "lab", "definition": WHERE, "data": "null"}));
     let first = host.read_id_within(id, FIRST_CALL);
-    let (work_dir, pid) = place(&first);
+    let (work_dir, pwd, pid) = place(&first);
     assert_eq!(work_dir, worker.workdir().display().to_string(), "the worker's workdir");
+    let entered = std::fs::canonicalize(worker.workdir()).expect("the workdir's real path");
+    assert_eq!(pwd, entered.display().to_string(), "a remote eval starts in its worker's workdir");
     assert_ne!(pid as u32, host.pid(), "the worker's process, not the MCP's");
     let rerun = host.call("rerun", json!({"host": "lab", "nonce": nonce_of(&first), "data": "null"}));
-    assert_eq!(place(&rerun), (work_dir.clone(), pid), "the rerun on the same worker");
-    let (local_dir, local_pid) = place(&host.execute(WHERE, "null"));
+    assert_eq!(place(&rerun), (work_dir.clone(), pwd.clone(), pid), "the rerun on the same worker");
+    let (local_dir, _, local_pid) = place(&host.execute(WHERE, "null"));
     assert_ne!(local_dir, work_dir, "`local` stays on the MCP's engine");
     assert_eq!(local_pid as u32, host.pid());
 

@@ -20,12 +20,12 @@ impl subsys::Handler<OperatorSystem> for OperatorWatch {
     }
 
     fn on_sub(&mut self, sub: subsys::FromSub) -> impl Future<Output = ()> + Send {
-        log_status("operator", sub, &self.stopping);
+        log_status("the operator's system", sub, &self.stopping);
         std::future::ready(())
     }
 
     fn on_closed(&mut self) -> impl Future<Output = ()> + Send {
-        log_closed("operator", &self.stopping);
+        log_closed("the operator's system", &self.stopping);
         std::future::ready(())
     }
 }

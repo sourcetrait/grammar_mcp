@@ -39,6 +39,7 @@ fn serve(
         for line in &config.homes.diagnostics {
             eprintln!("grammard: {line}");
         }
+        enter(&config.workdir)?;
         Runtime::start(config)
     });
     let runtime = match started {
@@ -63,6 +64,14 @@ fn serve(
     let end = end?;
     shut?;
     Ok(end)
+}
+
+/// The process moved into `workdir`, before the engine seeds its `PWD` from it.
+fn enter(workdir: &Path) -> DaemonResult<()> {
+    std::env::set_current_dir(workdir).map_err(|e| DaemonError::WorkdirInvalid {
+        path: workdir.to_path_buf(),
+        reason: format!("entering it: {e}"),
+    })
 }
 
 /// A start's failure told the MCP: its hello read and refused with the reason.

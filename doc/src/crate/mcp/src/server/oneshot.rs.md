@@ -7,10 +7,13 @@ supervision, and dispatches one invocation straight to the `pub(crate)` handler
 methods on `NuSh` - no rmcp transport anywhere. That is what makes this the operator's
 no-agent contribution loop rather than a parallel implementation to keep in step.
 
-The invocation ends with its process: no shutdown runs, and its systems end with the
-process. Its controller holds the namespace's lock its caller took (`run.rs`), so a
-host or a worker on the namespace refuses it, and the kernel releases the lock with the
-process.
+The invocation ends with its controller's ordered stop, the serve path's own
+(`server/controller.rs`'s `shutdown`), once its envelope prints: the remote engines' system,
+the face, and the engine stopped in order, the engine's teardown ending anything the call
+left running, and the lock released. Leaving the systems to end with the process is
+rejected: each would end as its handle drops, racing the runtime's end, and the remote
+engines' system logs such an end as unasked. The controller holds the namespace's lock its
+caller took (`run.rs`), so a host or a worker on the namespace refuses it.
 
 The invocation is its own host, its engine in its own process, so every tool it drives
 names `local`: it takes no host of the operator's, since it reaches no other.

@@ -19,7 +19,7 @@ pub(crate) async fn run_oneshot(
                 return 1;
             }
         };
-        let server = NuSh::new(controller, &DenySet::default());
+        let server = NuSh::new(controller.clone(), &DenySet::default());
         let host = LOCAL_HOST.to_string();
         let result = match tool {
             CliTool::Call {
@@ -70,7 +70,7 @@ pub(crate) async fn run_oneshot(
                     .await
             }
         };
-        match result {
+        let code = match result {
             Ok(r) => match r.content.first() {
                 Some(mcp::ContentBlock::Text(text)) => {
                     println!("{}", text.text);
@@ -85,7 +85,10 @@ pub(crate) async fn run_oneshot(
                 eprintln!("{e}");
                 1
             }
-        }
+        };
+        drop(server);
+        controller.shutdown().await;
+        code
     }
     .await;
     process::ExitCode::from(exit_code as u8)

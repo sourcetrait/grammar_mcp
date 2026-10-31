@@ -37,6 +37,15 @@ fn cli_removes_its_scratch_directories_at_the_end() {
 }
 
 #[tested]
+fn cli_stops_each_system_it_started() {
+    let t = testing::test!({ .using_temp_dir() });
+    let out = run_output(t.temp_dir(), &["--id", "cid", "cli", "interface", "interface info"]);
+    assert!(out.status.success(), "cli interface info should exit 0; got {out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!stderr.contains("ended unasked"), "a one-shot run stops its systems in order; got {stderr}");
+}
+
+#[tested]
 fn cli_equip_lifecycle_and_call() {
     let t = testing::test!({ .using_temp_dir() });
     let equip = equip_source(&t.temp_dir().join("src"), "sourcetrait/clilib");

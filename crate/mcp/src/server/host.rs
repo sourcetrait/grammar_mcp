@@ -168,12 +168,12 @@ impl subsys::Handler<EngineSystem> for HostRoute {
     }
 
     fn on_sub(&mut self, sub: subsys::FromSub) -> impl Future<Output = ()> + Send {
-        log_status("engine", sub, &self.stopping);
+        log_status("the engine's system", sub, &self.stopping);
         std::future::ready(())
     }
 
     fn on_closed(&mut self) -> impl Future<Output = ()> + Send {
-        log_closed("engine", &self.stopping);
+        log_closed("the engine's system", &self.stopping);
         std::future::ready(())
     }
 }

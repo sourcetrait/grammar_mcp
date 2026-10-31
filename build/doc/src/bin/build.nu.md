@@ -18,7 +18,7 @@ lives in from any working directory.
 ## const BUILD_RECORD
 What `--pack` needs of the build, its name, semver, os, and arch, written
 beside the tree, so the packing machine needs neither the build's cargo
-metadata nor its rustc.
+metadata nor its rustc; `build/type/BuildRecord.nutype` is its model.
 
 ## def main
 A whole build resolves the signer first, before any build, because a

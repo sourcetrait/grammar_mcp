@@ -13,8 +13,11 @@ mounted beside grammar_mcp.
 `Z` relabels each mount for this container alone where SELinux enforces, as on
 Fedora, whose policy refuses a container an unlabelled mount; where SELinux is
 off podman ignores it. The tree in `<out>` keeps the container's label, so an
-install copies it without its context (`cp --no-preserve=context`), its files
-taking their new home's.
+install copies its modes and times alone (`cp -R --preserve=mode,timestamps`),
+its files taking their new home's label; `cp -a` carries the label over in the
+xattrs it keeps, `--no-preserve=context` notwithstanding. A label already
+carried over is a customizable type, which `restorecon` resets under `-F`
+alone.
 
 ## The work directory
 Beside `--out` rather than in `/tmp`, often a tmpfs, since a release build's
