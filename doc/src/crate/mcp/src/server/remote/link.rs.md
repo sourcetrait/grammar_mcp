@@ -108,7 +108,14 @@ synchronous mpsc sends, so a grimm eval thread drives them. A mid-push failure
 means the driver is gone (the link went down at enqueue): the registration is
 forgotten and the error returned synchronously, with no id and no async notice,
 since nothing left the host. push_frames is the free helper doing the pushes;
-splitting it out keeps the register/forget bracket readable.
+splitting it out keeps the register/forget bracket readable. It builds every
+frame of the send first and checks each as its peer will read it
+(codec.rs's `check_outbound`), so a frame the peer would refuse, one inflating
+past the cap or one past the decode budget, refuses the whole send
+synchronously with nothing queued, rather than reaching the peer, which would
+close the link, after the write had reported it sent. A frame is checked
+wrapped in `InitiatorToAcceptor`, whose `Msg` and `File` frames encode to the
+same bytes as `AcceptorToInitiator`'s, so one check serves either end.
 
 ## struct SendTracker / struct PendingSend
 The aggregate write-outcome half. A send is Sent only when the Deliver and every

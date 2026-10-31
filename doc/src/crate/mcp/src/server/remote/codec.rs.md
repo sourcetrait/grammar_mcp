@@ -33,8 +33,21 @@ balance; a single level keeps the codec branch-free. A tiny handshake frame pays
 bytes of zstd overhead, accepted for the uniform rule.
 
 ## const REMOTE_INFLATED_MAX
-The length-delimited frame's own ceiling, 8 MiB, which a delivery or a file
-chunk of 256 KiB fits well within: a frame inflating past it is refused.
+8 MiB, which a delivery or a file chunk of 256 KiB fits well within: a frame
+inflating past it is refused.
+
+## fn remote_frame_max
+The length-delimited ceiling on the wire, zstd's compress bound for a payload
+of `REMOTE_INFLATED_MAX`, a few tens of KiB past it: an incompressible frame
+grows a little under zstd, so a frame within the inflated cap always fits the
+wire, and the sender's frame codec never refuses what the check passed.
+
+## fn check_outbound
+A frame's peer-side checks run before it is queued: its bitcode encoding
+within `REMOTE_INFLATED_MAX` and a budgeted decode of it within
+`DECODE_BUDGET_DEFAULT`, exactly what the receiving codec applies after it
+inflates the frame. The decode costs a copy of the frame, beside the
+compression that dominates a send.
 
 ## struct BitcodeCodec
 A tokio-util Decoder and Encoder wrapping LengthDelimitedCodec: the length prefix frames

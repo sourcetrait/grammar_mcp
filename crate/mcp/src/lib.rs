@@ -131,11 +131,11 @@ pub(crate) use crate::{
         remote::{
             codec::{
                 AcceptorToInitiator, BitcodeCodec, FileFrame, InitiatorToAcceptor, MsgFrame,
-                REMOTE_INFLATED_MAX, RemoteStream,
+                REMOTE_INFLATED_MAX, RemoteStream, check_outbound,
             },
             link::{
                 LinkKeys, RemoteLinkEntry, bound_listeners, close_listener, connect_remote,
-                find_link_send, listen_remote, remote_links, safe_dest,
+                find_link_send, listen_remote, push_frames, remote_links, safe_dest,
             },
             verify::PublicKeyVerifier,
         },

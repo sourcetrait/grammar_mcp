@@ -5,8 +5,14 @@ use crate::*;
 /// The zstd level applied to every remote frame before it hits the wire.
 const REMOTE_ZSTD_LEVEL: i32 = 3;
 
-/// The most a remote frame inflates to: the length-delimited frame's ceiling.
+/// The most a remote frame inflates to.
 pub(crate) const REMOTE_INFLATED_MAX: u64 = 8 * 1024 * 1024;
+
+/// The most a remote frame takes on the wire: zstd's bound for a payload of
+/// `REMOTE_INFLATED_MAX`, so every frame within the inflated cap fits.
+fn remote_frame_max() -> usize {
+    zstd::zstd_safe::compress_bound(REMOTE_INFLATED_MAX as usize)
+}
 
 /// Which of a link's two connections a handshake announces.
 #[derive(
@@ -86,10 +92,30 @@ pub(crate) struct BitcodeCodec<T> {
 impl<T> BitcodeCodec<T> {
     pub(crate) fn new() -> Self {
         Self {
-            frames: tku::LengthDelimitedCodec::new(),
+            frames: tku::LengthDelimitedCodec::builder()
+                .max_frame_length(remote_frame_max())
+                .new_codec(),
             _marker: PhantomData,
         }
     }
+}
+
+/// A frame its peer would refuse, inflating past `REMOTE_INFLATED_MAX` or
+/// decoding past the budget, refused before it is queued.
+pub(crate) fn check_outbound<T>(frame: &T) -> Result<(), String>
+where
+    T: bitcode::Encode + bitcode::DecodeOwned,
+{
+    let bytes = bitcode::encode(frame);
+    if bytes.len() as u64 > REMOTE_INFLATED_MAX {
+        return Err(format!(
+            "remote send refused: a frame of {} bytes passes the peer's {REMOTE_INFLATED_MAX}-byte cap",
+            bytes.len()
+        ));
+    }
+    decode_payload::<T>(&bytes, DECODE_BUDGET_DEFAULT)
+        .map(drop)
+        .map_err(|e| format!("remote send refused: the peer would refuse a frame: {e}"))
 }
 
 impl<T> tku::Decoder for BitcodeCodec<T>

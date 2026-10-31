@@ -128,6 +128,118 @@ fn bitcode_codec_refuses_a_frame_past_its_decode_budget() {
     assert!(err.to_string().contains("elements bound"), "{err}");
 }
 
+/// Both wire enums encode a Msg or a File frame to the same bytes, so a frame
+/// checked as the initiator's is checked as the acceptor's.
+#[test]
+fn both_wire_enums_encode_the_shared_frames_alike() {
+    use crate::{AcceptorToInitiator, FileFrame, InitiatorToAcceptor, MsgFrame};
+
+    let deliver = MsgFrame::Deliver {
+        id: "id1".to_string(),
+        model: "proj/thing/Changed".to_string(),
+        event_nuon: "{a: 1}".to_string(),
+        files: vec!["out.txt".to_string(), "b".to_string()],
+    };
+    let chunk = FileFrame::Chunk {
+        id: "id1".to_string(),
+        dest: "out.txt".to_string(),
+        seq: 70_000,
+        bytes: vec![1, 2, 3],
+        last: false,
+    };
+    assert_eq!(
+        bitcode::encode(&InitiatorToAcceptor::Msg(deliver.clone())),
+        bitcode::encode(&AcceptorToInitiator::Msg(deliver))
+    );
+    assert_eq!(
+        bitcode::encode(&InitiatorToAcceptor::File(chunk.clone())),
+        bitcode::encode(&AcceptorToInitiator::File(chunk))
+    );
+}
+
+/// A send holding a frame that would inflate past its peer's cap is refused
+/// before any of its frames is queued.
+#[test]
+fn a_send_past_the_inflated_cap_is_refused_before_it_is_queued() {
+    use crate::{REMOTE_INFLATED_MAX, push_frames, tk};
+
+    let (msg_tx, mut msg_rx) = tk::unbounded_channel();
+    let (file_tx, mut file_rx) = tk::unbounded_channel();
+    let model = "m".repeat(REMOTE_INFLATED_MAX as usize + 1);
+    let payloads = vec![("out.txt".to_string(), vec![7u8; 1000])];
+    let err = push_frames(
+        &msg_tx,
+        &file_tx,
+        "id1",
+        model,
+        "{}".to_string(),
+        payloads,
+        vec!["out.txt".to_string()],
+    )
+    .expect_err("refused");
+    assert!(err.contains("byte cap"), "{err}");
+    assert!(msg_rx.try_recv().is_err(), "no Deliver queued");
+    assert!(file_rx.try_recv().is_err(), "no chunk queued");
+}
+
+/// A send naming more files than the decode budget's elements is refused
+/// before any of its frames is queued.
+#[test]
+fn a_send_past_the_decode_budget_is_refused_before_it_is_queued() {
+    use crate::{DECODE_BUDGET_DEFAULT, push_frames, tk};
+
+    let (msg_tx, mut msg_rx) = tk::unbounded_channel();
+    let (file_tx, mut file_rx) = tk::unbounded_channel();
+    let n = DECODE_BUDGET_DEFAULT.elements as usize + 1;
+    let payloads: Vec<(String, Vec<u8>)> = (0..n).map(|i| (format!("f{i}"), Vec::new())).collect();
+    let dests = payloads.iter().map(|(dest, _)| dest.clone()).collect();
+    let err = push_frames(
+        &msg_tx,
+        &file_tx,
+        "id1",
+        "proj/thing/Changed".to_string(),
+        "{}".to_string(),
+        payloads,
+        dests,
+    )
+    .expect_err("refused");
+    assert!(err.contains("elements bound"), "{err}");
+    assert!(msg_rx.try_recv().is_err(), "no Deliver queued");
+    assert!(file_rx.try_recv().is_err(), "no chunk queued");
+}
+
+/// A frame the check passes crosses the codec whole, incompressible at the
+/// cap: the wire's ceiling is zstd's bound for the inflated cap.
+#[test]
+fn a_frame_the_check_passes_crosses_the_codec_whole() {
+    use crate::tku::{BytesMut, Decoder, Encoder};
+    use crate::{BitcodeCodec, FileFrame, InitiatorToAcceptor, REMOTE_INFLATED_MAX, check_outbound};
+
+    let mut state = 0x9e37_79b9_7f4a_7c15u64;
+    let bytes: Vec<u8> = (0..REMOTE_INFLATED_MAX as usize - 64)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 24) as u8
+        })
+        .collect();
+    let frame = InitiatorToAcceptor::File(FileFrame::Chunk {
+        id: "id1".to_string(),
+        dest: "out.bin".to_string(),
+        seq: 0,
+        bytes,
+        last: true,
+    });
+    check_outbound(&frame).expect("within the cap and the budget");
+    let mut dst = BytesMut::new();
+    let mut codec: BitcodeCodec<InitiatorToAcceptor> = BitcodeCodec::new();
+    codec.encode(frame.clone(), &mut dst).expect("encoded");
+    assert!(dst.len() > REMOTE_INFLATED_MAX as usize, "{} bytes on the wire", dst.len());
+    let got = codec.decode(&mut dst).expect("decode ok").expect("a full frame");
+    assert_eq!(got, frame);
+}
+
 /// safe_dest accepts a relative path, rejects an empty one, an absolute one, and
 /// any `..` escape from the per-packet inbox.
 #[test]

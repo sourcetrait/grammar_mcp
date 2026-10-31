@@ -23,14 +23,18 @@ Status takes RPC's ceilings, the contract naming none of its own.
 
 ## type DecodeBudget
 bitcode's `Budget` from sourcetrait's fork, so the bounds a payload decodes
-within are the ones its decoders charge.
+within are the ones its decoders charge, each checked before what it bounds
+is allocated. The heap is what the decoded value keeps; the decoder's own
+column buffers, freed when the decode ends, are outside it.
 
 ## const DECODE_BUDGET_DEFAULT
 The contract's 100,000 decoded elements and 32 MiB of decoded heap. Its depth
 is 128 where the contract names 64: the decode counts every collection that
-nests with values in it, a frame's own among them, so a value's 64 levels,
-which `check_value` holds after the decode, fit inside a frame's containers.
-128 levels of decoding take well under a two-MiB worker stack.
+nests with values in it, a frame's own among them, so a value's 64 levels fit
+inside a frame's containers. Those 64 are `check_value`'s, held at the
+daemon's dispatch before a frame is dispatched, since a decode counting every
+container can't count one type's levels apart. 128 levels of decoding take
+well under a two-MiB worker stack.
 
 ## const DECODE_HEAP_HARD
 The heap a negotiated budget may reach, the contract's ceiling.

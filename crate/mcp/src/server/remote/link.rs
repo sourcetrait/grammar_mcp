@@ -339,8 +339,9 @@ impl RemoteLinkHandle {
     }
 }
 
-/// Queue one send's file chunks, then its Deliver; a closed queue is an error.
-fn push_frames(
+/// Queue one send's file chunks, then its Deliver, each checked first as its
+/// peer will read it; a refused frame or a closed queue is an error.
+pub(crate) fn push_frames(
     msg_out_tx: &tk::UnboundedSender<MsgFrame>,
     file_out_tx: &tk::UnboundedSender<FileFrame>,
     id: &str,
@@ -349,41 +350,59 @@ fn push_frames(
     payloads: Vec<(String, Vec<u8>)>,
     dests: Vec<String>,
 ) -> Result<(), String> {
-    let closing = || "remote link is closing".to_string();
+    let mut chunks = Vec::new();
     for (dest, bytes) in payloads {
         if bytes.is_empty() {
-            file_out_tx
-                .send(FileFrame::Chunk {
-                    id: id.to_string(),
-                    dest: dest.clone(),
-                    seq: 0,
-                    bytes: Vec::new(),
-                    last: true,
-                })
-                .map_err(|_| closing())?;
+            chunks.push(FileFrame::Chunk {
+                id: id.to_string(),
+                dest,
+                seq: 0,
+                bytes: Vec::new(),
+                last: true,
+            });
             continue;
         }
         let total = bytes.len().div_ceil(CHUNK_BYTES);
         for (i, chunk) in bytes.chunks(CHUNK_BYTES).enumerate() {
-            file_out_tx
-                .send(FileFrame::Chunk {
-                    id: id.to_string(),
-                    dest: dest.clone(),
-                    seq: i as u32,
-                    bytes: chunk.to_vec(),
-                    last: i + 1 == total,
-                })
-                .map_err(|_| closing())?;
+            chunks.push(FileFrame::Chunk {
+                id: id.to_string(),
+                dest: dest.clone(),
+                seq: i as u32,
+                bytes: chunk.to_vec(),
+                last: i + 1 == total,
+            });
         }
     }
-    msg_out_tx
-        .send(MsgFrame::Deliver {
-            id: id.to_string(),
-            model,
-            event_nuon,
-            files: dests,
+    let deliver = MsgFrame::Deliver {
+        id: id.to_string(),
+        model,
+        event_nuon,
+        files: dests,
+    };
+    // Every frame is checked before any is queued, so a refused send queues
+    // nothing. Both wire enums encode a Msg or File frame alike.
+    let chunks = chunks
+        .into_iter()
+        .map(|chunk| match checked(InitiatorToAcceptor::File(chunk))? {
+            InitiatorToAcceptor::File(chunk) => Ok(chunk),
+            _ => unreachable!("checked as a file frame"),
         })
-        .map_err(|_| closing())
+        .collect::<Result<Vec<_>, String>>()?;
+    let deliver = match checked(InitiatorToAcceptor::Msg(deliver))? {
+        InitiatorToAcceptor::Msg(deliver) => deliver,
+        _ => unreachable!("checked as a message frame"),
+    };
+    let closing = || "remote link is closing".to_string();
+    for chunk in chunks {
+        file_out_tx.send(chunk).map_err(|_| closing())?;
+    }
+    msg_out_tx.send(deliver).map_err(|_| closing())
+}
+
+/// `frame` back once its peer would take it.
+fn checked(frame: InitiatorToAcceptor) -> Result<InitiatorToAcceptor, String> {
+    check_outbound(&frame)?;
+    Ok(frame)
 }
 
 /// A spawned link: its handle and both drivers' join handles.

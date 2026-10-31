@@ -227,7 +227,7 @@ fn each_frame_s_charge_covers_what_it_keeps() {
         tool: "execute".to_string(),
         started_at: i as u64,
         args: NuVal::Record(vec![("data".to_string(), NuVal::List((0..i as i64).map(NuVal::Int).collect()))]),
-        source_nonce: (i % 2 == 0).then(|| "s".to_string()),
+        source_nonce: i.is_multiple_of(2).then(|| "s".to_string()),
         path: None,
     };
     let frames = [
