@@ -1,7 +1,7 @@
 use crate::*;
 
 impl NuSh {
-    /// `interface equip commit`: an equip's source promoted into the routed engine's namespace.
+    /// `interface equip commit`: an equip's source promoted into the routed namespace.
     pub(crate) async fn equip_commit(
         &self,
         nonce: datum::Nonce,

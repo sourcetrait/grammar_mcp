@@ -233,6 +233,24 @@ impl Drop for Sshd {
     }
 }
 
+/// `endpoint` as a config file's `[[engine]]` table.
+pub fn engine_toml(endpoint: &Endpoint) -> String {
+    let keys: Vec<String> = endpoint.host_keys.iter().map(|key| format!("\"{key}\"")).collect();
+    format!(
+        "[[engine]]\nalias = \"{}\"\nhost = \"{}\"\nport = {}\nuser = \"{}\"\nkey = \"{}\"\nhost_keys = [{}]\ncommand = \"{}\"\nid = \"{}\"\nnamespace = \"{}\"\nworkdir = \"{}\"\n\n",
+        endpoint.alias,
+        endpoint.host,
+        endpoint.port,
+        endpoint.user,
+        endpoint.key,
+        keys.join(", "),
+        endpoint.command,
+        endpoint.id,
+        endpoint.namespace,
+        endpoint.workdir,
+    )
+}
+
 /// A loopback proxy to a port whose connections a test cuts, as a dropped network does.
 pub struct Cuttable {
     pub port: u16,

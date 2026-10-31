@@ -162,7 +162,7 @@ pub(crate) use sourcetrait_grammar_protocol::{
     ChannelEpoch, ChannelPhase, ChannelSendData, ControlRequest, EngineRequest, EngineResponse,
     FromEngineSys, LIMITS_DEFAULT, LOCAL_HOST, MAX_FRAME_BYTES, PreparedSend, PurviewAnswer,
     PurviewRequest, PurviewRow, PurviewView, RemoteResult, RemoteSendData, RuntimeError,
-    SpamThresholdsData, ToEngineSys, TransportError, WorkerInfo,
+    SessionAsk, SpamThresholdsData, ToEngineSys, TransportError, WorkerInfo,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{

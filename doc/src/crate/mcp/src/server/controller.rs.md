@@ -66,15 +66,18 @@ then the remote engines'. `supervise` is the serve path's: the operator, its
 observer, and the policy's hold on the Channel's spam pair. The one-shot CLI
 and the in-process harness start unsupervised.
 
+### fn start_engine
+The policy is made before the engine, and a supervised start puts it in the
+face's hub slot before any system it answers runs. The engine's handler is the
+route: the face's Channel and links, the config, and the shutdown flag. The
+remote engines' handler takes the same route and the same policy, which this
+returns, so a worker's asks and emergencies take the paths a local eval's and
+the operator's do.
+
 ### fn start_remote
 The system starts on the config's engines whether it names any or not, so
 every controller holds one and stops it the same way; no session opens until a
 tool names an engine.
-
-### fn start_engine
-The policy is made before the engine, and a supervised start puts it in the
-face's hub slot before any system it answers runs. The engine's handler is the
-route: the face's Channel and links, the config, and the shutdown flag.
 
 ### fn request
 The tools' requests go to the engine directly, each on its caller's own task,

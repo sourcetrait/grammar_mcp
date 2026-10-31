@@ -8,7 +8,9 @@ pub(crate) struct PurviewConfigureResult {
 }
 
 impl NuSh {
-    /// `interface purview configure`: set a purview's patterns on the routed engine; empty deletes it.
+    /// `interface purview configure`: a purview's patterns set on the routed engine.
+    ///
+    /// An empty list deletes the purview.
     pub(crate) async fn purview_configure(
         &self,
         nonce: datum::Nonce,

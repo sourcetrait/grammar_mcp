@@ -1,4 +1,4 @@
-//! Each host's current purview, the ids it has in view, resolved by that host's engine.
+//! Each host's current purview, the ids in view, resolved by that host's engine.
 use crate::*;
 
 /// What changed between two pattern sets, as `(added, removed)`.
@@ -89,7 +89,7 @@ impl CurrentPurview {
     }
 }
 
-/// Each engine's current view: the MCP's own, and a remote engine's from its first use.
+/// Each engine's current view: the MCP's own, a remote engine's from its first use.
 #[derive(Default)]
 pub(crate) struct Views {
     local: Arc<CurrentPurview>,
@@ -163,7 +163,7 @@ impl NuSh {
         }
     }
 
-    /// The purview rows a configure or a rig's change leaves on the engine `route` names.
+    /// The purview rows a configure or a rig's change leaves on the routed engine.
     pub(crate) async fn purview_rows_on(
         &self,
         route: &Route,

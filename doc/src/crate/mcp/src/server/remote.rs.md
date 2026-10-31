@@ -5,15 +5,18 @@ The controller's handler of the remote engines' system (`crate/client`'s
 as packets, and the system's status and end are logged as the engine's are.
 
 ## struct RemoteRoute
-### field stopping
-The controller's shutdown flag, under which the system's end goes unsaid.
+The engine's own route and the controller's emergency policy, the same two the
+MCP's engine and operator answer through (`server/controller.rs`), so a remote
+eval's sends and a remote operator's emergencies take the same paths a local
+one's do.
 
 ### fn on_packet
-A worker's emergency is logged under its engine's alias, by its kind.
+A worker's emergency goes to the policy under its engine's alias, logged and
+announced as the MCP's own are, its host named.
 
 ### fn on_request
-A worker's ask is refused with why, so the eval that asked answers its
-refusal at once rather than at its deadline.
+A worker's ask is answered by the route (`server/host.rs`'s `remote_answer`),
+on a task of its own as every system's request is.
 
 ### fn on_sub
 ### fn on_closed

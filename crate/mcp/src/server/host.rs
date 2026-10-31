@@ -89,16 +89,24 @@ impl HostRoute {
         &self,
         data: RemoteSendData,
     ) -> HostAnswer {
+        match tk::spawn_blocking(move || prepare_send(data)).await {
+            Ok(Ok(prepared)) => self.send_prepared(prepared).await,
+            Ok(Err(reason)) => HostAnswer::Refused(reason),
+            Err(e) => HostAnswer::Refused(format!("the send's files: {e}")),
+        }
+    }
+
+    /// A prepared remote send, its files carried whole, to the peer links.
+    async fn send_prepared(
+        &self,
+        prepared: PreparedSend,
+    ) -> HostAnswer {
         let PreparedSend {
             mcp_nom,
             model,
             event_nuon,
             files,
-        } = match tk::spawn_blocking(move || prepare_send(data)).await {
-            Ok(Ok(prepared)) => prepared,
-            Ok(Err(reason)) => return HostAnswer::Refused(reason),
-            Err(e) => return HostAnswer::Refused(format!("the send's files: {e}")),
-        };
+        } = prepared;
         let send = RemoteSendRequest {
             mcp_nom,
             model,
@@ -110,6 +118,38 @@ impl HostRoute {
             Ok(Err(reason)) | Err(reason) => HostAnswer::Refused(reason),
         }
     }
+
+    /// A remote engine's ask, answered as a local eval's, its origin naming the engine.
+    pub(crate) async fn remote_answer(
+        &self,
+        alias: &str,
+        ask: SessionAsk,
+    ) -> HostAnswer {
+        match ask {
+            SessionAsk::ChannelSend(mut data) => {
+                data.from = remote_origin(alias, &data.from);
+                self.channel_send(data).await
+            }
+            SessionAsk::Stopped(mut stopped) => {
+                stopped.origin = remote_origin(alias, &stopped.origin);
+                let _ = self.channel.notify(StoppedNotice(stopped)).await;
+                HostAnswer::Noted
+            }
+            SessionAsk::RemoteSend(prepared) => self.send_prepared(prepared).await,
+            SessionAsk::Config => match config_record(&self.channel, &self.config).await {
+                Ok(record) => HostAnswer::Config(record),
+                Err(reason) => HostAnswer::Refused(reason),
+            },
+        }
+    }
+}
+
+/// A remote eval's origin, `<alias>/thread/<nonce>`, apart from every local one.
+pub(crate) fn remote_origin(
+    alias: &str,
+    origin: &str,
+) -> String {
+    format!("{alias}/{origin}")
 }
 
 impl subsys::Handler<EngineSystem> for HostRoute {

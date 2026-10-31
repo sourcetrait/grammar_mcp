@@ -21,7 +21,7 @@ fn a_hang() -> Emergency {
 
 #[test]
 fn to_nuon_line_is_single_line_and_parses() {
-    let line = emergency_line(&a_hang(), 9999, "nomAAA").unwrap();
+    let line = emergency_line(&a_hang(), 9999, "nomAAA", None).unwrap();
     assert!(!line.contains('\n'), "an emergency line must not span lines: {line:?}");
     let v = nu::from_nuon(&line, None).expect("valid NUON record");
     let rec = v.as_record().expect("record");
@@ -30,13 +30,25 @@ fn to_nuon_line_is_single_line_and_parses() {
     assert_eq!(rec.get("nonce").and_then(|x| x.as_str().ok()), Some("abc123"));
     assert_eq!(rec.get("lane").and_then(|x| x.as_str().ok()), Some("stateless"));
     assert_eq!(rec.get("tool").and_then(|x| x.as_str().ok()), Some("execute"));
+    assert!(rec.get("host").is_none(), "the MCP's own emergency names no host");
+}
+
+/// A remote engine's emergency names its host by alias, beside the MCP's nom.
+#[test]
+fn a_remote_engines_line_names_its_host() {
+    let line = emergency_line(&a_hang(), 9999, "nomAAA", Some("lab")).unwrap();
+    let v = nu::from_nuon(&line, None).expect("valid NUON record");
+    let rec = v.as_record().expect("record");
+    assert_eq!(rec.get("host").and_then(|x| x.as_str().ok()), Some("lab"));
+    assert_eq!(rec.get("mcp_nom").and_then(|x| x.as_str().ok()), Some("nomAAA"));
+    assert_eq!(rec.get("nonce").and_then(|x| x.as_str().ok()), Some("abc123"));
 }
 
 /// No emergency's event names a field the packet's envelope carries.
 #[test]
 fn no_event_field_collides_with_the_packet_envelope() {
     for em in all_kinds() {
-        let line = emergency_line(&em, 1, "nom").unwrap();
+        let line = emergency_line(&em, 1, "nom", None).unwrap();
         let v = nu::from_nuon(&line, None).expect("valid NUON record");
         let rec = v.as_record().expect("record");
         assert!(
@@ -123,7 +135,7 @@ fn all_kinds() -> Vec<Emergency> {
 fn every_kind_serializes_single_line() {
     for em in all_kinds() {
         let want = em.kind().name().to_string();
-        let line = emergency_line(&em, 1, "nom").unwrap();
+        let line = emergency_line(&em, 1, "nom", None).unwrap();
         assert!(!line.contains('\n'), "line spans multiple lines: {line:?}");
         let v = nu::from_nuon(&line, None).expect("valid NUON record");
         let rec = v.as_record().expect("record");

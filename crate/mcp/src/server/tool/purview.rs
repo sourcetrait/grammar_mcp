@@ -8,7 +8,7 @@ pub(crate) struct PurviewSetResult {
 }
 
 impl NuSh {
-    /// `interface purview set`: replace the routed engine's current view with these purviews.
+    /// `interface purview set`: the routed engine's current view set to these purviews.
     pub(crate) async fn purview_set(
         &self,
         nonce: datum::Nonce,

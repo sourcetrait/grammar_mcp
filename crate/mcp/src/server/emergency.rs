@@ -72,18 +72,35 @@ fn emergency_record(emergency: &Emergency) -> nu::Record {
     r
 }
 
-/// An emergency as a single-line NUON record, the log's line.
+/// An emergency's fields as announced, a remote engine's led by its `host`.
+fn announced_record(
+    emergency: &Emergency,
+    host: Option<&str>,
+) -> nu::Record {
+    let span = nu::Span::unknown();
+    let mut r = nu::Record::new();
+    if let Some(host) = host {
+        r.insert("host", nu::Value::string(host.to_string(), span));
+    }
+    for (key, value) in emergency_record(emergency) {
+        r.insert(key, value);
+    }
+    r
+}
+
+/// An emergency as the log's one-line NUON record, a remote one naming its host.
 pub(crate) fn emergency_line(
     emergency: &Emergency,
     ts: u64,
     mcp_nom: &str,
+    host: Option<&str>,
 ) -> Result<String, String> {
     let span = nu::Span::unknown();
     let mut r = nu::Record::new();
     r.insert("ts", nu::Value::int(ts as i64, span));
     r.insert("mcp_nom", nu::Value::string(mcp_nom.to_string(), span));
     r.insert("kind", nu::Value::string(emergency.kind().name().to_string(), span));
-    for (key, value) in emergency_record(emergency) {
+    for (key, value) in announced_record(emergency, host) {
         r.insert(key, value);
     }
     nu::to_nuon(
@@ -148,11 +165,20 @@ impl EmergencyPolicy {
         &self,
         emergency: Emergency,
     ) {
-        match emergency_line(&emergency, now_millis(), &self.mcp_nom) {
+        self.respond_from(None, emergency).await;
+    }
+
+    /// An emergency of the host `host` names, none the MCP's, logged then announced.
+    pub(crate) async fn respond_from(
+        &self,
+        host: Option<&str>,
+        emergency: Emergency,
+    ) {
+        match emergency_line(&emergency, now_millis(), &self.mcp_nom, host) {
             Ok(line) => self.append(&line),
             Err(e) => eprintln!("grammar: emergency serialize failed: {e}"),
         }
-        self.announce(&emergency).await;
+        self.announce(&emergency, host).await;
     }
 
     /// One record appended whole, the clones' appends taken one at a time.
@@ -173,8 +199,9 @@ impl EmergencyPolicy {
     async fn announce(
         &self,
         emergency: &Emergency,
+        host: Option<&str>,
     ) {
-        let event = nu::Value::record(emergency_record(emergency), nu::Span::unknown());
+        let event = nu::Value::record(announced_record(emergency, host), nu::Span::unknown());
         let Ok(event) = NuVal::try_from_nu(event) else {
             return;
         };

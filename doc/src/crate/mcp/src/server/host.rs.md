@@ -65,11 +65,28 @@ error's emergency.
 
 ### fn remote_send
 The send is prepared by the engine's `prepare_send`, its files read and its
-event rendered off the runtime's workers, as a worker prepares a remote eval's;
-then the peer links' system mints the id, spills an oversized event, and queues
-the frames on the link to `mcp_nom` (`crate/peer`'s `system.rs`). The
-reservation was refused on the eval's side first, as it always came before the
-files.
+event rendered off the runtime's workers, as a worker prepares a remote eval's.
+The reservation was refused on the eval's side first, as it always came before
+the files.
+
+### fn send_prepared
+A prepared send, a local eval's or a worker's, goes to the peer links' system,
+which mints the id, spills an oversized event, and queues the frames on the
+link to `mcp_nom` (`crate/peer`'s `system.rs`).
+
+### fn remote_answer
+A remote engine's ask is answered as a local eval's is, so a definition on a
+worker reaches the agent's Channel and the remote links as it does locally. A
+Channel send and a spam stop take an origin naming the engine,
+`<alias>/thread/<nonce>`, so the Channel counts each remote call apart from
+every local one and its packets and emergencies say where they came from. A
+prepared send goes to the peer links whole, its files read on the worker. The
+config answers from the MCP's, which the worker answers with its own
+supervisor lines in place (`crate/daemon`'s `controller.rs`); a pin never
+reaches here, the worker holding it.
+
+## fn remote_origin
+The worker's `thread/<nonce>` under its engine's alias.
 
 ## fn config_record
 The record `grimm get_config_all` returns mirrors the config file - the same

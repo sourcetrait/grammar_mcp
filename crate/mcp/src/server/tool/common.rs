@@ -73,7 +73,7 @@ impl NuSh {
         }
     }
 
-    /// The signature block within pattern strings, as the engine `route` names renders it.
+    /// The signature block within pattern strings, as the routed engine renders it.
     pub(crate) async fn signatures(
         &self,
         route: &Route,

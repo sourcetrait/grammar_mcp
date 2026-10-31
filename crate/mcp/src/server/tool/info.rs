@@ -25,7 +25,7 @@ pub(crate) struct InfoResult {
 }
 
 impl NuSh {
-    /// `interface info`: the routed engine's versions, plugins, and callable signatures.
+    /// `interface info`: the routed engine's versions, plugins, and signatures.
     pub(crate) async fn info(
         &self,
         nonce: datum::Nonce,

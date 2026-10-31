@@ -21,7 +21,15 @@ notification can never disagree about what a condition reported. That sharing
 is also what made a `from` event field easy to get wrong: the packet's envelope
 already carries one, which is why the spam pair names its offender `origin`.
 
+## fn announced_record
+An emergency's fields as the log and the Channel carry them, a remote engine's
+led by `host`, its alias, so an agent and the log alike know which machine
+raised it.
+
 ## fn emergency_line
+A remote engine's line names its `host` beside the MCP's own `mcp_nom`, the MCP
+keeping every engine's emergencies in its one log.
+
 Every field is a flat scalar, but a string field can still carry a newline - a spam
 error's `action` holds an error's message - and `to nuon` writes a newline inside a
 string raw. The render therefore goes through `escape_line`, as a packet's does, so
@@ -41,18 +49,24 @@ write, so no other append can land between them.
 
 ## struct EmergencyPolicy
 mcp's controller makes it (`controller.rs`). The operator's handler answers the
-operator's emergencies with it (`operator.rs`), and the face's hub slot raises
-the Channel's spam pair to it once supervision installs it (`channel/face.rs`),
-so one policy answers both sources, into one log and onto one Channel. It holds
-nothing beyond its handles, so each source holds a clone.
+operator's emergencies with it (`operator.rs`), the face's hub slot raises the
+Channel's spam pair to it once supervision installs it (`channel/face.rs`), and
+the remote engines' handler raises each worker's (`remote.rs`), so one policy
+answers every source, into one log and onto one Channel. It holds nothing
+beyond its handles, so each source holds a clone.
 
 ### fn new
 The log's path is a parameter: the serve path's is the host's per-process log
 (`emergency_log_path`), and a test's is a file of its own.
 
 ### fn respond
+The MCP's own emergency, through `respond_from`.
+
+### fn respond_from
 The log is written first and unconditionally, so the durable record never
-depends on a channel being open; the announcement follows it.
+depends on a channel being open; the announcement follows it. A remote
+engine's emergency comes from the remote engines' handler (`remote.rs`), its
+host its alias.
 
 ### fn append
 The operator's handler and the Channel's per-emergency tasks append at once,

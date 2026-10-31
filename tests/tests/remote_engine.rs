@@ -18,24 +18,6 @@ const END_WAIT: Duration = Duration::from_secs(30);
 const WHERE: &str =
     "def execute [data: nothing]: nothing -> record<work_dir: string, pid: int> { {work_dir: $env.EQUIP_WORK_DIR, pid: $nu.pid} }";
 
-/// `endpoint` as an `[[engine]]` table.
-fn engine_toml(endpoint: &Endpoint) -> String {
-    let keys: Vec<String> = endpoint.host_keys.iter().map(|key| format!("\"{key}\"")).collect();
-    format!(
-        "[[engine]]\nalias = \"{}\"\nhost = \"{}\"\nport = {}\nuser = \"{}\"\nkey = \"{}\"\nhost_keys = [{}]\ncommand = \"{}\"\nid = \"{}\"\nnamespace = \"{}\"\nworkdir = \"{}\"\n\n",
-        endpoint.alias,
-        endpoint.host,
-        endpoint.port,
-        endpoint.user,
-        endpoint.key,
-        keys.join(", "),
-        endpoint.command,
-        endpoint.id,
-        endpoint.namespace,
-        endpoint.workdir,
-    )
-}
-
 /// A host started in an agent directory under `root` whose config names `engines`.
 fn host_with(root: &Path, engines: &[Endpoint]) -> Host {
     let agent = root.join("agent");

@@ -10,7 +10,7 @@ pub(crate) struct PurviewsResult {
 }
 
 impl NuSh {
-    /// `interface purview list`: every purview the routed engine holds, and what is in view.
+    /// `interface purview list`: the routed engine's purviews, and what is in view.
     pub(crate) async fn purview_list(
         &self,
         nonce: datum::Nonce,

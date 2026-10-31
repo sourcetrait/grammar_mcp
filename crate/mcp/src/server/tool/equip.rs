@@ -104,7 +104,7 @@ impl NuSh {
 }
 
 impl NuSh {
-    /// A rig installed or uninstalled: the routed engine's purviews adjusted, its view kept.
+    /// A rig installed or removed: the routed engine's purviews adjusted, view kept.
     async fn purview_rig(
         &self,
         route: &Route,

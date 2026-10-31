@@ -70,8 +70,8 @@ impl McpController {
     ) -> Result<Arc<Self>, String> {
         let face = Self::start_face(&config).await?;
         let controller = Self::of(config, face, lock);
-        controller.start_engine(supervise).await?;
-        controller.start_remote().await?;
+        let remote = controller.start_engine(supervise).await?;
+        controller.start_remote(remote).await?;
         Ok(Arc::new(controller))
     }
 
@@ -101,10 +101,12 @@ impl McpController {
     }
 
     /// The engine's system, its asks routed here, then the supervision if asked.
+    ///
+    /// Returns the remote engines' handler, the same route and policy the engine's take.
     async fn start_engine(
         &self,
         supervise: bool,
-    ) -> Result<(), String> {
+    ) -> Result<RemoteRoute, String> {
         let mcp_nom = self.face.mcp_nom.as_str();
         let log = emergency_log_path(&self.config.cache_home(), mcp_nom);
         let policy = EmergencyPolicy::new(self.face.channel.clone(), mcp_nom, log);
@@ -117,24 +119,28 @@ impl McpController {
             config: self.config.clone(),
             stopping: self.stopping.clone(),
         };
+        let remote = RemoteRoute {
+            route: route.clone(),
+            policy: policy.clone(),
+        };
         let engine = Arc::new(EngineHandle::start(route).await.map_err(|e| e.to_string())?);
         if supervise {
             let supervision = self.supervise(engine.clone(), policy).await?;
             *held(&self.supervision) = Some(supervision);
         }
         *held(&self.engine) = Some(engine);
-        Ok(())
+        Ok(remote)
     }
 
-    /// The remote engines' system on the config's engines, their asks routed here.
-    async fn start_remote(&self) -> Result<(), String> {
+    /// The remote engines' system on the config's engines, `route` answering asks.
+    async fn start_remote(
+        &self,
+        route: RemoteRoute,
+    ) -> Result<(), String> {
         let paths = RemoteSysPaths::new(self.config.data_home(), self.config.cache_home());
         let params = RemoteSysParams {
             endpoints: self.config.engines.clone(),
             limits: LIMITS_DEFAULT,
-        };
-        let route = RemoteRoute {
-            stopping: self.stopping.clone(),
         };
         let remote = RemoteHandle::start(paths, params, route).await?;
         *held(&self.remote) = Some(Arc::new(remote));
