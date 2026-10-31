@@ -40,7 +40,9 @@ bytes in turn. The lengths keep `ab` + `c` apart from `a` + `bc`.
 The bounds a hello negotiates, the contract's initial-limits table less what is
 fixed: the hello's and the event frame's ceilings and the decoded elements and
 depth. `least` takes each bound's minimum, `past` names the first bound above
-another's, and `zero` the first at zero.
+another's, and `zero` the first at zero. `streams` is the listener's bound on
+the transport streams it holds at once, every role's: 16 by default and 64 at
+most, carried in the hello so a client reads the cap it meets.
 
 ### fn frame_ceiling
 RPC and Status take the negotiated RPC ceiling, the contract naming none of

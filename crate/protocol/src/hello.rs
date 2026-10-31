@@ -120,6 +120,8 @@ pub struct Limits {
     pub event_records: u32,
     /// The event backlog's bytes.
     pub event_bytes: u64,
+    /// The transport streams the worker accepts at once, every role's.
+    pub streams: u32,
 }
 
 /// The bounds before negotiation.
@@ -130,6 +132,7 @@ pub const LIMITS_DEFAULT: Limits = Limits {
     control_slots: 4,
     event_records: 4096,
     event_bytes: 16 * 1024 * 1024,
+    streams: 16,
 };
 
 /// The bounds no negotiation passes.
@@ -140,11 +143,12 @@ pub const LIMITS_HARD: Limits = Limits {
     control_slots: 8,
     event_records: 65536,
     event_bytes: 256 * 1024 * 1024,
+    streams: 64,
 };
 
 impl Limits {
     /// Each bound by its name, widened.
-    fn bounds(&self) -> [(&'static str, u64); 6] {
+    fn bounds(&self) -> [(&'static str, u64); 7] {
         [
             ("rpc_frame", u64::from(self.rpc_frame)),
             ("decode_heap", self.decode_heap),
@@ -152,6 +156,7 @@ impl Limits {
             ("control_slots", u64::from(self.control_slots)),
             ("event_records", u64::from(self.event_records)),
             ("event_bytes", self.event_bytes),
+            ("streams", u64::from(self.streams)),
         ]
     }
 
@@ -164,6 +169,7 @@ impl Limits {
             control_slots: self.control_slots.min(other.control_slots),
             event_records: self.event_records.min(other.event_records),
             event_bytes: self.event_bytes.min(other.event_bytes),
+            streams: self.streams.min(other.streams),
         }
     }
 

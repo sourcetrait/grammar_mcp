@@ -222,21 +222,21 @@ fn no_peer_event_poses_as_the_hosts_or_reaches_an_operation() {
 }
 
 /// Every peer message's bitcode.
-fn vectors() -> BTreeMap<String, Vec<u8>> {
+fn vectors() -> BTreeMap<String, golden::Vector> {
     let mut out = BTreeMap::new();
     for (name, result) in results() {
-        out.insert(format!("result/{name}"), bitcode::encode(&RuntimeReply::Remote(result)));
+        out.insert(format!("result/{name}"), golden::vector(&RuntimeReply::Remote(result)));
     }
     for (name, event) in events() {
-        out.insert(format!("event/{name}"), bitcode::encode(&event));
+        out.insert(format!("event/{name}"), golden::vector(&event));
     }
     let relayed = packet("peer/Checkpoint", record(&[("event_bytes", NuVal::Int(641))]));
-    out.insert("packet".to_string(), bitcode::encode(&relayed));
+    out.insert("packet".to_string(), golden::vector(&relayed));
     let frame = |payload| {
         EventFrame::Record(Box::new(EventRecord { generation: GENERATION, sequence: 9, channel: Some(ChannelEpoch(2)), payload, artifacts: Vec::new() }))
     };
-    out.insert("frame/remote".to_string(), bitcode::encode(&frame(EventPayload::Remote(events()[0].1.clone()))));
-    out.insert("frame/relayed".to_string(), bitcode::encode(&frame(EventPayload::Relayed(relayed))));
+    out.insert("frame/remote".to_string(), golden::vector(&frame(EventPayload::Remote(events()[0].1.clone()))));
+    out.insert("frame/relayed".to_string(), golden::vector(&frame(EventPayload::Relayed(relayed))));
     out
 }
 
@@ -264,7 +264,7 @@ fn each_message_has_its_golden_vector_and_round_trips() {
         let back: RemoteChannelEvent = decode_payload(&bitcode::encode(&event), DECODE_BUDGET_DEFAULT).expect(name);
         assert_eq!(back, event, "{name}");
     }
-    for (name, bytes) in vectors() {
-        assert!(bytes.len() <= EVENT_FRAME_MAX as usize, "{name} fits an event frame");
+    for (name, vector) in vectors() {
+        assert!(vector.bytes.len() <= EVENT_FRAME_MAX as usize, "{name} fits an event frame");
     }
 }

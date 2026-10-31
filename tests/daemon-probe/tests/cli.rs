@@ -48,7 +48,7 @@ fn field<'a>(value: &'a NuVal, name: &str) -> &'a NuVal {
 }
 
 #[tested]
-fn the_inventory_lists_every_group_unimplemented() {
+fn the_inventory_lists_every_group_wire_alone_implemented() {
     let t = testing::test!({ .using_temp_dir() });
     let out = t.temp_dir().join("inventory.nuon");
     let run = probe(&["inventory", "--out", out.to_str().unwrap()]);
@@ -56,7 +56,12 @@ fn the_inventory_lists_every_group_unimplemented() {
     let inventory = read_output(&out, "Inventory.nutype");
     let NuVal::List(groups) = field(&inventory, "groups") else { panic!("groups") };
     assert_eq!(groups.len(), 14);
-    assert!(groups.iter().all(|g| *field(g, "implemented") == NuVal::Bool(false)), "{groups:?}");
+    for group in groups {
+        let wire = *field(group, "case") == NuVal::String("wire".to_string());
+        assert_eq!(*field(group, "implemented"), NuVal::Bool(wire), "{group:?}");
+        let NuVal::List(assertions) = field(group, "assertions") else { panic!("assertions") };
+        assert_eq!(assertions.is_empty(), !wire, "{group:?}");
+    }
     let NuVal::Record(capabilities) = field(&inventory, "capabilities") else { panic!("capabilities") };
     assert!(!capabilities.is_empty() && capabilities.iter().all(|(_, on)| *on == NuVal::Bool(false)));
 
@@ -70,16 +75,36 @@ fn an_unimplemented_case_ends_unrun() {
     let dir = t.temp_dir();
     let set = write(dir, "set.nuon", SET);
     let fixture = write(dir, "fixture.nuon", FIXTURE);
-    let out = dir.join("wire");
+    let out = dir.join("runtime");
     let run = probe(&[
-        "run", "--case", "wire", "--candidate-set", &set, "--fixture", &fixture,
+        "run", "--case", "runtime", "--candidate-set", &set, "--fixture", &fixture,
         "--out", out.to_str().unwrap(),
     ]);
     assert_eq!(run.status.code(), Some(77), "{run:?}");
     let result = read_output(&out.join("result.nuon"), "Result.nutype");
     assert_eq!(*field(&result, "status"), NuVal::String("unrun".to_string()));
     assert_eq!(*field(&result, "exit"), NuVal::Int(77));
-    assert_eq!(*field(&result, "case"), NuVal::String("wire".to_string()));
+    assert_eq!(*field(&result, "case"), NuVal::String("runtime".to_string()));
+}
+
+#[tested]
+fn the_wire_case_passes_every_assertion() {
+    let t = testing::test!({ .using_temp_dir() });
+    let dir = t.temp_dir();
+    let set = write(dir, "set.nuon", SET);
+    let fixture = write(dir, "fixture.nuon", FIXTURE);
+    let out = dir.join("wire");
+    let run = probe(&[
+        "run", "--case", "wire", "--candidate-set", &set, "--fixture", &fixture,
+        "--out", out.to_str().unwrap(),
+    ]);
+    assert_eq!(run.status.code(), Some(0), "{run:?}");
+    let result = read_output(&out.join("result.nuon"), "Result.nutype");
+    assert_eq!(*field(&result, "status"), NuVal::String("pass".to_string()));
+    assert_eq!(*field(&result, "exit"), NuVal::Int(0));
+    let NuVal::List(assertions) = field(&result, "assertions") else { panic!("assertions") };
+    let names: Vec<_> = assertions.iter().map(|a| match a { NuVal::String(s) => s.as_str(), _ => panic!("a name") }).collect();
+    assert_eq!(names, ["wire.manifest", "wire.vectors", "wire.types", "wire.limits", "wire.handshake", "wire.execution"]);
 }
 
 #[tested]

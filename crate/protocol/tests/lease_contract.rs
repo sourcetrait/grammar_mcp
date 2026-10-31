@@ -246,26 +246,26 @@ fn no_loss_touches_an_operation() {
 }
 
 /// Every lease message variant's bitcode.
-fn vectors() -> BTreeMap<String, Vec<u8>> {
+fn vectors() -> BTreeMap<String, golden::Vector> {
     let grant = LeaseGrant { lease: LeaseId([1; 16]), token: LeaseToken([2; 32]), epoch: LeaseEpoch(3), heartbeat_ms: 10_000, expiry_ms: 30_000 };
     let mut out = BTreeMap::new();
-    let mut put = |name: &str, bytes: Vec<u8>| {
-        out.insert(name.to_string(), bytes);
+    let mut put = |name: &str, vector: golden::Vector| {
+        out.insert(name.to_string(), vector);
     };
-    put("intent/claim", bitcode::encode(&LeaseIntent::Claim));
-    put("intent/resume", bitcode::encode(&resume(&grant)));
-    put("intent/takeover", bitcode::encode(&LeaseIntent::Takeover));
-    put("intent/attach", bitcode::encode(&attach(&grant)));
-    put("intent/observe", bitcode::encode(&LeaseIntent::Observe));
-    put("binding/granted", bitcode::encode(&LeaseBinding::Granted(grant.clone())));
-    put("binding/attached", bitcode::encode(&LeaseBinding::Attached { lease: grant.lease, epoch: grant.epoch }));
-    put("binding/unbound", bitcode::encode(&LeaseBinding::Unbound));
-    put("request/heartbeat", bitcode::encode(&heartbeat(&grant)));
-    put("request/release", bitcode::encode(&LeaseRequest::Release { lease: grant.lease, token: grant.token }));
-    put("reply/renewed", bitcode::encode(&LeaseReply::Renewed { epoch: grant.epoch }));
-    put("reply/released", bitcode::encode(&LeaseReply::Released));
+    put("intent/claim", golden::vector(&LeaseIntent::Claim));
+    put("intent/resume", golden::vector(&resume(&grant)));
+    put("intent/takeover", golden::vector(&LeaseIntent::Takeover));
+    put("intent/attach", golden::vector(&attach(&grant)));
+    put("intent/observe", golden::vector(&LeaseIntent::Observe));
+    put("binding/granted", golden::vector(&LeaseBinding::Granted(grant.clone())));
+    put("binding/attached", golden::vector(&LeaseBinding::Attached { lease: grant.lease, epoch: grant.epoch }));
+    put("binding/unbound", golden::vector(&LeaseBinding::Unbound));
+    put("request/heartbeat", golden::vector(&heartbeat(&grant)));
+    put("request/release", golden::vector(&LeaseRequest::Release { lease: grant.lease, token: grant.token }));
+    put("reply/renewed", golden::vector(&LeaseReply::Renewed { epoch: grant.epoch }));
+    put("reply/released", golden::vector(&LeaseReply::Released));
     for (name, reason) in [("expired", LossReason::Expired), ("released", LossReason::Released), ("taken_over", LossReason::TakenOver)] {
-        put(&format!("notice/lost/{name}"), bitcode::encode(&LeaseNotice::Lost { lease: grant.lease, epoch: grant.epoch, reason }));
+        put(&format!("notice/lost/{name}"), golden::vector(&LeaseNotice::Lost { lease: grant.lease, epoch: grant.epoch, reason }));
     }
     out
 }
@@ -276,10 +276,10 @@ fn each_message_has_its_golden_vector_and_round_trips() {
     let golden = golden::read(GOLDEN, golden::VECTORS_MODEL, &actual);
     assert_eq!(golden, actual, "a lease message's bytes changed; a deliberate change re-blesses {GOLDEN}");
     let vectors = vectors();
-    let intent: LeaseIntent = decode_payload(&vectors["intent/resume"], DECODE_BUDGET_DEFAULT).expect("decoded");
+    let intent: LeaseIntent = decode_payload(&vectors["intent/resume"].bytes, DECODE_BUDGET_DEFAULT).expect("decoded");
     assert!(matches!(intent, LeaseIntent::Resume { epoch: LeaseEpoch(3), .. }));
-    let binding: LeaseBinding = decode_payload(&vectors["binding/granted"], DECODE_BUDGET_DEFAULT).expect("decoded");
+    let binding: LeaseBinding = decode_payload(&vectors["binding/granted"].bytes, DECODE_BUDGET_DEFAULT).expect("decoded");
     assert!(matches!(binding, LeaseBinding::Granted(LeaseGrant { epoch: LeaseEpoch(3), .. })));
-    let notice: LeaseNotice = decode_payload(&vectors["notice/lost/taken_over"], DECODE_BUDGET_DEFAULT).expect("decoded");
+    let notice: LeaseNotice = decode_payload(&vectors["notice/lost/taken_over"].bytes, DECODE_BUDGET_DEFAULT).expect("decoded");
     assert_eq!(notice, LeaseNotice::Lost { lease: LeaseId([1; 16]), epoch: LeaseEpoch(3), reason: LossReason::TakenOver });
 }

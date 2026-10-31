@@ -204,7 +204,7 @@ fn a_slow_subscriber_reads_a_gap_then_is_closed_past_its_window() {
 }
 
 /// Every event message variant's bitcode.
-fn vectors() -> BTreeMap<String, Vec<u8>> {
+fn vectors() -> BTreeMap<String, golden::Vector> {
     let artifact = EventArtifact {
         artifact: ArtifactRef { id: ArtifactId([0x22; 16]), size: 4096, sha256: [0x33; 32] },
         dest: "out/report.nuon".to_string(),
@@ -213,18 +213,18 @@ fn vectors() -> BTreeMap<String, Vec<u8>> {
     let emergency = EventPayload::Emergency(Emergency::CpuWarning(CpuWarningEmergency { cpu_pct: 97.5, sample_ms: 1000 }));
     let lease = EventPayload::Lease(LeaseNotice::Lost { lease: LeaseId([1; 16]), epoch: LeaseEpoch(3), reason: LossReason::Expired });
     let mut out = BTreeMap::new();
-    let mut put = |name: &str, bytes: Vec<u8>| {
-        out.insert(name.to_string(), bytes);
+    let mut put = |name: &str, vector: golden::Vector| {
+        out.insert(name.to_string(), vector);
     };
-    put("cursor", bitcode::encode(&EventCursor { generation: GENERATION, sequence: 7 }));
-    put("frame/record/host", bitcode::encode(&EventFrame::Record(Box::new(record(host(1), vec![artifact.clone()])))));
-    put("frame/record/emergency", bitcode::encode(&EventFrame::Record(Box::new(record(emergency, Vec::new())))));
-    put("frame/record/lease", bitcode::encode(&EventFrame::Record(Box::new(record(lease, Vec::new())))));
-    put("frame/gap", bitcode::encode(&EventFrame::Gap { from: 2, to: 5 }));
-    put("frame/generation_reset", bitcode::encode(&EventFrame::GenerationReset { generation: RESTARTED, oldest: 1 }));
-    put("resume/cursor", bitcode::encode(&EventResume { cursor: at(7) }));
-    put("resume/oldest", bitcode::encode(&EventResume { cursor: None }));
-    put("ack", bitcode::encode(&EventAck { cursor: EventCursor { generation: GENERATION, sequence: 7 } }));
+    put("cursor", golden::vector(&EventCursor { generation: GENERATION, sequence: 7 }));
+    put("frame/record/host", golden::vector(&EventFrame::Record(Box::new(record(host(1), vec![artifact.clone()])))));
+    put("frame/record/emergency", golden::vector(&EventFrame::Record(Box::new(record(emergency, Vec::new())))));
+    put("frame/record/lease", golden::vector(&EventFrame::Record(Box::new(record(lease, Vec::new())))));
+    put("frame/gap", golden::vector(&EventFrame::Gap { from: 2, to: 5 }));
+    put("frame/generation_reset", golden::vector(&EventFrame::GenerationReset { generation: RESTARTED, oldest: 1 }));
+    put("resume/cursor", golden::vector(&EventResume { cursor: at(7) }));
+    put("resume/oldest", golden::vector(&EventResume { cursor: None }));
+    put("ack", golden::vector(&EventAck { cursor: EventCursor { generation: GENERATION, sequence: 7 } }));
     out
 }
 
@@ -234,11 +234,11 @@ fn each_message_has_its_golden_vector_and_round_trips() {
     let golden = golden::read(GOLDEN, golden::VECTORS_MODEL, &actual);
     assert_eq!(golden, actual, "an event message's bytes changed; a deliberate change re-blesses {GOLDEN}");
     let vectors = vectors();
-    let frame: EventFrame = decode_payload(&vectors["frame/record/host"], DECODE_BUDGET_DEFAULT).expect("decoded");
+    let frame: EventFrame = decode_payload(&vectors["frame/record/host"].bytes, DECODE_BUDGET_DEFAULT).expect("decoded");
     let EventFrame::Record(record) = frame else { panic!("a record") };
     assert_eq!(record.artifacts.len(), 1);
     assert_eq!(record.artifacts[0].dest, "out/report.nuon");
-    for (name, bytes) in &vectors {
-        assert!(bytes.len() <= EVENT_FRAME_MAX as usize, "{name} fits an event frame");
+    for (name, vector) in &vectors {
+        assert!(vector.bytes.len() <= EVENT_FRAME_MAX as usize, "{name} fits an event frame");
     }
 }

@@ -6,6 +6,7 @@ pub(crate) mod command;
 pub(crate) mod engine;
 pub(crate) mod error;
 pub(crate) mod event;
+pub mod fixture;
 pub(crate) mod hello;
 pub(crate) mod lease;
 pub(crate) mod limits;
@@ -13,6 +14,7 @@ pub(crate) mod operation;
 pub(crate) mod operator;
 pub(crate) mod peer;
 pub(crate) mod runtime;
+pub(crate) mod stream;
 pub(crate) mod value;
 
 pub(crate) use std::{fmt, io};
@@ -103,6 +105,9 @@ pub use crate::{
     runtime::{
         ClientInstanceId, ControllerPolicy, InfoReply, LeaseId, OperationId, PluginInfo, PurviewRow,
         PurviewView, RuntimeReply, RuntimeRequest, WorkerGeneration,
+    },
+    stream::{
+        EventsAnswer, EventsFrame, Ping, RpcAnswer, RpcFrame, StatusAnswer, StatusFrame, StreamClose,
     },
     value::{ValueLimitError, ValueLimitErrorKind, ValueLimits, check_error, check_value},
 };

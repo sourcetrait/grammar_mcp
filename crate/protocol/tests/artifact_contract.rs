@@ -634,22 +634,22 @@ fn each_error_has_a_stable_kind_and_renders_as_one_row() {
 }
 
 /// Every artifact message's bitcode.
-fn vectors() -> BTreeMap<String, Vec<u8>> {
+fn vectors() -> BTreeMap<String, golden::Vector> {
     let mut out = BTreeMap::new();
     for (name, request) in requests() {
-        out.insert(format!("request/{name}"), bitcode::encode(&request));
+        out.insert(format!("request/{name}"), golden::vector(&request));
     }
     for (name, reply) in replies() {
-        out.insert(format!("reply/{name}"), bitcode::encode(&reply));
+        out.insert(format!("reply/{name}"), golden::vector(&reply));
     }
     for (name, error) in errors() {
-        out.insert(format!("error/{name}"), bitcode::encode(&error));
+        out.insert(format!("error/{name}"), golden::vector(&error));
     }
     use ArtifactState as S;
     for state in [S::Reserved, S::Publishing, S::Published, S::Aborted, S::Expired, S::Evicted] {
-        out.insert(format!("state/{state:?}"), bitcode::encode(&state));
+        out.insert(format!("state/{state:?}"), golden::vector(&state));
     }
-    out.insert("limits".to_string(), bitcode::encode(&ARTIFACT_LIMITS_DEFAULT));
+    out.insert("limits".to_string(), golden::vector(&ARTIFACT_LIMITS_DEFAULT));
     out
 }
 

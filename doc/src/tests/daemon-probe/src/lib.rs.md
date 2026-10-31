@@ -5,7 +5,7 @@ enters a product package. It drives the client and protocol APIs directly
 for adversarial cases and, as its cases land, the MCP candidate over stdio.
 
 ## mod cases
-A home, empty until the scenario groups' code arrives, a file a group.
+The scenario groups' code, a file a group: `wire` so far.
 
 ## mod ser
 serde's `Serialize` under one path: the inventory and the results are NUON,

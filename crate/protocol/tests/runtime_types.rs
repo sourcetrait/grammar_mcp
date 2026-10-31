@@ -374,7 +374,7 @@ fn artifacts() -> Vec<(&'static str, ArtifactRequest, ArtifactReply)> {
     ]
 }
 
-fn misc() -> Vec<(&'static str, Vec<u8>)> {
+fn misc() -> Vec<(&'static str, golden::Vector)> {
     let observation = Observation {
         engine: Some(EngineHealth {
             hung: vec![HungEval { nonce: "n".into(), tool: "call".into(), lane: Lane::Stateful, started_at: 1, cancelled_at: 2 }],
@@ -406,47 +406,47 @@ fn misc() -> Vec<(&'static str, Vec<u8>)> {
     let reference = ArtifactRef { id: ARTIFACT, size: 1, sha256: HASH };
     let _ = Nom::new_unchecked(0);
     vec![
-        ("observation", bitcode::encode(&observation)),
-        ("host_event", bitcode::encode(&event)),
-        ("channel_send", bitcode::encode(&send)),
-        ("remote_send", bitcode::encode(&remote)),
-        ("remote_row", bitcode::encode(&row)),
-        ("spam_thresholds", bitcode::encode(&thresholds)),
-        ("artifact_ref", bitcode::encode(&reference)),
-        ("purview_row", bitcode::encode(&PurviewRow { id: "core".into(), namepath_patterns: vec!["gram:".into()] })),
+        ("observation", golden::vector(&observation)),
+        ("host_event", golden::vector(&event)),
+        ("channel_send", golden::vector(&send)),
+        ("remote_send", golden::vector(&remote)),
+        ("remote_row", golden::vector(&row)),
+        ("spam_thresholds", golden::vector(&thresholds)),
+        ("artifact_ref", golden::vector(&reference)),
+        ("purview_row", golden::vector(&PurviewRow { id: "core".into(), namepath_patterns: vec!["gram:".into()] })),
     ]
 }
 
 /// Every vector's name and its encoding.
-fn encoded() -> BTreeMap<String, Vec<u8>> {
+fn encoded() -> BTreeMap<String, golden::Vector> {
     let mut out = BTreeMap::new();
     for (name, e) in operator() {
-        out.insert(name, bitcode::encode(&e));
+        out.insert(name, golden::vector(&e));
     }
     for (name, e) in runtime_errors() {
-        out.insert(format!("runtime_error/{name}"), bitcode::encode(&e));
+        out.insert(format!("runtime_error/{name}"), golden::vector(&e));
     }
     for (name, e) in transport_errors() {
-        out.insert(format!("transport_error/{name}"), bitcode::encode(&e));
+        out.insert(format!("transport_error/{name}"), golden::vector(&e));
     }
     for (name, r) in requests() {
-        out.insert(format!("request/{name}"), bitcode::encode(&r));
+        out.insert(format!("request/{name}"), golden::vector(&r));
     }
     for (name, r) in replies() {
-        out.insert(format!("reply/{name}"), bitcode::encode(&r));
+        out.insert(format!("reply/{name}"), golden::vector(&r));
     }
     for (name, n) in channel() {
-        out.insert(format!("channel_notice/{name}"), bitcode::encode(&n));
+        out.insert(format!("channel_notice/{name}"), golden::vector(&n));
     }
     for (name, e) in peer() {
-        out.insert(format!("remote_event/{name}"), bitcode::encode(&e));
+        out.insert(format!("remote_event/{name}"), golden::vector(&e));
     }
     for (name, request, reply) in artifacts() {
-        out.insert(format!("artifact_request/{name}"), bitcode::encode(&request));
-        out.insert(format!("artifact_reply/{name}"), bitcode::encode(&reply));
+        out.insert(format!("artifact_request/{name}"), golden::vector(&request));
+        out.insert(format!("artifact_reply/{name}"), golden::vector(&reply));
     }
-    for (name, bytes) in misc() {
-        out.insert(format!("data/{name}"), bytes);
+    for (name, vector) in misc() {
+        out.insert(format!("data/{name}"), vector);
     }
     out
 }

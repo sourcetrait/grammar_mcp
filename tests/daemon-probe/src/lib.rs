@@ -1,4 +1,6 @@
-pub(crate) mod cases {}
+pub(crate) mod cases {
+    pub(crate) mod wire;
+}
 pub(crate) mod cli;
 pub(crate) mod error;
 pub(crate) mod inventory;

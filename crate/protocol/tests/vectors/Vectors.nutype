@@ -4,9 +4,12 @@
 #
 # A test encodes each named value with the pinned bitcode and holds the bytes
 # to its row; `BLESS=1` rewrites the table when an encoding moves on purpose.
-# `hex` is the bytes in lowercase hex, two digits a byte.
+# `type` is the value's Rust type, its module paths dropped, the name the
+# protocol's fixture driver decodes it by. `hex` is the bytes in lowercase hex,
+# two digits a byte.
 
 table<
     name: string,
+    type: string,
     hex: string
 >

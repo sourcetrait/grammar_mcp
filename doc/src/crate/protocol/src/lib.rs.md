@@ -7,8 +7,9 @@ The engine, the client, the daemon, the MCP frontend, and the probe all take
 it, and it takes none of them, so the package graph stays one-way.
 
 ## mod artifact
-An artifact's metadata, the requests that reserve, publish, abort, describe, and
-read it, and the default limits; the bytes move by SFTP.
+An artifact's metadata, the requests that reserve, publish, inspect, abort,
+describe, and read a log, the store's bounds the hello advertises, and the
+store a worker keeps of them; the bytes move by SFTP.
 
 ## mod channel
 The Channel's reservations, caps, modes, and phases, and what crosses between a
@@ -35,20 +36,43 @@ re-exports them.
 The runtime's and the transport's errors, each rendering to the envelope's rows,
 the transport's under stable `daemon::` kinds.
 
+## mod event
+The Events stream's cursors, records, gaps, resets, and acks, with the backlog
+and the Channel gate a worker keeps.
+
+## pub mod fixture
+The v1 fixture driver, public as a module of its own, so a native test or the
+probe decodes the golden vectors by type through it.
+
+## mod hello
+A stream's opening exchange, the negotiated bounds, and both ends' checks.
+
+## mod lease
+The controller lease's messages and intents, and the table a worker keeps.
+
 ## mod limits
 The frame ceilings the wire contract sets, each stream role's.
+
+## mod operation
+An operation's ticket, admission, status, and outcome, and the table a worker
+keeps before its journal makes them durable.
 
 ## mod operator
 The operator's portable data, its manager's observation and the emergencies it
 classifies, at fixed widths; the operator's Linux monitoring stays in its crate.
 
 ## mod peer
-The retained remote Channel's models, its list rows and listen result, and its
-lifecycle and delivery events, as data a worker reports to its frontend.
+The retained remote Channel's models, its commands' typed results, and its
+lifecycle and delivery events and relayed messages, as data a worker reports
+to its frontend.
 
 ## mod runtime
 The runtime's opaque identities, its request and reply, the host's metadata, the
-purviews, the controller's policy, and an operation's status.
+purviews, and the controller's policy.
+
+## mod stream
+Each stream role's frames after its hello, both ways, with their ping and
+close.
 
 ## use nuval::wide
 The wire's widening, shared with nuval so every count and offset widens one

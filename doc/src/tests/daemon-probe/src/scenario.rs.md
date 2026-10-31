@@ -3,7 +3,9 @@
 ## fn run_case
 The case name and both manifests are checked before anything is written, so a
 refused run leaves no result behind. A valid run of a case this build lacks
-writes its result as `unrun` and exits 77: a case never passes by omission.
+writes its result as `unrun` and exits 77: a case never passes by omission. An
+implemented case writes `pass` with every assertion it ran, or `fail` with
+those it ran through the one that failed and that failure as its reason.
 
 ## fn manifest
 A manifest is NUON its model holds, each record exactly its declared fields,

@@ -30,15 +30,47 @@ pub fn row(columns: impl IntoIterator<Item = (&'static str, NuVal)>) -> NuVal {
     NuVal::Record(columns.into_iter().map(|(name, value)| (name.to_string(), value)).collect())
 }
 
-/// Golden bitcode vectors as `Vectors.nutype`'s table: each name, its bytes
-/// in lowercase hex.
-pub fn hex_table(vectors: BTreeMap<String, Vec<u8>>) -> NuVal {
+/// One golden vector: its value's type, as the fixture driver names it, and
+/// its pinned bitcode.
+pub struct Vector {
+    pub ty: String,
+    pub bytes: Vec<u8>,
+}
+
+/// A value's golden vector.
+pub fn vector<T: bitcode::Encode + ?Sized>(value: &T) -> Vector {
+    Vector { ty: type_name::<T>(), bytes: bitcode::encode(value) }
+}
+
+/// `T`'s name with every module path dropped, `Result<NuVal, EngineError>`.
+pub fn type_name<T: ?Sized>() -> String {
+    let mut out = String::new();
+    let mut word = String::new();
+    let mut chars = std::any::type_name::<T>().chars().peekable();
+    while let Some(c) = chars.next() {
+        if c.is_alphanumeric() || c == '_' {
+            word.push(c);
+        } else if c == ':' && chars.peek() == Some(&':') {
+            chars.next();
+            word.clear();
+        } else {
+            out.push_str(&word);
+            word.clear();
+            out.push(c);
+        }
+    }
+    out + &word
+}
+
+/// Golden bitcode vectors as `Vectors.nutype`'s table: each name, its type,
+/// and its bytes in lowercase hex.
+pub fn hex_table(vectors: BTreeMap<String, Vector>) -> NuVal {
     NuVal::List(
         vectors
             .into_iter()
-            .map(|(name, bytes)| {
-                let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
-                row([("name", NuVal::String(name)), ("hex", NuVal::String(hex))])
+            .map(|(name, vector)| {
+                let hex: String = vector.bytes.iter().map(|b| format!("{b:02x}")).collect();
+                row([("name", NuVal::String(name)), ("type", NuVal::String(vector.ty)), ("hex", NuVal::String(hex))])
             })
             .collect(),
     )

@@ -46,7 +46,7 @@ pub(crate) struct Inventory {
     groups: Vec<Group>,
 }
 
-/// This build's inventory: every group listed, none implemented.
+/// This build's inventory: every group listed, `wire` alone implemented.
 pub(crate) fn inventory() -> Inventory {
     Inventory {
         schema_version: 1,
@@ -54,7 +54,10 @@ pub(crate) fn inventory() -> Inventory {
         capabilities: sourcetrait_grammar_client::capabilities(),
         groups: GROUPS
             .iter()
-            .map(|&case| Group { case, implemented: false, assertions: Vec::new() })
+            .map(|&case| match case {
+                "wire" => Group { case, implemented: true, assertions: cases::wire::ASSERTIONS.to_vec() },
+                _ => Group { case, implemented: false, assertions: Vec::new() },
+            })
             .collect(),
     }
 }

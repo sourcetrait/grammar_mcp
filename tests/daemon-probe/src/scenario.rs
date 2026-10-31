@@ -31,7 +31,7 @@ pub(crate) struct ScenarioResult {
     assertions: Vec<&'static str>,
 }
 
-/// Runs one case; this build implements none, so a valid run ends unrun.
+/// Runs one case, an unimplemented one ending unrun.
 pub(crate) fn run_case(
     case: &str,
     candidate_set: &Path,
@@ -46,20 +46,28 @@ pub(crate) fn run_case(
     manifest(fixture, FIXTURE)?;
     fs::create_dir_all(out)
         .map_err(|e| ProbeError::Io { path: out.to_path_buf(), reason: e.to_string() })?;
-    let reason = format!("the {case} case is not implemented in this build");
-    let unrun = ProbeError::Unrun { reason: reason.clone() };
+    let (status, error, assertions) = match case {
+        "wire" => match cases::wire::run() {
+            Ok(()) => ("pass", None, cases::wire::ASSERTIONS.to_vec()),
+            Err((at, reason)) => ("fail", Some(ProbeError::Failed { reason }), cases::wire::ASSERTIONS[..=at].to_vec()),
+        },
+        _ => {
+            let reason = format!("the {case} case is not implemented in this build");
+            ("unrun", Some(ProbeError::Unrun { reason }), Vec::new())
+        }
+    };
     let result = ScenarioResult {
         case: case.to_string(),
-        status: "unrun",
-        exit: unrun.exit_code(),
-        reason,
+        status,
+        exit: error.as_ref().map_or(0, ProbeError::exit_code),
+        reason: error.as_ref().map_or_else(|| "every assertion passed".to_string(), ToString::to_string),
         probe: PROBE,
         started_at_ms,
         ended_at_ms: now_ms(),
-        assertions: Vec::new(),
+        assertions,
     };
     write_nuon(&out.join("result.nuon"), &result)?;
-    Err(unrun)
+    error.map_or(Ok(()), Err)
 }
 
 /// Checks a manifest is NUON its model holds, at this probe's schema version.

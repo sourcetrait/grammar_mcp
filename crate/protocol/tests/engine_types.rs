@@ -227,9 +227,9 @@ fn answers() -> Vec<(String, FromEngineSys)> {
 }
 
 /// Every vector's name and its encoding.
-fn encoded() -> BTreeMap<String, Vec<u8>> {
-    let requests = requests().into_iter().map(|(n, r)| (n, bitcode::encode(&r)));
-    let answers = answers().into_iter().map(|(n, a)| (n, bitcode::encode(&a)));
+fn encoded() -> BTreeMap<String, golden::Vector> {
+    let requests = requests().into_iter().map(|(n, r)| (n, golden::vector(&r)));
+    let answers = answers().into_iter().map(|(n, a)| (n, golden::vector(&a)));
     requests.chain(answers).collect()
 }
 
@@ -254,7 +254,8 @@ fn every_request_and_answer_round_trips() {
 
 #[test]
 fn truncated_or_trailing_bytes_are_refused() {
-    for (name, bytes) in encoded() {
+    for (name, vector) in encoded() {
+        let bytes = vector.bytes;
         let decode = |b: &[u8]| -> bool {
             if name.starts_with("request/") {
                 decode::<ToEngineSys>(b).is_ok()

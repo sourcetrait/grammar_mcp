@@ -1,12 +1,12 @@
 [
-  [name,                   hex];
-  [ack,                    "094400000607"],
-  [cursor,                 "094400000607"],
-  [frame/gap,              "0106020605"],
-  [frame/generation_reset, "02094500000601"],
-  [frame/record/emergency, "00094400000607010602010100000000000060584004e80300"],
-  [frame/record/host,      "0009440000060701060200066576656e74310e7468726561642f6669787475726515666978747572652f7468696e672f4368616e6765640106010001092200000400100933000000000f6f75742f7265706f72742e6e756f6e"],
-  [frame/record/lease,     "00094400000607010602020affff06030000"],
-  [resume/cursor,          "01094400000607"],
-  [resume/oldest,          "00"]
+  [name,                   type,        hex];
+  [ack,                    EventAck,    "094400000607"],
+  [cursor,                 EventCursor, "094400000607"],
+  [frame/gap,              EventFrame,  "0106020605"],
+  [frame/generation_reset, EventFrame,  "02094500000601"],
+  [frame/record/emergency, EventFrame,  "00094400000607010602010100000000000060584004e80300"],
+  [frame/record/host,      EventFrame,  "0009440000060701060200066576656e74310e7468726561642f6669787475726515666978747572652f7468696e672f4368616e6765640106010001092200000400100933000000000f6f75742f7265706f72742e6e756f6e"],
+  [frame/record/lease,     EventFrame,  "00094400000607010602020affff06030000"],
+  [resume/cursor,          EventResume, "01094400000607"],
+  [resume/oldest,          EventResume, "00"]
 ]

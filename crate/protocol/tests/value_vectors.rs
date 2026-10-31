@@ -176,9 +176,9 @@ fn errors() -> Vec<(&'static str, NuValError)> {
 }
 
 /// Every vector's name and its encoding.
-fn encoded() -> BTreeMap<String, Vec<u8>> {
-    let values = values().into_iter().map(|(n, v)| (format!("value/{n}"), bitcode::encode(&v)));
-    let errors = errors().into_iter().map(|(n, e)| (format!("error/{n}"), bitcode::encode(&e)));
+fn encoded() -> BTreeMap<String, golden::Vector> {
+    let values = values().into_iter().map(|(n, v)| (format!("value/{n}"), golden::vector(&v)));
+    let errors = errors().into_iter().map(|(n, e)| (format!("error/{n}"), golden::vector(&e)));
     values.chain(errors).collect()
 }
 
@@ -214,7 +214,8 @@ fn a_nan_keeps_its_bits() {
 
 #[test]
 fn truncated_or_trailing_bytes_are_refused() {
-    for (name, bytes) in encoded() {
+    for (name, vector) in encoded() {
+        let bytes = vector.bytes;
         let decode = |b: &[u8]| -> bool {
             if name.starts_with("value/") {
                 decode::<NuVal>(b).is_ok()

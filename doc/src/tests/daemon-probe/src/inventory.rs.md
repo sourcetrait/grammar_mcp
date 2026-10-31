@@ -6,7 +6,7 @@ takes. A run's case must be one of them, so a typo is refused rather than run
 as nothing.
 
 ## fn inventory
-Every group listed with `implemented` false and no assertions: a group's
-assertions are enumerated by the gate that owns it, and an inventory that
-claimed one before then would let a matrix count it. The capabilities are the
-client's, the side the probe drives.
+Every group listed, `wire` implemented with its six assertions and every other
+with `implemented` false and none: a group's assertions are enumerated by the
+gate that owns it, and an inventory that claimed one before then would let a
+matrix count it. The capabilities are the client's, the side the probe drives.

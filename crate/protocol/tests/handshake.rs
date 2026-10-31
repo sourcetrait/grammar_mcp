@@ -173,6 +173,7 @@ fn raised_limits_negotiate_down_to_the_worker_s_and_the_hard_ceilings() {
         control_slots: u32::MAX,
         event_records: u32::MAX,
         event_bytes: u64::MAX,
+        streams: u32::MAX,
     };
     let asked = ClientHello { requested: greedy, ..hello() };
     assert_eq!(check_hello(&asked, &worker()).expect("accepted"), LIMITS_DEFAULT);
@@ -264,6 +265,7 @@ fn the_client_holds_each_limit_to_the_hard_ceilings_whatever_it_asked() {
         control_slots: u32::MAX,
         event_records: u32::MAX,
         event_bytes: u64::MAX,
+        streams: u32::MAX,
     };
     let expect = Expectation { requested: greedy, ..expectation() };
     let past = [
@@ -273,6 +275,7 @@ fn the_client_holds_each_limit_to_the_hard_ceilings_whatever_it_asked() {
         ("control_slots", Limits { control_slots: LIMITS_HARD.control_slots + 1, ..LIMITS_HARD }),
         ("event_records", Limits { event_records: LIMITS_HARD.event_records + 1, ..LIMITS_HARD }),
         ("event_bytes", Limits { event_bytes: LIMITS_HARD.event_bytes + 1, ..LIMITS_HARD }),
+        ("streams", Limits { streams: LIMITS_HARD.streams + 1, ..LIMITS_HARD }),
     ];
     for (name, effective) in past {
         let error = check_reply(HelloReply::Accepted(Box::new(ServerHello { effective, ..reply() })), &expect).expect_err(name);
@@ -391,12 +394,12 @@ fn an_instance_name_is_refused_unless_valid_and_never_sanitized() {
 }
 
 /// Every hello and reply variant's bitcode.
-fn vectors() -> BTreeMap<String, Vec<u8>> {
+fn vectors() -> BTreeMap<String, golden::Vector> {
     let mut out = BTreeMap::new();
-    out.insert("client_hello".to_string(), bitcode::encode(&hello()));
-    out.insert("reply/accepted".to_string(), bitcode::encode(&HelloReply::Accepted(Box::new(reply()))));
+    out.insert("client_hello".to_string(), golden::vector(&hello()));
+    out.insert("reply/accepted".to_string(), golden::vector(&HelloReply::Accepted(Box::new(reply()))));
     let refusal = TransportError::WrongWorker { expected: "fixture/default".to_string(), found: "fixture/test".to_string() };
-    out.insert("reply/refused".to_string(), bitcode::encode(&HelloReply::Refused(refusal)));
+    out.insert("reply/refused".to_string(), golden::vector(&HelloReply::Refused(refusal)));
     out
 }
 
@@ -406,14 +409,14 @@ fn each_hello_and_reply_has_its_golden_vector_and_decodes_within_the_hello_budge
     let golden = golden::read(GOLDEN, golden::VECTORS_MODEL, &actual);
     assert_eq!(golden, actual, "a hello's bytes changed; a deliberate change re-blesses {GOLDEN}");
     let vectors = vectors();
-    for (name, bytes) in &vectors {
-        assert!(bytes.len() <= HELLO_FRAME_MAX as usize, "{name} fits the hello's frame");
+    for (name, vector) in &vectors {
+        assert!(vector.bytes.len() <= HELLO_FRAME_MAX as usize, "{name} fits the hello's frame");
     }
-    let client: ClientHello = decode_payload(&vectors["client_hello"], HELLO_BUDGET).expect("decoded");
+    let client: ClientHello = decode_payload(&vectors["client_hello"].bytes, HELLO_BUDGET).expect("decoded");
     assert_eq!(client, hello());
-    let accepted: HelloReply = decode_payload(&vectors["reply/accepted"], HELLO_BUDGET).expect("decoded");
+    let accepted: HelloReply = decode_payload(&vectors["reply/accepted"].bytes, HELLO_BUDGET).expect("decoded");
     assert_eq!(accepted, HelloReply::Accepted(Box::new(reply())));
-    let refused: HelloReply = decode_payload(&vectors["reply/refused"], HELLO_BUDGET).expect("decoded");
+    let refused: HelloReply = decode_payload(&vectors["reply/refused"].bytes, HELLO_BUDGET).expect("decoded");
     assert!(matches!(refused, HelloReply::Refused(TransportError::WrongWorker { .. })));
     // A hello requiring more names than its budget's elements is refused as it decodes.
     let flood = ClientHello { required: vec![String::new(); 100], ..hello() };

@@ -1,18 +1,18 @@
 [
-  [name,                   hex];
-  [binding/attached,       "010affff0603"],
-  [binding/granted,        "000affff0902000000000603021027023075"],
-  [binding/unbound,        "02"],
-  [intent/attach,          "030affff090200000000060309440000"],
-  [intent/claim,           "00"],
-  [intent/observe,         "04"],
-  [intent/resume,          "010affff090200000000060309440000"],
-  [intent/takeover,        "02"],
-  [notice/lost/expired,    "0affff060300"],
-  [notice/lost/released,   "0affff060301"],
-  [notice/lost/taken_over, "0affff060302"],
-  [reply/released,         "01"],
-  [reply/renewed,          "000603"],
-  [request/heartbeat,      "000affff090200000000"],
-  [request/release,        "010affff090200000000"]
+  [name,                   type,         hex];
+  [binding/attached,       LeaseBinding, "010affff0603"],
+  [binding/granted,        LeaseBinding, "000affff0902000000000603021027023075"],
+  [binding/unbound,        LeaseBinding, "02"],
+  [intent/attach,          LeaseIntent,  "030affff090200000000060309440000"],
+  [intent/claim,           LeaseIntent,  "00"],
+  [intent/observe,         LeaseIntent,  "04"],
+  [intent/resume,          LeaseIntent,  "010affff090200000000060309440000"],
+  [intent/takeover,        LeaseIntent,  "02"],
+  [notice/lost/expired,    LeaseNotice,  "0affff060300"],
+  [notice/lost/released,   LeaseNotice,  "0affff060301"],
+  [notice/lost/taken_over, LeaseNotice,  "0affff060302"],
+  [reply/released,         LeaseReply,   "01"],
+  [reply/renewed,          LeaseReply,   "000603"],
+  [request/heartbeat,      LeaseRequest, "000affff090200000000"],
+  [request/release,        LeaseRequest, "010affff090200000000"]
 ]

@@ -336,38 +336,38 @@ fn each_request_has_its_class() {
 }
 
 /// Every operation message variant's bitcode.
-fn vectors() -> BTreeMap<String, Vec<u8>> {
+fn vectors() -> BTreeMap<String, golden::Vector> {
     let ticket = OperationTicket { operation: op(1), nonce: nonce(7), generation: GENERATION, epoch: EPOCH, expires_ms: 60_000 };
     let request = an_execute(nonce(7), "null");
     let mut out = BTreeMap::new();
-    let mut put = |name: String, bytes: Vec<u8>| {
-        out.insert(name, bytes);
+    let mut put = |name: String, vector: golden::Vector| {
+        out.insert(name, vector);
     };
-    put("ticket".into(), bitcode::encode(&ticket));
-    put("ticket_request".into(), bitcode::encode(&TicketRequest { correlation: 1 }));
-    put("ticket_reply/issued".into(), bitcode::encode(&TicketReply { correlation: 1, outcome: Ok(ticket.clone()) }));
-    put("ticket_reply/refused".into(), bitcode::encode(&TicketReply { correlation: 1, outcome: Err(TransportError::Busy) }));
-    put("submission".into(), bitcode::encode(&Submission { correlation: 2, ticket: ticket.clone(), hash: payload_hash(&request), request }));
+    put("ticket".into(), golden::vector(&ticket));
+    put("ticket_request".into(), golden::vector(&TicketRequest { correlation: 1 }));
+    put("ticket_reply/issued".into(), golden::vector(&TicketReply { correlation: 1, outcome: Ok(ticket.clone()) }));
+    put("ticket_reply/refused".into(), golden::vector(&TicketReply { correlation: 1, outcome: Err(TransportError::Busy) }));
+    put("submission".into(), golden::vector(&Submission { correlation: 2, ticket: ticket.clone(), hash: payload_hash(&request), request }));
     for (name, outcome) in [
         ("admitted", AdmissionOutcome::Admitted),
         ("existing", AdmissionOutcome::Existing(OperationStatus::Known { operation: op(1), state: OperationState::Running })),
         ("refused", AdmissionOutcome::Refused(TransportError::OperationConflict { operation: op(1) })),
     ] {
-        put(format!("admission/{name}"), bitcode::encode(&Admission { correlation: 2, operation: op(1), outcome }));
+        put(format!("admission/{name}"), golden::vector(&Admission { correlation: 2, operation: op(1), outcome }));
     }
-    put("status_query".into(), bitcode::encode(&StatusQuery { correlation: 3, operation: op(1) }));
+    put("status_query".into(), golden::vector(&StatusQuery { correlation: 3, operation: op(1) }));
     for (name, status) in [
         ("known", OperationStatus::Known { operation: op(1), state: OperationState::CancelRequested }),
         ("unknown", OperationStatus::Unknown { operation: op(1) }),
         ("expired", OperationStatus::Expired { operation: op(1), terminal: Some(OperationState::Succeeded) }),
         ("expired_untold", OperationStatus::Expired { operation: op(1), terminal: None }),
     ] {
-        put(format!("status_reply/{name}"), bitcode::encode(&StatusReply { correlation: 3, status }));
+        put(format!("status_reply/{name}"), golden::vector(&StatusReply { correlation: 3, status }));
     }
-    put("response/reply".into(), bitcode::encode(&Response { correlation: 4, operation: op(1), outcome: Ok(RuntimeReply::Interface { result: NuVal::Nothing }) }));
-    put("response/error".into(), bitcode::encode(&Response { correlation: 4, operation: op(1), outcome: Err(TransportError::Busy) }));
+    put("response/reply".into(), golden::vector(&Response { correlation: 4, operation: op(1), outcome: Ok(RuntimeReply::Interface { result: NuVal::Nothing }) }));
+    put("response/error".into(), golden::vector(&Response { correlation: 4, operation: op(1), outcome: Err(TransportError::Busy) }));
     for state in STATES {
-        put(format!("state/{state:?}"), bitcode::encode(&state));
+        put(format!("state/{state:?}"), golden::vector(&state));
     }
     out
 }
@@ -378,12 +378,12 @@ fn each_message_has_its_golden_vector_and_round_trips() {
     let golden = golden::read(GOLDEN, golden::VECTORS_MODEL, &actual);
     assert_eq!(golden, actual, "an operation message's bytes changed; a deliberate change re-blesses {GOLDEN}");
     let vectors = vectors();
-    let ticket: OperationTicket = decode_payload(&vectors["ticket"], DECODE_BUDGET_DEFAULT).expect("decoded");
+    let ticket: OperationTicket = decode_payload(&vectors["ticket"].bytes, DECODE_BUDGET_DEFAULT).expect("decoded");
     assert_eq!(ticket.operation, op(1));
-    let submission: Submission = decode_payload(&vectors["submission"], DECODE_BUDGET_DEFAULT).expect("decoded");
+    let submission: Submission = decode_payload(&vectors["submission"].bytes, DECODE_BUDGET_DEFAULT).expect("decoded");
     assert_eq!(submission.hash, payload_hash(&submission.request));
     for state in STATES {
-        let back: OperationState = decode_payload(&vectors[&format!("state/{state:?}")], DECODE_BUDGET_DEFAULT).expect("decoded");
+        let back: OperationState = decode_payload(&vectors[&format!("state/{state:?}")].bytes, DECODE_BUDGET_DEFAULT).expect("decoded");
         assert_eq!(back, state);
     }
 }
