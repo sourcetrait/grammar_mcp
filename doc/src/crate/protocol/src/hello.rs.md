@@ -57,25 +57,30 @@ ones still grants none past them.
 The client's first frame, and the worker's: acceptance or a transport error,
 after which the worker closes the stream. A required feature is a capability's
 name as a string, so a later minor can add a feature without a layout change,
-and a name the worker doesn't know is refused like one it has off.
+and a name the worker doesn't know is refused like one it has off. The hello
+carries the stream's lease intent and the reply its binding (lease.rs).
+`Accepted` boxes its hello, some 280 bytes beside a refusal's 56.
 
-## fn accept_hello
-The worker's side: the version, schema, and codec; the expected instance valid
-and the worker's own; every required feature on; no requested bound at zero;
-and each effective bound the least of the request, the worker's, and the hard
-ceilings.
+## fn check_hello
+The worker's side, before any lease is bound: the version, schema, and codec;
+the expected instance valid and the worker's own; the lease intent one the
+role allows; every required feature on; no requested bound at zero. It
+returns each effective bound, the least of the request, the worker's, and the
+hard ceilings. A hello it refuses binds no lease.
 
 ## fn check_reply
 The client's side of the same checks, and what only the client can check: the
 worker's UID and instance its endpoint expects, the key derived from that
-instance, the role echoed, no bound raised past the request, and the
-generation against the last one seen. A new generation is reported in
+instance, the role echoed, no bound raised past the request, the binding the
+one its intent asked for, and the generation against the last one seen. A new generation is reported in
 `Session::new_generation`, so a caller drops what it held of the old worker, a
 lease to resume or a verified Channel, rather than carrying it over.
 
 ## enum HelloState
-One stream's handshake on the worker. `admit` refuses every request until a
-hello readies the stream, so nothing dispatches before it; a second hello, the
+One stream's handshake on the worker. `on_hello` checks the hello, then binds
+its lease in the worker's table and returns the table's actions with the
+reply. `admit` refuses every request until a hello readies the stream, so
+nothing dispatches before it; a second hello, the
 only way a role could change, is refused and closes the stream; a refusal
 closes it too. A reconnect is a new stream with a new state, so no handshake
 outlives its stream. `Ready` boxes the accepted hello, some 200 bytes beside

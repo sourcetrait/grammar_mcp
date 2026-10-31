@@ -6,6 +6,7 @@ pub(crate) mod command;
 pub(crate) mod engine;
 pub(crate) mod error;
 pub(crate) mod hello;
+pub(crate) mod lease;
 pub(crate) mod limits;
 pub(crate) mod operator;
 pub(crate) mod peer;
@@ -61,7 +62,12 @@ pub use crate::{
         AUTH_DEADLINE, ClientHello, Expectation, HELLO_BUDGET, HELLO_DEADLINE, HelloReply,
         HelloState, Instance, InstanceKey, LIMITS_DEFAULT, LIMITS_HARD, Limits, PROTOCOL_VERSION,
         ProtocolVersion, REQUIRED_FEATURES_MAX, ServerHello, Session, WorkerIdentity,
-        WorkerProfile, accept_hello, check_reply,
+        WorkerProfile, check_hello, check_reply,
+    },
+    lease::{
+        Change, Fresh, LEASE_EXPIRY, LEASE_HEARTBEAT, LeaseAction, LeaseBinding, LeaseEpoch,
+        LeaseGrant, LeaseIntent, LeaseNotice, LeaseReply, LeaseRequest, LeaseTable, LeaseToken,
+        LossReason,
     },
     limits::{
         DECODE_BUDGET_DEFAULT, DECODE_HEAP_HARD, DecodeBudget, EVENT_FRAME_MAX, HELLO_FRAME_MAX,

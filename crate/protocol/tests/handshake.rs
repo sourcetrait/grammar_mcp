@@ -18,6 +18,7 @@ const GOLDEN: &str = "tests/vectors/hello.nuon";
 const UID: u32 = 4242;
 const GENERATION: WorkerGeneration = WorkerGeneration([0x44; 16]);
 const CLIENT: ClientInstanceId = ClientInstanceId([0x55; 16]);
+const FRESH: Fresh = Fresh { lease: LeaseId([0x66; 16]), token: LeaseToken([0x77; 32]) };
 
 fn instance() -> Instance {
     Instance::new("fixture", "default").expect("a valid instance")
@@ -38,6 +39,7 @@ fn expectation() -> Expectation {
         uid: UID,
         instance: instance(),
         role: StreamRole::Rpc,
+        lease: LeaseIntent::Claim,
         requested: LIMITS_DEFAULT,
         required: vec!["wire".to_string()],
         last: None,
@@ -48,24 +50,34 @@ fn hello() -> ClientHello {
     expectation().hello(CLIENT)
 }
 
+/// A fresh worker's reply to `hello`, on a stream of its own.
+fn answer(hello: &ClientHello) -> HelloReply {
+    let mut leases = LeaseTable::new(GENERATION);
+    HelloState::default().on_hello(hello, &worker(), &mut leases, 0, FRESH).0
+}
+
 /// The worker's acceptance of the fixture hello.
 fn reply() -> ServerHello {
-    accept_hello(&hello(), &worker()).expect("the fixture hello")
+    match answer(&hello()) {
+        HelloReply::Accepted(accepted) => *accepted,
+        refused => panic!("the fixture hello refused: {refused:?}"),
+    }
 }
 
 /// A worker's stream counting what it dispatches: only an admitted request is.
 struct Stream {
     state: HelloState,
+    leases: LeaseTable,
     dispatched: Cell<u32>,
 }
 
 impl Stream {
     fn new() -> Self {
-        Self { state: HelloState::default(), dispatched: Cell::new(0) }
+        Self { state: HelloState::default(), leases: LeaseTable::new(GENERATION), dispatched: Cell::new(0) }
     }
 
     fn hello(&mut self, hello: &ClientHello) -> HelloReply {
-        self.state.on_hello(hello, &worker())
+        self.state.on_hello(hello, &worker(), &mut self.leases, 0, FRESH).0
     }
 
     fn request(&self) -> Result<(), TransportError> {
@@ -125,6 +137,9 @@ fn each_mismatch_is_refused_alone_with_nothing_dispatched() {
             ClientHello { requested: Limits { control_slots: 0, ..LIMITS_DEFAULT }, ..hello() },
             "daemon::invalid_frame",
         ),
+        ("a Status stream claiming", ClientHello { role: StreamRole::Status, ..hello() }, "daemon::invalid_frame"),
+        ("an Events stream claiming", ClientHello { role: StreamRole::Events, ..hello() }, "daemon::invalid_frame"),
+        ("an RPC stream observing", ClientHello { lease: LeaseIntent::Observe, ..hello() }, "daemon::invalid_frame"),
     ];
     for (name, hello, kind) in cases {
         let error = refused(&hello);
@@ -133,9 +148,19 @@ fn each_mismatch_is_refused_alone_with_nothing_dispatched() {
 }
 
 #[test]
+fn a_refused_hello_binds_no_lease() {
+    let mut stream = Stream::new();
+    let bad = ClientHello { schema: [0; 32], ..hello() };
+    assert!(matches!(stream.hello(&bad), HelloReply::Refused(_)));
+    assert_eq!(stream.leases.live(0), None);
+}
+
+#[test]
 fn a_minor_version_beneath_one_schema_is_accepted() {
     let newer = ClientHello { version: ProtocolVersion { major: 1, minor: 7 }, ..hello() };
-    assert_eq!(accept_hello(&newer, &worker()).expect("accepted").version, PROTOCOL_VERSION);
+    assert!(check_hello(&newer, &worker()).is_ok());
+    let HelloReply::Accepted(accepted) = answer(&newer) else { panic!("refused") };
+    assert_eq!(accepted.version, PROTOCOL_VERSION);
 }
 
 #[test]
@@ -149,13 +174,13 @@ fn raised_limits_negotiate_down_to_the_worker_s_and_the_hard_ceilings() {
         event_bytes: u64::MAX,
     };
     let asked = ClientHello { requested: greedy, ..hello() };
-    assert_eq!(accept_hello(&asked, &worker()).expect("accepted").effective, LIMITS_DEFAULT);
+    assert_eq!(check_hello(&asked, &worker()).expect("accepted"), LIMITS_DEFAULT);
     // A worker configured past the hard ceilings still grants none past them.
     let lavish = WorkerProfile { limits: greedy, ..worker() };
-    assert_eq!(accept_hello(&asked, &lavish).expect("accepted").effective, LIMITS_HARD);
+    assert_eq!(check_hello(&asked, &lavish).expect("accepted"), LIMITS_HARD);
     // A modest request is granted as asked.
     let modest = Limits { rpc_frame: 1 << 20, concurrent_rpcs: 2, ..LIMITS_DEFAULT };
-    let granted = accept_hello(&ClientHello { requested: modest, ..hello() }, &worker()).expect("accepted").effective;
+    let granted = check_hello(&ClientHello { requested: modest, ..hello() }, &worker()).expect("accepted");
     assert_eq!(granted, modest);
     assert_eq!(granted.frame_ceiling(StreamRole::Rpc), 1 << 20);
     assert_eq!(granted.frame_ceiling(StreamRole::Status), 1 << 20);
@@ -165,7 +190,7 @@ fn raised_limits_negotiate_down_to_the_worker_s_and_the_hard_ceilings() {
 
 #[test]
 fn the_client_accepts_the_worker_it_expects() {
-    let session = check_reply(HelloReply::Accepted(reply()), &expectation()).expect("accepted");
+    let session = check_reply(HelloReply::Accepted(Box::new(reply())), &expectation()).expect("accepted");
     assert_eq!(session.worker.uid, UID);
     assert_eq!(session.worker.instance, instance());
     assert_eq!(session.limits, LIMITS_DEFAULT);
@@ -201,10 +226,11 @@ fn the_client_refuses_each_wrong_reply() {
             ServerHello { effective: Limits { event_records: 0, ..LIMITS_DEFAULT }, ..reply() },
             "daemon::invalid_frame",
         ),
+        ("a claim left unbound", ServerHello { lease: LeaseBinding::Unbound, ..reply() }, "daemon::invalid_frame"),
         ("a feature off", ServerHello { capabilities: Capabilities::NONE, ..reply() }, "daemon::unsupported_feature"),
     ];
     for (name, hello, kind) in cases {
-        let error = check_reply(HelloReply::Accepted(hello), &expectation()).expect_err(name);
+        let error = check_reply(HelloReply::Accepted(Box::new(hello)), &expectation()).expect_err(name);
         assert_eq!(error.kind(), kind, "{name}: {}", error.message());
     }
     // A refusal is the worker's own error, passed through.
@@ -215,9 +241,9 @@ fn the_client_refuses_each_wrong_reply() {
 #[test]
 fn a_new_generation_is_reported_so_nothing_of_the_old_worker_carries_over() {
     let same = Expectation { last: Some(GENERATION), ..expectation() };
-    assert!(!check_reply(HelloReply::Accepted(reply()), &same).expect("accepted").new_generation);
+    assert!(!check_reply(HelloReply::Accepted(Box::new(reply())), &same).expect("accepted").new_generation);
     let restarted = Expectation { last: Some(WorkerGeneration([0x45; 16])), ..expectation() };
-    assert!(check_reply(HelloReply::Accepted(reply()), &restarted).expect("accepted").new_generation);
+    assert!(check_reply(HelloReply::Accepted(Box::new(reply())), &restarted).expect("accepted").new_generation);
 }
 
 #[test]
@@ -238,20 +264,29 @@ fn a_second_hello_closes_the_stream_and_a_fresh_stream_awaits_its_own() {
 
 #[test]
 fn both_ends_agree_on_one_set_of_fixtures() {
-    let hellos = [
-        hello(),
-        ClientHello { role: StreamRole::Events, ..hello() },
-        ClientHello { role: StreamRole::Status, required: Vec::new(), ..hello() },
-        ClientHello { requested: Limits { rpc_frame: 1 << 16, ..LIMITS_DEFAULT }, ..hello() },
-    ];
-    for asked in hellos {
-        let expect = Expectation { role: asked.role, requested: asked.requested, required: asked.required.clone(), ..expectation() };
-        assert_eq!(expect.hello(CLIENT), asked);
+    let mut leases = LeaseTable::new(GENERATION);
+    let mut run = |expect: Expectation| {
+        let asked = expect.hello(CLIENT);
         let mut state = HelloState::default();
-        let session = check_reply(state.on_hello(&asked, &worker()), &expect).expect("both ends accept");
+        let (reply, _) = state.on_hello(&asked, &worker(), &mut leases, 0, FRESH);
+        let session = check_reply(reply, &expect).expect("both ends accept");
         assert_eq!(state.admit().expect("ready").effective, session.limits);
         assert_eq!(session.role, asked.role);
-    }
+        session
+    };
+    let LeaseBinding::Granted(grant) = run(expectation()).lease else { panic!("a claim left ungranted") };
+    let held = |intent: fn(LeaseId, LeaseToken, LeaseEpoch, WorkerGeneration) -> LeaseIntent| {
+        intent(grant.lease, grant.token, grant.epoch, GENERATION)
+    };
+    let attach = held(|lease, token, epoch, generation| LeaseIntent::Attach { lease, token, epoch, generation });
+    let resume = held(|lease, token, epoch, generation| LeaseIntent::Resume { lease, token, epoch, generation });
+    let events = run(Expectation { role: StreamRole::Events, lease: attach, ..expectation() });
+    assert_eq!(events.lease, LeaseBinding::Attached { lease: grant.lease, epoch: grant.epoch });
+    let status = run(Expectation { role: StreamRole::Status, lease: LeaseIntent::Observe, required: Vec::new(), ..expectation() });
+    assert_eq!(status.lease, LeaseBinding::Unbound);
+    let modest = Limits { rpc_frame: 1 << 16, ..LIMITS_DEFAULT };
+    let resumed = run(Expectation { lease: resume, requested: modest, ..expectation() });
+    assert_eq!(resumed.lease, LeaseBinding::Granted(grant));
 }
 
 #[test]
@@ -294,7 +329,7 @@ fn an_instance_name_is_refused_unless_valid_and_never_sanitized() {
 fn vectors() -> BTreeMap<String, Vec<u8>> {
     let mut out = BTreeMap::new();
     out.insert("client_hello".to_string(), bitcode::encode(&hello()));
-    out.insert("reply/accepted".to_string(), bitcode::encode(&HelloReply::Accepted(reply())));
+    out.insert("reply/accepted".to_string(), bitcode::encode(&HelloReply::Accepted(Box::new(reply()))));
     let refusal = TransportError::WrongWorker { expected: "fixture/default".to_string(), found: "fixture/test".to_string() };
     out.insert("reply/refused".to_string(), bitcode::encode(&HelloReply::Refused(refusal)));
     out
@@ -312,7 +347,7 @@ fn each_hello_and_reply_has_its_golden_vector_and_decodes_within_the_hello_budge
     let client: ClientHello = decode_payload(&vectors["client_hello"], HELLO_BUDGET).expect("decoded");
     assert_eq!(client, hello());
     let accepted: HelloReply = decode_payload(&vectors["reply/accepted"], HELLO_BUDGET).expect("decoded");
-    assert_eq!(accepted, HelloReply::Accepted(reply()));
+    assert_eq!(accepted, HelloReply::Accepted(Box::new(reply())));
     let refused: HelloReply = decode_payload(&vectors["reply/refused"], HELLO_BUDGET).expect("decoded");
     assert!(matches!(refused, HelloReply::Refused(TransportError::WrongWorker { .. })));
     // A hello requiring more names than its budget's elements is refused as it decodes.

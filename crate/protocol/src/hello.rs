@@ -211,6 +211,8 @@ pub struct ClientHello {
     pub expected: Instance,
     /// The stream's role, fixed for its life.
     pub role: StreamRole,
+    /// What the stream asks of the namespace's lease, as its role allows.
+    pub lease: LeaseIntent,
     /// The client process's identity, fresh per process.
     pub client: ClientInstanceId,
     /// The bounds the client asks for.
@@ -238,6 +240,8 @@ pub struct ServerHello {
     pub codec: String,
     pub worker: WorkerIdentity,
     pub role: StreamRole,
+    /// The lease the stream is bound to.
+    pub lease: LeaseBinding,
     /// The negotiated bounds.
     pub effective: Limits,
     pub capabilities: Capabilities,
@@ -247,7 +251,7 @@ pub struct ServerHello {
 /// before the worker closes the stream.
 #[cereal::derived(Data)]
 pub enum HelloReply {
-    Accepted(ServerHello),
+    Accepted(Box<ServerHello>),
     Refused(TransportError),
 }
 
@@ -293,8 +297,8 @@ pub struct WorkerProfile {
     pub capabilities: Capabilities,
 }
 
-/// The worker's acceptance of `hello`, or the refusal it closes the stream with.
-pub fn accept_hello(hello: &ClientHello, worker: &WorkerProfile) -> Result<ServerHello, TransportError> {
+/// The worker's checks of `hello`, before any lease binds: its negotiated limits.
+pub fn check_hello(hello: &ClientHello, worker: &WorkerProfile) -> Result<Limits, TransportError> {
     agree(hello.version, &hello.schema, &hello.codec)?;
     hello.expected.check()?;
     if hello.expected != worker.instance {
@@ -303,13 +307,23 @@ pub fn accept_hello(hello: &ClientHello, worker: &WorkerProfile) -> Result<Serve
             found: worker.instance.to_string(),
         });
     }
+    if !hello.lease.fits(hello.role) {
+        return Err(TransportError::InvalidFrame {
+            reason: format!("a {:?} stream can't {}", hello.role, hello.lease.name()),
+        });
+    }
     provide(&hello.required, worker.capabilities)?;
     if let Some(name) = hello.requested.zero() {
         return Err(TransportError::InvalidFrame {
             reason: format!("the hello requests a {name} of zero"),
         });
     }
-    Ok(ServerHello {
+    Ok(hello.requested.least(worker.limits).least(LIMITS_HARD))
+}
+
+/// The worker's reply to a checked hello, its lease bound.
+fn accepted(hello: &ClientHello, worker: &WorkerProfile, effective: Limits, lease: LeaseBinding) -> ServerHello {
+    ServerHello {
         version: PROTOCOL_VERSION,
         schema: SCHEMA_ID,
         codec: CODEC_ID.to_string(),
@@ -320,9 +334,10 @@ pub fn accept_hello(hello: &ClientHello, worker: &WorkerProfile) -> Result<Serve
             generation: worker.generation,
         },
         role: hello.role,
-        effective: hello.requested.least(worker.limits).least(LIMITS_HARD),
+        lease,
+        effective,
         capabilities: worker.capabilities,
-    })
+    }
 }
 
 /// What a client expects of the worker a stream reaches.
@@ -332,6 +347,8 @@ pub struct Expectation {
     pub uid: u32,
     pub instance: Instance,
     pub role: StreamRole,
+    /// What the stream asks of the lease.
+    pub lease: LeaseIntent,
     pub requested: Limits,
     pub required: Vec<String>,
     /// The generation the client last reached this worker at, if any.
@@ -347,6 +364,7 @@ impl Expectation {
             codec: CODEC_ID.to_string(),
             expected: self.instance.clone(),
             role: self.role,
+            lease: self.lease.clone(),
             client,
             requested: self.requested,
             required: self.required.clone(),
@@ -359,6 +377,7 @@ impl Expectation {
 pub struct Session {
     pub worker: WorkerIdentity,
     pub role: StreamRole,
+    pub lease: LeaseBinding,
     pub limits: Limits,
     pub capabilities: Capabilities,
     /// Whether the worker's generation is new since the expectation's last,
@@ -369,7 +388,7 @@ pub struct Session {
 /// The client's check of the worker's reply against what it expects.
 pub fn check_reply(reply: HelloReply, expect: &Expectation) -> Result<Session, TransportError> {
     let hello = match reply {
-        HelloReply::Accepted(hello) => hello,
+        HelloReply::Accepted(hello) => *hello,
         HelloReply::Refused(refusal) => return Err(refusal),
     };
     agree(hello.version, &hello.schema, &hello.codec)?;
@@ -401,13 +420,36 @@ pub fn check_reply(reply: HelloReply, expect: &Expectation) -> Result<Session, T
         });
     }
     provide(&expect.required, hello.capabilities)?;
+    if !bound_as_asked(&expect.lease, &hello.lease) {
+        return Err(TransportError::InvalidFrame {
+            reason: format!("the worker answered a {} with another binding", expect.lease.name()),
+        });
+    }
     Ok(Session {
         new_generation: expect.last.is_some_and(|last| last != hello.worker.generation),
         worker: hello.worker,
         role: hello.role,
+        lease: hello.lease,
         limits: hello.effective,
         capabilities: hello.capabilities,
     })
+}
+
+/// Whether `binding` answers `intent`: a grant for a claim or a takeover, the
+/// same lease, token, and epoch for a resume, the same lease and epoch for an
+/// attachment, and nothing for a Status stream.
+fn bound_as_asked(intent: &LeaseIntent, binding: &LeaseBinding) -> bool {
+    match (intent, binding) {
+        (LeaseIntent::Claim | LeaseIntent::Takeover, LeaseBinding::Granted(_)) => true,
+        (LeaseIntent::Resume { lease, token, epoch, .. }, LeaseBinding::Granted(grant)) => {
+            grant.lease == *lease && grant.token.matches(token) && grant.epoch == *epoch
+        }
+        (LeaseIntent::Attach { lease, epoch, .. }, LeaseBinding::Attached { lease: bound, epoch: at }) => {
+            bound == lease && at == epoch
+        }
+        (LeaseIntent::Observe, LeaseBinding::Unbound) => true,
+        _ => false,
+    }
 }
 
 /// One stream's handshake on the worker: awaiting its hello, ready under the
@@ -421,28 +463,46 @@ pub enum HelloState {
 }
 
 impl HelloState {
-    /// The reply to `hello`: the stream ready on acceptance, closed on a
-    /// refusal, and a second hello, the one way to change a role, refused.
-    pub fn on_hello(&mut self, hello: &ClientHello, worker: &WorkerProfile) -> HelloReply {
-        let outcome = match self {
-            Self::Awaiting => accept_hello(hello, worker),
-            Self::Ready(_) => Err(TransportError::InvalidFrame {
-                reason: "a second hello on the stream".to_string(),
-            }),
-            Self::Closed => Err(TransportError::InvalidFrame {
-                reason: "a hello on a closed stream".to_string(),
-            }),
+    /// The reply to `hello` at `now_ms`, its lease bound in `leases`, `fresh`
+    /// drawn for a grant, with the lease's actions: the stream ready on
+    /// acceptance, closed on a refusal, and a second hello refused.
+    pub fn on_hello(
+        &mut self,
+        hello: &ClientHello,
+        worker: &WorkerProfile,
+        leases: &mut LeaseTable,
+        now_ms: u64,
+        fresh: Fresh,
+    ) -> (HelloReply, Vec<LeaseAction>) {
+        let (outcome, actions) = match self {
+            Self::Awaiting => match check_hello(hello, worker) {
+                Ok(effective) => {
+                    let change = leases.bind(now_ms, hello.role, &hello.lease, fresh);
+                    (change.outcome.map(|lease| accepted(hello, worker, effective, lease)), change.actions)
+                }
+                Err(refusal) => (Err(refusal), Vec::new()),
+            },
+            Self::Ready(_) => (
+                Err(TransportError::InvalidFrame { reason: "a second hello on the stream".to_string() }),
+                Vec::new(),
+            ),
+            Self::Closed => (
+                Err(TransportError::InvalidFrame { reason: "a hello on a closed stream".to_string() }),
+                Vec::new(),
+            ),
         };
-        match outcome {
+        let reply = match outcome {
             Ok(accepted) => {
-                *self = Self::Ready(Box::new(accepted.clone()));
+                let accepted = Box::new(accepted);
+                *self = Self::Ready(accepted.clone());
                 HelloReply::Accepted(accepted)
             }
             Err(refusal) => {
                 *self = Self::Closed;
                 HelloReply::Refused(refusal)
             }
-        }
+        };
+        (reply, actions)
     }
 
     /// The accepted hello a request is admitted under, refused before it.
