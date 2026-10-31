@@ -42,13 +42,13 @@ fn validate_new_names(
             });
         }
     }
-    if let Some(n) = name {
-        if !is_valid_ident(n) || is_reserved_term(n) {
-            return Err(EngineError::RigInvalidName {
-                name: n.to_string(),
-                reason: "invalid or reserved (`main`) function name".to_string(),
-            });
-        }
+    if let Some(n) = name
+        && (!is_valid_ident(n) || is_reserved_term(n))
+    {
+        return Err(EngineError::RigInvalidName {
+            name: n.to_string(),
+            reason: "invalid or reserved (`main`) function name".to_string(),
+        });
     }
     Ok(())
 }

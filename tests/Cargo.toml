@@ -11,16 +11,10 @@ categories.workspace = true
 keywords.workspace   = true
 
 [features]
-# The legacy cohort drives the host's `test-driver` and `cli`, which only an mcp
-# binary built with ITS own `embedded-cli` feature carries. Build and run together,
-# in one target directory:
-#   cargo build -p sourcetrait_grammar_mcp --features embedded-cli
-#   cargo test -p sourcetrait_grammar_tests --features embedded-cli -- --test-threads=1
-embedded-cli = []
-# The lifecycle tests also need the mcp binary's `test-hooks` feature
-# (__test_hang / __test_panic). Run all together:
-#   cargo build -p sourcetrait_grammar_mcp --features embedded-cli,test-hooks
-#   cargo test -p sourcetrait_grammar_tests --features embedded-cli,test-hooks -- --test-threads=1
+# The lifecycle tests need the mcp binary's `test-hooks` feature (__test_hang /
+# __test_panic). Build and run together, in one target directory:
+#   cargo build -p sourcetrait_grammar_mcp --features test-hooks
+#   cargo test -p sourcetrait_grammar_tests --features test-hooks -- --test-threads=1
 test-hooks = []
 
 [dependencies]

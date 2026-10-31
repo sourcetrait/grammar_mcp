@@ -2,9 +2,7 @@
 
 ## struct Cli
 One binary, its namespace and deny set selected at runtime by trusted operator
-config. What it serves on is the build's: a bare invocation is the client in
-every build, and the engine-backed test host is `test-driver`, under
-`embedded-cli` alone (`run.rs`).
+config. A bare invocation serves MCP on the process's own engine (`run.rs`).
 
 The validation here is deliberately uneven, and the unevenness is the design.
 `id` and `namespace` are not ident-checked: they come from trusted operator
@@ -29,10 +27,8 @@ its start directory, whose absence is the ordinary zero-config state
 (`config.rs`).
 
 ## enum CliCmd
-`Cli` parses in every build, so a client build answers an operator's command
-with the feature it lacks rather than clap's unknown-subcommand error.
-`TestDriver` exists only under `embedded-cli` and is hidden from the help: it
-serves the legacy test cohort, never an agent.
+`Cli` is the one subcommand: one tool call on the process's own engine, its
+envelope printed; no subcommand serves MCP.
 
 ## enum CliTool
 Deny does not apply to this surface. It gates agent registration, and the

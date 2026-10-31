@@ -2,9 +2,9 @@
 
 ## fn init_engine
 The engine's start: its parameters from the config the process resolved and its
-homes the namespace's (`home.rs`). No engine can be built before it, so the test
-driver and the one-shot CLI start it first, both under `embedded-cli` and never
-on the serving path (`run.rs`), and the test harness once a process (`guts.rs`).
+homes the namespace's (`home.rs`). No engine can be built before it, so the
+server and the one-shot CLI start it first, after the namespace's lock
+(`run.rs`), and the test harness once a process (`guts.rs`).
 
 The scratch directories are made here, before the engine, because parameters
 carry them: every definition reads them as `$env.EQUIP_TMP` and
@@ -26,7 +26,7 @@ host from serving.
 builtins, since grammar's rig calls plugin commands its validation must know. It
 belongs to the substrate because every engine base loads the registry it writes,
 so it must land before the first base is built, on every entry point that
-starts an engine: the test driver, the one-shot CLI, and the test server.
+starts an engine: the server, the one-shot CLI, and the test server.
 
 The engine starts after it, its locks hydrated from the store this makes, so
 they hold the builtins installed a moment before (`run.rs`).

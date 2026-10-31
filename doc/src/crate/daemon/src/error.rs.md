@@ -22,3 +22,7 @@ operation journal it can't make or trust; 75, `EX_TEMPFAIL`, for a namespace
 or a journal another process holds, which a later start may find free; 71,
 `EX_OSERR`, for task threads the system won't give; and 70 for an engine that
 fails its start.
+
+## impl From<LockError>
+The scratch crate's lock refusals as the worker's own kinds, the holder's
+record kept, so a held namespace still reports `runtime::namespace_held`.

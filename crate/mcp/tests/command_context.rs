@@ -1,4 +1,3 @@
-#![cfg(feature = "embedded-cli")]
 
 use sourcetrait_grammar_mcp::guts::{TestServer, lint_engine_reuses_until_the_registry_moves, nuon};
 use sourcetrait_common::testing::prelude::*;

@@ -1,5 +1,4 @@
 //! The execute contract over `execute` definitions, through `guts::analyze_definition`.
-#![cfg(feature = "embedded-cli")]
 
 use sourcetrait_grammar_mcp::guts::{NuVal, analyze_definition};
 

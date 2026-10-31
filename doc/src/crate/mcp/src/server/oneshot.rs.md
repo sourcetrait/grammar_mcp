@@ -8,6 +8,8 @@ methods on `NuSh` - no rmcp transport anywhere. That is what makes this the oper
 no-agent contribution loop rather than a parallel implementation to keep in step.
 
 The invocation ends with its process: no shutdown runs, and its systems end with the
+process. Its controller holds the namespace's lock its caller took (`run.rs`), so a
+host or a worker on the namespace refuses it, and the kernel releases the lock with the
 process.
 
 The invocation is its own host, its engine in its own process, so every tool it drives

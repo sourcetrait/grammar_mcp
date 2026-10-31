@@ -1,6 +1,5 @@
 //! The tool surface's documentation: User's three texts, verbatim, and no tool
 //! declaring an output schema.
-#![cfg(feature = "embedded-cli")]
 
 use sourcetrait_common::testing::prelude::*;
 use sourcetrait_grammar_mcp::guts::TestServer;

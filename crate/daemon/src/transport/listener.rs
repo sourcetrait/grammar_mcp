@@ -47,8 +47,8 @@ impl EngineListener {
             return Err(unavailable(format!("its directory's mode {:o} opens it past 0700", meta.mode() & 0o777)));
         }
         let held = NamespaceLock::acquire(&path.with_extension(SOCKET_LOCK_EXTENSION)).map_err(|e| match e {
-            DaemonError::NamespaceHeld { .. } => unavailable("another worker holds its lock".to_string()),
-            other => unavailable(other.to_string()),
+            LockError::Held { .. } => unavailable("another worker holds its lock".to_string()),
+            LockError::Unavailable { reason, .. } => unavailable(reason),
         })?;
         match fs::symlink_metadata(path) {
             Ok(meta) if meta.file_type().is_socket() && meta.uid() == uid => match probe(path) {

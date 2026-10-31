@@ -1,14 +1,12 @@
 //! System-test harness for `grammar-mcp`.
 //!
-//! These tests spawn the REAL host binary - the bare serving client, the
-//! `test-driver` JSON-RPC server over stdio on the in-process engine, or the
-//! one-shot `cli` subcommand - so they are SYSTEM tests and live outside the mcp
-//! crate to keep its own `cargo test` fast. The binary is located from the test
-//! binary's own path (`current_exe()` -> the `target/<profile>/grammar-mcp`
-//! sibling of `deps/`), so it must be built first, in the same target directory:
-//! `cargo build -p sourcetrait_grammar_mcp` for the client tests alone, and
-//! `--features embedded-cli` on both crates for the legacy cohort, which drives
-//! `test-driver` and `cli`.
+//! These tests spawn the REAL host binary - the server, MCP over stdio on its
+//! in-process engine, or the one-shot `cli` subcommand - so they are SYSTEM
+//! tests and live outside the mcp crate to keep its own `cargo test` fast. The
+//! binary is located from the test binary's own path (`current_exe()` -> the
+//! `target/<profile>/grammar-mcp` sibling of `deps/`), so it must be built
+//! first, in the same target directory: `cargo build -p sourcetrait_grammar_mcp`,
+//! with `--features test-hooks` for the lifecycle tests.
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
@@ -26,10 +24,6 @@ pub use nuval::NuVal;
 
 pub mod remote;
 pub use remote::*;
-
-/// The entry a legacy host serves under: MCP over stdio on the in-process engine,
-/// which only a binary built with mcp's `embedded-cli` carries.
-pub const TEST_DRIVER: &str = "test-driver";
 
 /// The `grammar-mcp` host binary, beside the running test binary's `deps/`.
 ///
@@ -157,27 +151,12 @@ impl Host {
     /// The test owns the first message, as a client probing before `initialize`
     /// does.
     pub fn spawn_uninitialized(scratch: &Path, stderr_log: &Path) -> Self {
-        Self::start(Some(TEST_DRIVER), scratch, &[], &[], None, Some(stderr_log))
+        Self::start(scratch, &[], &[], None, Some(stderr_log))
     }
 
-    /// A host on the bare entry, serving as a client, with extra CLI args.
-    pub fn spawn_client(scratch: &Path, args: &[&str]) -> Self {
-        let mut host = Self::start(None, scratch, args, &[], None, None);
-        host.initialize();
-        host
-    }
-
-    /// `spawn_client` in a working directory, for a host whose `[identity]` must
-    /// resolve.
-    pub fn spawn_client_in(scratch: &Path, args: &[&str], cwd: &Path) -> Self {
-        let mut host = Self::start(None, scratch, args, &[], Some(cwd), None);
-        host.initialize();
-        host
-    }
-
-    /// A client host with its stderr in `stderr_log` and nothing sent.
-    pub fn spawn_client_uninitialized(scratch: &Path, args: &[&str], stderr_log: &Path) -> Self {
-        Self::start(None, scratch, args, &[], None, Some(stderr_log))
+    /// `spawn_uninitialized` with extra CLI args.
+    pub fn spawn_uninitialized_args(scratch: &Path, args: &[&str], stderr_log: &Path) -> Self {
+        Self::start(scratch, args, &[], None, Some(stderr_log))
     }
 
     fn spawn_core(
@@ -187,15 +166,13 @@ impl Host {
         cwd: Option<&Path>,
         stderr_log: Option<&Path>,
     ) -> Self {
-        let mut host = Self::start(Some(TEST_DRIVER), scratch, args, envs, cwd, stderr_log);
+        let mut host = Self::start(scratch, args, envs, cwd, stderr_log);
         host.initialize();
         host
     }
 
-    /// Spawn the binary on `entry`, its subcommand after the CLI args, or on the
-    /// bare entry when none.
+    /// Spawn the binary on its bare entry, MCP over stdio.
     fn start(
-        entry: Option<&str>,
         scratch: &Path,
         args: &[&str],
         envs: &[(&str, &str)],
@@ -215,7 +192,6 @@ impl Host {
         };
         let mut cmd = Command::new(grammar_mcp_bin());
         cmd.args(args)
-            .args(entry)
             .env("XDG_DATA_HOME", &data_home)
             .env("XDG_CACHE_HOME", &cache_home)
             .env("UENV_USR_DATA", &data_home)

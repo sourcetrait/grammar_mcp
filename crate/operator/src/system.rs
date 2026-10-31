@@ -6,14 +6,11 @@ pub struct OperatorSystem {
     watchdog: Watchdog,
     probe_tx: tk::UnboundedSender<Probe>,
     probe_rx: tk::UnboundedReceiver<Probe>,
-    _host_lock: Option<HostLock>,
 }
 
-/// The system's parameters: the host it watches and the lines it warns at.
+/// The system's parameters: how it samples and the lines it warns at.
 #[cereal::derived(Data)]
 pub struct OperatorSysParams {
-    /// The host process's id, written into the host lock.
-    pub mcp_nom: String,
     /// Whether the host runs with `--test`, sampling only while its Channel is open.
     pub test: bool,
     /// The supervisor lines in force under any pin.
@@ -147,21 +144,12 @@ impl subsys::System for OperatorSystem {
     fn inner_mut(&mut self) -> &mut subsys::InnerSystem<Self> { &mut self.inner }
 
     async fn init(inner: subsys::InnerSystem<Self>, params: Self::Params) -> subsys::SubsysResult<Self> {
-        let lock_path = inner.paths.data_home.join(HOST_LOCK_FILE);
-        let host_lock = match acquire_host_lock(&lock_path, &params.mcp_nom) {
-            Ok(lock) => Some(lock),
-            Err(e) => {
-                eprintln!("grammar: host lock not held: {e}");
-                None
-            }
-        };
         let (probe_tx, probe_rx) = tk::unbounded_channel();
         Ok(Self {
             inner,
             watchdog: Watchdog::new(params.supervisor, params.test),
             probe_tx,
             probe_rx,
-            _host_lock: host_lock,
         })
     }
 
@@ -239,7 +227,7 @@ impl OperatorHandle {
             .map_err(|e| format!("grammar: the operator's system: {e}"))
     }
 
-    /// Stops the operator's system, its host lock released.
+    /// Stops the operator's system.
     pub async fn stop(self) -> Result<(), String> {
         self.control
             .stop(true)

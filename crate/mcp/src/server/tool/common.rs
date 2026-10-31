@@ -1,7 +1,6 @@
 use crate::*;
 
-/// The test driver's server: the four tools on the in-process engine.
-#[cfg(feature = "embedded-cli")]
+/// The server: the four tools on the in-process engine.
 pub struct NuSh {
     /// mcp's controller: the engine's requests and the face's commands go to it.
     pub(crate) controller: Arc<McpController>,
@@ -15,7 +14,6 @@ pub struct NuSh {
     pub(crate) tool_router: mcp::ToolRouter<NuSh>,
 }
 
-#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// The server over `controller`, its interface engine denying `deny`'s commands.
     pub(crate) fn new(
@@ -62,7 +60,6 @@ pub(crate) fn resolve_host(alias: &str) -> GrammarMcpResult<Host> {
 }
 
 /// The internal error an answer of another command's kind is.
-#[cfg(feature = "embedded-cli")]
 pub(crate) fn unexpected(command: &str) -> GrammarMcpError {
     GrammarMcpError::Internal {
         phase: format!("engine::{command}"),
@@ -115,7 +112,6 @@ pub(crate) fn success_void(nonce: datum::Nonce) -> Result<mcp::CallToolResult, m
 }
 
 /// A call's value from the engine, its nushell form, or why it has none.
-#[cfg(feature = "embedded-cli")]
 pub(crate) fn answer_value(answer: EngineResult<ValueAnswer>) -> GrammarMcpResult<nu::Value> {
     let value = answer?.result?;
     value

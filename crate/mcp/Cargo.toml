@@ -16,22 +16,14 @@ path = "src/main.rs"
 
 [features]
 # Test-only engine decls (__test_hang / __test_panic) for the lifecycle system
-# tests; never enabled in a shipped build. The weak form leaves the engine to
-# embedded-cli: hooks alone bring no engine.
-test-hooks = ["sourcetrait_grammar_engine?/test-hooks"]
-# The in-process engine and operator of the local CLI and the test driver,
-# never shipped and never a serving backend: serving is a client in every build.
-embedded-cli = [
-    "dep:nix",
-    "dep:sourcetrait_grammar_engine",
-    "dep:sourcetrait_grammar_operator",
-]
+# tests; never enabled in a shipped build.
+test-hooks = ["sourcetrait_grammar_engine/test-hooks"]
 
 [dependencies]
 clap.workspace = true
 directories.workspace = true
 futures-util.workspace = true
-nix = { workspace = true, optional = true }
+nix.workspace = true
 nu-engine.workspace = true
 nu-parser.workspace = true
 nu-protocol.workspace = true
@@ -52,9 +44,9 @@ toml.workspace = true
 sourcetrait_common.workspace = true
 sourcetrait_grammar_channel.workspace = true
 sourcetrait_grammar_client.workspace = true
-sourcetrait_grammar_engine = { workspace = true, optional = true }
+sourcetrait_grammar_engine.workspace = true
 sourcetrait_grammar_interface.workspace = true
-sourcetrait_grammar_operator = { workspace = true, optional = true }
+sourcetrait_grammar_operator.workspace = true
 sourcetrait_grammar_peer.workspace = true
 sourcetrait_grammar_protocol.workspace = true
 sourcetrait_grammar_scratch.workspace = true

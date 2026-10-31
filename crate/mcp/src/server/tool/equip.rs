@@ -1,14 +1,12 @@
 use crate::*;
 
 /// `new` summary: the paths scaffolded for the fresh equip's rig.
-#[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct NewSummary {
     pub created: Vec<String>,
 }
 
 /// The per-action summary, `install`'s its commit's; `uninstall` returns none.
-#[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]
 #[serde(untagged)]
 pub(crate) enum EquipSummary {
@@ -18,14 +16,12 @@ pub(crate) enum EquipSummary {
 }
 
 /// Success result of each `interface equip` action on a source.
-#[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct EquipResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<EquipSummary>,
 }
 
-#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// `interface equip new`: register an equip at its source and seed its rig.
     pub(crate) async fn equip_new(
@@ -103,7 +99,6 @@ impl NuSh {
     }
 }
 
-#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// A rig installed or uninstalled: the engine's purviews adjusted, the view kept.
     async fn purview_rig(

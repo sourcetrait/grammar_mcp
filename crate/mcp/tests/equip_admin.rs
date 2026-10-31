@@ -1,4 +1,3 @@
-#![cfg(feature = "embedded-cli")]
 
 use std::os::unix::fs::PermissionsExt;
 

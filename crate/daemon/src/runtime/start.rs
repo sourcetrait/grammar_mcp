@@ -57,7 +57,8 @@ impl Runtime {
             STARTED.store(false, Ordering::Release);
             e
         };
-        let (lock, generation, scratch) = claim(&config).map_err(given_back)?;
+        let mcp_nom = datum::Nom::generate(&datum::NonceGenerator::new()).into_pair();
+        let (lock, generation, scratch) = claim(&config, mcp_nom.as_str()).map_err(given_back)?;
         let started = tasks().and_then(|tasks| {
             let controller = tasks.block_on(GrammardController::start(&config, generation))?;
             Ok((tasks, controller))
@@ -70,7 +71,7 @@ impl Runtime {
             }
         };
         let mut diagnostics = scratch.diagnostics().to_vec();
-        let serving = start_engine(&config, &scratch, &mut diagnostics).and_then(|()| match &config.paths.socket {
+        let serving = start_engine(&config, &scratch, mcp_nom.as_str(), &mut diagnostics).and_then(|()| match &config.paths.socket {
             Some(path) => serve(path, &config, generation, &tasks).map(Some),
             None => Ok(None),
         });
@@ -194,25 +195,20 @@ fn serve(
 }
 
 
-/// The lock taken, this start's generation recorded in it, and the scratch made.
-fn claim(config: &InstanceConfig) -> DaemonResult<(NamespaceLock, WorkerGeneration, WorkerScratch)> {
+/// The lock taken and its record written, the generation drawn, the scratch made.
+fn claim(
+    config: &InstanceConfig,
+    mcp_nom: &str,
+) -> DaemonResult<(NamespaceLock, WorkerGeneration, WorkerScratch)> {
     let unavailable = |reason: String| DaemonError::LockUnavailable {
         path: config.paths.lock.clone(),
         reason,
     };
     let mut lock = NamespaceLock::acquire(&config.paths.lock)?;
     let generation = fresh_generation().map_err(|e| unavailable(format!("no generation can be drawn: {e}")))?;
-    let owner = Owner::current().map_err(|e| unavailable(e.to_string()))?;
-    lock.record(&LockRecord {
-        holder: LOCK_HOLDER,
-        uid: config.identity.uid,
-        id: config.identity.id.clone(),
-        namespace: config.identity.namespace.clone(),
-        pid: owner.pid,
-        start: owner.start,
-        boot: owner.boot,
-        generation: generation.hex(),
-    })?;
+    let record = LockRecord::current(LOCK_HOLDER, &config.identity.id, &config.identity.namespace, mcp_nom)
+        .map_err(|e| unavailable(e.to_string()))?;
+    lock.record(&record)?;
     let scratch = WorkerScratch::create(&config.homes)?;
     Ok((lock, generation, scratch))
 }
@@ -221,17 +217,17 @@ fn claim(config: &InstanceConfig) -> DaemonResult<(NamespaceLock, WorkerGenerati
 fn start_engine(
     config: &InstanceConfig,
     scratch: &WorkerScratch,
+    mcp_nom: &str,
     diagnostics: &mut Vec<String>,
 ) -> DaemonResult<()> {
     let failed = |reason: String| DaemonError::EngineInit { reason };
-    let mcp_nom = datum::Nom::generate(&datum::NonceGenerator::new()).into_pair();
     engine::init(engine::EngineParams {
         id: config.identity.id.clone(),
         namespace: config.identity.namespace.clone(),
         work_dir: config.workdir.clone(),
         tmp_dir: scratch.tmp().to_path_buf(),
         transient_dir: scratch.transient().to_path_buf(),
-        mcp_nom: mcp_nom.as_str().to_string(),
+        mcp_nom: mcp_nom.to_string(),
         data_home: config.paths.data.clone(),
         cache_home: config.paths.cache.clone(),
     })

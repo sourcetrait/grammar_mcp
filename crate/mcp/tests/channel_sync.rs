@@ -3,7 +3,6 @@
 //!
 //! A binary of its own, its cases one Stepper sequence: the Channel is the
 //! process's one, so every case reads or changes the same state.
-#![cfg(feature = "embedded-cli")]
 
 use sourcetrait_common::testing::prelude::*;
 use sourcetrait_grammar_mcp::guts::{NuVal, TestServer, error_kind, error_messages, has_error, nuon};

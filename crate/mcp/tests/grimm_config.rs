@@ -4,7 +4,6 @@
 //! registry is a process-global, and `TestServer` shares the very process the
 //! eval runs in, so a test can pin to its own pid and know for certain the
 //! process is alive - which is the one thing a spawned host could not give it.
-#![cfg(feature = "embedded-cli")]
 
 use sourcetrait_grammar_mcp::guts::{
     TestServer, clear_config_pins, error_text, has_error, nuon,

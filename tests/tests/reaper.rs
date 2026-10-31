@@ -9,7 +9,7 @@
 //!
 //! Linux alone: the subreaper is Linux's `PR_SET_CHILD_SUBREAPER`. Elsewhere an orphan
 //! goes to init (launchd on macOS), which reaps it, so the host has no such duty.
-#![cfg(all(feature = "embedded-cli", target_os = "linux"))]
+#![cfg(target_os = "linux")]
 
 use std::path::Path;
 use std::time::{Duration, Instant};

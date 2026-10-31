@@ -1,5 +1,3 @@
-#![cfg_attr(not(feature = "embedded-cli"), allow(dead_code, unused_imports))]
-
 pub(crate) mod error;
 pub(crate) mod run;
 pub(crate) mod server {
@@ -8,19 +6,13 @@ pub(crate) mod server {
         pub(crate) mod face;
         pub(crate) mod hub;
     }
-    pub(crate) mod client;
     pub(crate) mod controller;
     pub(crate) mod emergency;
-    #[cfg(feature = "embedded-cli")]
     pub(crate) mod host;
     pub(crate) mod identity;
-    #[cfg(feature = "embedded-cli")]
     pub(crate) mod oneshot;
-    #[cfg(feature = "embedded-cli")]
     pub(crate) mod operator;
-    #[cfg(feature = "embedded-cli")]
     pub(crate) mod purview;
-    #[cfg(feature = "embedded-cli")]
     pub(crate) mod run;
     pub(crate) mod tool {
         pub(crate) mod call;
@@ -31,9 +23,7 @@ pub(crate) mod server {
         pub(crate) mod commit;
         pub(crate) mod config_channel;
         pub(crate) mod common;
-        #[cfg(feature = "embedded-cli")]
         pub(crate) mod handler;
-        #[cfg(feature = "embedded-cli")]
         pub(crate) mod info;
         pub(crate) mod inspect;
         pub(crate) mod interface;
@@ -41,11 +31,9 @@ pub(crate) mod server {
         pub(crate) mod execute;
         pub(crate) mod kill;
         pub(crate) mod new;
-        #[cfg(feature = "embedded-cli")]
         pub(crate) mod processes;
         pub(crate) mod purview_configure;
         pub(crate) mod purview_extend;
-        #[cfg(feature = "embedded-cli")]
         pub(crate) mod purviews;
         pub(crate) mod purview;
         pub(crate) mod remote_channel_close;
@@ -57,7 +45,6 @@ pub(crate) mod server {
     }
     #[cfg(test)]
     mod tests {
-        mod client;
         mod emergency;
         mod face;
     }
@@ -72,7 +59,6 @@ pub(crate) mod config;
 pub(crate) mod consts;
 pub(crate) mod home;
 pub(crate) mod scratch;
-#[cfg(feature = "embedded-cli")]
 pub mod guts;
 
 pub(crate) use crate::{
@@ -99,30 +85,28 @@ pub(crate) use crate::{
             },
             hub::{FROM_MCP, open_packet, start as start_channel_hub},
         },
-        client::serve_client,
         controller::{McpController, log_closed, log_status},
         emergency::{EmergencyPolicy, emergency_log_path},
         identity::{mint_nonce, process_identity},
         tool::{
-            call::{CALL_DESCRIPTION, CallParams},
+            call::CallParams,
             common::{
                 envelope_text, now_millis, resolve_host, serde_to_nu, success, success_value,
                 success_void,
             },
             interface::{
-                INTERFACE_DESCRIPTION, INTERFACE_TOOL, InterfaceParams, interface_description,
-                interface_engine_for, render_signatures,
+                INTERFACE_TOOL, InterfaceParams, interface_description, interface_engine_for,
+                render_signatures,
             },
             execute::ExecuteParams,
-            rerun::{RERUN_DESCRIPTION, RerunParams},
+            rerun::RerunParams,
         },
     },
     run::{
-        parse_deniable,
+        lock_namespace, parse_deniable,
     },
 };
 
-#[cfg(feature = "embedded-cli")]
 pub(crate) use crate::server::{
     host::{HostRoute, ensure_substrate, init_engine},
     oneshot::run_oneshot,
@@ -132,7 +116,6 @@ pub(crate) use crate::server::{
     tool::common::{NuSh, answer_value, unexpected},
 };
 
-#[cfg(feature = "embedded-cli")]
 pub(crate) use sourcetrait_grammar_engine::{
     self as engine, EVAL_STACK_SIZE, EngineHandle, EngineParams, EngineSystem, FromEngine,
     GRIMM, HostAnswer, HostAsk, HostStop, LintEngine, NU_VERSION, NamepathPattern,
@@ -182,12 +165,13 @@ pub(crate) use sourcetrait_grammar_protocol::{
 
 pub(crate) use sourcetrait_grammar_protocol::{Emergency, EmergencyKind, Observation};
 
-#[cfg(feature = "embedded-cli")]
 pub(crate) use sourcetrait_grammar_operator::{
     FromOperatorSys, OperatorHandle, OperatorSysParams, OperatorSysPaths, OperatorSystem,
     SAMPLE_INTERVAL, SupervisorConfig, check_fraction, clear_pins, effective_supervisor,
     install_child_subreaper, pin,
 };
+
+pub(crate) use sourcetrait_grammar_scratch::{LOCK_FILE, LockRecord, NamespaceLock};
 
 pub(crate) use nuval::{NuVal, NuonStyle, TryFromNu, TryIntoNu};
 

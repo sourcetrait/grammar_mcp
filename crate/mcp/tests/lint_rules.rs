@@ -7,7 +7,6 @@
 //! `accepted` hold a definition to the contract first, so a case that fails to
 //! parse can neither pass nor trip. `tests/body_lint.rs` covers the same lint
 //! at the `execute` tool's boundary.
-#![cfg(feature = "embedded-cli")]
 
 use sourcetrait_grammar_mcp::guts::{NuVal, analyze_definition, lint_definition, nuon};
 

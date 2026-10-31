@@ -4,7 +4,6 @@
 //! here it holds only what this file commits, which is what makes the
 //! namespace-wide patterns (`*`, `author/`) assertable as exact blocks rather than
 //! as `contains` checks that another test's rig could satisfy.
-#![cfg(feature = "embedded-cli")]
 
 use std::path::Path;
 

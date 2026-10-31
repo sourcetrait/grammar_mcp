@@ -1,4 +1,3 @@
-#![cfg(feature = "embedded-cli")]
 
 use std::path::Path;
 

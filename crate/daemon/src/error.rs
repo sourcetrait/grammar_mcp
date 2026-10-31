@@ -200,3 +200,12 @@ impl fmt::Display for DaemonError {
 }
 
 impl std::error::Error for DaemonError {}
+
+impl From<LockError> for DaemonError {
+    fn from(e: LockError) -> Self {
+        match e {
+            LockError::Held { path, holder } => Self::NamespaceHeld { path, holder },
+            LockError::Unavailable { path, reason } => Self::LockUnavailable { path, reason },
+        }
+    }
+}

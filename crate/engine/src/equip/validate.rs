@@ -32,10 +32,10 @@ fn cap_diagnostics(diagnostics: Vec<Diagnostic>, cap: usize) -> Vec<Diagnostic> 
 
 fn prefix_diagnostic_paths(result: &mut ValidationResult, rig: &str) {
     for d in &mut result.diagnostics {
-        if let Some(src) = &mut d.source {
-            if let Some(path) = &src.path {
-                src.path = Some(format!("{rig}/{path}"));
-            }
+        if let Some(src) = &mut d.source
+            && let Some(path) = &src.path
+        {
+            src.path = Some(format!("{rig}/{path}"));
         }
     }
 }
@@ -756,10 +756,10 @@ fn extract_module_edges(
         .and_then(|p| p.elements.first())
         .and_then(|elem| match &elem.expr.expr {
             nu::Expr::Call(call) => call.arguments.iter().find_map(|arg| {
-                if let nu::Argument::Positional(e) = arg {
-                    if let nu::Expr::Block(id) = &e.expr {
-                        return Some(*id);
-                    }
+                if let nu::Argument::Positional(e) = arg
+                    && let nu::Expr::Block(id) = &e.expr
+                {
+                    return Some(*id);
                 }
                 None
             }),
@@ -779,10 +779,10 @@ fn extract_module_edges(
                     "use" | "overlay use" => EdgeKind::Use,
                     _ => continue,
                 };
-                if let Some(nu::Argument::Positional(e)) = call.arguments.first() {
-                    if let Some(n) = edge_name_from_expr(&e.expr) {
-                        edges.push((kind, n));
-                    }
+                if let Some(nu::Argument::Positional(e)) = call.arguments.first()
+                    && let Some(n) = edge_name_from_expr(&e.expr)
+                {
+                    edges.push((kind, n));
                 }
             }
         }
@@ -1270,10 +1270,7 @@ fn validate_function_file_ast(
     };
     let module: &nu::Module = working_set.get_module(module_id);
 
-    let main_decl = module.main;
-    let Some(main_id) = main_decl else {
-        return None;
-    };
+    let main_id = module.main?;
 
     let main_line = decl_line(&working_set, main_id, source, source_start);
     let main_sig = working_set.get_decl(main_id).signature();

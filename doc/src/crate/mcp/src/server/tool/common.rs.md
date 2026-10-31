@@ -1,16 +1,15 @@
 # common.rs
 
 ## struct NuSh
-The test driver's server, under `embedded-cli` alone; the serving MCP is the client
-(`server/client.rs`). One instance per process. The rmcp `#[tool_handler]` dispatches off
+The server, one instance per process. The rmcp `#[tool_handler]` dispatches off
 `self.tool_router`, which is assembled deny-filtered at construction.
 
 ### field controller
 Every eval, every equip action, and every signature block is the engine's answer to a
 request sent through mcp's controller (`server/controller.rs`), the same controller that
 observes the engine for the operator and stops both; the Channel's commands and the
-remote channels' run on its face, the face the client serves them through too
-(`server/channel/face.rs`). The controller is shared with the signal sweep.
+remote channels' run on its face (`server/channel/face.rs`). The controller is shared
+with the signal sweep.
 
 ### field interface_engine
 Built once, from the deny set `NuSh::new` is handed, so a denied command is unknown to the
@@ -26,7 +25,7 @@ The `mcp_nom` is the face's, the process's one (`process_identity`), since the
 operator and the emergency log are keyed by it too.
 
 ## fn NuSh::mint
-`mint_nonce` on the server's generator (`server/identity.rs`), the client's minting too.
+`mint_nonce` on the server's generator (`server/identity.rs`).
 The request carries the nonce to the engine, which runs the call under it.
 
 ## fn resolve_host

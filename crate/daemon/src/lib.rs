@@ -20,7 +20,6 @@ pub(crate) mod rpc {}
 #[cfg(feature = "service")]
 pub(crate) mod run;
 pub(crate) mod runtime {
-    pub(crate) mod lock;
     pub(crate) mod scratch;
     pub(crate) mod start;
 }
@@ -60,7 +59,7 @@ pub(crate) use clap::Parser;
 
 pub(crate) use futures_util::{SinkExt, StreamExt};
 pub(crate) use nutype::NuTypeFile;
-pub(crate) use nuval::{NuVal, NuonStyle};
+pub(crate) use nuval::NuVal;
 pub(crate) use sha2::{Digest, Sha256};
 pub(crate) use tokio as tk;
 pub(crate) use tokio_util as tk_util;
@@ -79,14 +78,13 @@ pub(crate) use sourcetrait_grammar_protocol::{
     StreamClose, StreamRole, TransportError, WorkerGeneration, WorkerProfile, decode_payload, framed,
     payload,
 };
-pub(crate) use sourcetrait_grammar_scratch::{HostProbe, OwnedDir, Owner, current_uid, sweep};
+pub(crate) use sourcetrait_grammar_scratch::{
+    HostProbe, LOCK_FILE, LockError, LockRecord, NamespaceLock, OwnedDir, Owner, current_uid, sweep,
+};
 
 pub(crate) use crate::{
     controller::GrammardController,
-    runtime::{
-        lock::{LOCK_FILE, LockRecord, NamespaceLock},
-        start::random_bytes,
-    },
+    runtime::start::random_bytes,
     session::{
         serve::serve,
         sessions::{Clock, Sessions, StopRing, StreamId, ticker},
@@ -98,7 +96,7 @@ pub(crate) use crate::{
 };
 
 pub(crate) mod ser {
-    pub(crate) use ::serde::{Deserialize, Serialize};
+    pub(crate) use ::serde::Deserialize;
 }
 
 pub use crate::{

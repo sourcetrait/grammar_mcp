@@ -14,10 +14,9 @@ pub struct CallParams {
     pub timeout: Option<String>,
 }
 
-/// The tool's description, the same on the client and the test driver.
+/// The tool's description.
 pub(crate) const CALL_DESCRIPTION: &str = "Invoke a committed rig function on its typed data.";
 
-#[cfg(feature = "embedded-cli")]
 #[mcp::tool_router(router = call_router, vis = "pub(crate)")]
 impl NuSh {
     #[doc = include_str!("../../../../../include/mcp/tool/call.md")]

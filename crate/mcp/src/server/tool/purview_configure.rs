@@ -1,14 +1,12 @@
 use crate::*;
 
 /// Success result of `interface purview configure`, the state after the write.
-#[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct PurviewConfigureResult {
     /// Everything this purview reveals; null when the call deleted it.
     pub signatures: Option<String>,
 }
 
-#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// `interface purview configure`: set a purview's patterns; empty deletes it.
     pub(crate) async fn purview_configure(

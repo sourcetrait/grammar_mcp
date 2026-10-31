@@ -11,8 +11,7 @@ The engine starts once a process and the homes are `LazyLock`s that read the
 environment at first access, so every `TestServer` in one test binary shares one
 namespace: one id and namespace, one data home, one equip git repo, and one host
 nom, the process's (`process_identity`, `server/identity.rs`), which its engine
-exports. The module
-is `embedded-cli`'s alone, as every test reaching it is. Per-file isolation is therefore free
+exports. Per-file isolation is therefore free
 (each `tests/*.rs` is its own process) while within a file tests must use unique
 equip names and must not rely on a pristine namespace. A test that genuinely needs
 an empty namespace belongs in its own binary or in the system crate.
@@ -79,8 +78,9 @@ A fresh `TestServer` per test builds a fresh `NuSh` on a controller of its own, 
 face's systems and the engine, which is roughly the spawned binary's startup cost minus
 the process spawn. That is what makes the in-process tier fast and cleanly isolated - each test gets
 its own stateful engine on its own runtime, with no subprocess. It leaves the serve
-path's supervision out: an operator would take the namespace's host lock and sample the
-test process.
+path's supervision and its namespace lock out: the binary's servers share one
+namespace, which a lock held by the first would refuse to the second, and an operator
+would sample the test process.
 
 ### fn interface
 The whole tool, parse and dispatch, for a test of the contract or of a command as an
@@ -113,13 +113,14 @@ An expected value is written as the NUON text it is, so a test reads as the
 envelope it compares.
 
 ## struct SupervisedSystem
-mcp's controller as the serve path starts it, supervising, the operator with the
-engine, for the one test of its whole lifecycle; that test is a binary of its own,
-since the host lock it holds is the namespace's.
+mcp's controller as the serve path starts it, the namespace's lock taken first and
+held by the controller, supervising, the operator with the engine, for the one test
+of its whole lifecycle; that test is a binary of its own, since the lock is the
+namespace's.
 
 ### fn host_lock_held
 Tried, not read: a non-blocking lock on a fresh open of the file conflicts with the
-operator's even within one process, because a `flock` belongs to the open file
+controller's even within one process, because a `flock` belongs to the open file
 description, and the attempt releases at once when it succeeds.
 
 ## fn clear_config_pins

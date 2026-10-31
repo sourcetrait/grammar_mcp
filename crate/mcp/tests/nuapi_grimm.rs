@@ -1,7 +1,6 @@
 //! The embedded API (`grimm *`) - decls registered per-eval into the working set
 //! `eval_in_process` parses with, so they exist ONLY inside an `execute` definition or a
 //! call's body and carry that call's own log dir.
-#![cfg(feature = "embedded-cli")]
 
 use sourcetrait_grammar_mcp::guts::{NuVal, TestServer, error_text, has_error, nuon, write_tree};
 use sourcetrait_common::testing::prelude::*;

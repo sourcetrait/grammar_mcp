@@ -21,7 +21,6 @@ pub(crate) const AGENT_CONFIG_FILE: &str = ".grammar/config.toml";
 #[serde(deny_unknown_fields)]
 pub(crate) struct ConfigToml {
     pub channel: Option<ChannelConfigToml>,
-    #[cfg_attr(not(feature = "embedded-cli"), allow(dead_code))]
     pub supervisor: Option<SupervisorConfigToml>,
     pub identity: Option<IdentityConfigToml>,
 }
@@ -39,7 +38,6 @@ pub(crate) struct IdentityConfigToml {
 /// The `[supervisor]` table: when a resource level is worth one warning.
 #[derive(Debug, Clone, Default, ser::Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(not(feature = "embedded-cli"), allow(dead_code))]
 pub(crate) struct SupervisorConfigToml {
     /// Fraction of ALL cores the host's own CPU must reach.
     pub cpu_warn_fraction: Option<f64>,
@@ -73,7 +71,6 @@ pub(crate) struct Config {
     /// Was this host launched with `--test`?
     pub test: bool,
     pub channel: ChannelConfig,
-    #[cfg(feature = "embedded-cli")]
     pub supervisor: SupervisorConfig,
     /// The host's own key pair, from `[identity]`; none when the file names none.
     pub identity: Option<IdentityConfig>,
@@ -136,7 +133,6 @@ fn resolved_identity(file: Option<IdentityConfigToml>) -> Result<Option<Identity
     }))
 }
 
-#[cfg(feature = "embedded-cli")]
 fn merged_supervisor(
     user: Option<SupervisorConfigToml>,
     base: Option<SupervisorConfigToml>,
@@ -164,7 +160,6 @@ fn merged_supervisor(
 }
 
 /// A supervisor fraction the merged layers carry, held to the operator's range.
-#[cfg(feature = "embedded-cli")]
 fn fraction_field(
     name: &str,
     value: Option<f64>,
@@ -213,7 +208,6 @@ impl Config {
         let base: ConfigToml = toml::from_str(DEFAULTS_CONFIG)
             .map_err(|e| format!("the embedded defaults do not parse: {e}"))?;
         let channel = merged_channel(user.channel, base.channel)?;
-        #[cfg(feature = "embedded-cli")]
         let supervisor = merged_supervisor(user.supervisor, base.supervisor)?;
         let identity = resolved_identity(user.identity)?;
         Ok(Self {
@@ -223,7 +217,6 @@ impl Config {
             deny,
             test,
             channel,
-            #[cfg(feature = "embedded-cli")]
             supervisor,
             identity,
             remotes_file,

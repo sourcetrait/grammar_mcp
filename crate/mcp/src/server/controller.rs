@@ -2,7 +2,6 @@
 use crate::*;
 
 /// How long the shutdown waits for in-flight requests to let the engine go.
-#[cfg(feature = "embedded-cli")]
 const ENGINE_RELEASE_GRACE: tk::TkDuration = tk::TkDuration::from_secs(1);
 
 /// A system's status change, logged unless a shutdown is running.
@@ -35,24 +34,23 @@ fn held<T>(slot: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 /// The operator and the observer that feeds it, the serve path's supervision.
-#[cfg(feature = "embedded-cli")]
 struct Supervision {
     operator: Arc<OperatorHandle>,
     observer: tk::JoinHandle<()>,
 }
 
-/// The process's systems: the face's in every build, the engine's when embedded.
+/// The process's systems, with the namespace's lock held for their life.
 pub(crate) struct McpController {
     /// The runtime config the process resolved, which every system starts on.
     pub(crate) config: Arc<Config>,
     /// The Channel's and the peer links' systems, and the open's hub.
     pub(crate) face: ChannelFace,
     /// The engine's system, none before its start and once the shutdown takes it.
-    #[cfg(feature = "embedded-cli")]
     engine: std::sync::Mutex<Option<Arc<EngineHandle>>>,
     /// The operator and its observer, when the controller supervises.
-    #[cfg(feature = "embedded-cli")]
     supervision: std::sync::Mutex<Option<Supervision>>,
+    /// The namespace's lock, released once the engine and the operator stop.
+    lock: std::sync::Mutex<Option<NamespaceLock>>,
     /// Set as the shutdown starts, so the systems' ends it asks for go unsaid.
     stopping: Arc<AtomicBool>,
     /// Held across the shutdown, so a second caller waits for the first's.
@@ -62,20 +60,14 @@ pub(crate) struct McpController {
 }
 
 impl McpController {
-    /// The face's systems on `config`, the controller of a client's serving.
-    pub(crate) async fn client(config: Arc<Config>) -> Result<Arc<Self>, String> {
-        let face = Self::start_face(&config).await?;
-        Ok(Arc::new(Self::of(config, face)))
-    }
-
-    /// The face's systems, then the engine's, and the operator's when `supervise`.
-    #[cfg(feature = "embedded-cli")]
-    pub(crate) async fn embedded(
+    /// The face's systems, the engine's, and the operator's, holding `lock`.
+    pub(crate) async fn start(
         config: Arc<Config>,
         supervise: bool,
+        lock: Option<NamespaceLock>,
     ) -> Result<Arc<Self>, String> {
         let face = Self::start_face(&config).await?;
-        let controller = Self::of(config, face);
+        let controller = Self::of(config, face, lock);
         controller.start_engine(supervise).await?;
         Ok(Arc::new(controller))
     }
@@ -90,14 +82,14 @@ impl McpController {
     fn of(
         config: Arc<Config>,
         face: ChannelFace,
+        lock: Option<NamespaceLock>,
     ) -> Self {
         Self {
             config,
             face,
-            #[cfg(feature = "embedded-cli")]
             engine: std::sync::Mutex::new(None),
-            #[cfg(feature = "embedded-cli")]
             supervision: std::sync::Mutex::new(None),
+            lock: std::sync::Mutex::new(lock),
             stopping: Arc::new(AtomicBool::new(false)),
             stopped: tk::AsyncMutex::new(false),
             sweep: std::sync::Mutex::new(None),
@@ -105,7 +97,6 @@ impl McpController {
     }
 
     /// The engine's system, its asks routed here, then the supervision if asked.
-    #[cfg(feature = "embedded-cli")]
     async fn start_engine(
         &self,
         supervise: bool,
@@ -132,7 +123,6 @@ impl McpController {
     }
 
     /// The operator on the namespace's homes, its emergencies the policy's, observed.
-    #[cfg(feature = "embedded-cli")]
     async fn supervise(
         &self,
         engine: Arc<EngineHandle>,
@@ -140,7 +130,6 @@ impl McpController {
     ) -> Result<Supervision, String> {
         let paths = OperatorSysPaths::new(self.config.data_home(), self.config.cache_home());
         let params = OperatorSysParams {
-            mcp_nom: self.face.mcp_nom.as_str().to_string(),
             test: self.config.test,
             supervisor: self.config.supervisor,
         };
@@ -154,7 +143,6 @@ impl McpController {
     }
 
     /// The engine's system, or the failure a stopped one answers.
-    #[cfg(feature = "embedded-cli")]
     fn engine(&self) -> EngineResult<Arc<EngineHandle>> {
         held(&self.engine).clone().ok_or_else(|| EngineError::Internal {
             phase: "mcp::engine".to_string(),
@@ -163,7 +151,6 @@ impl McpController {
     }
 
     /// Sends a request to the engine and awaits its answer.
-    #[cfg(feature = "embedded-cli")]
     pub(crate) async fn request<T>(
         &self,
         req: T,
@@ -176,7 +163,6 @@ impl McpController {
     }
 
     /// Sends a command to the local engine and awaits its answer.
-    #[cfg(feature = "embedded-cli")]
     pub(crate) async fn control(
         &self,
         command: EngineCommand,
@@ -202,7 +188,7 @@ impl McpController {
         self.stop().await;
     }
 
-    /// The Channel closed for the shutdown, then the engine's side stopped, once.
+    /// The Channel closed, the engine's side stopped, and the lock released, once.
     async fn stop(&self) {
         let mut stopped = self.stopped.lock().await;
         if *stopped {
@@ -210,13 +196,12 @@ impl McpController {
         }
         self.stopping.store(true, Ordering::SeqCst);
         self.face.closer().close_for_shutdown().await;
-        #[cfg(feature = "embedded-cli")]
         self.stop_engine().await;
+        drop(held(&self.lock).take());
         *stopped = true;
     }
 
     /// The observer, then the engine's calls, the operator, and the engine stopped.
-    #[cfg(feature = "embedded-cli")]
     async fn stop_engine(&self) {
         let supervision = held(&self.supervision).take();
         let operator = match supervision {

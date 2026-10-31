@@ -8,9 +8,8 @@
 //! oversized event's spill. Keys are one-off and trusted directly, so this
 //! needs no OS trust store and runs unattended.
 //!
-//! The remote channels are the MCP's own, so a host here is the client, the
-//! bare entry, in every build; a case whose packets a definition sends needs an
-//! engine, and runs on the test driver under embedded-cli.
+//! The remote channels are the MCP's own: a host here is the server, its bare
+//! entry, and a definition on its engine drives the cases that send.
 
 use std::path::Path;
 use std::time::Duration;
@@ -23,7 +22,6 @@ static TESTING: testing::Module = testing::module!(Integration, { .using_temp_di
 
 /// The reusable consumer, standalone: connect a real WSS client to a host's
 /// Channel against a test-minted CA, verify, and receive a definition's packet.
-#[cfg(feature = "embedded-cli")]
 #[tested]
 fn consumer_connects_verifies_and_receives_a_packet() {
     let t = testing::test!({ .using_temp_dir() });
@@ -77,7 +75,7 @@ fn a_channel_without_an_identity_is_refused() {
     let root = t.temp_dir();
     let cwd = root.join("bare");
     std::fs::create_dir_all(&cwd).expect("mkdir the start directory");
-    let mut host = Host::spawn_client_in(
+    let mut host = Host::spawn_in(
         &root.join("scratch"),
         &["--id", "bare", "--namespace", "default"],
         &cwd,
@@ -103,7 +101,7 @@ fn the_config_flag_replaces_the_start_directorys_file() {
     std::fs::create_dir_all(cwd.join(".grammar")).expect("mkdir .grammar");
     std::fs::write(cwd.join(".grammar").join("config.toml"), "not [toml")
         .expect("write a broken config");
-    let host = Host::spawn_client_in(
+    let host = Host::spawn_in(
         &root.join("scratch"),
         &["--id", "flag", "--namespace", "default", "--config", named.to_str().unwrap()],
         &cwd,
@@ -114,7 +112,6 @@ fn the_config_flag_replaces_the_start_directorys_file() {
 /// The full transport proof plus the ConnectionWoes contract: a synchronous
 /// blocking open (listener on bind, connector on connect), the A->B->A echo over
 /// a real mTLS link, and Disconnected on teardown for both roles.
-#[cfg(feature = "embedded-cli")]
 #[tested]
 fn remote_loopback_echo() {
     let t = testing::test!({ .using_temp_dir() });
@@ -186,7 +183,7 @@ fn a_refused_connect_fails_synchronously() {
     let dead = format!("127.0.0.1:{}", free_port());
     let host_dir = root.join("host");
     write_host_config(&host_dir, &cert_a, &remote_connector(&dead, &cert_dead.public_key));
-    let host = Host::spawn_client_in(
+    let host = Host::spawn_in(
         &root.join("scratch"),
         &["--id", "dc", "--namespace", "default"],
         &host_dir,
@@ -214,7 +211,7 @@ fn a_second_listen_is_refused() {
     let listen = format!("127.0.0.1:{}", free_port());
     let host_dir = root.join("host");
     write_host_config(&host_dir, &cert_b, &remote_listener(&listen, &cert_peer.public_key));
-    let host = Host::spawn_client_in(
+    let host = Host::spawn_in(
         &root.join("scratch"),
         &["--id", "dl", "--namespace", "default"],
         &host_dir,
@@ -234,7 +231,7 @@ fn a_second_listen_is_refused() {
 fn remote_list_shows_each_remotes_state() {
     let t = testing::test!({ .using_temp_dir() });
     let root = t.temp_dir();
-    let (mut a, mut b, nom_a, nom_b) = spawn_two_hosts(root, Host::spawn_client_in);
+    let (mut a, mut b, nom_a, nom_b) = spawn_two_hosts(root, Host::spawn_in);
 
     let closed = remote_row(&mut b, "peer");
     assert_eq!(closed["state"], "closed", "got {closed}");
@@ -275,7 +272,7 @@ fn remote_entries_are_set_read_and_unset_live() {
     let peer = generate_keys("peer", &root.join("cert_peer"));
     let host_dir = root.join("host");
     write_host_config(&host_dir, &keys, "");
-    let mut host = Host::spawn_client_in(
+    let mut host = Host::spawn_in(
         &root.join("scratch"),
         &["--id", "live", "--namespace", "default"],
         &host_dir,
@@ -376,7 +373,7 @@ fn a_taken_port_fails_and_its_ip_alone_listens_on_a_random_one() {
     let host_dir = root.join("host");
     let listen = format!("127.0.0.1:{port}");
     write_host_config(&host_dir, &cert_b, &remote_listener(&listen, &cert_peer.public_key));
-    let host = Host::spawn_client_in(
+    let host = Host::spawn_in(
         &root.join("scratch"),
         &["--id", "taken", "--namespace", "default"],
         &host_dir,
@@ -400,7 +397,6 @@ fn a_taken_port_fails_and_its_ip_alone_listens_on_a_random_one() {
 /// CapNoCap (local): an oversized channel_send event auto-spills to an inbox file;
 /// a compact pointer rides the wire under the notification cap, and the full event
 /// survives in the spill file.
-#[cfg(feature = "embedded-cli")]
 #[tested]
 fn channel_send_spills_oversized_event() {
     let t = testing::test!({ .using_temp_dir() });
@@ -448,7 +444,6 @@ fn channel_send_spills_oversized_event() {
 /// CapNoCap (remote): an oversized remote_channel_send event auto-spills via the
 /// file connection; the relayed packet on the receiver is a pointer under the cap,
 /// and the full event lands in the receiver's inbox before the packet is seen.
-#[cfg(feature = "embedded-cli")]
 #[tested]
 fn remote_send_spills_oversized_event() {
     let t = testing::test!({ .using_temp_dir() });
@@ -490,7 +485,6 @@ fn remote_send_spills_oversized_event() {
 /// `grimm remote_channel_send_with` returns `{event_id}`, and that id is the one
 /// the sender's own Sent notice carries; the files reach the receiver beside the
 /// relayed packet.
-#[cfg(feature = "embedded-cli")]
 #[tested]
 fn remote_send_with_returns_its_event_id() {
     let t = testing::test!({ .using_temp_dir() });
@@ -537,7 +531,6 @@ fn mcp_nom(c: &mut Consumer) -> String {
 }
 
 /// Drive `grimm remote channel send` from a definition and return the message id.
-#[cfg(feature = "embedded-cli")]
 fn remote_send(c: &mut Consumer, peer_nom: &str, model: &str, event_body: &str) -> String {
     let definition = format!(
         "def execute [data: record<nom: string>]: nothing -> record<id: string> {{\n    let sent = (grimm remote channel send $data.nom '{model}' {{{event_body}}})\n    {{id: $sent.event_id}}\n}}",
@@ -569,7 +562,7 @@ fn remote_row_of(host: &mut Host, alias: &str) -> NuVal {
 fn attach_bare(root: &Path, name: &str, keys: &GeneratedKeys) -> Consumer {
     let dir = root.join(format!("host_{name}"));
     write_host_config(&dir, keys, "");
-    let host = Host::spawn_client_in(
+    let host = Host::spawn_in(
         &root.join(format!("scratch_{name}")),
         &["--id", &format!("bare_{name}"), "--namespace", "default"],
         &dir,
@@ -578,16 +571,14 @@ fn attach_bare(root: &Path, name: &str, keys: &GeneratedKeys) -> Consumer {
 }
 
 /// The inbox-relative spill path from a spill-pointer packet's event.
-#[cfg(feature = "embedded-cli")]
 fn spill_path(pkt: &Packet) -> String {
     let ev = NuVal::from_nuon(&pkt.event).expect("event parses as NUON");
     ev["spilled_event_path"].as_str().expect("a spill pointer carries spilled_event_path").to_string()
 }
 
 /// Spawn a listener host (B) and a connector host (A) cross-configured on one free
-/// loopback port, each with an attached consumer, each host made by `spawn`: the
-/// client, or the test driver for a case a definition drives. Returns (a, b,
-/// nom_a, nom_b); no link is opened yet.
+/// loopback port, each with an attached consumer, each host made by `spawn`.
+/// Returns (a, b, nom_a, nom_b); no link is opened yet.
 fn spawn_two_hosts(
     root: &Path,
     spawn: fn(&Path, &[&str], &Path) -> Host,
@@ -621,7 +612,6 @@ fn spawn_two_hosts(
 
 /// B listens and A connects, both synchronous, then B's Connected is awaited, so
 /// the link is established when this returns.
-#[cfg(feature = "embedded-cli")]
 fn pair(a: &mut Consumer, b: &mut Consumer, nom_a: &str) {
     let open_b = b.host.interface("interface remote channel listen 'peer'");
     assert!(!has_error_path(&open_b), "the listen is synchronous on its bind; got {open_b}");

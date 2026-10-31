@@ -2,7 +2,6 @@
 //! cancel -> tree-kill path), and so is that child's own child. In-process:
 //! `nu_timeout` drives the real dispatch, and the reap is asserted by scanning the
 //! processes' command lines, from /proc on Linux and from `ps` elsewhere.
-#![cfg(feature = "embedded-cli")]
 
 use std::time::{Duration, Instant};
 

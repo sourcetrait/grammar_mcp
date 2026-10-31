@@ -72,27 +72,32 @@ fn join_path(
     }
 }
 
-/// Render one module's calls and submodules that `patterns` put in view.
+/// What every module of one rig's signature walk shares.
+struct SignatureScope<'a> {
+    docs_dir: &'a std::path::Path,
+    rig: &'a str,
+    patterns: &'a [NamepathStr],
+}
+
+/// Render one module's calls and submodules that the scope's patterns put in view.
 fn push_within_signatures(
     out: &mut String,
     depth: usize,
     functions: &[IndexFunction],
     modules: &[IndexModule],
-    docs_dir: &std::path::Path,
     parent: &str,
-    rig: &str,
-    patterns: &[NamepathStr],
+    scope: &SignatureScope<'_>,
 ) -> bool {
     let mut showed = false;
     let mut calls: Vec<&IndexFunction> = functions.iter().collect();
     calls.sort_by(|a, b| a.name.cmp(&b.name));
     for f in calls {
         let namepath = NamepathRef::Function {
-            rig: rig.to_string(),
+            rig: scope.rig.to_string(),
             module_path: parent.to_string(),
             name: f.name.clone(),
         };
-        if !patterns.iter().any(|p| p.covers(&namepath)) {
+        if !scope.patterns.iter().any(|p| p.covers(&namepath)) {
             continue;
         }
         let docs_path = join_path(parent, &f.name);
@@ -100,7 +105,7 @@ fn push_within_signatures(
             out,
             depth,
             &signature_of(&f.name, f),
-            &read_summary(docs_dir, &docs_path),
+            &read_summary(scope.docs_dir, &docs_path),
         );
         showed = true;
     }
@@ -114,20 +119,18 @@ fn push_within_signatures(
             depth + 1,
             &m.functions,
             &m.modules,
-            docs_dir,
             &module_path,
-            rig,
-            patterns,
+            scope,
         );
         let namepath = NamepathRef::Module {
-            rig: rig.to_string(),
+            rig: scope.rig.to_string(),
             module_path: module_path.clone(),
         };
-        let covered = patterns.iter().any(|p| p.covers(&namepath));
+        let covered = scope.patterns.iter().any(|p| p.covers(&namepath));
         if !below && !covered {
             continue;
         }
-        push_signature_line(out, depth, &m.name, &read_summary(docs_dir, &module_path));
+        push_signature_line(out, depth, &m.name, &read_summary(scope.docs_dir, &module_path));
         out.push_str(&body);
         showed = true;
     }
@@ -185,16 +188,19 @@ async fn rig_signatures(
         }
     };
     let docs_dir = rig_docs_dir(name);
+    let scope = SignatureScope {
+        docs_dir: &docs_dir,
+        rig: name,
+        patterns,
+    };
     let mut body = String::new();
     let showed = push_within_signatures(
         &mut body,
         depth,
         &index.functions,
         &index.modules,
-        &docs_dir,
         "",
-        name,
-        patterns,
+        &scope,
     );
     let rig_namepath = NamepathRef::Rig {
         rig: name.to_string(),

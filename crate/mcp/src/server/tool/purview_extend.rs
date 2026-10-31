@@ -1,7 +1,6 @@
 use crate::*;
 
 /// What a change to the current view did.
-#[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct PurviewDeltaResult {
     /// `info`'s `signatures` for what this call brought into view, or null.
@@ -10,7 +9,6 @@ pub(crate) struct PurviewDeltaResult {
     pub current: Vec<String>,
 }
 
-#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// `interface purview extend`: bring more purviews into the current view.
     pub(crate) async fn purview_extend(

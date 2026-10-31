@@ -1,14 +1,12 @@
 use crate::*;
 
 /// Success result of `interface purview set`.
-#[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct PurviewSetResult {
     /// `info`'s `signatures` for what this call brought into view, or null.
     pub revealed: Option<String>,
 }
 
-#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// `interface purview set`: replace the current view with these purviews.
     pub(crate) async fn purview_set(

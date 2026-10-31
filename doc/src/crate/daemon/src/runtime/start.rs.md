@@ -23,10 +23,11 @@ exist.
 
 ### fn start
 The order is the namespace's safety. The lock comes before anything that
-touches the namespace, so a second worker is refused before its scratch, its
-journal, its engine, or a plugin; then the generation is recorded in the lock,
-the scratch made, the controller's systems started, the journal first, and the
-engine's parameters, config dirs, and substrate set, once. A failure undoes
+touches the namespace, so a second worker, or an MCP on the namespace, is
+refused before its scratch, its journal, its engine, or a plugin; then the
+holder is recorded in the lock, the scratch made, the controller's systems
+started, the journal first, and the engine's parameters, config dirs, and
+substrate set, once. A failure undoes
 what the start made, the systems stopped, the scratch removed, and the lock
 released with its descriptor, and leaves the namespace's state and equips as
 they were; one before the engine gives the claim back.
@@ -53,6 +54,11 @@ by a worker that can't serve it. The worker's profile offers the instance
 file's limits, or the protocol's defaults, each held to the protocol's hard
 ceiling as a hello negotiates it. The sessions are timed by the worker's own
 monotonic clock from the socket's start, and ticked beside the accept task.
+
+## fn claim
+The scratch crate's namespace lock (`crate/scratch`'s `lock.rs`), the one the
+MCP takes too, recorded with the worker's nom, which the start draws before
+the lock so the record names the nom the engine exports.
 
 ## fn start_engine
 The MCP's substrate, made as its host makes it: the equip store, the default

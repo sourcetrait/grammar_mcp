@@ -50,7 +50,7 @@ fn a_killed_workers_lock_passes_to_its_restart() {
     assert_eq!(std::fs::metadata(&lock).unwrap().ino(), inode, "the lock's inode kept");
     let record = std::fs::read_to_string(&lock).unwrap();
     assert!(record.contains(&format!("pid: {}", restarted.pid())), "{record}");
-    assert!(record.contains(&restarted.generation), "{record}");
+    assert!(record.contains("holder: grammard"), "{record}");
     assert_ne!(restarted.generation, killed_generation, "a fresh generation");
     assert_eq!(TestInstance::worker_dirs(&instance.home("tmp")).len(), 1, "the killed worker's scratch swept");
     assert!(restarted.stop().success());

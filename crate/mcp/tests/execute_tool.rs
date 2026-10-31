@@ -1,6 +1,5 @@
 //! The `execute` tool end to end through the in-process harness: its lanes, its
 //! checks, its timeout, and `rerun` over its definitions.
-#![cfg(feature = "embedded-cli")]
 
 use sourcetrait_common::testing::prelude::*;
 use sourcetrait_grammar_mcp::guts::{NuVal, TestServer, error_kind, error_messages, has_error, nuon};

@@ -3,8 +3,10 @@ use crate::*;
 /// The stack every runtime worker gets, the size of an eval thread's.
 const WORKER_STACK_SIZE: usize = 64 * 1024 * 1024;
 
-#[cfg(feature = "embedded-cli")]
 const _: () = assert!(WORKER_STACK_SIZE >= EVAL_STACK_SIZE);
+
+/// What the host's record in its namespace lock names its holder.
+const LOCK_HOLDER: &str = "grammar-mcp";
 
 /// Set a home from its flag, under its UENV name too, so the flag wins.
 fn set_cli_env_path(k: &'static str, v: &Option<PathBuf>) -> Result<(), String> {
@@ -83,61 +85,62 @@ async fn serve_or_oneshot(cli: Cli) -> process::ExitCode {
     };
     let config = Arc::new(config);
     let code = match command {
-        None => match serve_client(config).await {
-            Ok(()) => process::ExitCode::SUCCESS,
-            Err(reason) => {
-                eprintln!("grammar: {reason}");
-                process::ExitCode::FAILURE
-            }
-        },
+        None => serve(config).await,
         Some(CliCmd::Cli { tool }) => run_cli(config, tool).await,
-        #[cfg(feature = "embedded-cli")]
-        Some(CliCmd::TestDriver) => run_test_driver(config).await,
     };
     remove_scratch_dirs();
     code
 }
 
-/// The local CLI: one tool call on the in-process engine, its envelope printed.
-#[cfg(feature = "embedded-cli")]
-async fn run_cli(
-    config: Arc<Config>,
-    tool: CliTool,
-) -> process::ExitCode {
+/// The server: MCP over stdio on the in-process engine until the agent leaves.
+async fn serve(config: Arc<Config>) -> process::ExitCode {
+    let lock = match lock_namespace(&config) {
+        Ok(lock) => lock,
+        Err(reason) => {
+            eprintln!("grammar: {reason}");
+            return process::ExitCode::FAILURE;
+        }
+    };
     if let Err(reason) = init_engine(&config) {
         eprintln!("{reason}");
         return process::ExitCode::from(2);
     }
-    run_oneshot(config, tool).await
-}
-
-/// Without the in-process engine there is no local CLI; say what carries one.
-#[cfg(not(feature = "embedded-cli"))]
-async fn run_cli(
-    _config: Arc<Config>,
-    _tool: CliTool,
-) -> process::ExitCode {
-    eprintln!(
-        "grammar: the local CLI is not in this build: it runs on the in-process engine, \
-         which only a build with the embedded-cli feature carries"
-    );
-    process::ExitCode::from(2)
-}
-
-/// The test driver: MCP over stdio on the in-process engine, for legacy tests.
-#[cfg(feature = "embedded-cli")]
-async fn run_test_driver(config: Arc<Config>) -> process::ExitCode {
-    if let Err(reason) = init_engine(&config) {
-        eprintln!("{reason}");
-        return process::ExitCode::from(2);
-    }
-    match run_server(config).await {
+    match run_server(config, lock).await {
         Ok(()) => process::ExitCode::SUCCESS,
         Err(reason) => {
             eprintln!("grammar: {reason}");
             process::ExitCode::FAILURE
         }
     }
+}
+
+/// The local CLI: one tool call on the in-process engine, its envelope printed.
+async fn run_cli(
+    config: Arc<Config>,
+    tool: CliTool,
+) -> process::ExitCode {
+    let lock = match lock_namespace(&config) {
+        Ok(lock) => lock,
+        Err(reason) => {
+            eprintln!("grammar: {reason}");
+            return process::ExitCode::FAILURE;
+        }
+    };
+    if let Err(reason) = init_engine(&config) {
+        eprintln!("{reason}");
+        return process::ExitCode::from(2);
+    }
+    run_oneshot(config, tool, lock).await
+}
+
+/// The namespace's lock taken and this process recorded in it.
+pub(crate) fn lock_namespace(config: &Config) -> Result<NamespaceLock, String> {
+    let mut lock = NamespaceLock::acquire(&config.data_home().join(LOCK_FILE)).map_err(|e| e.to_string())?;
+    let (_, mcp_nom) = process_identity();
+    let record = LockRecord::current(LOCK_HOLDER, &config.id, &config.namespace, mcp_nom.as_str())
+        .map_err(|e| format!("the namespace lock's record: {e}"))?;
+    lock.record(&record).map_err(|e| e.to_string())?;
+    Ok(lock)
 }
 
 /// `--test` supplies a default namespace, never an override.

@@ -72,7 +72,6 @@ impl ChannelFace {
     }
 }
 
-#[cfg(feature = "embedded-cli")]
 #[mcp::tool_router(router = interface_router, vis = "pub(crate)")]
 impl NuSh {
     #[mcp::tool(description = INTERFACE_DESCRIPTION)]
@@ -93,7 +92,6 @@ impl NuSh {
     }
 }
 
-#[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// Run a parsed command under the interface call's nonce, routed to its system.
     pub(crate) async fn run_interface(

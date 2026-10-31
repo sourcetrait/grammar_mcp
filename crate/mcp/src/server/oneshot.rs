@@ -4,6 +4,7 @@ use crate::*;
 pub(crate) async fn run_oneshot(
     config: Arc<Config>,
     tool: CliTool,
+    lock: NamespaceLock,
 ) -> process::ExitCode {
     let exit_code = async move {
         install_child_subreaper();
@@ -11,7 +12,7 @@ pub(crate) async fn run_oneshot(
             eprintln!("grammar: the equip substrate: {e}");
             return 1;
         }
-        let controller = match McpController::embedded(config, false).await {
+        let controller = match McpController::start(config, false, Some(lock)).await {
             Ok(controller) => controller,
             Err(e) => {
                 eprintln!("{e}");

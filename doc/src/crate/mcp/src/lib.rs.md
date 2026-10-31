@@ -3,24 +3,15 @@
 The manifest carries no prose of its own by convention, so what follows is only
 what a reader of it could reasonably get wrong.
 
-## cfg_attr allow(dead_code, unused_imports)
-A build without `embedded-cli` serves a narrow surface over the shared facade:
-the controller, the emergency lines, and the interface catalog compile whole,
-their breadth serving the test driver. The allow is that build's alone.
-The `embedded-cli` build compiles every module with both lints, and clippy runs
-over it, so code dead there still fails.
+## mod server
+One build: the server and the one-shot CLI run on the process's own engine,
+the controller over the face's systems, the engine's, and the operator's
+(User). The Channel's and the peer links' systems (`crate/channel`,
+`crate/peer`) are the MCP's own.
 
-## cfg embedded-cli
-The engine, the operator, nix, and every module that reaches them - the host,
-the operator's watch, the purviews, the one-shot, the test driver's server, and
-`guts` - compile under `embedded-cli` alone, as do each tool's engine-side
-method and the controller's engine side; each tool's parameters stay in every
-build, since the interface parse carries them. The client, the controller, the
-face of the Channel and the remote channels, the cert profile, the interface
-parse, the config, and the scratch directories compile in every build, as do
-the Channel's and the peer links'
-systems (`crate/channel`, `crate/peer`): the Channel and the remote channels
-are the MCP's own, never the runtime's (User).
+## use sourcetrait_grammar_scratch
+The namespace lock is the scratch crate's, shared with grammard, so both
+programs take one lock under one record's shape.
 
 ## mod schema
 The shim re-exporting `schemars::JsonSchema`, reached only through the
@@ -32,7 +23,7 @@ JSON-RPC's own `tools/list`; nothing the host serves converts through JSON.
 
 ## use sourcetrait_grammar_engine
 The engine's public face named bare, as mcp's own items are, and the crate
-itself as `engine`, the path its `init` is called by, under `embedded-cli`.
+itself as `engine`, the path its `init` is called by.
 
 ## use futures_util
 `SinkExt` and `StreamExt`, and `PemObject` beside them, ride at the crate root

@@ -1,4 +1,3 @@
-pub(crate) mod liveness;
 pub(crate) mod msg;
 pub(crate) mod pin;
 pub(crate) mod reaper;
@@ -13,7 +12,6 @@ mod tests {
 }
 
 pub(crate) use crate::{
-    liveness::{HOST_LOCK_FILE, HostLock, acquire as acquire_host_lock},
     pin::reap_pins,
     reaper::OrphanReaper,
     watchdog::{Probe, Watchdog, now_millis, probe_disk, probe_vram},
@@ -21,9 +19,6 @@ pub(crate) use crate::{
 
 pub(crate) use std::{
     collections::{HashMap, HashSet},
-    fs,
-    io::{self, Write},
-    os::unix::fs::OpenOptionsExt,
     path::PathBuf,
     process,
     sync::LazyLock,
@@ -31,7 +26,7 @@ pub(crate) use std::{
 };
 
 #[cfg(target_os = "linux")]
-pub(crate) use std::sync::OnceLock;
+pub(crate) use std::{fs, sync::OnceLock};
 
 pub(crate) use sourcetrait_common::{agnostic, cereal, subsys};
 

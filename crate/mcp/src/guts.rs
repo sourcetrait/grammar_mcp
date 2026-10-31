@@ -98,7 +98,7 @@ impl TestServer {
             .expect("tokio runtime");
         rt.block_on(ensure_substrate()).expect("ensure_substrate");
         let controller = rt
-            .block_on(McpController::embedded(config.clone(), false))
+            .block_on(McpController::start(config.clone(), false, None))
             .expect("mcp's controller starts its systems");
         let nush = NuSh::new(controller, &config.deny);
         Self { rt, nush }
@@ -447,16 +447,17 @@ impl TestServer {
     }
 }
 
-/// mcp's controller on the test namespace, supervising: the operator runs too.
+/// mcp's controller on the test namespace as the serve path starts it.
 pub struct SupervisedSystem {
     rt: tokio::runtime::Runtime,
     controller: Arc<McpController>,
 }
 
 impl SupervisedSystem {
-    /// The controller's systems started on the test namespace, supervised.
+    /// The namespace's lock taken, then the controller started, supervising.
     pub fn start() -> Self {
         let config = test_config();
+        let lock = lock_namespace(&config).expect("the test namespace's lock");
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .thread_stack_size(EVAL_STACK_SIZE)
@@ -464,7 +465,7 @@ impl SupervisedSystem {
             .expect("tokio runtime");
         rt.block_on(ensure_substrate()).expect("ensure_substrate");
         let controller = rt
-            .block_on(McpController::embedded(config, true))
+            .block_on(McpController::start(config, true, Some(lock)))
             .expect("mcp's controller starts its systems");
         Self { rt, controller }
     }
@@ -477,9 +478,9 @@ impl SupervisedSystem {
         )
     }
 
-    /// Whether the namespace's host lock is held, tried without blocking.
+    /// Whether the namespace's lock is held, tried without blocking.
     pub fn host_lock_held(&self) -> bool {
-        let lock = self.controller.config.data_home().join("host.lock");
+        let lock = self.controller.config.data_home().join(LOCK_FILE);
         let Ok(file) = fs::File::open(lock) else {
             return false;
         };

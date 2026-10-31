@@ -69,7 +69,6 @@ async fn start(
 ) -> OperatorHandle {
     let paths = OperatorSysPaths::new(root.join("data"), root.join("cache"));
     let params = OperatorSysParams {
-        mcp_nom: "testnom".to_string(),
         test: false,
         supervisor: LINES,
     };
@@ -117,20 +116,6 @@ fn every_stateless_permit_hung_is_critical() {
         }
         kinds.sort_unstable();
         assert_eq!(kinds, vec!["critical", "hung_engine_thread"]);
-        operator.stop().await.expect("the operator stops");
-    });
-}
-
-#[tested]
-fn the_operator_holds_its_namespace_host_lock() {
-    let t = testing::test!({ .using_temp_dir() });
-    let rt = tokio::runtime::Runtime::new().expect("a runtime");
-    rt.block_on(async {
-        let (tx, _rx) = mpsc::unbounded_channel();
-        let operator = start(t.temp_dir(), tx).await;
-        let lock = std::fs::read_to_string(t.temp_dir().join("data").join("host.lock"))
-            .expect("the host lock written");
-        assert!(lock.contains("mcp_nom: \"testnom\""), "got {lock}");
         operator.stop().await.expect("the operator stops");
     });
 }

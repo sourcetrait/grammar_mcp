@@ -4,8 +4,6 @@
   summary: The implementation's starting revisions, trees, lock, and toolchain
 - doc: daemon/test_map.tsv
   summary: Every baseline test and the client cohort's, with its cohort, profile, and entry
-- doc: daemon/feature_matrix.md
-  summary: The build profiles, grammar-mcp's entries, the closure check, each cohort's builds
 - doc: daemon/operation_map.tsv
   summary: Every baseline public operation with its future owner and task
 - doc: daemon/engine_type_map.tsv

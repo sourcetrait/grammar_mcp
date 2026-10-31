@@ -2,7 +2,6 @@
 //! transport (the JSON-RPC handshake + tools/list framing) is a SYSTEM concern
 //! covered by `sourcetrait_grammar_tests` (host_run_tool); these exercise what
 //! nu / processes / kill actually DO.
-#![cfg(feature = "embedded-cli")]
 
 use sourcetrait_grammar_mcp::guts::{
     TestServer, error_kind, error_messages, error_text, has_error, nuon,

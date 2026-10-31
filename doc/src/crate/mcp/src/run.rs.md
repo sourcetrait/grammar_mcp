@@ -9,14 +9,18 @@ standard variable alone would lose to a UENV tree in the environment.
 A `--xdg-*` value that does not expand is the operator's error: it comes back as
 an `Err` and the host exits 2 before anything reads the environment.
 
+## const LOCK_HOLDER
+What the namespace lock's record names a holder, beside grammard's own: a
+reader of the lock's file tells the two programs apart by it.
+
 ## const WORKER_STACK_SIZE
-Every runtime worker gets an eval thread's stack, in every build; under
-`embedded-cli` an assertion holds it to the engine's `EVAL_STACK_SIZE`.
+Every runtime worker gets an eval thread's stack; an assertion holds it to the
+engine's `EVAL_STACK_SIZE`.
 
 Nushell parsing is deeply recursive, and parses run inline on a runtime worker
-rather than on an eval thread: the interface parse of an agent's command in
-every build, and under `embedded-cli` an `execute` definition's contract check
-with its lint and the equip validator. A pathological module graph, whose
+rather than on an eval thread: the interface parse of an agent's command, an
+`execute` definition's contract check with its lint, and the equip validator.
+A pathological module graph, whose
 resolution recurses until the accumulated path stops resolving, overflowed the
 2 MB worker default, and so does a command nested 50 subexpressions deep on a
 debug build. A stack overflow is a fatal runtime error rather than a panic, so
@@ -55,32 +59,38 @@ The config is resolved once here and handed down whole, one `Arc` each entry
 passes to its controller (`server/controller.rs`), so every reader reaches it
 through what it was handed and none can meet it unset.
 
-The bare entry serves as a client in every build (`server/client.rs`): no
-engine starts on it, with or without `embedded-cli` and under `--test` alike,
-so serving never makes engine or equip state. Only the local CLI and the test
-driver start the engine, each behind `embedded-cli`.
+The bare entry serves MCP on the process's own engine; the `cli` subcommand
+runs one tool call on it. Each takes the namespace's lock before its engine
+starts.
 
 Every end removes the scratch directories, whichever start made them: the
-client's serve, the engine's under the CLI or the test driver, a failed start.
-A signal's end removes them in its own sweep (`server/channel/face.rs`).
+server's, the one-shot's, a failed start. A signal's end removes them in its
+own sweep (`server/channel/face.rs`).
 
 Exit code 2 is the operator-input code the one-shot CLI already uses, so a
 rejected config and an unparseable argument report the same way. A serve that
-ends in an error prints its reason after `grammar: ` and exits 1.
+ends in an error, a held namespace among them, prints its reason after
+`grammar: ` and exits 1.
+
+## fn serve
+The lock first, then the engine's start, its params from the config, mcp its
+host, and nushell's config dirs resolved (`server/host.rs`), then
+`run_server` (`server/run.rs`), which hands the lock to the controller to hold
+until its systems stop. A held namespace exits 1 before the engine is touched;
+an engine that can't start exits 2, as a bad config does.
 
 ## fn run_cli
-Under `embedded-cli` the engine starts first, its params from the config, mcp
-its host, and nushell's config dirs, which every engine reads, resolved
-(`server/host.rs`); a failure there exits 2, as a bad config does. Without the
-feature the subcommand still parses, so an operator's command meets an answer
-rather than clap's unknown-subcommand error: the refusal names the feature that
-carries the CLI and exits 2, before anything is made.
+The serve path's start, the lock then the engine, before `run_oneshot`
+(`server/oneshot.rs`), whose controller holds the lock until the process ends.
 
-## fn run_test_driver
-The legacy engine-backed serving path, kept for the test cohort that needs an
-engine behind the four tools: the engine's start as the CLI's, then
-`run_server` (`server/run.rs`). It exists only under `embedded-cli`, its
-subcommand hidden, so no shipped build serves on an engine.
+## fn lock_namespace
+One engine a namespace, whichever program starts it: the server, the one-shot
+CLI, and grammard take the same lock, the data home's `host.lock`, so each
+refuses a namespace another holds, a worker on the same machine among them.
+It is taken before anything touches the namespace, the equip store's
+substrate included, and its record names this process: the holder, the
+identity, the pid, the start, the boot, and the process's nom, which `interface
+info` reports, so a reader tells which host holds it.
 
 ## fn resolve_namespace
 The namespace half of `--test` ends here, and that is what keeps the flag from

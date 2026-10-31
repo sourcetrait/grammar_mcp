@@ -6,9 +6,8 @@ use nutype::NuTypeFile;
 use nuval::NuVal;
 
 /// The repository's `.nutype` files, from the workspace's root.
-const FILES: [&str; 12] = [
+const FILES: [&str; 11] = [
     "include/config/Config.nutype",
-    "build/type/daemon/feature_matrix.nutype",
     "crate/protocol/schema/Schema.nutype",
     "crate/protocol/tests/vectors/Budget.nutype",
     "crate/protocol/tests/vectors/Vectors.nutype",
@@ -22,8 +21,7 @@ const FILES: [&str; 12] = [
 ];
 
 /// The repository's NUON files, each with its model, from the workspace's root.
-const MODELED: [(&str, &str); 9] = [
-    ("build/nuon/daemon/feature_matrix.nuon", "build/type/daemon/feature_matrix.nutype"),
+const MODELED: [(&str, &str); 8] = [
     ("crate/protocol/schema/v1.nuon", "crate/protocol/schema/Schema.nutype"),
     ("crate/protocol/tests/vectors/budget.nuon", "crate/protocol/tests/vectors/Budget.nutype"),
     ("crate/protocol/tests/vectors/engine.nuon", "crate/protocol/tests/vectors/Vectors.nutype"),

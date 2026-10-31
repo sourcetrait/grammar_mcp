@@ -1,6 +1,5 @@
 //! The `host` every tool takes: `local` is this MCP's own host, and any other
 //! alias is refused as `host::unknown` before the tool does anything.
-#![cfg(feature = "embedded-cli")]
 
 use sourcetrait_common::testing::prelude::*;
 use sourcetrait_grammar_mcp::guts::{TestServer, error_kind, error_messages, nuon};
