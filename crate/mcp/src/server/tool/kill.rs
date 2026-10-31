@@ -1,12 +1,5 @@
 use crate::*;
 
-/// Parameters for `interface process kill`.
-#[derive(Debug, ser::Deserialize, ser::Serialize)]
-pub struct KillParams {
-    /// The nonce of the in-flight call to cancel.
-    pub nonce: String,
-}
-
 #[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// `interface process kill`: cancel an in-flight call by its nonce.

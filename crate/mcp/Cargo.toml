@@ -55,6 +55,7 @@ sourcetrait_common.workspace = true
 sourcetrait_grammar_channel.workspace = true
 sourcetrait_grammar_client.workspace = true
 sourcetrait_grammar_engine = { workspace = true, optional = true }
+sourcetrait_grammar_interface.workspace = true
 sourcetrait_grammar_operator = { workspace = true, optional = true }
 sourcetrait_grammar_peer.workspace = true
 sourcetrait_grammar_protocol.workspace = true

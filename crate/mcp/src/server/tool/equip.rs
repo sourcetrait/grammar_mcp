@@ -1,12 +1,5 @@
 use crate::*;
 
-/// Parameters for each `interface equip` action on a source.
-#[derive(Debug, ser::Deserialize, ser::Serialize)]
-pub struct EquipParams {
-    /// The equip's source: an `equip/<author>/<name>` directory.
-    pub source: String,
-}
-
 /// `new` summary: the paths scaffolded for the fresh equip's rig.
 #[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]

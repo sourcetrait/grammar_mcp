@@ -5,11 +5,41 @@ use crate::*;
 const COMMAND_FILE: &str = "command";
 
 /// The kind every refusal is reported under.
-pub(crate) const KIND_INTERFACE: &str = "interface::invalid";
+pub const KIND_INTERFACE: &str = "interface::invalid";
 
-/// A parsed command, carrying its tool's parameters as they are.
+/// A parsed command, by the system that owns it: the routing table.
 #[derive(Debug)]
-pub(crate) enum InterfaceCommand {
+pub enum InterfaceCommand {
+    Channel(ChannelCommand),
+    Peer(PeerCommand),
+    Engine(EngineInterfaceCommand),
+}
+
+/// The Channel's five commands, the Channel's system's.
+#[derive(Debug)]
+pub enum ChannelCommand {
+    Open(ChannelOpenParams),
+    Sync,
+    Ready,
+    Close,
+    Config(ConfigChannelParams),
+}
+
+/// The remote channels' seven commands, the peer links' system's.
+#[derive(Debug)]
+pub enum PeerCommand {
+    List,
+    Get(RemoteAliasParams),
+    Set(RemoteSetParams),
+    Unset(RemoteAliasParams),
+    Listen(RemoteListenParams),
+    Connect(RemoteConnectParams),
+    Close(RemoteChannelCloseParams),
+}
+
+/// The engine's commands: info, help, the processes, the purviews, the equips.
+#[derive(Debug)]
+pub enum EngineInterfaceCommand {
     Info,
     Help(InspectParams),
     ProcessList,
@@ -18,18 +48,6 @@ pub(crate) enum InterfaceCommand {
     PurviewSet(PurviewParams),
     PurviewExtend(PurviewExtendParams),
     PurviewConfigure(PurviewConfigureParams),
-    ChannelOpen(ChannelOpenParams),
-    ChannelSync,
-    ChannelReady,
-    ChannelClose,
-    ChannelConfig(ConfigChannelParams),
-    RemoteList,
-    RemoteGet(RemoteAliasParams),
-    RemoteSet(RemoteSetParams),
-    RemoteUnset(RemoteAliasParams),
-    RemoteListen(RemoteListenParams),
-    RemoteConnect(RemoteConnectParams),
-    RemoteClose(RemoteChannelCloseParams),
     EquipNew(EquipParams),
     EquipInstall(EquipParams),
     EquipCheck(EquipParams),
@@ -52,7 +70,7 @@ type Literals = HashMap<&'static str, (Literal, nu::Span)>;
 type Refusal = (Option<nu::Span>, String);
 
 /// Hold `text` to the contract: one interface call, its arguments literals.
-pub(crate) fn parse_command(
+pub fn parse_command(
     engine: &nu::EngineState,
     text: &str,
 ) -> Result<InterfaceCommand, Vec<Diagnostic>> {
@@ -304,76 +322,78 @@ fn command(
     kind: CommandKind,
     literals: &mut Literals,
 ) -> Result<InterfaceCommand, Refusal> {
+    use EngineInterfaceCommand as E;
     let source = |literals: &mut Literals| EquipParams {
         source: text(literals, "source"),
     };
+    let channel = InterfaceCommand::Channel;
+    let peer = InterfaceCommand::Peer;
+    let engine = InterfaceCommand::Engine;
     Ok(match kind {
-        CommandKind::Info => InterfaceCommand::Info,
-        CommandKind::Help => InterfaceCommand::Help(InspectParams {
+        CommandKind::Info => engine(E::Info),
+        CommandKind::Help => engine(E::Help(InspectParams {
             namepath: text(literals, "namepath"),
-        }),
-        CommandKind::ProcessList => InterfaceCommand::ProcessList,
-        CommandKind::ProcessKill => InterfaceCommand::ProcessKill(KillParams {
+        })),
+        CommandKind::ProcessList => engine(E::ProcessList),
+        CommandKind::ProcessKill => engine(E::ProcessKill(KillParams {
             nonce: text(literals, "nonce"),
-        }),
-        CommandKind::PurviewList => InterfaceCommand::PurviewList,
-        CommandKind::PurviewSet => InterfaceCommand::PurviewSet(PurviewParams {
+        })),
+        CommandKind::PurviewList => engine(E::PurviewList),
+        CommandKind::PurviewSet => engine(E::PurviewSet(PurviewParams {
             purviews: texts(literals, "purviews"),
-        }),
-        CommandKind::PurviewExtend => InterfaceCommand::PurviewExtend(PurviewExtendParams {
+        })),
+        CommandKind::PurviewExtend => engine(E::PurviewExtend(PurviewExtendParams {
             purviews: texts(literals, "purviews"),
-        }),
-        CommandKind::PurviewConfigure => {
-            InterfaceCommand::PurviewConfigure(PurviewConfigureParams {
-                purview: text(literals, "purview"),
-                namepaths: texts(literals, "namepaths"),
-            })
-        }
-        CommandKind::ChannelOpen => InterfaceCommand::ChannelOpen(ChannelOpenParams {
+        })),
+        CommandKind::PurviewConfigure => engine(E::PurviewConfigure(PurviewConfigureParams {
+            purview: text(literals, "purview"),
+            namepaths: texts(literals, "namepaths"),
+        })),
+        CommandKind::ChannelOpen => channel(ChannelCommand::Open(ChannelOpenParams {
             mode: mode(literals)?,
-        }),
-        CommandKind::ChannelSync => InterfaceCommand::ChannelSync,
-        CommandKind::ChannelReady => InterfaceCommand::ChannelReady,
-        CommandKind::ChannelClose => InterfaceCommand::ChannelClose,
-        CommandKind::ChannelConfig => InterfaceCommand::ChannelConfig(ConfigChannelParams {
+        })),
+        CommandKind::ChannelSync => channel(ChannelCommand::Sync),
+        CommandKind::ChannelReady => channel(ChannelCommand::Ready),
+        CommandKind::ChannelClose => channel(ChannelCommand::Close),
+        CommandKind::ChannelConfig => channel(ChannelCommand::Config(ConfigChannelParams {
             spam_warn_window_secs: count(literals, "spam-warn-window-secs")?,
             spam_warn_rate: count(literals, "spam-warn-rate")?,
             spam_error_window_secs: count(literals, "spam-error-window-secs")?,
             spam_error_rate: count(literals, "spam-error-rate")?,
-        }),
-        CommandKind::RemoteList => InterfaceCommand::RemoteList,
-        CommandKind::RemoteGet => InterfaceCommand::RemoteGet(RemoteAliasParams {
+        })),
+        CommandKind::RemoteList => peer(PeerCommand::List),
+        CommandKind::RemoteGet => peer(PeerCommand::Get(RemoteAliasParams {
             alias: text(literals, "alias"),
-        }),
-        CommandKind::RemoteSet => InterfaceCommand::RemoteSet(RemoteSetParams {
+        })),
+        CommandKind::RemoteSet => peer(PeerCommand::Set(RemoteSetParams {
             alias: text(literals, "alias"),
             address: optional_text(literals, "address"),
             listen: optional_text(literals, "listen"),
             cert: optional_text(literals, "cert"),
-        }),
-        CommandKind::RemoteUnset => InterfaceCommand::RemoteUnset(RemoteAliasParams {
+        })),
+        CommandKind::RemoteUnset => peer(PeerCommand::Unset(RemoteAliasParams {
             alias: text(literals, "alias"),
-        }),
-        CommandKind::RemoteListen => InterfaceCommand::RemoteListen(RemoteListenParams {
+        })),
+        CommandKind::RemoteListen => peer(PeerCommand::Listen(RemoteListenParams {
             alias: text(literals, "alias"),
             on: optional_text(literals, "on"),
-        }),
-        CommandKind::RemoteConnect => InterfaceCommand::RemoteConnect(RemoteConnectParams {
+        })),
+        CommandKind::RemoteConnect => peer(PeerCommand::Connect(RemoteConnectParams {
             alias: text(literals, "alias"),
             address: optional_text(literals, "address"),
-        }),
-        CommandKind::RemoteClose => InterfaceCommand::RemoteClose(RemoteChannelCloseParams {
+        })),
+        CommandKind::RemoteClose => peer(PeerCommand::Close(RemoteChannelCloseParams {
             alias: text(literals, "alias"),
-        }),
-        CommandKind::EquipNew => InterfaceCommand::EquipNew(source(literals)),
-        CommandKind::EquipInstall => InterfaceCommand::EquipInstall(source(literals)),
-        CommandKind::EquipCheck => InterfaceCommand::EquipCheck(source(literals)),
-        CommandKind::EquipUninstall => InterfaceCommand::EquipUninstall(source(literals)),
-        CommandKind::EquipScaffold => InterfaceCommand::EquipScaffold(NewParams {
+        })),
+        CommandKind::EquipNew => engine(E::EquipNew(source(literals))),
+        CommandKind::EquipInstall => engine(E::EquipInstall(source(literals))),
+        CommandKind::EquipCheck => engine(E::EquipCheck(source(literals))),
+        CommandKind::EquipUninstall => engine(E::EquipUninstall(source(literals))),
+        CommandKind::EquipScaffold => engine(E::EquipScaffold(NewParams {
             namepaths: texts(literals, "namepaths"),
-        }),
-        CommandKind::EquipCommit => InterfaceCommand::EquipCommit(CommitParams {
+        })),
+        CommandKind::EquipCommit => engine(E::EquipCommit(CommitParams {
             namepath: text(literals, "namepath"),
-        }),
+        })),
     })
 }

@@ -26,7 +26,7 @@ impl ClientSh {
         Self {
             face,
             nonce_gen,
-            interface_engine: Arc::new(interface_engine(deny)),
+            interface_engine: Arc::new(interface_engine_for(deny)),
             tool_router: Self::tool_router(),
         }
     }
@@ -72,26 +72,16 @@ impl ClientSh {
         }
     }
 
-    /// Run a parsed command: the frontend's own here, the rest the runtime's.
+    /// Run a parsed command: the face's systems' here, the engine's the runtime's.
     async fn run_interface(
         &self,
         nonce: datum::Nonce,
         command: InterfaceCommand,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         match command {
-            InterfaceCommand::ChannelOpen(p) => self.face.channel_open(nonce, p).await,
-            InterfaceCommand::ChannelSync => self.face.channel_sync(nonce).await,
-            InterfaceCommand::ChannelReady => self.face.channel_ready(nonce).await,
-            InterfaceCommand::ChannelClose => self.face.channel_close(nonce).await,
-            InterfaceCommand::ChannelConfig(p) => self.face.channel_config(nonce, p).await,
-            InterfaceCommand::RemoteList => self.face.remote_list(nonce).await,
-            InterfaceCommand::RemoteGet(p) => self.face.remote_get(nonce, p).await,
-            InterfaceCommand::RemoteSet(p) => self.face.remote_set(nonce, p).await,
-            InterfaceCommand::RemoteUnset(p) => self.face.remote_unset(nonce, p).await,
-            InterfaceCommand::RemoteListen(p) => self.face.remote_listen(nonce, p).await,
-            InterfaceCommand::RemoteConnect(p) => self.face.remote_connect(nonce, p).await,
-            InterfaceCommand::RemoteClose(p) => self.face.remote_close(nonce, p).await,
-            _ => Self::unavailable(nonce),
+            InterfaceCommand::Channel(command) => self.face.run_channel(nonce, command).await,
+            InterfaceCommand::Peer(command) => self.face.run_peer(nonce, command).await,
+            InterfaceCommand::Engine(_) => Self::unavailable(nonce),
         }
     }
 }

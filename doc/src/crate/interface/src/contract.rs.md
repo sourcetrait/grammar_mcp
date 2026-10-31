@@ -6,8 +6,15 @@ rules are the contract's spine: the context has nothing else it can access, and
 the agent can't pipe commands.
 
 ## enum InterfaceCommand
-Each variant carries its tool's parameters struct as it stood, so the dispatch
-calls the tool's own logic with the very value the tool used to deserialize.
+The routing table: a command grouped by the system that owns it, the Channel's
+five, the remote channels' seven, and the engine's fourteen, so a controller
+routes the group and the group's own commands stay together. Each variant
+carries its tool's parameters struct as it stood (`params.rs`).
+
+## enum EngineInterfaceCommand
+Info, help, the processes, the purviews, and the equips: the engine's to answer,
+the purviews' and `info`'s and `help`'s with the session's view, which only a
+controller holds.
 
 ## fn parse_command
 nushell's own parser over the interface engine, so the arguments' types are
@@ -22,7 +29,7 @@ are, by the protocol's `LINT_VIOLATION_CAP`, so the client caps them with no
 engine.
 
 ## fn held_call
-THE TWO RULES, made structural. One statement, one pipeline element, no
+The two rules, made structural. One statement, one pipeline element, no
 redirection: so no `;`, no newline-separated second command, no `|`, and no
 `o>`. The element must be a call to an interface decl; with nothing else in the
 engine, any other head parses as an external, which is refused here rather than

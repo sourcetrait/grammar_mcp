@@ -1,12 +1,5 @@
 use crate::*;
 
-/// Parameters for a remote channel command that names one alias alone.
-#[derive(Debug, ser::Deserialize, ser::Serialize)]
-pub struct RemoteAliasParams {
-    /// The remote's alias.
-    pub alias: String,
-}
-
 impl ChannelFace {
     /// `interface remote channel list`: every remote, configured or live, by alias.
     pub(crate) async fn remote_list(

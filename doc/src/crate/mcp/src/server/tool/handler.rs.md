@@ -1,18 +1,19 @@
 # handler.rs
 
 ## fn NuSh::tool_router
-DENY IS ENFORCED AT ROUTER ASSEMBLY, not at call time, and that is the whole design: a denied
-tool is ABSENT from `tools/list`, so its schema never enters the agent's context and there is
-no denied-error loop to fall into. A call anyway fails at the rmcp layer as an unknown tool.
+Deny is enforced at router assembly, not at call time, and that is the whole design: a
+denied tool is absent from `tools/list`, so its schema never enters the agent's context and
+there is no denied-error loop to fall into. A call anyway fails at the rmcp layer as an
+unknown tool.
 
 rmcp routers compose with `+` at runtime, which is what makes conditional assembly possible
 at all rather than requiring a compile-time feature per tool.
 
-Each of the four tools is deniable on its own, and there is NO implication between tokens -
-denying `execute` does not deny `rerun` - so an operator's config lists exactly what it means. A
-denied interface COMMAND leaves the tool standing: the command leaves the interface's parse
-and its description instead (`server/interface/grammar.rs`), and denying `interface` removes
-the tool whole.
+Each of the four tools is deniable on its own, and there is no implication between tokens -
+denying `execute` does not deny `rerun` - so an operator's config lists exactly what it
+means. A denied interface command leaves the tool standing: the command leaves the
+interface's parse and its description instead (`crate/interface`'s `grammar.rs`), and
+denying `interface` removes the tool whole.
 
 The interface's description is written here, after its router is built, because it is
 rendered from the deny set at runtime and the tool attribute takes only a constant.
@@ -23,17 +24,17 @@ keeps as the contract's own text, so the instructions an agent reads are his sch
 rather than a restatement of it.
 
 ## fn get_info
-`ServerCapabilities::builder().enable_tools()` is REQUIRED. `default()` advertises no tool
+`ServerCapabilities::builder().enable_tools()` is required. `default()` advertises no tool
 capability and Claude Code then skips `tools/list` entirely, which presents as a server with
 no tools rather than as an error.
 
-`env!("CARGO_PKG_VERSION")` must expand in THIS crate, so the version cannot be threaded in
+`env!("CARGO_PKG_VERSION")` must expand in this crate, so the version cannot be threaded in
 from elsewhere.
 
-The TITLE suffixes a non-default namespace so co-running namespace variants stay
+The title suffixes a non-default namespace so co-running namespace variants stay
 tellable-apart in the client's own listing.
 
-`instructions` opens with `MCP_DOC`, then renders the cache and data paths LIVE as this host
+`instructions` opens with `MCP_DOC`, then renders the cache and data paths live as this host
 resolved them, rather than as a static string or as a variable an agent's own environment
 might resolve differently, so what it names is what this host actually uses. The
 agent-facing operational craft beyond the envelope and those paths lives in the skills, not

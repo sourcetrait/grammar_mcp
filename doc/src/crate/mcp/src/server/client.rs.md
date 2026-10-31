@@ -39,9 +39,10 @@ refused `host::unknown` on either entry alike.
 ## fn ClientSh::run_interface
 The ownership is `doc/ai/daemon/runtime_ownership.tsv`'s, after User's rulings:
 the Channel is events and communication, and the remote engine is control. So
-every Channel command and every remote channel command runs here, as the MCP
-always served them, a sync Channel's queue and the thresholds among them; the
-rest are the runtime's control and answer unavailable.
+the Channel's group and the remote channels' run here, through the face's
+routes the test driver shares (`server/tool/interface.rs`), as the MCP always
+served them, a sync Channel's queue and the thresholds among them; the engine's
+group is the runtime's control and answers unavailable.
 
 ## fn ClientSh::interface
 The command meets the same contract parse as on the test driver, so a

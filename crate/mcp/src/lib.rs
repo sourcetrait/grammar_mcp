@@ -14,10 +14,6 @@ pub(crate) mod server {
     #[cfg(feature = "embedded-cli")]
     pub(crate) mod host;
     pub(crate) mod identity;
-    pub(crate) mod interface {
-        pub(crate) mod contract;
-        pub(crate) mod grammar;
-    }
     #[cfg(feature = "embedded-cli")]
     pub(crate) mod oneshot;
     #[cfg(feature = "embedded-cli")]
@@ -66,12 +62,12 @@ pub(crate) mod server {
         mod client;
         mod emergency;
         mod face;
-        mod interface;
     }
 }
 #[cfg(test)]
 mod tests {
     mod config;
+    mod deny;
 }
 pub(crate) mod cli;
 pub(crate) mod config;
@@ -109,35 +105,17 @@ pub(crate) use crate::{
         client::serve_client,
         emergency::{EmergencyTx, spawn_emergency_responder},
         identity::{mint_nonce, process_identity},
-        interface::{
-            contract::{InterfaceCommand, parse_command},
-            grammar::{interface_engine, render_command_list, render_signatures},
-        },
         tool::{
             call::{CALL_DESCRIPTION, CallParams},
-            channel_open::ChannelOpenParams,
-            commit::CommitParams,
-            config_channel::ConfigChannelParams,
-            equip::EquipParams,
             common::{
                 envelope_text, now_millis, resolve_host, serde_to_nu, success, success_value,
                 success_void,
             },
-            inspect::InspectParams,
             interface::{
                 INTERFACE_DESCRIPTION, INTERFACE_TOOL, InterfaceParams, interface_description,
+                interface_engine_for, render_signatures,
             },
-            kill::KillParams,
-            new::NewParams,
             execute::ExecuteParams,
-            purview_configure::PurviewConfigureParams,
-            purview_extend::PurviewExtendParams,
-            purview::PurviewParams,
-            remote_channel_close::RemoteChannelCloseParams,
-            remote_channel_connect::RemoteConnectParams,
-            remote_channel_listen::RemoteListenParams,
-            remote_channel_set::RemoteSetParams,
-            remote_channels::RemoteAliasParams,
             rerun::{RERUN_DESCRIPTION, RerunParams},
         },
     },
@@ -178,6 +156,14 @@ pub(crate) use sourcetrait_grammar_channel::{
     SyncRequest, ThresholdsRequest, escape_line, mint_msg_id, render_nuon, render_packet,
 };
 
+pub(crate) use sourcetrait_grammar_interface::{
+    ChannelCommand, ChannelOpenParams, CommitParams, ConfigChannelParams, EngineInterfaceCommand,
+    EquipParams, InspectParams, InterfaceCommand, KillParams, NewParams, PeerCommand,
+    PurviewConfigureParams, PurviewExtendParams, PurviewParams, RemoteAliasParams,
+    RemoteChannelCloseParams, RemoteConnectParams, RemoteListenParams, RemoteSetParams,
+    parse_command,
+};
+
 pub(crate) use sourcetrait_grammar_peer::{
     ExpandDefault, FromPeerSys, IdentityKeys, InboxRequest, Payload, PeerHandle, PeerSysParams,
     PeerSysPaths, PeerSystem, REMOTES_FILE, Relay, RemoteCloseRequest, RemoteConnectRequest,
@@ -192,11 +178,10 @@ pub(crate) use sourcetrait_grammar_protocol::{
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
-    ArgShape, ArgSpec, COMMANDS, CallRequest, CheckSummary, CommandKind, CommandSpec,
-    CommitResult, ControlAnswer, ControlRequest, Diagnostic, EngineCommand, EngineError,
-    EngineHealth, EngineResult, ExecuteRequest, FromEngineSys, Host, INTERFACE, InspectDoc,
-    LINT_VIOLATION_CAP, RerunRequest, SignaturesDoc, Source, ToEngineSys, ValueAnswer,
-    command_by_words, command_spec, span_to_line_col,
+    COMMANDS, CallRequest, CheckSummary, CommitResult, ControlAnswer, ControlRequest, Diagnostic,
+    EngineCommand, EngineError, EngineHealth, EngineResult, ExecuteRequest, FromEngineSys, Host,
+    INTERFACE, InspectDoc, RerunRequest, SignaturesDoc, ToEngineSys, ValueAnswer,
+    command_by_words,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{Emergency, EmergencyKind, Observation};
@@ -208,7 +193,7 @@ pub(crate) use sourcetrait_grammar_operator::{
     install_child_subreaper, pin,
 };
 
-pub(crate) use nuval::{NuVal, NuonStyle, TryFromNu, TryIntoNu, wide};
+pub(crate) use nuval::{NuVal, NuonStyle, TryFromNu, TryIntoNu};
 
 pub(crate) use std::{
     collections::HashMap,
@@ -232,15 +217,11 @@ pub(crate) mod dirs {
 }
 
 pub(crate) mod nu {
-    pub(crate) use nu_engine::command_prelude::Call;
     pub(crate) use nu_parser::parse;
     pub(crate) use nu_protocol::{
-        Category, PipelineData, Record, ShellError, Signature, Span, SyntaxShape,
-        Type, Value,
-        ast::{Argument, Block, Expr, Expression, ListItem},
-        engine::{Command, EngineState, Stack, StateWorkingSet},
+        Record, Span, Value,
+        engine::{EngineState, StateWorkingSet},
     };
-    pub(crate) use nu_protocol::shell_error::generic::GenericError;
     pub(crate) use nuon::{ToNuonConfig, from_nuon, to_nuon};
 }
 

@@ -63,24 +63,14 @@ impl nu::Command for InterfaceDecl {
     }
 }
 
-/// An engine holding the commands the deny set leaves, and nothing else.
-pub(crate) fn interface_engine(deny: &DenySet) -> nu::EngineState {
+/// An engine holding the commands `denied` leaves by their words, nothing else.
+pub fn interface_engine(denied: impl Fn(&str) -> bool) -> nu::EngineState {
     let mut engine_state = nu::EngineState::new();
     let mut working_set = nu::StateWorkingSet::new(&engine_state);
-    for spec in COMMANDS.iter().filter(|spec| !deny.denies_command(spec.words())) {
+    for spec in COMMANDS.iter().filter(|spec| !denied(spec.words())) {
         working_set.add_decl(Box::new(InterfaceDecl { spec }));
     }
     let delta = working_set.render();
     let _ = engine_state.merge_delta(delta);
     engine_state
-}
-
-/// The commands the deny set leaves, by their words, a `##` heading a topic.
-pub(crate) fn render_command_list(deny: &DenySet) -> String {
-    sourcetrait_grammar_protocol::render_command_list(|words| deny.denies_command(words))
-}
-
-/// The signatures the deny set leaves, a `###` heading a topic.
-pub(crate) fn render_signatures(deny: &DenySet) -> String {
-    sourcetrait_grammar_protocol::render_signatures(|words| deny.denies_command(words))
 }

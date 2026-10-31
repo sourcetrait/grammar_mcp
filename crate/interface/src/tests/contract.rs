@@ -1,10 +1,13 @@
-use crate::server::interface::contract::KIND_INTERFACE;
+//! The interface's parse held to its contract, each command to its owning system.
 use crate::*;
+use sourcetrait_grammar_protocol::render_signatures;
 
+/// An engine with every command.
 fn engine() -> nu::EngineState {
-    interface_engine(&DenySet::default())
+    interface_engine(|_| false)
 }
 
+/// A command's parse against the full engine.
 fn parse(text: &str) -> Result<InterfaceCommand, Vec<Diagnostic>> {
     parse_command(&engine(), text)
 }
@@ -27,8 +30,7 @@ fn refusal(text: &str) -> String {
     rows.first().map(|(_, message)| message.clone()).unwrap_or_default()
 }
 
-/// The smallest command a spec takes: each required positional a sample, a mode
-/// one of its two values.
+/// A spec's smallest command: each required positional a sample, a mode its value.
 fn sample(spec: &CommandSpec) -> String {
     let mut text = spec.name.to_string();
     for arg in spec.positionals.iter().filter(|arg| !arg.optional) {
@@ -42,37 +44,46 @@ fn sample(spec: &CommandSpec) -> String {
     text
 }
 
+/// The kind a parsed command is, by the system that owns it.
 fn kind_of(command: &InterfaceCommand) -> CommandKind {
+    use EngineInterfaceCommand as E;
     match command {
-        InterfaceCommand::Info => CommandKind::Info,
-        InterfaceCommand::Help(_) => CommandKind::Help,
-        InterfaceCommand::ProcessList => CommandKind::ProcessList,
-        InterfaceCommand::ProcessKill(_) => CommandKind::ProcessKill,
-        InterfaceCommand::PurviewList => CommandKind::PurviewList,
-        InterfaceCommand::PurviewSet(_) => CommandKind::PurviewSet,
-        InterfaceCommand::PurviewExtend(_) => CommandKind::PurviewExtend,
-        InterfaceCommand::PurviewConfigure(_) => CommandKind::PurviewConfigure,
-        InterfaceCommand::ChannelOpen(_) => CommandKind::ChannelOpen,
-        InterfaceCommand::ChannelSync => CommandKind::ChannelSync,
-        InterfaceCommand::ChannelReady => CommandKind::ChannelReady,
-        InterfaceCommand::ChannelClose => CommandKind::ChannelClose,
-        InterfaceCommand::ChannelConfig(_) => CommandKind::ChannelConfig,
-        InterfaceCommand::RemoteList => CommandKind::RemoteList,
-        InterfaceCommand::RemoteGet(_) => CommandKind::RemoteGet,
-        InterfaceCommand::RemoteSet(_) => CommandKind::RemoteSet,
-        InterfaceCommand::RemoteUnset(_) => CommandKind::RemoteUnset,
-        InterfaceCommand::RemoteListen(_) => CommandKind::RemoteListen,
-        InterfaceCommand::RemoteConnect(_) => CommandKind::RemoteConnect,
-        InterfaceCommand::RemoteClose(_) => CommandKind::RemoteClose,
-        InterfaceCommand::EquipNew(_) => CommandKind::EquipNew,
-        InterfaceCommand::EquipInstall(_) => CommandKind::EquipInstall,
-        InterfaceCommand::EquipCheck(_) => CommandKind::EquipCheck,
-        InterfaceCommand::EquipUninstall(_) => CommandKind::EquipUninstall,
-        InterfaceCommand::EquipScaffold(_) => CommandKind::EquipScaffold,
-        InterfaceCommand::EquipCommit(_) => CommandKind::EquipCommit,
+        InterfaceCommand::Engine(command) => match command {
+            E::Info => CommandKind::Info,
+            E::Help(_) => CommandKind::Help,
+            E::ProcessList => CommandKind::ProcessList,
+            E::ProcessKill(_) => CommandKind::ProcessKill,
+            E::PurviewList => CommandKind::PurviewList,
+            E::PurviewSet(_) => CommandKind::PurviewSet,
+            E::PurviewExtend(_) => CommandKind::PurviewExtend,
+            E::PurviewConfigure(_) => CommandKind::PurviewConfigure,
+            E::EquipNew(_) => CommandKind::EquipNew,
+            E::EquipInstall(_) => CommandKind::EquipInstall,
+            E::EquipCheck(_) => CommandKind::EquipCheck,
+            E::EquipUninstall(_) => CommandKind::EquipUninstall,
+            E::EquipScaffold(_) => CommandKind::EquipScaffold,
+            E::EquipCommit(_) => CommandKind::EquipCommit,
+        },
+        InterfaceCommand::Channel(command) => match command {
+            ChannelCommand::Open(_) => CommandKind::ChannelOpen,
+            ChannelCommand::Sync => CommandKind::ChannelSync,
+            ChannelCommand::Ready => CommandKind::ChannelReady,
+            ChannelCommand::Close => CommandKind::ChannelClose,
+            ChannelCommand::Config(_) => CommandKind::ChannelConfig,
+        },
+        InterfaceCommand::Peer(command) => match command {
+            PeerCommand::List => CommandKind::RemoteList,
+            PeerCommand::Get(_) => CommandKind::RemoteGet,
+            PeerCommand::Set(_) => CommandKind::RemoteSet,
+            PeerCommand::Unset(_) => CommandKind::RemoteUnset,
+            PeerCommand::Listen(_) => CommandKind::RemoteListen,
+            PeerCommand::Connect(_) => CommandKind::RemoteConnect,
+            PeerCommand::Close(_) => CommandKind::RemoteClose,
+        },
     }
 }
 
+/// Each command's smallest form parses to its own kind.
 #[test]
 fn every_command_parses_to_its_kind() {
     for spec in COMMANDS {
@@ -82,6 +93,7 @@ fn every_command_parses_to_its_kind() {
     }
 }
 
+/// No command's name or argument holds an underscore.
 #[test]
 fn no_command_name_holds_an_underscore() {
     for spec in COMMANDS {
@@ -92,22 +104,24 @@ fn no_command_name_holds_an_underscore() {
     }
 }
 
+/// A command's arguments reach its parameters as written.
 #[test]
 fn arguments_reach_the_tools_parameters() {
+    use EngineInterfaceCommand as E;
     match parse("interface purview configure 'iter/one' ['acme/geo:', '@core']") {
-        Ok(InterfaceCommand::PurviewConfigure(p)) => {
+        Ok(InterfaceCommand::Engine(E::PurviewConfigure(p))) => {
             assert_eq!(p.purview, "iter/one");
             assert_eq!(p.namepaths, vec!["acme/geo:".to_string(), "@core".to_string()]);
         }
         other => panic!("got {other:?}"),
     }
     match parse("interface info") {
-        Ok(InterfaceCommand::Info) => {}
+        Ok(InterfaceCommand::Engine(E::Info)) => {}
         other => panic!("got {other:?}"),
     }
     assert!(!refused("interface info ['default']").is_empty(), "info takes no argument");
     match parse("interface channel config --spam-warn-rate 12 --spam-error-window-secs 30") {
-        Ok(InterfaceCommand::ChannelConfig(p)) => {
+        Ok(InterfaceCommand::Channel(ChannelCommand::Config(p))) => {
             assert_eq!(p.spam_warn_rate, Some(12));
             assert_eq!(p.spam_error_window_secs, Some(30));
             assert_eq!(p.spam_warn_window_secs, None);
@@ -116,30 +130,35 @@ fn arguments_reach_the_tools_parameters() {
         other => panic!("got {other:?}"),
     }
     match parse("interface equip install r#'/tmp/a b/equip/acme/geo'#") {
-        Ok(InterfaceCommand::EquipInstall(p)) => assert_eq!(p.source, "/tmp/a b/equip/acme/geo"),
+        Ok(InterfaceCommand::Engine(E::EquipInstall(p))) => {
+            assert_eq!(p.source, "/tmp/a b/equip/acme/geo");
+        }
         other => panic!("got {other:?}"),
     }
     match parse("interface help grammar:eye:git") {
-        Ok(InterfaceCommand::Help(p)) => assert_eq!(p.namepath, "grammar:eye:git"),
+        Ok(InterfaceCommand::Engine(E::Help(p))) => assert_eq!(p.namepath, "grammar:eye:git"),
         other => panic!("got {other:?}"),
     }
 }
 
+/// A remote channel command takes its flags, and only its own.
 #[test]
 fn a_remote_takes_its_flags() {
     match parse("interface remote channel listen 'peer' --on '127.0.0.1'") {
-        Ok(InterfaceCommand::RemoteListen(p)) => {
+        Ok(InterfaceCommand::Peer(PeerCommand::Listen(p))) => {
             assert_eq!(p.alias, "peer");
             assert_eq!(p.on.as_deref(), Some("127.0.0.1"));
         }
         other => panic!("got {other:?}"),
     }
     match parse("interface remote channel listen 'peer'") {
-        Ok(InterfaceCommand::RemoteListen(p)) => assert!(p.on.is_none(), "a flag absent is unset"),
+        Ok(InterfaceCommand::Peer(PeerCommand::Listen(p))) => {
+            assert!(p.on.is_none(), "a flag absent is unset");
+        }
         other => panic!("got {other:?}"),
     }
     match parse("interface remote channel set 'peer' --cert '~/k/p.pem' --address '127.0.0.1:9'") {
-        Ok(InterfaceCommand::RemoteSet(p)) => {
+        Ok(InterfaceCommand::Peer(PeerCommand::Set(p))) => {
             assert_eq!(p.cert.as_deref(), Some("~/k/p.pem"));
             assert_eq!(p.address.as_deref(), Some("127.0.0.1:9"));
             assert_eq!(p.listen, None);
@@ -147,7 +166,7 @@ fn a_remote_takes_its_flags() {
         other => panic!("got {other:?}"),
     }
     match parse("interface remote channel connect 'peer' --address '127.0.0.1:9'") {
-        Ok(InterfaceCommand::RemoteConnect(p)) => {
+        Ok(InterfaceCommand::Peer(PeerCommand::Connect(p))) => {
             assert_eq!(p.address.as_deref(), Some("127.0.0.1:9"));
         }
         other => panic!("got {other:?}"),
@@ -160,6 +179,7 @@ fn a_remote_takes_its_flags() {
     );
 }
 
+/// A text naming no command is refused as no `interface` command.
 #[test]
 fn an_unknown_command_is_refused() {
     for text in ["interface", "interface purview", "interface nosuch thing", "ls", "nu -c 'ls'"] {
@@ -168,6 +188,7 @@ fn an_unknown_command_is_refused() {
     }
 }
 
+/// One command, alone, never piped.
 #[test]
 fn one_command_alone_never_piped() {
     assert!(refusal("interface info; interface purview list").contains("alone"));
@@ -176,6 +197,7 @@ fn one_command_alone_never_piped() {
     assert!(refusal("").contains("alone"));
 }
 
+/// Only literals reach a command: no variable, expression, or spread.
 #[test]
 fn only_literals_reach_a_command() {
     for text in [
@@ -192,12 +214,14 @@ fn only_literals_reach_a_command() {
     assert!(!rows.is_empty());
 }
 
+/// A redirection is refused.
 #[test]
 fn a_redirection_is_refused() {
     assert!(!refused("interface info o> out.txt").is_empty());
     assert!(!refused("interface info e> err.txt").is_empty());
 }
 
+/// A missing or mistyped argument is refused at its position.
 #[test]
 fn a_missing_or_mistyped_argument_is_refused_at_its_position() {
     let rows = parse("interface help").expect_err("help takes a namepath");
@@ -215,11 +239,14 @@ fn a_missing_or_mistyped_argument_is_refused_at_its_position() {
     let rows = parse("interface channel config --spam-warn-rate abc").expect_err("a rate is an int");
     assert_eq!(rows[0].kind, KIND_INTERFACE);
     match parse("interface process kill ['a']") {
-        Ok(InterfaceCommand::ProcessKill(p)) => assert_eq!(p.nonce, "['a']", "a string takes the token"),
+        Ok(InterfaceCommand::Engine(EngineInterfaceCommand::ProcessKill(p))) => {
+            assert_eq!(p.nonce, "['a']", "a string takes the token");
+        }
         other => panic!("got {other:?}"),
     }
 }
 
+/// The Channel opens in the mode it names, which is required.
 #[test]
 fn the_channel_opens_in_a_mode_it_names() {
     for (text, mode) in [
@@ -227,7 +254,9 @@ fn the_channel_opens_in_a_mode_it_names() {
         ("interface channel open 'async'", ChannelMode::Async),
     ] {
         match parse(text) {
-            Ok(InterfaceCommand::ChannelOpen(p)) => assert_eq!(p.mode, mode, "`{text}`"),
+            Ok(InterfaceCommand::Channel(ChannelCommand::Open(p))) => {
+                assert_eq!(p.mode, mode, "`{text}`");
+            }
             other => panic!("`{text}`: got {other:?}"),
         }
     }
@@ -241,6 +270,7 @@ fn the_channel_opens_in_a_mode_it_names() {
     );
 }
 
+/// A flag is checked for its range, and an unknown one refused.
 #[test]
 fn a_flag_is_checked_for_its_range() {
     let message = refusal("interface channel config --spam-warn-rate -1");
@@ -249,22 +279,24 @@ fn a_flag_is_checked_for_its_range() {
     assert!(!refused("interface info --help").is_empty());
 }
 
+/// A denied command is unknown to the parse and absent from the signatures.
 #[test]
 fn a_denied_command_is_unknown_and_undocumented() {
-    let deny = DenySet::new(vec![DeniableTool::Command("purview configure")]);
-    let engine = interface_engine(&deny);
+    let denied = |words: &str| words == "purview configure";
+    let engine = interface_engine(denied);
     let rows = parse_command(&engine, "interface purview configure x ['y']")
         .expect_err("a denied command is unknown");
     assert!(rows[0].message.contains("no `interface` command"), "{rows:?}");
     assert!(parse_command(&engine, "interface purview list").is_ok());
-    let rendered = render_signatures(&deny);
+    let rendered = render_signatures(denied);
     assert!(!rendered.contains("`purview configure ["), "{rendered}");
     assert!(rendered.contains("`purview list ["), "{rendered}");
 }
 
+/// The signatures cover every command, by topic.
 #[test]
 fn the_signatures_cover_every_command_by_topic() {
-    let rendered = render_signatures(&DenySet::default());
+    let rendered = render_signatures(|_| false);
     assert!(
         rendered.starts_with(
             "## Command Signatures\nNote: Each begins with `interface `\n### General\n"
@@ -287,6 +319,7 @@ fn the_signatures_cover_every_command_by_topic() {
     assert!(!rendered.contains("def ") && !rendered.contains("- `"), "{rendered}");
 }
 
+/// Every summary fits a line, and every result is a kind.
 #[test]
 fn every_summary_fits_a_line_and_every_result_is_a_kind() {
     for spec in COMMANDS {
@@ -298,16 +331,4 @@ fn every_summary_fits_a_line_and_every_result_is_a_kind() {
             spec.result,
         );
     }
-}
-
-#[test]
-fn deny_names_a_command_by_its_words() {
-    assert_eq!(
-        DeniableTool::from_name("purview configure"),
-        Some(DeniableTool::Command("purview configure")),
-    );
-    assert_eq!(DeniableTool::from_name(" equip commit "), Some(DeniableTool::Command("equip commit")));
-    assert_eq!(DeniableTool::from_name("interface"), Some(DeniableTool::Interface));
-    assert_eq!(DeniableTool::from_name("purview_configure"), None);
-    assert_eq!(DeniableTool::from_name("equip"), None);
 }

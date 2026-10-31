@@ -1,12 +1,5 @@
 use crate::*;
 
-/// Parameters for `interface help`.
-#[derive(Debug, ser::Deserialize, ser::Serialize)]
-pub struct InspectParams {
-    /// A namepath, a PATTERN ending in `/` or `:`, `*`, `.`, `interface`, or `grimm`.
-    pub namepath: String,
-}
-
 /// Success result of `interface help`.
 #[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]

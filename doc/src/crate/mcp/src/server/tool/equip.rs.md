@@ -1,9 +1,5 @@
 # equip.rs
 
-## struct EquipParams
-One parameter for all four commands, the source path: the namepath is read off it, so the
-equip is wherever its source says it is.
-
 ## enum EquipSummary
 Untagged: the caller knows the variant from the command it ran, and the shapes are distinct.
 `uninstall` returns no summary at all - void, matching its idempotent success.

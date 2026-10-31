@@ -30,7 +30,7 @@ impl NuSh {
             system,
             nonce_gen,
             mcp_nom,
-            interface_engine: Arc::new(interface_engine(deny)),
+            interface_engine: Arc::new(interface_engine_for(deny)),
             face,
             current_purview: Arc::new(CurrentPurview::new()),
             tool_router: Self::tool_router(),

@@ -1,12 +1,5 @@
 use crate::*;
 
-/// Parameters for `interface equip scaffold`.
-#[derive(Debug, ser::Deserialize, ser::Serialize)]
-pub struct NewParams {
-    /// Namepaths to scaffold into installed equips' rigs: a module or a function.
-    pub namepaths: Vec<String>,
-}
-
 /// Success result of `interface equip scaffold`: every path the batch made.
 #[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]

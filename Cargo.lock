@@ -6742,6 +6742,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sourcetrait_grammar_interface"
+version = "0.0.0-9"
+dependencies = [
+ "nu-engine",
+ "nu-parser",
+ "nu-protocol",
+ "nuval",
+ "serde",
+ "sourcetrait_grammar_protocol",
+]
+
+[[package]]
 name = "sourcetrait_grammar_mcp"
 version = "0.0.0-9"
 dependencies = [
@@ -6766,6 +6778,7 @@ dependencies = [
  "sourcetrait_grammar_channel",
  "sourcetrait_grammar_client",
  "sourcetrait_grammar_engine",
+ "sourcetrait_grammar_interface",
  "sourcetrait_grammar_operator",
  "sourcetrait_grammar_peer",
  "sourcetrait_grammar_protocol",

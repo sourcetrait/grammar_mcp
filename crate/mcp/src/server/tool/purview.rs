@@ -8,13 +8,6 @@ pub(crate) struct PurviewSetResult {
     pub revealed: Option<String>,
 }
 
-/// Parameters for `interface purview set`.
-#[derive(Debug, ser::Deserialize, ser::Serialize)]
-pub struct PurviewParams {
-    /// The purview ids to put in view, replacing the current set.
-    pub purviews: Vec<String>,
-}
-
 #[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// `interface purview set`: replace the current view with these purviews.

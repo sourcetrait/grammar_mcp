@@ -1,14 +1,5 @@
 use crate::*;
 
-/// Parameters for `interface remote channel listen`.
-#[derive(Debug, ser::Deserialize, ser::Serialize)]
-pub struct RemoteListenParams {
-    /// The remote whose peer to listen for.
-    pub alias: String,
-    /// The `ip` or `ip:port` to bind, in place of the entry's.
-    pub on: Option<String>,
-}
-
 impl ChannelFace {
     /// `interface remote channel listen`: bind for a peer, blocking on the bind.
     pub(crate) async fn remote_listen(

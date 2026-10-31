@@ -1,12 +1,5 @@
 use crate::*;
 
-/// Parameters for `interface channel open`.
-#[derive(Debug, ser::Serialize)]
-pub(crate) struct ChannelOpenParams {
-    /// `sync` or `async`: how the Channel's packets reach the agent.
-    pub mode: ChannelMode,
-}
-
 /// Success result of `interface channel open`.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct ChannelOpenResult {

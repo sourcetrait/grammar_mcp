@@ -1,14 +1,5 @@
 use crate::*;
 
-/// Parameters for `interface remote channel connect`.
-#[derive(Debug, ser::Deserialize, ser::Serialize)]
-pub struct RemoteConnectParams {
-    /// The remote whose peer to dial.
-    pub alias: String,
-    /// The `ip:port` to dial, in place of the entry's.
-    pub address: Option<String>,
-}
-
 impl ChannelFace {
     /// `interface remote channel connect`: dial a peer, blocking on the connect.
     pub(crate) async fn remote_connect(

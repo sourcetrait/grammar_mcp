@@ -1,22 +1,5 @@
 use crate::*;
 
-/// Parameters for `interface channel config`, a PARTIAL update.
-#[derive(Debug, ser::Deserialize, ser::Serialize)]
-pub struct ConfigChannelParams {
-    /// Window for the SOFT threshold, in whole seconds.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub spam_warn_window_secs: Option<u64>,
-    /// Sends within that window before one warning is issued for an origin.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub spam_warn_rate: Option<u32>,
-    /// Window for the HARD threshold, in whole seconds.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub spam_error_window_secs: Option<u64>,
-    /// Sends within that window before the origin is refused and stopped.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub spam_error_rate: Option<u32>,
-}
-
 /// The policy now IN FORCE, whether or not this call changed it.
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct ConfigChannelResult {

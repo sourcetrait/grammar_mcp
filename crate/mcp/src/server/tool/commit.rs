@@ -1,12 +1,5 @@
 use crate::*;
 
-/// Parameters for `interface equip commit`.
-#[derive(Debug, ser::Deserialize, ser::Serialize)]
-pub struct CommitParams {
-    /// The equip to commit: its `<author>/<name>`, or a builtin's name.
-    pub namepath: String,
-}
-
 #[cfg(feature = "embedded-cli")]
 impl NuSh {
     /// `interface equip commit`: an equip's source promoted into the namespace.

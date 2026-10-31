@@ -1,14 +1,5 @@
 use crate::*;
 
-/// Parameters for `interface purview configure`.
-#[derive(Debug, ser::Deserialize, ser::Serialize)]
-pub struct PurviewConfigureParams {
-    /// The purview to set, created if absent; a path-like snake label.
-    pub purview: String,
-    /// Its namepath patterns; an empty list deletes the purview.
-    pub namepaths: Vec<String>,
-}
-
 /// Success result of `interface purview configure`, the state after the write.
 #[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]

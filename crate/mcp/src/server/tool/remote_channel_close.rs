@@ -1,12 +1,5 @@
 use crate::*;
 
-/// Parameters for `interface remote channel close`.
-#[derive(Debug, ser::Deserialize, ser::Serialize)]
-pub struct RemoteChannelCloseParams {
-    /// The alias of the open link to close.
-    pub alias: String,
-}
-
 impl ChannelFace {
     /// `interface remote channel close`: close an open link or a waiting listener.
     pub(crate) async fn remote_close(

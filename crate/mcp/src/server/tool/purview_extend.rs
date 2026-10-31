@@ -1,12 +1,5 @@
 use crate::*;
 
-/// Parameters for `interface purview extend`.
-#[derive(Debug, ser::Deserialize, ser::Serialize)]
-pub struct PurviewExtendParams {
-    /// Purview ids to add to the current view; additive.
-    pub purviews: Vec<String>,
-}
-
 /// What a change to the current view did.
 #[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]

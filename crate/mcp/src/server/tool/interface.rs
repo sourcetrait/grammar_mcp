@@ -23,6 +23,55 @@ pub(crate) fn interface_description(deny: &DenySet) -> String {
 /// The tool's stub description; the router carries `interface_description`.
 pub(crate) const INTERFACE_DESCRIPTION: &str = "Interfaces directly with the Grammar MCP.";
 
+/// The parse's engine, holding the commands the deny set leaves.
+pub(crate) fn interface_engine_for(deny: &DenySet) -> nu::EngineState {
+    sourcetrait_grammar_interface::interface_engine(|words| deny.denies_command(words))
+}
+
+/// The commands the deny set leaves, by their words, a `##` heading a topic.
+pub(crate) fn render_command_list(deny: &DenySet) -> String {
+    sourcetrait_grammar_protocol::render_command_list(|words| deny.denies_command(words))
+}
+
+/// The signatures the deny set leaves, a `###` heading a topic.
+pub(crate) fn render_signatures(deny: &DenySet) -> String {
+    sourcetrait_grammar_protocol::render_signatures(|words| deny.denies_command(words))
+}
+
+impl ChannelFace {
+    /// A Channel command, routed to the Channel's system through the face.
+    pub(crate) async fn run_channel(
+        &self,
+        nonce: datum::Nonce,
+        command: ChannelCommand,
+    ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        match command {
+            ChannelCommand::Open(p) => self.channel_open(nonce, p).await,
+            ChannelCommand::Sync => self.channel_sync(nonce).await,
+            ChannelCommand::Ready => self.channel_ready(nonce).await,
+            ChannelCommand::Close => self.channel_close(nonce).await,
+            ChannelCommand::Config(p) => self.channel_config(nonce, p).await,
+        }
+    }
+
+    /// A remote channel command, routed to the peer links' system through the face.
+    pub(crate) async fn run_peer(
+        &self,
+        nonce: datum::Nonce,
+        command: PeerCommand,
+    ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        match command {
+            PeerCommand::List => self.remote_list(nonce).await,
+            PeerCommand::Get(p) => self.remote_get(nonce, p).await,
+            PeerCommand::Set(p) => self.remote_set(nonce, p).await,
+            PeerCommand::Unset(p) => self.remote_unset(nonce, p).await,
+            PeerCommand::Listen(p) => self.remote_listen(nonce, p).await,
+            PeerCommand::Connect(p) => self.remote_connect(nonce, p).await,
+            PeerCommand::Close(p) => self.remote_close(nonce, p).await,
+        }
+    }
+}
+
 #[cfg(feature = "embedded-cli")]
 #[mcp::tool_router(router = interface_router, vis = "pub(crate)")]
 impl NuSh {
@@ -46,39 +95,41 @@ impl NuSh {
 
 #[cfg(feature = "embedded-cli")]
 impl NuSh {
-    /// Run a parsed command under the interface call's nonce.
+    /// Run a parsed command under the interface call's nonce, routed to its system.
     pub(crate) async fn run_interface(
         &self,
         nonce: datum::Nonce,
         command: InterfaceCommand,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         match command {
-            InterfaceCommand::Info => self.info(nonce).await,
-            InterfaceCommand::Help(p) => self.help(nonce, p).await,
-            InterfaceCommand::ProcessList => self.process_list(nonce).await,
-            InterfaceCommand::ProcessKill(p) => self.process_kill(nonce, p).await,
-            InterfaceCommand::PurviewList => self.purview_list(nonce).await,
-            InterfaceCommand::PurviewSet(p) => self.purview_set(nonce, p).await,
-            InterfaceCommand::PurviewExtend(p) => self.purview_extend(nonce, p).await,
-            InterfaceCommand::PurviewConfigure(p) => self.purview_configure(nonce, p).await,
-            InterfaceCommand::ChannelOpen(p) => self.face.channel_open(nonce, p).await,
-            InterfaceCommand::ChannelSync => self.face.channel_sync(nonce).await,
-            InterfaceCommand::ChannelReady => self.face.channel_ready(nonce).await,
-            InterfaceCommand::ChannelClose => self.face.channel_close(nonce).await,
-            InterfaceCommand::ChannelConfig(p) => self.face.channel_config(nonce, p).await,
-            InterfaceCommand::RemoteList => self.face.remote_list(nonce).await,
-            InterfaceCommand::RemoteGet(p) => self.face.remote_get(nonce, p).await,
-            InterfaceCommand::RemoteSet(p) => self.face.remote_set(nonce, p).await,
-            InterfaceCommand::RemoteUnset(p) => self.face.remote_unset(nonce, p).await,
-            InterfaceCommand::RemoteListen(p) => self.face.remote_listen(nonce, p).await,
-            InterfaceCommand::RemoteConnect(p) => self.face.remote_connect(nonce, p).await,
-            InterfaceCommand::RemoteClose(p) => self.face.remote_close(nonce, p).await,
-            InterfaceCommand::EquipNew(p) => self.equip_new(nonce, p).await,
-            InterfaceCommand::EquipInstall(p) => self.equip_install(nonce, p).await,
-            InterfaceCommand::EquipCheck(p) => self.equip_check(nonce, p).await,
-            InterfaceCommand::EquipUninstall(p) => self.equip_uninstall(nonce, p).await,
-            InterfaceCommand::EquipScaffold(p) => self.equip_scaffold(nonce, p).await,
-            InterfaceCommand::EquipCommit(p) => self.equip_commit(nonce, p).await,
+            InterfaceCommand::Channel(command) => self.face.run_channel(nonce, command).await,
+            InterfaceCommand::Peer(command) => self.face.run_peer(nonce, command).await,
+            InterfaceCommand::Engine(command) => self.run_engine(nonce, command).await,
+        }
+    }
+
+    /// An engine command, routed to the engine's system with the session's view.
+    async fn run_engine(
+        &self,
+        nonce: datum::Nonce,
+        command: EngineInterfaceCommand,
+    ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
+        use EngineInterfaceCommand as E;
+        match command {
+            E::Info => self.info(nonce).await,
+            E::Help(p) => self.help(nonce, p).await,
+            E::ProcessList => self.process_list(nonce).await,
+            E::ProcessKill(p) => self.process_kill(nonce, p).await,
+            E::PurviewList => self.purview_list(nonce).await,
+            E::PurviewSet(p) => self.purview_set(nonce, p).await,
+            E::PurviewExtend(p) => self.purview_extend(nonce, p).await,
+            E::PurviewConfigure(p) => self.purview_configure(nonce, p).await,
+            E::EquipNew(p) => self.equip_new(nonce, p).await,
+            E::EquipInstall(p) => self.equip_install(nonce, p).await,
+            E::EquipCheck(p) => self.equip_check(nonce, p).await,
+            E::EquipUninstall(p) => self.equip_uninstall(nonce, p).await,
+            E::EquipScaffold(p) => self.equip_scaffold(nonce, p).await,
+            E::EquipCommit(p) => self.equip_commit(nonce, p).await,
         }
     }
 }
