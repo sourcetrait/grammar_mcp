@@ -25,7 +25,10 @@ pub(crate) mod runtime {
     pub(crate) mod start;
 }
 pub(crate) mod session {}
-pub(crate) mod transport {}
+pub(crate) mod transport {
+    pub(crate) mod admission;
+    pub(crate) mod listener;
+}
 
 #[cfg(feature = "service")]
 pub(crate) use crate::cli::{
@@ -35,9 +38,12 @@ pub(crate) use crate::cli::{
 
 pub(crate) use std::{
     collections::BTreeMap,
-    fmt, fs,
+    fmt, fs, io,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 #[cfg(feature = "service")]
 pub(crate) use std::process;
@@ -45,16 +51,31 @@ pub(crate) use std::process;
 #[cfg(feature = "service")]
 pub(crate) use clap::Parser;
 
+pub(crate) use futures_util::{SinkExt, StreamExt};
 pub(crate) use nutype::NuTypeFile;
 pub(crate) use nuval::{NuVal, NuonStyle};
 pub(crate) use sha2::{Digest, Sha256};
+pub(crate) use tokio as tk;
 
 pub(crate) use sourcetrait_common::datum;
 pub(crate) use sourcetrait_grammar_engine as engine;
-pub(crate) use sourcetrait_grammar_protocol::{Capabilities, WorkerGeneration};
+pub(crate) use sourcetrait_grammar_protocol::{
+    ARTIFACT_LIMITS_DEFAULT, Capabilities, ClientHello, Fresh, HELLO_BUDGET, HELLO_DEADLINE, HelloReply,
+    HelloState, Instance, LIMITS_DEFAULT, LeaseId, LeaseTable, LeaseToken, Limits, WorkerGeneration,
+    WorkerProfile, decode_payload, framed, payload,
+};
 pub(crate) use sourcetrait_grammar_scratch::{HostProbe, OwnedDir, Owner, current_uid, sweep};
 
-pub(crate) use crate::runtime::lock::{LOCK_FILE, LockRecord, NamespaceLock};
+pub(crate) use crate::{
+    runtime::{
+        lock::{LOCK_FILE, LockRecord, NamespaceLock},
+        start::random_bytes,
+    },
+    transport::{
+        admission::{Admission, accept},
+        listener::EngineListener,
+    },
+};
 
 pub(crate) mod ser {
     pub(crate) use ::serde::{Deserialize, Serialize};

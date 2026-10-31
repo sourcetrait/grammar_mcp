@@ -18,6 +18,10 @@ const OWNER_MODEL: &str = include_str!("../../../include/scratch/Owner.nutype");
 #[cfg(target_os = "linux")]
 const BOOT_ID: &str = "/proc/sys/kernel/random/boot_id";
 
+/// This process's PID namespace on Linux, the link naming it.
+#[cfg(target_os = "linux")]
+const PID_NAMESPACE: &str = "/proc/self/ns/pid";
+
 /// The source of a nonce's random bytes.
 const URANDOM: &str = "/dev/urandom";
 
@@ -30,6 +34,8 @@ pub struct Owner {
     pub start: u64,
     /// The boot it started in, where its start alone names none.
     pub boot: Option<String>,
+    /// The PID namespace its pid is numbered in, where the platform keeps them.
+    pub pidns: Option<String>,
     /// The guard's own tag, none in a predecessor's marker.
     pub nonce: Option<String>,
 }
@@ -66,6 +72,7 @@ impl Owner {
             pid,
             start,
             boot: current_boot(),
+            pidns: current_pid_namespace(),
             nonce: Some(random_nonce()?),
         })
     }
@@ -113,11 +120,42 @@ pub fn current_uid() -> u32 {
     nix::unistd::geteuid().as_raw()
 }
 
-/// The running boot's identity on Linux, none elsewhere or where unreadable.
+/// This machine's running boot, apart from every other boot; none where unread.
 pub(crate) fn current_boot() -> Option<String> {
     #[cfg(target_os = "linux")]
     {
         fs::read_to_string(BOOT_ID).ok().map(|id| id.trim().to_string()).filter(|id| !id.is_empty())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let mut buf = [0u8; 64];
+        let mut len = buf.len();
+        let read = unsafe {
+            nix::libc::sysctlbyname(
+                c"kern.bootsessionuuid".as_ptr(),
+                buf.as_mut_ptr().cast(),
+                &mut len,
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        if read != 0 || len > buf.len() {
+            return None;
+        }
+        let id = std::str::from_utf8(&buf[..len]).ok()?.trim_end_matches('\0').trim();
+        (!id.is_empty()).then(|| id.to_string())
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        None
+    }
+}
+
+/// This process's PID namespace on Linux, none elsewhere or where unreadable.
+pub(crate) fn current_pid_namespace() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        fs::read_link(PID_NAMESPACE).ok().map(|link| link.to_string_lossy().into_owned())
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -183,6 +221,7 @@ fn parse_legacy(
         pid,
         start,
         boot: None,
+        pidns: None,
         nonce: None,
     }
     .checked()

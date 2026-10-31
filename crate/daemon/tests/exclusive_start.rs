@@ -2,66 +2,9 @@
 
 mod support;
 
-use std::io::{BufRead, BufReader};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-use std::process::{Child, Command, Output, Stdio};
 
-use support::TestInstance;
-
-/// A worker serving, its pid and the generation its ready line names.
-struct Worker {
-    child: Child,
-    generation: String,
-}
-
-impl Worker {
-    fn pid(&self) -> u32 {
-        self.child.id()
-    }
-
-    /// Stopped as a service stop does, its exit answered.
-    fn stop(mut self) -> std::process::ExitStatus {
-        let pid = nix::unistd::Pid::from_raw(self.child.id() as i32);
-        nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGTERM).expect("the stop");
-        self.child.wait().expect("its exit")
-    }
-
-    /// Killed outright, which runs no cleanup.
-    fn kill(mut self) {
-        self.child.kill().expect("the kill");
-        self.child.wait().expect("reaped");
-    }
-}
-
-/// `namespace`'s worker started, ready, or the output of the start that failed.
-fn start(instance: &TestInstance, namespace: &str) -> Result<Worker, Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_grammard"))
-        .args(["serve", "--id", &instance.id, "--namespace", namespace])
-        .env_clear()
-        .envs(&instance.env)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("grammard runs");
-    let mut stderr = child.stderr.take().unwrap();
-    let errors = std::thread::spawn(move || {
-        let mut text = String::new();
-        let _ = std::io::Read::read_to_string(&mut stderr, &mut text);
-        text
-    });
-    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
-    while let Some(Ok(line)) = lines.next() {
-        if let Some((_, rest)) = line.split_once("at generation ") {
-            let generation = rest.split(',').next().unwrap_or_default().to_string();
-            std::thread::spawn(move || lines.for_each(drop));
-            return Ok(Worker { child, generation });
-        }
-    }
-    let status = child.wait().expect("the failed start's exit");
-    let stderr = errors.join().unwrap_or_default().into_bytes();
-    Err(Output { status, stdout: Vec::new(), stderr })
-}
+use support::{TestInstance, start};
 
 #[test]
 fn one_identity_starts_one_worker() {

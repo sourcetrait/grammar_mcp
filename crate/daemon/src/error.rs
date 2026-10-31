@@ -42,6 +42,10 @@ pub enum DaemonError {
     LockUnavailable { path: PathBuf, reason: String },
     /// The engine's start, its parameters or its substrate, failing.
     EngineInit { reason: String },
+    /// The engine socket that cannot be bound where the instance puts it.
+    SocketUnavailable { path: PathBuf, reason: String },
+    /// A service start whose environment names no runtime home for its socket.
+    NoRuntimeHome,
 }
 
 /// Payload-less mirror of `DaemonError`.
@@ -59,6 +63,8 @@ pub enum DaemonErrorKind {
     NamespaceHeld,
     LockUnavailable,
     EngineInit,
+    SocketUnavailable,
+    NoRuntimeHome,
 }
 
 impl DaemonErrorKind {
@@ -77,6 +83,8 @@ impl DaemonErrorKind {
             Self::NamespaceHeld => "runtime::namespace_held",
             Self::LockUnavailable => "runtime::lock_unavailable",
             Self::EngineInit => "runtime::engine_init",
+            Self::SocketUnavailable => "runtime::socket_unavailable",
+            Self::NoRuntimeHome => "runtime::no_runtime_home",
         }
     }
 }
@@ -97,6 +105,8 @@ impl DaemonError {
             Self::NamespaceHeld { .. } => DaemonErrorKind::NamespaceHeld,
             Self::LockUnavailable { .. } => DaemonErrorKind::LockUnavailable,
             Self::EngineInit { .. } => DaemonErrorKind::EngineInit,
+            Self::SocketUnavailable { .. } => DaemonErrorKind::SocketUnavailable,
+            Self::NoRuntimeHome => DaemonErrorKind::NoRuntimeHome,
         }
     }
 
@@ -111,7 +121,10 @@ impl DaemonError {
             | DaemonErrorKind::ConfigMissing
             | DaemonErrorKind::ConfigInvalid
             | DaemonErrorKind::ConfigUnsafe => 78,
-            DaemonErrorKind::ScratchUnavailable | DaemonErrorKind::LockUnavailable => 73,
+            DaemonErrorKind::ScratchUnavailable
+            | DaemonErrorKind::LockUnavailable
+            | DaemonErrorKind::SocketUnavailable => 73,
+            DaemonErrorKind::NoRuntimeHome => 78,
             DaemonErrorKind::NamespaceHeld => 75,
             DaemonErrorKind::EngineInit => 70,
         }
@@ -151,6 +164,13 @@ impl fmt::Display for DaemonError {
                 write!(f, "the namespace lock {}: {reason}", path.display())
             }
             Self::EngineInit { reason } => write!(f, "the engine's start: {reason}"),
+            Self::SocketUnavailable { path, reason } => {
+                write!(f, "the engine socket {}: {reason}", path.display())
+            }
+            Self::NoRuntimeHome => write!(
+                f,
+                "no runtime home names a directory for the engine socket: set UENV_USR_TRANSIENT or XDG_RUNTIME_DIR",
+            ),
         }
     }
 }

@@ -5,17 +5,20 @@ library builds without the `service` feature, so an embedding host links the
 runtime without the command line, the user service, or MCP; grammard is the
 binary the `service` feature adds, its adapters over the same library.
 
-## mod artifact, bridge, event, host, operation, peer, rpc, session, transport
+## mod artifact, bridge, event, host, operation, peer, rpc, session
 Homes, empty until their code arrives, each a directory of submodules:
 `artifact` the artifact store, `bridge` the controller's subsystem bridge,
 `event` the event broker, `host` the engine's host services, `operation` the
 operation journal, `peer` the retained mTLS remote Channel manager, `rpc` the
-dispatch, `session` the controller's lease, and `transport` the listeners and
-their admission.
+dispatch, and `session` the controller's lease.
 
 ## mod instance
 The instance a worker starts as: its names, its key, its homes, and its file,
 resolved before anything runs.
+
+## mod runtime, mod transport
+The worker's start, its lock, and its scratch; the engine socket's listener
+and each stream's admission.
 
 ## mod cli, mod run
 grammard's command line and entry, behind `service`, the local CLI's declared

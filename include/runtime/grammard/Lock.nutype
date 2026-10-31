@@ -1,7 +1,7 @@
 # Lock: who holds a namespace, the record its worker writes into the namespace lock.
 #
 # It sits at <data>/grammar/mcp/<id>/<namespace>/host.lock, the lock the MCP's
-# host takes, so a worker and a host never hold one namespace together. The
+# supervised host takes, so a worker refuses a namespace any holder holds. The
 # record is rewritten in place by each worker that takes the lock, its inode
 # kept. Its uid, pid, start, and boot name the worker's process as a scratch
 # marker does; its generation is the worker's for this start, lower-case hex.

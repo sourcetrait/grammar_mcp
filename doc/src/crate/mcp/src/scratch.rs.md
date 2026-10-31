@@ -26,14 +26,6 @@ Every inbox the process made, not only the Channel's current one: a teardown
 other than a deliberate close leaves its inbox for the agent to read, and the
 next open makes another, so the end removes each.
 
-## const OWNER_FILE
-The owner's pid and its start time from the process table
-(`sourcetrait_process`), the identity the operator's pins use: a pid alone is
-recycled, and the pair is not within a boot. The start time is in the
-platform's unit, clock ticks since boot on Linux and microseconds since the
-epoch on macOS, and a pair is only checked on the host that wrote it. Where no
-table is read no marker is written, and a sweep keeps the directory unmarked.
-
 ## const SCRATCH_MODE
 Asked of `tempfile` outright: its directories default to 0777 less the umask,
 which left one 0755 under a 022 umask. The umask can only narrow the mode asked
@@ -84,11 +76,12 @@ a deliberate close removed among them, is no error. A host killed outright
 leaves its inbox, which nothing sweeps.
 
 ## fn make_dir
-`tempfile`'s builder, as `mkdtemp` makes one: the name unguessable and the mode
-`SCRATCH_MODE` from creation, so no other user can enter it, and no other
-process can claim its name first. The marker is written after the directory
-exists; a sweep meeting a directory between the two finds no marker and leaves
-it.
+The shared guard's owned directory: the name unguessable and the mode 0700
+from creation, so no other user can enter it and no other process can claim its
+name first, and its owner marked with the guard's `owner.nuon`, which names the
+boot and the PID namespace a sweep judges the owner under. Where this process's
+start can't be read no marker is written, as on a platform with no process
+table, and a sweep keeps the directory unmarked.
 
 ## fn sweep_stale
 The shared guard's sweep (`sourcetrait_grammar_scratch`), the worker's own: a

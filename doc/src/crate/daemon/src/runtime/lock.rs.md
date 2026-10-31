@@ -1,9 +1,12 @@
 # lock.rs
 
 ## const LOCK_FILE
-The MCP host's own lock in the namespace's data home, so a worker and an
-embedded host exclude each other: two evaluators on one namespace would write
-one equip store at once.
+The MCP host's own lock in the namespace's data home: two evaluators on one
+namespace would write one equip store at once. A worker refuses the namespace
+while anyone holds the lock, a supervised MCP host among them. The MCP's
+embedded entries don't yet take it before their engine, its one-shot CLI taking
+none and its supervised host warning past a held one, so a worker excludes
+another worker alone until EmbeddedCli brings them to the lock.
 
 ## struct LockRecord
 NUON held to `include/runtime/grammard/Lock.nutype`: the worker by its identity

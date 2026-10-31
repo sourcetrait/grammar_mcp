@@ -30,9 +30,21 @@ failure undoes what the start made, the scratch removed and the lock released
 with its descriptor, and leaves the namespace's state and equips as they were.
 
 ### fn shutdown
-The scratch goes first and the lock last, so a successor takes the namespace
-only once this worker is done with it. The process's claim stays taken,
-matching the engine's single initialization.
+The socket closes first, its tasks given a short grace, then the scratch goes,
+and the lock last, so a successor takes the namespace only once this worker is
+done with it. The process's claim stays taken, matching the engine's single
+initialization.
+
+## struct Serving
+The socket's service is the runtime's own: its tasks run on a small runtime
+of their own threads, which the shutdown stops, so an embedding host needs no
+async runtime of its own to start a worker.
+
+## fn serve
+The socket is bound after the engine has started, so a stream is never admitted
+by a worker that can't serve it. The worker's profile offers the instance
+file's limits, or the protocol's defaults, each held to the protocol's hard
+ceiling as a hello negotiates it.
 
 ## fn start_engine
 The MCP's substrate, made as its host makes it: the equip store, the default

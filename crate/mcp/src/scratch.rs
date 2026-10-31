@@ -8,9 +8,6 @@ const SCRATCH_PREFIX: &str = "grammar-mcp.";
 /// A Channel inbox's name prefix, the host's nom or a random suffix after it.
 const CHANNEL_PREFIX: &str = "grammar.channel.";
 
-/// The marker naming a scratch directory's owner: its pid and its start time.
-const OWNER_FILE: &str = "owner";
-
 /// A scratch directory's mode: its owner's alone.
 const SCRATCH_MODE: u32 = 0o700;
 
@@ -125,19 +122,17 @@ fn runtime_base() -> Option<PathBuf> {
 
 /// One scratch directory in `base`, mode 0700 from creation, its owner marked.
 fn make_dir(base: &Path) -> Result<PathBuf, String> {
-    let dir = tempfile::Builder::new()
-        .prefix(SCRATCH_PREFIX)
-        .permissions(fs::Permissions::from_mode(SCRATCH_MODE))
-        .tempdir_in(base)
-        .map_err(|e| format!("make a scratch directory in {}: {e}", base.display()))?
-        .keep();
-    let pid = process::id();
-    if let Some(start) = sourcetrait_process::start_time(pid) {
-        let owner = dir.join(OWNER_FILE);
-        fs::write(&owner, format!("{pid} {start}\n"))
-            .map_err(|e| format!("write {}: {e}", owner.display()))?;
-    }
-    Ok(dir)
+    let made = match sourcetrait_grammar_scratch::Owner::current() {
+        Ok(owner) => {
+            sourcetrait_grammar_scratch::OwnedDir::create(base, SCRATCH_PREFIX, &owner).map(|dir| dir.path().to_path_buf())
+        }
+        Err(_) => tempfile::Builder::new()
+            .prefix(SCRATCH_PREFIX)
+            .permissions(fs::Permissions::from_mode(SCRATCH_MODE))
+            .tempdir_in(base)
+            .map(|dir| dir.keep()),
+    };
+    made.map_err(|e| format!("make a scratch directory in {}: {e}", base.display()))
 }
 
 /// Sweep `base` of scratch whose owner is proven gone, reporting what it keeps.

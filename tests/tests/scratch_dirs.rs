@@ -100,14 +100,9 @@ fn assert_scratch(dir: &Path, base: &Path, pid: u32) {
     let name = dir.file_name().and_then(|name| name.to_str()).unwrap_or_default();
     assert!(name.starts_with("grammar-mcp."), "the sweep matches its prefix; got {name}");
 
-    let owner = std::fs::read_to_string(dir.join("owner")).expect("its owner marker");
-    let pid = pid.to_string();
-    assert_eq!(
-        owner.split_whitespace().next(),
-        Some(pid.as_str()),
-        "the marker names its host's pid, then its start time; got {owner:?}",
-    );
-    assert_eq!(owner.split_whitespace().count(), 2, "got {owner:?}");
+    let owner = std::fs::read_to_string(dir.join("owner.nuon")).expect("its owner marker");
+    assert!(owner.contains(&format!("pid: {pid},")), "the marker names its host's pid; got {owner:?}");
+    assert!(owner.contains("nonce: "), "and its guard's nonce; got {owner:?}");
 }
 
 /// The UENV homes come first, so the standard variables' decoys stay empty.

@@ -15,7 +15,8 @@ sysexits' meanings, so a supervisor or a test tells the failures apart without
 reading text: 69, `EX_UNAVAILABLE`, for a command this build lacks; 70,
 `EX_SOFTWARE`, for a second runtime in one process, which is a caller's bug; 64,
 `EX_USAGE`, for a name that is not one; 78, `EX_CONFIG`, for every home, path,
-and instance file the start refuses; 73, `EX_CANTCREAT`, for scratch the worker
-can't make or remove and a lock it can't take for a reason of the lock's own;
+and instance file the start refuses, a service start with no runtime home among
+them; 73, `EX_CANTCREAT`, for scratch the worker can't make or remove, a lock it
+can't take for a reason of the lock's own, and a socket it can't bind;
 75, `EX_TEMPFAIL`, for a namespace another process holds, which a later start
 may find free; and 70 for an engine that fails its start.

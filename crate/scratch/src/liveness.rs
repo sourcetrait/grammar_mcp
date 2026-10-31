@@ -24,6 +24,9 @@ pub trait Probe {
 
     /// The running boot's identity, none where it can't be read or isn't kept.
     fn boot(&self) -> Option<String>;
+
+    /// The PID namespace the probe's pids are numbered in, none where none is kept.
+    fn pid_namespace(&self) -> Option<String>;
 }
 
 /// The host's table: its process records, then a null signal where they fail.
@@ -57,6 +60,10 @@ impl Probe for HostProbe {
     fn boot(&self) -> Option<String> {
         owner::current_boot()
     }
+
+    fn pid_namespace(&self) -> Option<String> {
+        owner::current_pid_namespace()
+    }
 }
 
 /// Whether a marker's owner runs.
@@ -75,10 +82,12 @@ pub fn liveness(
     owner: &Owner,
     probe: &impl Probe,
 ) -> Liveness {
-    if let (Some(then), Some(now)) = (&owner.boot, probe.boot())
-        && *then != now
-    {
-        return Liveness::Dead("it started in an earlier boot");
+    match (&owner.boot, probe.boot()) {
+        (Some(then), Some(now)) if *then == now => {}
+        _ => return Liveness::Unknown("its boot is another, an earlier one or another machine's, or none is known"),
+    }
+    if owner.pidns != probe.pid_namespace() {
+        return Liveness::Unknown("its pid is numbered in a PID namespace other than this one");
     }
     match probe.process(owner.pid) {
         ProcessAnswer::Started { start, zombie: false } if start == owner.start => Liveness::Alive,

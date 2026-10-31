@@ -37,15 +37,19 @@ fn serve(
     for line in &config.homes.diagnostics {
         eprintln!("grammard: {line}");
     }
+    if config.paths.socket.is_none() {
+        return Err(DaemonError::NoRuntimeHome);
+    }
     let runtime = Runtime::start(config)?;
     for line in runtime.diagnostics() {
         eprintln!("grammard: {line}");
     }
     let identity = runtime.identity();
+    let socket = runtime.socket().map(|path| path.display().to_string()).unwrap_or_default();
     let mut out = std::io::stdout().lock();
     let _ = writeln!(
         out,
-        "grammard: ready, {}/{} at generation {}, pid {}",
+        "grammard: ready, {}/{} at generation {}, pid {}, socket {socket}",
         identity.id,
         identity.namespace,
         runtime.generation().hex(),

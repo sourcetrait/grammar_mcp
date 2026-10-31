@@ -25,6 +25,11 @@ name = "exclusive_start"
 path = "tests/exclusive_start.rs"
 required-features = ["service"]
 
+[[test]]
+name = "socket_admission"
+path = "tests/socket_admission.rs"
+required-features = ["service"]
+
 [features]
 default = ["service"]
 # grammard's adapters over the runtime library: its command line, the user
@@ -36,11 +41,13 @@ test-hooks = ["sourcetrait_grammar_engine/test-hooks"]
 
 [dependencies]
 clap = { workspace = true, optional = true }
+futures-util.workspace = true
 nix.workspace = true
 nutype.workspace = true
 nuval.workspace = true
 serde.workspace = true
 sha2.workspace = true
+tokio.workspace = true
 
 sourcetrait_common.workspace = true
 sourcetrait_grammar_engine.workspace = true
