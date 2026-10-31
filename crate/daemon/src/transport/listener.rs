@@ -51,15 +51,13 @@ impl EngineListener {
             other => unavailable(other.to_string()),
         })?;
         match fs::symlink_metadata(path) {
-            Ok(meta) if meta.file_type().is_socket() && meta.uid() == uid => {
-                match std::os::unix::net::UnixStream::connect(path) {
-                    Ok(_) => return Err(unavailable("a live listener answers on it".to_string())),
-                    Err(e) if e.kind() == io::ErrorKind::ConnectionRefused => {
-                        fs::remove_file(path).map_err(|e| unavailable(format!("a dead worker's socket stays: {e}")))?;
-                    }
-                    Err(e) => return Err(unavailable(format!("the socket there can't be probed: {e}"))),
+            Ok(meta) if meta.file_type().is_socket() && meta.uid() == uid => match probe(path) {
+                Ok(Probe::Live) => return Err(unavailable("a live listener answers on it".to_string())),
+                Ok(Probe::Dead) => {
+                    fs::remove_file(path).map_err(|e| unavailable(format!("a dead worker's socket stays: {e}")))?;
                 }
-            }
+                Err(e) => return Err(unavailable(format!("the socket there can't be probed: {e}"))),
+            },
             Ok(_) => return Err(unavailable("something other than this UID's socket holds its path".to_string())),
             Err(e) if e.kind() == io::ErrorKind::NotFound => {}
             Err(e) => return Err(unavailable(e.to_string())),
@@ -88,6 +86,32 @@ impl EngineListener {
     /// The socket's path.
     pub(crate) fn path(&self) -> &Path {
         &self.path
+    }
+}
+
+/// What a connect that never waits finds at a socket's path.
+enum Probe {
+    /// A listener answers, or holds a full backlog.
+    Live,
+    /// Nothing listens: a dead worker's socket.
+    Dead,
+}
+
+/// The socket at `path` probed by a nonblocking connect, never waiting on it.
+fn probe(path: &Path) -> io::Result<Probe> {
+    let fd = nix::sys::socket::socket(
+        nix::sys::socket::AddressFamily::Unix,
+        nix::sys::socket::SockType::Stream,
+        nix::sys::socket::SockFlag::empty(),
+        None,
+    )?;
+    nix::fcntl::fcntl(&fd, nix::fcntl::FcntlArg::F_SETFD(nix::fcntl::FdFlag::FD_CLOEXEC))?;
+    nix::fcntl::fcntl(&fd, nix::fcntl::FcntlArg::F_SETFL(nix::fcntl::OFlag::O_NONBLOCK))?;
+    let addr = nix::sys::socket::UnixAddr::new(path)?;
+    match nix::sys::socket::connect(std::os::fd::AsRawFd::as_raw_fd(&fd), &addr) {
+        Ok(()) | Err(nix::errno::Errno::EAGAIN | nix::errno::Errno::EINPROGRESS) => Ok(Probe::Live),
+        Err(nix::errno::Errno::ECONNREFUSED) => Ok(Probe::Dead),
+        Err(errno) => Err(errno.into()),
     }
 }
 

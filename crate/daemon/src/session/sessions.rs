@@ -1,6 +1,6 @@
 //! The worker's sessions: its one lease, and each open stream by its lease.
 use crate::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// The clock a lease is timed by, in monotonic milliseconds.
 pub(crate) type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
@@ -28,8 +28,6 @@ struct Inner {
     leases: LeaseTable,
     streams: HashMap<StreamId, Bound>,
     next: StreamId,
-    /// The leases admitting nothing more, which Dispatch reads.
-    stopped: HashSet<LeaseId>,
     /// The epoch the Channel was last started afresh for, which EventBroker reads.
     channel_epoch: Option<LeaseEpoch>,
 }
@@ -51,7 +49,6 @@ impl Sessions {
                 leases: LeaseTable::new(generation),
                 streams: HashMap::new(),
                 next: 0,
-                stopped: HashSet::new(),
                 channel_epoch: None,
             }),
             clock,
@@ -65,8 +62,8 @@ impl Sessions {
         profile: &WorkerProfile,
         fresh: Fresh,
     ) -> (HelloReply, Option<(StreamId, StopRing)>) {
-        let now = (self.clock)();
         let mut inner = self.lock();
+        let now = (self.clock)();
         let mut state = HelloState::default();
         let (reply, actions) = state.on_hello(hello, profile, &mut inner.leases, now, fresh);
         inner.carry(actions);
@@ -82,8 +79,8 @@ impl Sessions {
         &self,
         request: &LeaseRequest,
     ) -> Result<LeaseReply, TransportError> {
-        let now = (self.clock)();
         let mut inner = self.lock();
+        let now = (self.clock)();
         let change = inner.leases.request(now, request);
         inner.carry(change.actions);
         change.outcome
@@ -91,8 +88,8 @@ impl Sessions {
 
     /// The table ticked at the clock's now, a lapsed lease's actions carried out.
     pub(crate) fn tick(&self) {
-        let now = (self.clock)();
         let mut inner = self.lock();
+        let now = (self.clock)();
         let actions = inner.leases.tick(now);
         inner.carry(actions);
     }
@@ -105,13 +102,15 @@ impl Sessions {
         self.lock().streams.remove(&id);
     }
 
-    /// Whether `lease` admits nothing more.
+    /// Whether a stream bound to `lease` admits: the lease is the one live now.
     #[cfg_attr(not(test), allow(dead_code))]
-    pub(crate) fn admission_stopped(
+    pub(crate) fn admits(
         &self,
         lease: &LeaseId,
     ) -> bool {
-        self.lock().stopped.contains(lease)
+        let inner = self.lock();
+        let now = (self.clock)();
+        inner.leases.live(now).is_some_and(|(live, _)| live == *lease)
     }
 
     /// The epoch the Channel was last started afresh for.
@@ -162,10 +161,7 @@ impl Inner {
         }
         for action in actions {
             match action {
-                LeaseAction::Notify(_) => {}
-                LeaseAction::StopAdmission { lease } => {
-                    self.stopped.insert(lease);
-                }
+                LeaseAction::Notify(_) | LeaseAction::StopAdmission { .. } => {}
                 LeaseAction::CloseStreams { lease } => {
                     let why = loss_error(reasons.get(&lease).copied());
                     for bound in self.streams.values().filter(|bound| bound.lease == Some(lease)) {

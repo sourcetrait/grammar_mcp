@@ -153,6 +153,70 @@ fn a_live_listener_at_the_socket_is_refused() {
     drop(live);
 }
 
+/// A listener whose backlog is full, Linux's alone: macOS answers a connect to
+/// a full backlog with a refusal, as to a socket nothing listens on, so a full
+/// listener reads as dead there.
+#[cfg(target_os = "linux")]
+mod full_backlog {
+    use std::os::fd::{AsRawFd, OwnedFd};
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    use std::path::Path;
+    use std::time::{Duration, Instant};
+
+    use nix::sys::socket::{AddressFamily, Backlog, SockFlag, SockType, UnixAddr, bind, connect, listen, socket};
+
+    use super::support::{TestInstance, start};
+
+    /// A Unix stream socket, nonblocking where `nonblocking` asks.
+    fn unix_socket(nonblocking: bool) -> OwnedFd {
+        let fd = socket(AddressFamily::Unix, SockType::Stream, SockFlag::empty(), None).expect("a socket");
+        if nonblocking {
+            nix::fcntl::fcntl(&fd, nix::fcntl::FcntlArg::F_SETFL(nix::fcntl::OFlag::O_NONBLOCK)).expect("nonblocking");
+        }
+        fd
+    }
+
+    /// A listener at `path` with a backlog of one, which never accepts.
+    fn listener_never_accepting(path: &Path) -> OwnedFd {
+        let fd = unix_socket(false);
+        bind(fd.as_raw_fd(), &UnixAddr::new(path).unwrap()).expect("the bind");
+        listen(&fd, Backlog::new(1).unwrap()).expect("the listen");
+        fd
+    }
+
+    /// Connects to `path` that never wait, until one finds the backlog full.
+    fn fill_backlog(path: &Path) -> Vec<OwnedFd> {
+        let mut held = Vec::new();
+        loop {
+            assert!(held.len() < 4096, "the backlog never filled");
+            let fd = unix_socket(true);
+            match connect(fd.as_raw_fd(), &UnixAddr::new(path).unwrap()) {
+                Ok(()) => held.push(fd),
+                Err(nix::errno::Errno::EAGAIN) => return held,
+                Err(e) => panic!("a connect while filling the backlog: {e}"),
+            }
+        }
+    }
+
+    #[test]
+    fn a_live_listener_with_a_full_backlog_is_refused_at_once() {
+        let instance = TestInstance::new("two", "default");
+        let socket = instance.load("default").paths.socket.unwrap();
+        std::fs::create_dir_all(socket.parent().unwrap()).unwrap();
+        std::fs::set_permissions(socket.parent().unwrap(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        let live = listener_never_accepting(&socket);
+        let held = fill_backlog(&socket);
+        let inode = std::fs::symlink_metadata(&socket).unwrap().ino();
+        let started = Instant::now();
+        let refused = start(&instance, "default").err().expect("a live listener holds the path");
+        assert!(started.elapsed() < Duration::from_secs(30), "refused at once, not at the ready deadline");
+        assert_eq!(refused.status.code(), Some(73), "{refused:?}");
+        assert!(String::from_utf8_lossy(&refused.stderr).contains("a live listener"), "{refused:?}");
+        assert_eq!(std::fs::symlink_metadata(&socket).unwrap().ino(), inode, "its socket left");
+        drop((held, live));
+    }
+}
+
 #[tokio::test]
 async fn two_data_homes_cannot_share_one_socket() {
     let instance = TestInstance::new("two", "default");

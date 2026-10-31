@@ -2,8 +2,9 @@
 
 mod support;
 
+use std::io::Write;
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
 use sourcetrait_grammar_protocol::{
@@ -50,6 +51,53 @@ async fn granted(socket: &Path, intent: LeaseIntent) -> (Framed, LeaseGrant, Wor
     (framed, grant, generation)
 }
 
+/// A Status stream's hello answered, or none where the worker closed it first.
+async fn observed(socket: &Path) -> bool {
+    let Ok(stream) = tokio::net::UnixStream::connect(socket).await else { return false };
+    let mut framed = framed(stream);
+    let expect = Expectation {
+        uid: uid(),
+        instance: Instance::new("two", "default").unwrap(),
+        role: StreamRole::Status,
+        lease: LeaseIntent::Observe,
+        requested: LIMITS_DEFAULT,
+        required: Vec::new(),
+        last: None,
+    };
+    if framed.send(payload(&expect.hello(ClientInstanceId([6; 16])))).await.is_err() {
+        return false;
+    }
+    let Ok(Some(Ok(frame))) = tokio::time::timeout(Duration::from_secs(5), framed.next()).await else { return false };
+    decode_payload::<HelloReply>(&frame, HELLO_BUDGET).is_ok_and(|reply| check_reply(reply, &expect).is_ok())
+}
+
+/// Pings written to `stream` and none of its answers read, until the worker's sends wait on it.
+///
+/// A write that would block is tried again after a pause: the worker may still
+/// be reading, and only a stream it has stopped reading stays full.
+fn flood(stream: tokio::net::UnixStream) -> std::os::unix::net::UnixStream {
+    let mut stream = stream.into_std().expect("a std stream");
+    stream.set_nonblocking(true).unwrap();
+    let body = payload(&RpcFrame::Ping(Ping { nonce: 1 }));
+    let mut frame = (body.len() as u32).to_be_bytes().to_vec();
+    frame.extend_from_slice(&body);
+    let started = Instant::now();
+    let mut stalls = 0;
+    while stalls < 3 {
+        assert!(started.elapsed() < Duration::from_secs(30), "the worker never stopped reading");
+        match stream.write(&frame) {
+            Ok(n) if n == frame.len() => stalls = 0,
+            Ok(_) => break,
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                stalls += 1;
+                std::thread::sleep(Duration::from_millis(200));
+            }
+            Err(e) => panic!("a ping's write: {e}"),
+        }
+    }
+    stream
+}
+
 /// The next answer on an RPC stream, within a few seconds.
 async fn answer(framed: &mut Framed) -> RpcAnswer {
     let frame = tokio::time::timeout(Duration::from_secs(5), framed.next())
@@ -80,6 +128,26 @@ async fn a_takeover_closes_the_old_controllers_stream() {
     assert!(new_grant.epoch.0 > old_grant.epoch.0);
     let RpcAnswer::Close(close) = answer(&mut old).await else { panic!("the old stream closed") };
     assert!(matches!(close.error, Some(TransportError::LeaseInvalid { reason }) if reason.contains("taken over")));
+    assert!(worker.stop().success());
+}
+
+#[tokio::test]
+async fn a_controller_that_never_reads_is_closed_at_a_takeover() {
+    let instance = TestInstance::with_streams("two", "default", 2);
+    let worker = start(&instance, "default").expect("the worker");
+    let (old, _, _) = granted(&worker.socket, LeaseIntent::Claim).await;
+    let flooded = flood(old.into_inner());
+    let (_new, _, _) = granted(&worker.socket, LeaseIntent::Takeover).await;
+    let started = Instant::now();
+    let mut freed = false;
+    while !freed && started.elapsed() < Duration::from_secs(10) {
+        freed = observed(&worker.socket).await;
+        if !freed {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
+    assert!(freed, "the old stream's place is freed with nothing of it read");
+    drop(flooded);
     assert!(worker.stop().success());
 }
 

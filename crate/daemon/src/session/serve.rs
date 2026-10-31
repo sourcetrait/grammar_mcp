@@ -4,6 +4,9 @@ use crate::*;
 /// The reason a call is refused before Dispatch serves calls.
 const CALLS_UNSERVED: &str = "this worker serves no calls before Dispatch";
 
+/// How long a closing stream's close frame may wait to be sent.
+const CLOSE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
+
 /// A framed stream after its hello.
 pub(crate) type Framed = tk_util::codec::Framed<tk::net::UnixStream, FrameCodec>;
 
@@ -43,7 +46,7 @@ async fn run<F, A>(
     F: bitcode::DecodeOwned,
     A: bitcode::Encode,
 {
-    loop {
+    let error = loop {
         let next = tk::select! {
             frame = framed.next() => match frame {
                 Some(Ok(bytes)) => match decode_payload::<F>(&bytes, budget) {
@@ -59,17 +62,20 @@ async fn run<F, A>(
         };
         match next {
             Turn::Go => {}
-            Turn::Answer(answer) => {
-                if framed.send(payload(&answer)).await.is_err() {
+            Turn::Answer(answer) => tk::select! {
+                biased;
+                sent = framed.send(payload(&answer)) => if sent.is_err() {
                     return;
-                }
-            }
-            Turn::Close(error) => {
-                let _ = framed.send(payload(&close(StreamClose { error }))).await;
-                return;
-            }
+                },
+                changed = stop.changed() => match changed {
+                    Ok(()) => break stop.borrow().clone(),
+                    Err(_) => return,
+                },
+            },
+            Turn::Close(error) => break error,
         }
-    }
+    };
+    let _ = tk::time::timeout(CLOSE_DEADLINE, framed.send(payload(&close(StreamClose { error })))).await;
 }
 
 /// An RPC frame: a lease message answered, a ping ponged, a call refused.

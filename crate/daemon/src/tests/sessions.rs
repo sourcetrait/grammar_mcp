@@ -72,7 +72,7 @@ fn an_expired_lease_stops_its_streams() {
     sessions.tick();
     assert!(matches!(rung(&rpc), Some(TransportError::LeaseExpired)), "{:?}", rung(&rpc));
     assert!(matches!(rung(&events), Some(TransportError::LeaseExpired)), "{:?}", rung(&events));
-    assert!(sessions.admission_stopped(&grant.lease), "nothing more is admitted under it");
+    assert!(!sessions.admits(&grant.lease), "nothing more is admitted under it");
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn a_heartbeat_holds_its_lease_past_the_first_expiry() {
     now.store(u64::from(grant.expiry_ms) + 1, Ordering::SeqCst);
     sessions.tick();
     assert!(rung(&rpc).is_none(), "the renewed lease lives");
-    assert!(!sessions.admission_stopped(&grant.lease));
+    assert!(sessions.admits(&grant.lease), "and admits");
 }
 
 #[test]
@@ -100,7 +100,72 @@ fn a_takeover_stops_the_old_leases_streams_alone() {
         assert!(matches!(rung(ring), Some(TransportError::LeaseInvalid { reason }) if reason.contains("taken over")));
     }
     assert!(rung(&new_rpc).is_none(), "the new lease's stream lives");
+    assert!(!sessions.admits(&old.lease) && sessions.admits(&new.lease), "the live lease alone admits");
     assert_eq!(sessions.channel_epoch(), Some(new.epoch), "the Channel starts afresh for the new epoch");
+}
+
+/// A clock whose next read the test can hold, the time it read kept while held.
+#[derive(Default)]
+struct HeldClock {
+    hand: AtomicU64,
+    gate: std::sync::Mutex<Gate>,
+    turned: std::sync::Condvar,
+}
+
+/// Whether the next read holds, whether one is held, and whether it is let go.
+#[derive(Default)]
+struct Gate {
+    hold: bool,
+    held: bool,
+    released: bool,
+}
+
+impl HeldClock {
+    fn read(&self) -> u64 {
+        let value = self.hand.load(Ordering::SeqCst);
+        let mut gate = self.gate.lock().unwrap();
+        if gate.hold {
+            gate.hold = false;
+            gate.held = true;
+            self.turned.notify_all();
+            while !gate.released {
+                gate = self.turned.wait(gate).unwrap();
+            }
+        }
+        value
+    }
+}
+
+#[test]
+fn a_heartbeat_that_waited_on_the_lock_never_moves_the_deadline_back() {
+    let clock = Arc::new(HeldClock::default());
+    let read = clock.clone();
+    let sessions = Arc::new(Sessions::new(GENERATION, Arc::new(move || read.read())));
+    let (grant, _rpc) = granted(&sessions, LeaseIntent::Claim, 1);
+    clock.gate.lock().unwrap().hold = true;
+    let first = {
+        let sessions = sessions.clone();
+        std::thread::spawn(move || sessions.request(&LeaseRequest::Heartbeat { lease: grant.lease, token: grant.token }))
+    };
+    let mut gate = clock.gate.lock().unwrap();
+    while !gate.held {
+        gate = clock.turned.wait(gate).unwrap();
+    }
+    drop(gate);
+    let later = u64::from(grant.expiry_ms) / 2;
+    clock.hand.store(later, Ordering::SeqCst);
+    let second = {
+        let sessions = sessions.clone();
+        std::thread::spawn(move || sessions.request(&LeaseRequest::Heartbeat { lease: grant.lease, token: grant.token }))
+    };
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    clock.gate.lock().unwrap().released = true;
+    clock.turned.notify_all();
+    assert!(matches!(first.join().unwrap(), Ok(LeaseReply::Renewed { .. })));
+    assert!(matches!(second.join().unwrap(), Ok(LeaseReply::Renewed { .. })));
+    clock.hand.store(later + u64::from(grant.expiry_ms) - 1, Ordering::SeqCst);
+    sessions.tick();
+    assert!(sessions.admits(&grant.lease), "the later heartbeat's deadline stands");
 }
 
 #[test]
