@@ -20,14 +20,6 @@ test-hooks = []
 [dependencies]
 futures-util.workspace = true
 nu-config.workspace = true
-# nuon takes nu-engine without its `os` feature, which nu-protocol's default
-# turns on, and nu-engine then misses a field nu-protocol has; its default here
-# unifies the two.
-nu-engine.workspace = true
-nu-json = { workspace = true, features = ["nu-protocol"] }
-nu-protocol.workspace = true
-nuon.workspace = true
-nutype.workspace = true
 nuval.workspace = true
 serde_json.workspace = true
 srcert_lib.workspace = true

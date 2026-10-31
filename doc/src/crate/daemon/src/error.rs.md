@@ -17,9 +17,9 @@ reading text: 69, `EX_UNAVAILABLE`, for a command this build lacks; 70,
 `EX_USAGE`, for a name that is not one; 78, `EX_CONFIG`, for every home, path,
 and instance file the start refuses, a service start with no runtime home among
 them; 73, `EX_CANTCREAT`, for scratch the worker can't make or remove, a lock it
-can't take for a reason of the lock's own, a socket it can't bind, and an
-operation journal it can't make or trust; 75, `EX_TEMPFAIL`, for a namespace
-or a journal another process holds, which a later start may find free; 71,
+can't take for a reason of the lock's own, and a socket it can't bind; 75,
+`EX_TEMPFAIL`, for a namespace another process holds, which a later start may
+find free; 71,
 `EX_OSERR`, for task threads the system won't give; and 70 for an engine that
 fails its start.
 

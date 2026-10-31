@@ -6,30 +6,25 @@ use nutype::NuTypeFile;
 use nuval::NuVal;
 
 /// The repository's `.nutype` files, from the workspace's root.
-const FILES: [&str; 11] = [
+const FILES: [&str; 8] = [
     "include/config/Config.nutype",
+    "include/config/grammard/Instance.nutype",
+    "include/scratch/Lock.nutype",
+    "include/scratch/Owner.nutype",
     "crate/protocol/schema/Schema.nutype",
     "crate/protocol/tests/vectors/Budget.nutype",
+    "crate/protocol/tests/vectors/Manifest.nutype",
     "crate/protocol/tests/vectors/Vectors.nutype",
-    "doc/ai/daemon/Dependencies.nutype",
-    "doc/ai/daemon/SourceBaseline.nutype",
-    "tests/daemon/IdentityManifest.nutype",
-    "tests/daemon/TrustVectors.nutype",
-    "tests/daemon-probe/type/CandidateSet.nutype",
-    "tests/daemon-probe/type/Inventory.nutype",
-    "tests/daemon-probe/type/Result.nutype",
 ];
 
 /// The repository's NUON files, each with its model, from the workspace's root.
-const MODELED: [(&str, &str); 8] = [
+const MODELED: [(&str, &str); 6] = [
     ("crate/protocol/schema/v1.nuon", "crate/protocol/schema/Schema.nutype"),
     ("crate/protocol/tests/vectors/budget.nuon", "crate/protocol/tests/vectors/Budget.nutype"),
     ("crate/protocol/tests/vectors/engine.nuon", "crate/protocol/tests/vectors/Vectors.nutype"),
+    ("crate/protocol/tests/vectors/manifest.nuon", "crate/protocol/tests/vectors/Manifest.nutype"),
     ("crate/protocol/tests/vectors/runtime.nuon", "crate/protocol/tests/vectors/Vectors.nutype"),
     ("crate/protocol/tests/vectors/value.nuon", "crate/protocol/tests/vectors/Vectors.nutype"),
-    ("doc/ai/daemon/dependencies.nuon", "doc/ai/daemon/Dependencies.nutype"),
-    ("doc/ai/daemon/source_baseline.nuon", "doc/ai/daemon/SourceBaseline.nutype"),
-    ("tests/daemon/trust_vectors.nuon", "tests/daemon/TrustVectors.nutype"),
 ];
 
 /// The workspace's root.

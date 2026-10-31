@@ -32,5 +32,5 @@ A ping is answered. A subscription's resume and acks are held over for
 EventBroker, which serves them.
 
 ## fn status_turn
-A ping is answered. A lookup waits on OperationJournal and a health check on
-OperatorLifecycle, each refused until then.
+A ping is answered. A lookup and a health check are refused, since no task here
+serves them.

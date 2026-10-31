@@ -9,11 +9,7 @@ binary the `service` feature adds, its adapters over the same library.
 Homes, empty until their code arrives, each a directory of submodules:
 `artifact` the artifact store, `bridge` the controller's subsystem bridge,
 `event` the event broker, `host` the engine's host services, `peer` the
-retained mTLS remote Channel manager, and `rpc` the dispatch. The operation
-journal is a crate of its own, `crate/journal`, so another product takes it.
-
-## mod controller
-The worker's systems under the controller its process owns.
+retained mTLS remote Channel manager, and `rpc` the dispatch.
 
 ## mod session
 The controller's lease and every open stream bound to it, each served by its

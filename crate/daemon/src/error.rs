@@ -48,10 +48,6 @@ pub enum DaemonError {
     NoRuntimeHome,
     /// The worker's task runtime, its threads, that can't be made.
     TasksUnavailable { reason: String },
-    /// The operation journal another worker holds, sharing this one's state home.
-    JournalHeld { path: PathBuf },
-    /// The operation journal that can't be made, opened, or trusted.
-    JournalUnavailable { path: PathBuf, reason: String },
 }
 
 /// Payload-less mirror of `DaemonError`.
@@ -72,8 +68,6 @@ pub enum DaemonErrorKind {
     SocketUnavailable,
     NoRuntimeHome,
     TasksUnavailable,
-    JournalHeld,
-    JournalUnavailable,
 }
 
 impl DaemonErrorKind {
@@ -95,8 +89,6 @@ impl DaemonErrorKind {
             Self::SocketUnavailable => "runtime::socket_unavailable",
             Self::NoRuntimeHome => "runtime::no_runtime_home",
             Self::TasksUnavailable => "runtime::tasks_unavailable",
-            Self::JournalHeld => "runtime::journal_held",
-            Self::JournalUnavailable => "runtime::journal_unavailable",
         }
     }
 }
@@ -120,8 +112,6 @@ impl DaemonError {
             Self::SocketUnavailable { .. } => DaemonErrorKind::SocketUnavailable,
             Self::NoRuntimeHome => DaemonErrorKind::NoRuntimeHome,
             Self::TasksUnavailable { .. } => DaemonErrorKind::TasksUnavailable,
-            Self::JournalHeld { .. } => DaemonErrorKind::JournalHeld,
-            Self::JournalUnavailable { .. } => DaemonErrorKind::JournalUnavailable,
         }
     }
 
@@ -138,10 +128,9 @@ impl DaemonError {
             | DaemonErrorKind::ConfigUnsafe => 78,
             DaemonErrorKind::ScratchUnavailable
             | DaemonErrorKind::LockUnavailable
-            | DaemonErrorKind::SocketUnavailable
-            | DaemonErrorKind::JournalUnavailable => 73,
+            | DaemonErrorKind::SocketUnavailable => 73,
             DaemonErrorKind::NoRuntimeHome => 78,
-            DaemonErrorKind::NamespaceHeld | DaemonErrorKind::JournalHeld => 75,
+            DaemonErrorKind::NamespaceHeld => 75,
             DaemonErrorKind::EngineInit => 70,
             DaemonErrorKind::TasksUnavailable => 71,
         }
@@ -189,12 +178,6 @@ impl fmt::Display for DaemonError {
                 "no runtime home names a directory for the engine socket: set UENV_USR_TRANSIENT or XDG_RUNTIME_DIR",
             ),
             Self::TasksUnavailable { reason } => write!(f, "the worker's task runtime: {reason}"),
-            Self::JournalHeld { path } => {
-                write!(f, "the operation journal is held by another worker, its lock {}", path.display())
-            }
-            Self::JournalUnavailable { path, reason } => {
-                write!(f, "the operation journal {}: {reason}", path.display())
-            }
         }
     }
 }

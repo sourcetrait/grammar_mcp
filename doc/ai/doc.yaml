@@ -1,12 +1,2 @@
-- doc: daemon/dependencies.nuon
-  summary: The daemon's pinned crates, toolchain, siblings, lock, and update rules
-- doc: daemon/source_baseline.nuon
-  summary: The implementation's starting revisions, trees, lock, and toolchain
-- doc: daemon/test_map.tsv
-  summary: Every baseline test and the client cohort's, with its cohort, profile, and entry
-- doc: daemon/operation_map.tsv
-  summary: Every baseline public operation with its future owner and task
-- doc: daemon/engine_type_map.tsv
-  summary: Each engine type moved into the protocol crate, from its old file to its new
 - doc: daemon/runtime_ownership.tsv
   summary: Every tool, interface command, and host callback with its owner and types

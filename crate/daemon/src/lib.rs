@@ -5,7 +5,6 @@ pub(crate) mod cli {
     pub(crate) mod command;
     pub(crate) mod oneshot;
 }
-pub(crate) mod controller;
 pub(crate) mod error;
 pub(crate) mod event {}
 pub(crate) mod host {}
@@ -64,12 +63,8 @@ pub(crate) use sha2::{Digest, Sha256};
 pub(crate) use tokio as tk;
 pub(crate) use tokio_util as tk_util;
 
-pub(crate) use sourcetrait_common::{datum, subsys};
+pub(crate) use sourcetrait_common::datum;
 pub(crate) use sourcetrait_grammar_engine as engine;
-pub(crate) use sourcetrait_grammar_journal::{
-    CAP_DEFAULT as JOURNAL_CAP, FromJournalSys, JournalError, JournalHandle, JournalSysParams,
-    JournalSystem,
-};
 pub(crate) use sourcetrait_grammar_protocol::{
     ARTIFACT_LIMITS_DEFAULT, Capabilities, ClientHello, DecodeBudget, EventsAnswer, EventsFrame, FrameCodec,
     Fresh, HELLO_BUDGET, HELLO_DEADLINE, HelloReply, HelloState, Instance, LIMITS_DEFAULT, LIMITS_HARD,
@@ -83,7 +78,6 @@ pub(crate) use sourcetrait_grammar_scratch::{
 };
 
 pub(crate) use crate::{
-    controller::GrammardController,
     runtime::start::random_bytes,
     session::{
         serve::serve,

@@ -6700,26 +6700,12 @@ dependencies = [
  "sha2",
  "sourcetrait_common",
  "sourcetrait_grammar_engine",
- "sourcetrait_grammar_journal",
  "sourcetrait_grammar_operator",
  "sourcetrait_grammar_protocol",
  "sourcetrait_grammar_scratch",
  "tempfile",
  "tokio",
  "tokio-util",
-]
-
-[[package]]
-name = "sourcetrait_grammar_daemon_probe"
-version = "0.0.0-9"
-dependencies = [
- "clap",
- "nutype",
- "nuval",
- "serde",
- "sourcetrait_common",
- "sourcetrait_grammar_client",
- "sourcetrait_grammar_protocol",
 ]
 
 [[package]]
@@ -6775,22 +6761,6 @@ dependencies = [
  "nuval",
  "serde",
  "sourcetrait_grammar_protocol",
-]
-
-[[package]]
-name = "sourcetrait_grammar_journal"
-version = "0.0.0-9"
-dependencies = [
- "bitcode",
- "nix",
- "nuval",
- "rkyv",
- "serde",
- "sha2",
- "sourcetrait_common",
- "sourcetrait_grammar_protocol",
- "tempfile",
- "tokio",
 ]
 
 [[package]]
@@ -6922,11 +6892,6 @@ dependencies = [
  "futures-util",
  "nix",
  "nu-config",
- "nu-engine",
- "nu-json",
- "nu-protocol",
- "nuon",
- "nutype",
  "nuval",
  "serde_json",
  "sourcetrait_common",

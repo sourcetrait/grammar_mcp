@@ -13,7 +13,7 @@ const URANDOM: &str = "/dev/urandom";
 /// How long a shutdown waits for the worker's tasks to end.
 const SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
 
-/// The threads the worker's systems and its socket's tasks run on.
+/// The threads the worker's socket's tasks run on.
 const TASK_THREADS: usize = 2;
 
 /// A worker's immutable identity: its effective UID, MCP id, and namespace.
@@ -35,7 +35,6 @@ pub struct Runtime {
     scratch: WorkerScratch,
     diagnostics: Vec<String>,
     tasks: tk::runtime::Runtime,
-    controller: GrammardController,
     serving: Option<Serving>,
     lock: NamespaceLock,
 }
@@ -59,12 +58,8 @@ impl Runtime {
         };
         let mcp_nom = datum::Nom::generate(&datum::NonceGenerator::new()).into_pair();
         let (lock, generation, scratch) = claim(&config, mcp_nom.as_str()).map_err(given_back)?;
-        let started = tasks().and_then(|tasks| {
-            let controller = tasks.block_on(GrammardController::start(&config, generation))?;
-            Ok((tasks, controller))
-        });
-        let (tasks, controller) = match started {
-            Ok(started) => started,
+        let tasks = match tasks() {
+            Ok(tasks) => tasks,
             Err(e) => {
                 let _ = scratch.remove();
                 return Err(given_back(e));
@@ -78,7 +73,6 @@ impl Runtime {
         let serving = match serving {
             Ok(serving) => serving,
             Err(e) => {
-                tasks.block_on(controller.shutdown());
                 tasks.shutdown_timeout(SHUTDOWN_GRACE);
                 let _ = scratch.remove();
                 return Err(e);
@@ -90,7 +84,6 @@ impl Runtime {
             scratch,
             diagnostics,
             tasks,
-            controller,
             serving,
             lock,
         })
@@ -126,12 +119,11 @@ impl Runtime {
         Capabilities::NONE
     }
 
-    /// Shuts the runtime down: its socket, its systems, its scratch, its lock last.
+    /// Shuts the runtime down: its socket, its tasks, its scratch, its lock last.
     pub fn shutdown(self) -> DaemonResult<()> {
         let Self {
             scratch,
             tasks,
-            controller,
             serving,
             lock,
             ..
@@ -140,7 +132,6 @@ impl Runtime {
             let _ = stop.send(true);
             listener
         });
-        tasks.block_on(controller.shutdown());
         tasks.shutdown_timeout(SHUTDOWN_GRACE);
         drop(listener);
         let removed = scratch.remove();
@@ -149,7 +140,7 @@ impl Runtime {
     }
 }
 
-/// The worker's task runtime, its systems' and its socket's threads.
+/// The worker's task runtime, its socket's threads.
 fn tasks() -> DaemonResult<tk::runtime::Runtime> {
     tk::runtime::Builder::new_multi_thread()
         .worker_threads(TASK_THREADS)
@@ -193,7 +184,6 @@ fn serve(
     tasks.spawn(ticker(sessions, stopped));
     Ok(Serving { listener, stop })
 }
-
 
 /// The lock taken and its record written, the generation drawn, the scratch made.
 fn claim(
