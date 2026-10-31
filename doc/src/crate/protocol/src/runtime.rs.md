@@ -34,7 +34,9 @@ the boundary.
 ## enum RuntimeRequest
 Typed engine requests, an interface command's raw text, which the runtime parses
 with its own catalog-built parser, the host's metadata, an operation's lookup,
-the controller's policy, the frontend's Channel notices, and artifact requests.
+the controller's policy, the frontend's Channel notices, artifact requests, and
+a cancellation, admitted as an operation of its own and naming its target. The
+operation's states and its lookup's answers live in operation.rs.
 No variant carries a Unix identity, a worker identity, or a role: a request runs as
 the worker it reaches, under the lease that admitted it.
 

@@ -53,4 +53,7 @@ The path to a worker failing, never the worker's answer, each under a stable
 status the caller can look up; an agent can tell a retry that is safe from one
 that may repeat an effect. `Busy` admits no operation at all.
 `UnsupportedFeature` is a hello's required feature the other end doesn't have
-on; it sits last so the variants before it keep their wire indices.
+on. `OperationConflict` is an operation admitted before with another payload,
+and `TicketInvalid` a ticket unknown, expired, used, or another worker's or
+epoch's; neither ran anything. Each new variant goes last, so the ones before
+it keep their wire indices.

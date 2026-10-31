@@ -1,0 +1,25 @@
+[
+  [name,                        hex];
+  [admission/admitted,          "06020affff00"],
+  [admission/existing,          "06020affff01000affff01"],
+  [admission/refused,           "06020affff020e0affff"],
+  [response/error,              "06040affff0108"],
+  [response/reply,              "06040affff00010d"],
+  [state/Admitted,              "00"],
+  [state/CancelRequested,       "04"],
+  [state/Cancelled,             "05"],
+  [state/Failed,                "03"],
+  [state/Running,               "01"],
+  [state/Succeeded,             "02"],
+  [state/UnknownAfterRestart,   "06"],
+  [status_query,                "06030affff"],
+  [status_reply/expired,        "0603020affff0102"],
+  [status_reply/expired_untold, "0603020affff00"],
+  [status_reply/known,          "0603000affff04"],
+  [status_reply/unknown,        "0603010affff"],
+  [submission,                  "06020affff06070944000006030260ea00e70fa06ac0621a46244e5b2695d6d92fb5866ec57e26078c7c5e02d1ab1b64860000000607386465662065786563757465205b646174613a206e6f7468696e675d3a206e6f7468696e67202d3e206e6f7468696e67207b206e756c6c207d046e756c6c00"],
+  [ticket,                      "0affff06070944000006030260ea"],
+  [ticket_reply/issued,         "0601000affff06070944000006030260ea"],
+  [ticket_reply/refused,        "06010108"],
+  [ticket_request,              "0601"]
+]

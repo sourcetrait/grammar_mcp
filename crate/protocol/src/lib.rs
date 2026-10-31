@@ -8,6 +8,7 @@ pub(crate) mod error;
 pub(crate) mod hello;
 pub(crate) mod lease;
 pub(crate) mod limits;
+pub(crate) mod operation;
 pub(crate) mod operator;
 pub(crate) mod peer;
 pub(crate) mod runtime;
@@ -82,10 +83,15 @@ pub use crate::{
         MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT, RemoteChannelEvent,
         RemoteChannelRow, RemoteFailure, RemoteLinkState, RemoteListenResult,
     },
+    operation::{
+        Admission, AdmissionOutcome, Execute, OperationEvent, OperationState, OperationStatus,
+        OperationTable, OperationTicket, RequestClass, Response, StatusQuery, StatusReply,
+        Submission, TICKET_EXPIRY, TICKETS_MAX, TicketReply, TicketRequest, payload_hash,
+        request_class, transition,
+    },
     runtime::{
-        ClientInstanceId, ControllerPolicy, InfoReply, LeaseId, OperationId, OperationState,
-        OperationStatus, PluginInfo, PurviewRow, PurviewView, RuntimeReply, RuntimeRequest,
-        WorkerGeneration,
+        ClientInstanceId, ControllerPolicy, InfoReply, LeaseId, OperationId, PluginInfo, PurviewRow,
+        PurviewView, RuntimeReply, RuntimeRequest, WorkerGeneration,
     },
     value::{ValueLimitError, ValueLimitErrorKind, ValueLimits, check_error, check_value},
 };

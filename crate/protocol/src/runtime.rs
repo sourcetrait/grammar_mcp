@@ -97,31 +97,6 @@ pub struct ControllerPolicy {
     pub deny_commands: Vec<String>,
 }
 
-/// An admitted operation's last known state.
-#[cereal::derived(Data, Copy, Eq)]
-pub enum OperationState {
-    Admitted,
-    Running,
-    Completed,
-    Failed,
-    Cancelled,
-}
-
-/// What a lookup knows of an operation: its state, nothing, or that it expired.
-#[cereal::derived(Data)]
-pub enum OperationStatus {
-    Known {
-        operation: OperationId,
-        state: OperationState,
-    },
-    Unknown {
-        operation: OperationId,
-    },
-    Expired {
-        operation: OperationId,
-    },
-}
-
 /// A request to a worker's runtime.
 #[cereal::derived(Data)]
 pub enum RuntimeRequest {
@@ -134,6 +109,8 @@ pub enum RuntimeRequest {
     Policy(ControllerPolicy),
     Channel(ChannelNotice),
     Artifact(ArtifactRequest),
+    /// A cancellation of another operation, admitted as its own.
+    Cancel { target: OperationId },
 }
 
 /// A worker runtime's answer.

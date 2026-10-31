@@ -238,6 +238,8 @@ fn transport_errors() -> Vec<(&'static str, TransportError)> {
         ("codec_mismatch", T::CodecMismatch { expected: "bitcode-0.6.9".into(), found: "bitcode-0.7.0".into() }),
         ("wrong_worker", T::WrongWorker { expected: "fixture/default".into(), found: "fixture/test".into() }),
         ("unsupported_feature", T::UnsupportedFeature { feature: "artifacts".into() }),
+        ("operation_conflict", T::OperationConflict { operation: OPERATION }),
+        ("ticket_invalid", T::TicketInvalid { reason: "expired".into() }),
         ("unauthorized", T::Unauthorized { reason: "peer uid 1001".into() }),
         ("authentication_failed", T::AuthenticationFailed { reason: "publickey".into() }),
         ("lease_invalid", T::LeaseInvalid { reason: "another epoch".into() }),
@@ -294,6 +296,7 @@ fn requests() -> Vec<(&'static str, RuntimeRequest)> {
         ),
         ("channel", RuntimeRequest::Channel(ChannelNotice::Opened { epoch: epoch(), mode: ChannelMode::Async })),
         ("artifact", RuntimeRequest::Artifact(ArtifactRequest::Reserve(reserve))),
+        ("cancel", RuntimeRequest::Cancel { target: OPERATION }),
     ]
 }
 
@@ -505,9 +508,10 @@ fn every_variant_has_its_vector() {
             RuntimeRequest::Policy(_) => "policy",
             RuntimeRequest::Channel(_) => "channel",
             RuntimeRequest::Artifact(_) => "artifact",
+            RuntimeRequest::Cancel { .. } => "cancel",
         })
         .collect();
-    assert_eq!(requests.len(), 7);
+    assert_eq!(requests.len(), 8);
     let replies: BTreeSet<_> = replies()
         .iter()
         .map(|(_, r)| match r {
@@ -552,7 +556,7 @@ fn every_variant_has_its_vector() {
         .collect();
     assert_eq!(kinds.len(), 15);
     let transport: BTreeSet<_> = transport_errors().iter().map(|(_, e)| e.kind()).collect();
-    assert_eq!(transport.len(), 14);
+    assert_eq!(transport.len(), 16);
 }
 
 #[test]

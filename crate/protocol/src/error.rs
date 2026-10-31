@@ -164,6 +164,10 @@ pub enum TransportError {
     Unavailable { reason: String },
     /// A hello required a feature the other end doesn't have on.
     UnsupportedFeature { feature: String },
+    /// The operation was admitted before with another payload.
+    OperationConflict { operation: OperationId },
+    /// A submission's ticket is unknown, expired, used, or another's.
+    TicketInvalid { reason: String },
 }
 
 impl TransportError {
@@ -175,6 +179,8 @@ impl TransportError {
             Self::CodecMismatch { .. } => "daemon::codec_mismatch",
             Self::WrongWorker { .. } => "daemon::wrong_worker",
             Self::UnsupportedFeature { .. } => "daemon::unsupported_feature",
+            Self::OperationConflict { .. } => "daemon::operation_conflict",
+            Self::TicketInvalid { .. } => "daemon::ticket_invalid",
             Self::Unauthorized { .. } => "daemon::unauthorized",
             Self::AuthenticationFailed { .. } => "daemon::authentication_failed",
             Self::LeaseInvalid { .. } => "daemon::lease_invalid",
@@ -205,6 +211,11 @@ impl TransportError {
             Self::UnsupportedFeature { feature } => {
                 format!("the required feature `{feature}` is not on")
             }
+            Self::OperationConflict { operation } => format!(
+                "operation {} was admitted with another payload; nothing ran",
+                operation.hex(),
+            ),
+            Self::TicketInvalid { reason } => format!("the ticket can't run anything: {reason}"),
             Self::Unauthorized { reason } => format!("the worker refused this peer: {reason}"),
             Self::AuthenticationFailed { reason } => {
                 format!("authentication failed before any request was sent: {reason}")
