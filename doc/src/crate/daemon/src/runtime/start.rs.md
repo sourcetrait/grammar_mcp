@@ -5,7 +5,9 @@ One runtime a process, and only once: the engine underneath holds process-wide
 state that initializes once and never again, so a second runtime, under
 another identity or the same one after a shutdown, can't own an engine of its
 own. The claim is an atomic swap, so two starts racing on two threads leave
-exactly one runtime.
+exactly one runtime. A start that fails before the engine starts gives the
+claim back, so the process may try again; once the engine has started the
+claim stays taken.
 
 ## struct RuntimeIdentity
 The worker's identity is the effective UID with the MCP id and the namespace:
@@ -19,6 +21,26 @@ explicitly, with no MCP server and no systemd activation in the way. Typed
 dispatch and event subscription join it once the request and event types
 exist.
 
-## fn shutdown
-Consumes the runtime and leaves the process's claim taken, matching the
-engine's single initialization.
+### fn start
+The order is the namespace's safety. The lock comes before anything that
+touches the namespace, so a second worker is refused before its scratch, its
+engine, or a plugin; then the generation is recorded in the lock, the scratch
+made, and the engine's parameters, config dirs, and substrate set, once. A
+failure undoes what the start made, the scratch removed and the lock released
+with its descriptor, and leaves the namespace's state and equips as they were.
+
+### fn shutdown
+The scratch goes first and the lock last, so a successor takes the namespace
+only once this worker is done with it. The process's claim stays taken,
+matching the engine's single initialization.
+
+## fn start_engine
+The MCP's substrate, made as its host makes it: the equip store, the default
+purview, the plugin registry, and the builtins on a fresh store. A default
+purview that can't be made is reported, as the MCP's host reports it, and the
+start goes on. The worker's nom is its own, drawn at each start.
+
+## fn fresh_generation
+The protocol's `WorkerGeneration`, sixteen random bytes: random rather than
+counted, so no file has to survive a crash for a restart to be told apart from
+the worker it follows.

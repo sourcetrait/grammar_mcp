@@ -60,6 +60,8 @@ pub struct InstancePaths {
     pub cache: PathBuf,
     /// The engine socket, none without a runtime home.
     pub socket: Option<PathBuf>,
+    /// The namespace lock, the MCP host's own in the engine's data home.
+    pub lock: PathBuf,
 }
 
 impl InstancePaths {
@@ -91,6 +93,7 @@ impl InstancePaths {
             data: mcp(&homes.data),
             cache: mcp(&homes.cache),
             socket,
+            lock: mcp(&homes.data).join(LOCK_FILE),
         })
     }
 }

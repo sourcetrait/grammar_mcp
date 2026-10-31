@@ -9,10 +9,10 @@ namespace's files in one place.
 The MCP takes these two roots from `directories`: the UENV variable, else XDG's
 on Linux, and on macOS the platform's, where `directories` reads no XDG variable
 and answers `Library/Application Support` and `Library/Caches` under `HOME`. The
-runtime contract's table names XDG's defaults on every platform and also retains
-the MCP's layout for equips and definitions; on macOS only the platform's roots
-keep both. `tests/instance_homes.rs` holds the two to `directories` under one
-environment.
+worker takes them the same way: it serves the MCP's namespace, so it finds the
+equips and definitions where the MCP keeps them, and XDG's defaults would part
+the two on macOS. `tests/instance_homes.rs` holds the two to `directories`
+under one environment.
 
 ## struct InstanceHomes
 ### fn resolve

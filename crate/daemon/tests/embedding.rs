@@ -1,21 +1,27 @@
 //! An embedding host's use of the runtime library, without MCP or the service.
 
-use sourcetrait_grammar_daemon::{DaemonError, Runtime, RuntimeIdentity};
+mod support;
+
+use sourcetrait_grammar_daemon::{DaemonError, Runtime};
 use sourcetrait_grammar_protocol::Capabilities;
 
 #[test]
 fn a_process_starts_one_runtime() {
-    let identity = RuntimeIdentity { uid: 1000, id: "embedder".into(), namespace: "test".into() };
-    let runtime = Runtime::start(identity.clone()).expect("the first start");
-    assert_eq!(runtime.identity(), &identity);
+    let instance = support::TestInstance::new("embedder", "test");
+    let config = instance.load("test");
+    let runtime = Runtime::start(config.clone()).expect("the first start");
+    assert_eq!(runtime.identity(), &config.identity);
     assert_eq!(runtime.capabilities(), Capabilities::NONE);
+    let tmp = runtime.scratch().tmp().to_path_buf();
+    assert!(tmp.is_dir(), "the worker's scratch is made");
+    assert!(config.paths.lock.is_file(), "and its lock taken");
 
-    let other = RuntimeIdentity { namespace: "other".into(), ..identity.clone() };
-    assert_eq!(Runtime::start(other).err(), Some(DaemonError::AlreadyStarted));
+    assert_eq!(Runtime::start(config.clone()).err(), Some(DaemonError::AlreadyStarted));
 
     runtime.shutdown().expect("the shutdown");
+    assert!(!tmp.exists(), "the shutdown removes the scratch");
     assert_eq!(
-        Runtime::start(identity).err(),
+        Runtime::start(config).err(),
         Some(DaemonError::AlreadyStarted),
         "a process starts no second runtime, after a shutdown too",
     );

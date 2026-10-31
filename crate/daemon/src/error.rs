@@ -36,6 +36,12 @@ pub enum DaemonError {
     ConfigUnsafe { path: PathBuf, reason: String },
     /// A scratch directory the worker cannot make or remove.
     ScratchUnavailable { path: PathBuf, reason: String },
+    /// The namespace lock another process holds, and that holder's own record.
+    NamespaceHeld { path: PathBuf, holder: String },
+    /// A namespace lock that cannot be taken or written for a reason of its own.
+    LockUnavailable { path: PathBuf, reason: String },
+    /// The engine's start, its parameters or its substrate, failing.
+    EngineInit { reason: String },
 }
 
 /// Payload-less mirror of `DaemonError`.
@@ -50,6 +56,9 @@ pub enum DaemonErrorKind {
     ConfigInvalid,
     ConfigUnsafe,
     ScratchUnavailable,
+    NamespaceHeld,
+    LockUnavailable,
+    EngineInit,
 }
 
 impl DaemonErrorKind {
@@ -65,6 +74,9 @@ impl DaemonErrorKind {
             Self::ConfigInvalid => "instance::config_invalid",
             Self::ConfigUnsafe => "instance::config_unsafe",
             Self::ScratchUnavailable => "scratch::unavailable",
+            Self::NamespaceHeld => "runtime::namespace_held",
+            Self::LockUnavailable => "runtime::lock_unavailable",
+            Self::EngineInit => "runtime::engine_init",
         }
     }
 }
@@ -82,6 +94,9 @@ impl DaemonError {
             Self::ConfigInvalid { .. } => DaemonErrorKind::ConfigInvalid,
             Self::ConfigUnsafe { .. } => DaemonErrorKind::ConfigUnsafe,
             Self::ScratchUnavailable { .. } => DaemonErrorKind::ScratchUnavailable,
+            Self::NamespaceHeld { .. } => DaemonErrorKind::NamespaceHeld,
+            Self::LockUnavailable { .. } => DaemonErrorKind::LockUnavailable,
+            Self::EngineInit { .. } => DaemonErrorKind::EngineInit,
         }
     }
 
@@ -96,7 +111,9 @@ impl DaemonError {
             | DaemonErrorKind::ConfigMissing
             | DaemonErrorKind::ConfigInvalid
             | DaemonErrorKind::ConfigUnsafe => 78,
-            DaemonErrorKind::ScratchUnavailable => 73,
+            DaemonErrorKind::ScratchUnavailable | DaemonErrorKind::LockUnavailable => 73,
+            DaemonErrorKind::NamespaceHeld => 75,
+            DaemonErrorKind::EngineInit => 70,
         }
     }
 }
@@ -127,6 +144,13 @@ impl fmt::Display for DaemonError {
             Self::ScratchUnavailable { path, reason } => {
                 write!(f, "scratch under {}: {reason}", path.display())
             }
+            Self::NamespaceHeld { path, holder } => {
+                write!(f, "the namespace is held, {} naming {holder}", path.display())
+            }
+            Self::LockUnavailable { path, reason } => {
+                write!(f, "the namespace lock {}: {reason}", path.display())
+            }
+            Self::EngineInit { reason } => write!(f, "the engine's start: {reason}"),
         }
     }
 }

@@ -20,6 +20,7 @@ pub(crate) mod rpc {}
 #[cfg(feature = "service")]
 pub(crate) mod run;
 pub(crate) mod runtime {
+    pub(crate) mod lock;
     pub(crate) mod scratch;
     pub(crate) mod start;
 }
@@ -45,14 +46,18 @@ pub(crate) use std::process;
 pub(crate) use clap::Parser;
 
 pub(crate) use nutype::NuTypeFile;
-pub(crate) use nuval::NuVal;
+pub(crate) use nuval::{NuVal, NuonStyle};
 pub(crate) use sha2::{Digest, Sha256};
 
-pub(crate) use sourcetrait_grammar_protocol::Capabilities;
+pub(crate) use sourcetrait_common::datum;
+pub(crate) use sourcetrait_grammar_engine as engine;
+pub(crate) use sourcetrait_grammar_protocol::{Capabilities, WorkerGeneration};
 pub(crate) use sourcetrait_grammar_scratch::{HostProbe, OwnedDir, Owner, current_uid, sweep};
 
+pub(crate) use crate::runtime::lock::{LOCK_FILE, LockRecord, NamespaceLock};
+
 pub(crate) mod ser {
-    pub(crate) use ::serde::Deserialize;
+    pub(crate) use ::serde::{Deserialize, Serialize};
 }
 
 pub use crate::{

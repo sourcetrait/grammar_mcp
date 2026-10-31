@@ -8,7 +8,7 @@ pub enum ProcessAnswer {
     Started { start: u64, zombie: bool },
     /// No process holds the pid.
     Absent,
-    /// Another user's process holds the pid.
+    /// The null signal was refused: another user's process, or a sandbox's denial.
     Denied,
     /// A process holds the pid, and its start can't be read.
     Unreadable,
@@ -87,7 +87,7 @@ pub fn liveness(
         }
         ProcessAnswer::Started { .. } => Liveness::Dead("another process holds its pid"),
         ProcessAnswer::Absent => Liveness::Dead("no process holds its pid"),
-        ProcessAnswer::Denied => Liveness::Unknown("another user's process holds its pid"),
+        ProcessAnswer::Denied => Liveness::Unknown("the null signal to its pid was refused"),
         ProcessAnswer::Unreadable => Liveness::Unknown("the process holding its pid can't be read"),
     }
 }

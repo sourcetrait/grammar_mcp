@@ -26,10 +26,10 @@ default.
 Every path is a function of the identity and the homes alone: the instance file
 under the config home, durable state under the state home by key, the engine's
 data and cache homes under the MCP's own `grammar/mcp/<id>/<namespace>` layout,
-so a worker and an embedded engine share one namespace's files, and the socket
-under the runtime home. A socket's path is measured with its terminator against
-`sockaddr_un` and refused past it rather than truncated, since a truncated path
-would bind another file.
+so a worker and an embedded engine share one namespace's files, the namespace
+lock among them, and the socket under the runtime home. A socket's path is
+measured with its terminator against `sockaddr_un` and refused past it rather
+than truncated, since a truncated path would bind another file.
 
 ## struct InstanceConfig
 ### fn load

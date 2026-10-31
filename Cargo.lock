@@ -6686,6 +6686,7 @@ dependencies = [
  "nuval",
  "serde",
  "sha2",
+ "sourcetrait_common",
  "sourcetrait_grammar_engine",
  "sourcetrait_grammar_operator",
  "sourcetrait_grammar_protocol",

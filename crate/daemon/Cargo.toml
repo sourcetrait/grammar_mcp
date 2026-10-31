@@ -20,6 +20,11 @@ name = "grammard_cli"
 path = "tests/grammard_cli.rs"
 required-features = ["service"]
 
+[[test]]
+name = "exclusive_start"
+path = "tests/exclusive_start.rs"
+required-features = ["service"]
+
 [features]
 default = ["service"]
 # grammard's adapters over the runtime library: its command line, the user
@@ -37,6 +42,7 @@ nuval.workspace = true
 serde.workspace = true
 sha2.workspace = true
 
+sourcetrait_common.workspace = true
 sourcetrait_grammar_engine.workspace = true
 sourcetrait_grammar_operator.workspace = true
 sourcetrait_grammar_protocol.workspace = true

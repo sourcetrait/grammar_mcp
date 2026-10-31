@@ -7,7 +7,19 @@ a script alike, and stdout stays empty for the commands that will speak a
 protocol on it.
 
 ## fn run
-Every command refuses with `Unimplemented`: a command that exits 0 before it
-exists would read as one that works. Each command replaces its refusal as its
-own code lands; the local CLI's already runs through its declared stub
-(`cli/oneshot.rs`).
+`serve` runs a worker in the foreground; every other command refuses with
+`Unimplemented`, since a command that exits 0 before it exists would read as
+one that works. Each replaces its refusal as its own code lands; the local
+CLI's already runs through its declared stub (`cli/oneshot.rs`).
+
+## fn serve
+The stop signals are blocked before anything starts, so every thread the start
+spawns inherits the block and the main thread alone takes a signal, by
+`sigwait`, then shuts the runtime down. The environment is read once as data,
+an entry that isn't UTF-8 left out. The ready line on stdout, naming the
+instance, the generation, and the pid, is a foreground start's readiness; a
+service's comes with its activation.
+
+## fn stop_signals
+SIGTERM, a service manager's stop; SIGINT, a terminal's; SIGHUP, a closed
+session's.

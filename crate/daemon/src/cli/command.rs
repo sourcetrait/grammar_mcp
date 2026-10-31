@@ -9,10 +9,17 @@ pub(crate) struct GrammardCli {
 }
 
 /// grammard's commands, each a namespace of its own.
-#[derive(clap::Subcommand, Clone, Copy)]
+#[derive(clap::Subcommand, Clone)]
 pub(crate) enum GrammardCmd {
     /// Serve an instance's engine socket as a user service.
-    Serve,
+    Serve {
+        /// The instance's MCP id.
+        #[arg(long)]
+        id: String,
+        /// The instance's namespace.
+        #[arg(long)]
+        namespace: String,
+    },
     /// Register and administer this user's instances.
     Instance,
     /// Bridge a controller's SSH subsystem session to its instance.
@@ -23,9 +30,9 @@ pub(crate) enum GrammardCmd {
 
 impl GrammardCmd {
     /// The command's name, as its user typed it.
-    pub(crate) fn name(self) -> &'static str {
+    pub(crate) fn name(&self) -> &'static str {
         match self {
-            Self::Serve => "serve",
+            Self::Serve { .. } => "serve",
             Self::Instance => "instance",
             Self::Bridge => "bridge",
             Self::Cli => "cli",
