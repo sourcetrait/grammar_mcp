@@ -37,7 +37,20 @@ config, and the pins are mcp's. An eval asks its engine's controller, mcp's
 system, which sends each ask up to its own controller, this one
 (`system.rs`'s `EngineWatch`), since a subsys system takes only data at its start
 and so cannot hold the face's handles. It holds the face's two systems, the
-Channel's and the peer links', and routes each ask to the one it is for.
+Channel's and the peer links', and routes each ask to the one it is for. It
+holds the emergency policy too (`emergency.rs`), its answer to its systems'
+emergencies.
+
+### fn of
+The policy logs to the host's per-process emergency log and announces on the
+face's Channel.
+
+### fn supervise
+Supervision's start, before mcp's system starts: the face's hub slot takes the
+policy, so the Channel's spam pair is answered as the operator's emergencies
+are. The one-shot CLI and the in-process test harness don't supervise: they
+start no operator, and their Channel's spam pair goes unlogged and
+unannounced.
 
 ### fn answer
 A send goes to its system whole; the config is read here, with what each system
@@ -59,6 +72,13 @@ blocking read of the caller's own files; then the peer links' system mints the
 id, spills an oversized event, and queues the frames on the link to `mcp_nom`
 (`crate/peer`'s `system.rs`). The reservation was refused on the eval's side
 first, as it always came before the files.
+
+### fn on_packet
+A packet mcp's system sends up unasked is an operator's emergency, which the
+policy answers on the control task itself. The control task awaits each before
+it takes the next, so the emergencies are logged and announced in the order the
+operator raised them; the announcement is a request to the Channel's system,
+never to mcp's, so it never waits on the control task that awaits it.
 
 ## fn prepared
 The files are read before the event renders, the order the send's refusals

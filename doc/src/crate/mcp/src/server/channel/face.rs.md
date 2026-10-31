@@ -57,7 +57,7 @@ whose drop ends the accept loop.
 
 ## struct HubSlot
 The face's side of the open, shared with its pump and its timer: the hub, the
-armed verify timer, the emergency lane, and the epochs the face mints.
+armed verify timer, the emergency policy, and the epochs the face mints.
 
 ### fn next_epoch
 From 1, so the Channel's closed epoch, 0, is never an open's.
@@ -89,10 +89,22 @@ so verification, a close and a re-arm all stand the timer down. That is also
 why re-opening cannot leave two timers racing one channel. The epoch rides with
 the sender, so standing one open's timer down leaves another's armed.
 
+### fn install_policy
+Supervision's (`server/host.rs`'s `HostRoute::supervise`): until a policy is
+installed, the Channel's spam pair goes unanswered, as on a host that starts no
+operator.
+
+### fn raise
+Each emergency is answered on a task of its own. The pump raises it on the
+Channel's control task, and the policy's announcement is a request to that same
+system, whose answer only that control task delivers, so awaiting it there
+would wait on itself.
+
 ## struct HubPump
 The face's handler of its Channel's system. It does its work before it returns,
 on the control task, so the system's next answer reaches its waiter only after
-the line is queued or the frame signalled.
+the line is queued or the frame signalled. An emergency is the one it hands on,
+to the policy's own task (`raise`).
 
 ## const CLOSE_FLUSH_GRACE
 Bounded because a peer that has already gone must never hold the shutdown open.

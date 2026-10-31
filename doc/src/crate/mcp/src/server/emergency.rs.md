@@ -1,29 +1,25 @@
 # emergency.rs
 
-The host's emergency lane: the operator's emergencies and the Channel's spam pair, each
-logged, then announced. The conditions themselves are the operator's model (the
-operator's `emergency.rs`).
-
-## type EmergencyTx
-Unbounded so no producer ever blocks or back-pressures - the operator's router and the
-face's pump, which carries the Channel's spam pair, both push here, and the volume is
-low because emission is edge-triggered.
+The controller's policy over its systems' emergencies, the operator's and the
+Channel's spam pair: each logged, then announced. The conditions themselves are
+the operator's model (the operator's `emergency.rs`).
 
 ## fn emergency_model
-`mcp/` IS A RESERVATION. Every host-originated model lives beneath it, which is what
-lets a model path from a FOREIGN source be checked mechanically - anything claiming
-`mcp/` that is not the host is not entitled to it. Enforced today at the one place a
-non-host picks a model, and available to a future peer surface on the same terms.
+`mcp/` is a reservation. Every host-originated model lives beneath it, which is
+what lets a model path from a foreign source be checked mechanically: anything
+claiming `mcp/` that is not the host is not entitled to it. Enforced today at
+the one place a non-host picks a model, and available to a future peer surface
+on the same terms.
 
-A unit test asserts EVERY variant is under the reservation and that the models are
-distinct. One variant escaping would turn a mechanical provenance check back into a
-judgement.
+A unit test asserts every variant is under the reservation and that the models
+are distinct. One variant escaping would turn a mechanical provenance check
+back into a judgement.
 
 ## fn emergency_record
-SHARED by the log line and the channel packet, so the durable record and the
-notification can never disagree about what a condition reported. That sharing is also
-what made a `from` event field easy to get wrong: the packet's envelope already carries
-one, which is why the spam pair names its offender `origin`.
+Shared by the log line and the channel packet, so the durable record and the
+notification can never disagree about what a condition reported. That sharing
+is also what made a `from` event field easy to get wrong: the packet's envelope
+already carries one, which is why the spam pair names its offender `origin`.
 
 ## fn emergency_line
 Every field is a flat scalar, but a string field can still carry a newline - a spam
@@ -34,25 +30,35 @@ original characters, a compact render's raw newlines sitting only inside quoted
 strings.
 
 ## fn emergency_log_path
-`mcp_nom` namespaces it per PROCESS because the cache root is only
-`(id, namespace)`-scoped, so two concurrent hosts on one namespace would otherwise
-clobber each other's log.
+`mcp_nom` namespaces it per process because the cache root is only
+`(id, namespace)`-scoped, so two concurrent hosts on one namespace would
+otherwise clobber each other's log.
 
 ## fn append_line
 Open-append-close per line: low volume, and robust against an external truncation
 between writes. Nothing is buffered to lose.
 
-## fn announce
-Through the Channel's gated emit (`EmitRequest`), so it is VERIFICATION-GATED like any
-other telemetry - an unproven peer must not receive host state. A closed or unverified
-channel silently DROPS the announcement, which is correct rather than an error: channels
-are optional and the log already holds the record. The Channel is the running face's,
-reached through the bridge (`server/channel/bridge.rs`) until EmergencyPolicy makes
-the responder its controller's.
+## struct EmergencyPolicy
+mcp's controller holds it (`host.rs`'s `HostRoute`). mcp's system sends the
+operator's emergencies up to the controller, and the face's hub slot raises the
+Channel's spam pair to it once supervision installs it (`channel/face.rs`), so
+one policy answers both sources, into one log and onto one Channel. It holds
+nothing beyond its handles, so each source holds a clone.
 
-No rate limiting is applied or needed. The operator's level gates upstream already bound
-each condition to roughly one report per episode.
+### fn new
+The log's path is a parameter: the serve path's is the host's per-process log
+(`emergency_log_path`), and a test's is a file of its own.
 
-## fn spawn_emergency_responder
-The log is written FIRST and unconditionally, so the durable record never depends on a
-channel being open. The task ends when every producer drops the sender.
+### fn respond
+The log is written first and unconditionally, so the durable record never
+depends on a channel being open; the announcement follows it.
+
+### fn announce
+Through the Channel's gated emit (`EmitRequest`), so it is verification-gated
+like any other telemetry: an unproven peer must not receive host state. A
+closed or unverified channel silently drops the announcement, which is correct
+rather than an error: channels are optional and the log already holds the
+record.
+
+No rate limiting is applied or needed. The operator's level gates upstream
+already bound each condition to roughly one report per episode.

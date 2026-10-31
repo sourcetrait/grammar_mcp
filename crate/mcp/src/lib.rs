@@ -103,7 +103,7 @@ pub(crate) use crate::{
             hub::{FROM_MCP, open_packet, start as start_channel_hub},
         },
         client::serve_client,
-        emergency::{EmergencyTx, spawn_emergency_responder},
+        emergency::{EmergencyPolicy, emergency_log_path},
         identity::{mint_nonce, process_identity},
         tool::{
             call::{CALL_DESCRIPTION, CallParams},
@@ -269,7 +269,7 @@ pub(crate) mod tk {
         task::{JoinHandle, spawn_blocking},
         sync::{
             Mutex as AsyncMutex, oneshot,
-            mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
+            mpsc::{Sender, UnboundedReceiver, UnboundedSender, unbounded_channel},
         },
         time::{Duration as TkDuration, sleep, timeout},
     };

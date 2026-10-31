@@ -3,8 +3,8 @@
 mcp as a subsys system, the manager of the others: it starts the engine and, on the
 serve path, the operator; the tools' requests reach the engine through it, and the
 engine's host asks go up through it to its controller; it routes the engine's health to
-the operator and the operator's emergencies to the Channel; it hears each component's
-status and end; and it stops them in order.
+the operator and the operator's emergencies up to its controller's policy; it hears
+each component's status and end; and it stops them in order.
 
 The tools' requests go through it, which was settled by measurement: a subsys round trip
 costs about ten microseconds in a release build, against about a millisecond and a half
@@ -24,10 +24,10 @@ cannot answer is refused in the controller's words, so an eval never waits on on
 
 ## struct McpSysParams
 ### field supervise
-The serve path's supervision, the operator, its observer, and the emergency lane, which
-the one-shot CLI and the in-process test harness leave out: a one-shot exits before any
-of it would matter, and the harness would otherwise take the namespace's host lock and
-sample the test process.
+The serve path's supervision, the operator, its observer, and the policy's hold on the
+Channel's spam pair (`host.rs`'s `HostRoute::supervise`), which the one-shot CLI and the
+in-process test harness leave out: a one-shot exits before any of it would matter, and
+the harness would otherwise take the namespace's host lock and sample the test process.
 
 ## enum ToMcpSys
 The engine's own requests wrapped whole, so a tool sends the same request types it sent
@@ -41,7 +41,9 @@ never waits on one mcp dropped.
 
 ## enum FromMcpSys
 The engine's answers wrapped whole, the shutdown's, and an engine's host ask on its way
-up, the same ask the engine made, so its answer needs no translating either way.
+up, the same ask the engine made, so its answer needs no translating either way; and
+the operator's emergencies on their way up to the controller's policy, each as the
+operator raised it.
 
 ## fn forward
 Every request is answered. A request the engine couldn't take answers its failure under
@@ -66,11 +68,10 @@ stopped engine can't answer already answer their failure. An end during the shut
 the shutdown's own and goes unsaid.
 
 ## fn McpSystem::init
-The emergency lane is built here, before the operator, because the operator's
-emergencies are routed onto it and there is nothing to push onto until it exists. The
-lane is installed into the running face's hub slot (`server/channel/bridge.rs`), whose
-pump puts the Channel's spam pair on it; the face starts before the system, so the slot
-is there to take it.
+The operator's handler takes the system's own way up to its controller, so each of the
+operator's emergencies reaches the controller's policy as a packet of its own
+(`operator.rs`, `host.rs`): a subsys system takes only data at its start, so mcp's
+system holds no Channel to announce on itself.
 
 ## fn McpSystem::on_channel_recv
 A request for the engine is answered from a task of its own, so a long eval holds no
@@ -85,4 +86,6 @@ arriving late answers the engine's absence rather than failing to send.
 ## fn start_system
 The config's lines and `--test` flag are the operator's parameters; the system reads no
 config of its own once started. `route` is the controller's handler, holding the face's
-systems, so every start of mcp's system has a face beside it.
+systems, so every start of mcp's system has a face beside it. A supervised start has the
+route install its policy in the face's hub slot first, so the Channel's spam pair is
+answered from the system's start.

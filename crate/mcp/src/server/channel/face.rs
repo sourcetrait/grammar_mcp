@@ -38,7 +38,7 @@ impl ChannelFace {
         };
         let paths = PeerSysPaths::new(data_base_dir(), cache_base_dir());
         let peer = Arc::new(PeerHandle::start(paths, params, pump).await?);
-        set_host_channel(&channel, &hub);
+        set_host_channel(&channel);
         Ok(Self {
             channel,
             peer,
@@ -158,12 +158,12 @@ pub(crate) struct Hub {
     pub(crate) _shutdown: tk::oneshot::Sender<()>,
 }
 
-/// The face's async hub, its verify timer, and the emergency lane its pump feeds.
+/// The face's hub, its verify timer, and the emergency policy its pump applies.
 #[derive(Default)]
 pub(crate) struct HubSlot {
     hub: std::sync::Mutex<Option<Hub>>,
     verify: std::sync::Mutex<Option<(ChannelEpoch, tk::oneshot::Sender<()>)>>,
-    emergencies: std::sync::Mutex<Option<EmergencyTx>>,
+    policy: std::sync::Mutex<Option<EmergencyPolicy>>,
     epochs: AtomicU64,
 }
 
@@ -273,21 +273,21 @@ impl HubSlot {
         }
     }
 
-    /// Install the emergency lane the pump feeds.
-    pub(crate) fn install_emergency(
+    /// Install the emergency policy the pump applies.
+    pub(crate) fn install_policy(
         &self,
-        tx: EmergencyTx,
+        policy: EmergencyPolicy,
     ) {
-        *held(&self.emergencies) = Some(tx);
+        *held(&self.policy) = Some(policy);
     }
 
-    /// An emergency onto the lane, if one is installed.
+    /// An emergency to the policy, on a task of its own, when one is installed.
     pub(crate) fn raise(
         &self,
         emergency: Emergency,
     ) {
-        if let Some(tx) = held(&self.emergencies).as_ref() {
-            let _ = tx.send(emergency);
+        if let Some(policy) = held(&self.policy).clone() {
+            tk::spawn(async move { policy.respond(emergency).await });
         }
     }
 }

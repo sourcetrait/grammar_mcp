@@ -75,7 +75,7 @@ pub(crate) struct McpSystem {
 #[cereal::derived(Data)]
 pub(crate) struct McpSysParams {
     pub mcp_nom: String,
-    /// The serve path's supervision: the operator, its observer, the emergency lane.
+    /// The serve path's supervision: the operator, its observer, the emergency policy.
     pub supervise: bool,
     /// Whether the host runs with `--test`, the operator's sampling gate.
     pub test: bool,
@@ -157,6 +157,8 @@ pub(crate) enum FromMcpSys {
     ShutDown(ShutdownAnswer),
     /// An engine's host ask, sent up for the controller.
     Host(HostAsk),
+    /// The operator's emergency, sent up for the controller's policy.
+    Emergency(Emergency),
 }
 
 /// Each purview request's way into `ToMcpSys`, and the answer it names.
@@ -494,11 +496,6 @@ impl subsys::System for McpSystem {
         })?;
         let engine = Arc::new(engine);
         let (operator, observer) = if params.supervise {
-            let (emergency_tx, emergency_rx) = tk::unbounded_channel::<Emergency>();
-            spawn_emergency_responder(emergency_rx, params.mcp_nom.clone());
-            if let Some(host) = host_channel() {
-                host.hub.install_emergency(emergency_tx.clone());
-            }
             let paths = OperatorSysPaths::new(
                 inner.paths.data_home.clone(),
                 inner.paths.cache_home.clone(),
@@ -509,7 +506,7 @@ impl subsys::System for McpSystem {
                 supervisor: params.supervisor,
             };
             let watch = OperatorWatch {
-                emergencies: emergency_tx,
+                up: inner.channel.tx.clone(),
                 notices: notice_tx,
             };
             let operator = OperatorHandle::start(paths, operator_params, watch)
@@ -648,6 +645,9 @@ pub(crate) async fn start_system(
         test: cfg.test,
         supervisor: cfg.supervisor,
     };
+    if supervise {
+        route.supervise();
+    }
     let control = subsys::SystemControl::start(paths, McpSysConfig, params, route)
         .await
         .map_err(|e| format!("grammar: mcp's system: {e}"))?;

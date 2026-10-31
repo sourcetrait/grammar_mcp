@@ -1,4 +1,4 @@
-//! The face's hub slot: the verify timer, the hub's lanes, and the shutdown's ack.
+//! The face's hub slot: its verify timer, hub lanes, shutdown ack, and policy.
 use crate::*;
 use sourcetrait_grammar_protocol::ChannelSpamWarningEmergency;
 
@@ -144,19 +144,63 @@ fn verification_and_a_hub_close_stand_the_timer_down_for_their_open_alone() {
     ));
 }
 
+/// A Channel's controller that hears nothing, for a policy to announce through.
+struct Deaf;
+
+impl subsys::Handler<ChannelSystem> for Deaf {
+    fn on_packet(&mut self, _pkt: subsys::Packet<FromChannelSys>) -> impl Future<Output = Option<subsys::Packet<FromChannelSys>>> + 'static + Send {
+        std::future::ready(None)
+    }
+}
+
+/// The log's lines once one is there, or what it holds when `HANG` has passed.
+async fn logged(log: &Path) -> String {
+    let deadline = Instant::now() + HANG;
+    loop {
+        let lines = fs::read_to_string(log).unwrap_or_default();
+        if !lines.is_empty() || Instant::now() >= deadline {
+            return lines;
+        }
+        tk::sleep(tk::TkDuration::from_millis(10)).await;
+    }
+}
+
+/// How long a test waits on the policy's task before calling it a hang.
+const HANG: tk::TkDuration = tk::TkDuration::from_secs(5);
+
 #[test]
-fn an_emergency_reaches_the_lane_once_one_is_installed() {
-    let slot = HubSlot::default();
+fn an_emergency_reaches_the_policy_once_one_is_installed() {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("a tokio runtime");
+    let home = std::env::temp_dir().join(format!("grammar_mcp_face_policy_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&home);
+    let log = home.join("emergency.nuonl");
     let warning = Emergency::ChannelSpamWarning(ChannelSpamWarningEmergency {
         origin: "thread/a".to_string(),
         hits: 3,
         window_secs: 10,
         rate: 3,
     });
-    slot.raise(warning.clone());
-    let (tx, mut rx) = tk::unbounded_channel::<Emergency>();
-    slot.install_emergency(tx);
-    slot.raise(warning.clone());
-    assert_eq!(rx.try_recv().ok(), Some(warning), "raised after the install");
-    assert!(rx.try_recv().is_err(), "the one raised before it went nowhere");
+    let lines = rt.block_on(async {
+        let spam = SpamThresholdsData {
+            warn_window_secs: 10,
+            warn_rate: 1_000,
+            error_window_secs: 10,
+            error_rate: 10_000,
+        };
+        let paths = ChannelSysPaths::new(home.clone(), home.clone());
+        let channel = ChannelHandle::start(paths, ChannelSysParams { spam }, Deaf)
+            .await
+            .expect("the Channel's system starts");
+        let slot = HubSlot::default();
+        slot.raise(warning.clone());
+        slot.install_policy(EmergencyPolicy::new(Arc::new(channel), "nomAAA", log.clone()));
+        slot.raise(warning);
+        logged(&log).await
+    });
+    let _ = fs::remove_dir_all(&home);
+    assert_eq!(lines.lines().count(), 1, "the one raised before the install went nowhere: {lines}");
+    assert!(lines.contains("channel_spam_warning"), "the line is the warning's: {lines}");
 }

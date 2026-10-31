@@ -1,17 +1,22 @@
 //! The operator's handler and observer: its emergencies routed, the engine seen.
 use crate::*;
 
-/// The operator's emergencies onto the lane; its status and end to mcp's loop.
+/// The operator's emergencies sent up; its status and end to mcp's loop.
 pub(crate) struct OperatorWatch {
-    pub emergencies: EmergencyTx,
+    /// mcp's system's way up, which carries each emergency to its controller's policy.
+    pub up: tk::Sender<subsys::MsgFromSys<FromMcpSys>>,
     pub notices: tk::UnboundedSender<Notice>,
 }
 
 impl subsys::Handler<OperatorSystem> for OperatorWatch {
     fn on_packet(&mut self, pkt: subsys::Packet<FromOperatorSys>) -> impl Future<Output = Option<subsys::Packet<FromOperatorSys>>> + 'static + Send {
-        let FromOperatorSys::Emergency(emergency) = pkt.take_msg();
-        let _ = self.emergencies.send(emergency);
-        std::future::ready(None)
+        let up = self.up.clone();
+        async move {
+            let FromOperatorSys::Emergency(emergency) = pkt.take_msg();
+            let packet = subsys::Packet::singular(FromMcpSys::Emergency(emergency));
+            let _ = up.send(subsys::MsgFromSys::Packet(packet)).await;
+            None
+        }
     }
 
     fn on_sub(&mut self, sub: subsys::FromSub) -> impl Future<Output = ()> + Send {

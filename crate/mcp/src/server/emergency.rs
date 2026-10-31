@@ -1,12 +1,7 @@
-//! The emergency lane: each emergency logged, then announced on the Channel.
+//! The controller's emergency policy: each logged, then announced on the Channel.
 use crate::*;
 
-/// Producer end of the EmergencyChannel; unbounded so a producer never blocks.
-pub(crate) type EmergencyTx = tk::UnboundedSender<Emergency>;
-/// Consumer end, drained by the sole responder.
-pub(crate) type EmergencyRx = tk::UnboundedReceiver<Emergency>;
-
-/// The RESERVED model path an emergency rides under on the channel.
+/// The reserved model path an emergency rides under on the channel.
 pub(crate) fn emergency_model(emergency: &Emergency) -> &'static str {
     match emergency.kind() {
         EmergencyKind::HungEngineThread => "mcp/supervisor/HungEngineThread",
@@ -21,7 +16,7 @@ pub(crate) fn emergency_model(emergency: &Emergency) -> &'static str {
     }
 }
 
-/// An emergency's OWN fields, without the envelope the log adds.
+/// An emergency's own fields, without the envelope the log adds.
 fn emergency_record(emergency: &Emergency) -> nu::Record {
     let span = nu::Span::unknown();
     let mut r = nu::Record::new();
@@ -77,7 +72,7 @@ fn emergency_record(emergency: &Emergency) -> nu::Record {
     r
 }
 
-/// An emergency as a SINGLE-LINE NUON record, the log's line.
+/// An emergency as a single-line NUON record, the log's line.
 pub(crate) fn emergency_line(
     emergency: &Emergency,
     ts: u64,
@@ -119,44 +114,62 @@ pub(crate) fn append_line(
     Ok(())
 }
 
-/// Put one Emergency on the channel under its reserved `mcp/` model.
-async fn announce(emergency: &Emergency) {
-    let Some(host) = host_channel() else {
-        return;
-    };
-    let event = nu::Value::record(emergency_record(emergency), nu::Span::unknown());
-    let Ok(event) = NuVal::try_from_nu(event) else {
-        return;
-    };
-    let emit = EmitRequest {
-        from: FROM_MCP.to_string(),
-        model: emergency_model(emergency).to_string(),
-        event,
-        attached: None,
-    };
-    let _ = host.channel.request(emit).await;
+/// The controller's policy over its systems' emergencies: logged, then announced.
+#[derive(Clone)]
+pub(crate) struct EmergencyPolicy {
+    channel: Arc<ChannelHandle>,
+    mcp_nom: String,
+    log: PathBuf,
 }
 
-/// Spawn the sole responder: log each Emergency, then announce it.
-pub(crate) fn spawn_emergency_responder(
-    mut rx: EmergencyRx,
-    mcp_nom: String,
-) {
-    let path = emergency_log_path(&mcp_nom);
-    tk::spawn(async move {
-        while let Some(emergency) = rx.recv().await {
-            match emergency_line(&emergency, now_millis(), &mcp_nom) {
-                Ok(line) => {
-                    if let Err(e) = append_line(&path, &line) {
-                        eprintln!(
-                            "grammar: emergency log append failed at {}: {e}",
-                            path.display(),
-                        );
-                    }
-                }
-                Err(e) => eprintln!("grammar: emergency serialize failed: {e}"),
-            }
-            announce(&emergency).await;
+impl EmergencyPolicy {
+    /// The policy of the host `mcp_nom`, logging to `log` and announcing on `channel`.
+    pub(crate) fn new(
+        channel: Arc<ChannelHandle>,
+        mcp_nom: &str,
+        log: PathBuf,
+    ) -> Self {
+        Self {
+            channel,
+            mcp_nom: mcp_nom.to_string(),
+            log,
         }
-    });
+    }
+
+    /// An emergency logged, then announced on the Channel under its reserved model.
+    pub(crate) async fn respond(
+        &self,
+        emergency: Emergency,
+    ) {
+        match emergency_line(&emergency, now_millis(), &self.mcp_nom) {
+            Ok(line) => {
+                if let Err(e) = append_line(&self.log, &line) {
+                    eprintln!(
+                        "grammar: emergency log append failed at {}: {e}",
+                        self.log.display(),
+                    );
+                }
+            }
+            Err(e) => eprintln!("grammar: emergency serialize failed: {e}"),
+        }
+        self.announce(&emergency).await;
+    }
+
+    /// Put one emergency on the Channel under its reserved `mcp/` model.
+    async fn announce(
+        &self,
+        emergency: &Emergency,
+    ) {
+        let event = nu::Value::record(emergency_record(emergency), nu::Span::unknown());
+        let Ok(event) = NuVal::try_from_nu(event) else {
+            return;
+        };
+        let emit = EmitRequest {
+            from: FROM_MCP.to_string(),
+            model: emergency_model(emergency).to_string(),
+            event,
+            attached: None,
+        };
+        let _ = self.channel.request(emit).await;
+    }
 }

@@ -32,20 +32,33 @@ pub(crate) async fn ensure_substrate() -> io::Result<()> {
     Ok(())
 }
 
-/// mcp's controller: the engine's host asks, routed to the face's systems.
+/// mcp's controller: the engine's asks routed to their systems, and its policy.
 #[derive(Clone)]
 pub(crate) struct HostRoute {
     pub(crate) channel: Arc<ChannelHandle>,
     pub(crate) peer: Arc<PeerHandle>,
+    /// The face's hub, through which the Channel's own emergencies reach the policy.
+    hub: Arc<HubSlot>,
+    /// The policy over the systems' emergencies.
+    policy: EmergencyPolicy,
 }
 
 impl HostRoute {
     /// The route to a face's systems.
     pub(crate) fn of(face: &ChannelFace) -> Self {
+        let mcp_nom = face.mcp_nom.as_str();
+        let log = emergency_log_path(mcp_nom);
         Self {
             channel: face.channel.clone(),
             peer: face.peer.clone(),
+            hub: face.hub.clone(),
+            policy: EmergencyPolicy::new(face.channel.clone(), mcp_nom, log),
         }
+    }
+
+    /// Supervision's start: the Channel's own emergencies answered by the policy too.
+    pub(crate) fn supervise(&self) {
+        self.hub.install_policy(self.policy.clone());
     }
 
     /// An eval's ask, answered by the system it is for.
@@ -120,7 +133,13 @@ impl HostRoute {
 
 impl subsys::Handler<McpSystem> for HostRoute {
     fn on_packet(&mut self, pkt: subsys::Packet<FromMcpSys>) -> impl Future<Output = Option<subsys::Packet<FromMcpSys>>> + 'static + Send {
-        std::future::ready(Some(pkt))
+        let policy = self.policy.clone();
+        async move {
+            if let FromMcpSys::Emergency(emergency) = pkt.take_msg() {
+                policy.respond(emergency).await;
+            }
+            None
+        }
     }
 
     fn on_request(&mut self, pkt: subsys::Packet<FromMcpSys>) -> impl Future<Output = Option<ToMcpSys>> + 'static + Send {
