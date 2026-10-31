@@ -30,13 +30,11 @@ impl NuSh {
         &self,
         nonce: datum::Nonce,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let rows = match load_purviews() {
-            Ok(rows) => rows,
+        let view = match self.resolve_purviews(self.current_purview.ids()).await {
+            Ok(view) => view,
             Err(error) => return error_to_call_result(error, nonce),
         };
-        let ids = self.current_purview.ids();
-        let patterns = expand_values(&resolve_patterns(&ids, rows.as_ref()), rows.as_ref());
-        let signatures = match self.signatures(patterns).await {
+        let signatures = match self.signatures(view.patterns).await {
             Ok(signatures) => signatures,
             Err(error) => return error_to_call_result(error, nonce),
         };
@@ -54,7 +52,7 @@ impl NuSh {
                 transient: transient_dir().map(|dir| dir.display().to_string()).unwrap_or_default(),
                 plugins: list_registered_plugins(),
                 signatures,
-                purview: purview_views(&ids, rows.as_ref()),
+                purview: view.views,
             },
         )
     }

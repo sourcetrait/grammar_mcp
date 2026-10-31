@@ -11,43 +11,10 @@ pub struct PurviewExtendParams {
 #[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct PurviewDeltaResult {
-    /// `info`'s `signatures` for what this call brought INTO view, or null.
+    /// `info`'s `signatures` for what this call brought into view, or null.
     pub revealed: Option<String>,
-    /// The purview ids in view now - the KEYS alone.
+    /// The purview ids in view now - the keys alone.
     pub current: Vec<String>,
-}
-
-#[cfg(feature = "embedded-cli")]
-impl NuSh {
-    /// The shared delta report for a change to the current view.
-    pub(crate) async fn purview_delta(
-        &self,
-        nonce: datum::Nonce,
-        before: Vec<String>,
-        after: Vec<String>,
-        ids: Vec<String>,
-        rows: Option<Vec<PurviewRow>>,
-    ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let (revealed, _left) = pattern_delta(
-            &expand_values(&before, rows.as_ref()),
-            &expand_values(&after, rows.as_ref()),
-        );
-        let revealed_block = if revealed.is_empty() {
-            None
-        } else {
-            match self.signatures(revealed).await {
-                Ok(signatures) => Some(signatures),
-                Err(error) => return error_to_call_result(error, nonce),
-            }
-        };
-        success(
-            nonce,
-            &PurviewDeltaResult {
-                revealed: revealed_block,
-                current: ids,
-            },
-        )
-    }
 }
 
 #[cfg(feature = "embedded-cli")]
@@ -58,24 +25,37 @@ impl NuSh {
         nonce: datum::Nonce,
         p: PurviewExtendParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let rows = match load_purviews() {
-            Ok(rows) => rows,
+        let asked = match self.resolve_purviews(p.purviews.clone()).await {
+            Ok(asked) => asked,
             Err(error) => return error_to_call_result(error, nonce),
         };
-        for id in &p.purviews {
-            if !is_nameable_purview(id, rows.as_ref()) {
-                return error_to_call_result(
-                    GrammarMcpError::PurviewInvalidId {
-                        id: id.clone(),
-                        reason: "no such purview; configure it first".to_string(),
-                    },
-                    nonce,
-                );
-            }
+        if let Some(id) = asked.unknown.first() {
+            return error_to_call_result(unknown_purview(id), nonce);
         }
-        let before = resolve_patterns(&self.current_purview.ids(), rows.as_ref());
+        let before = match self.resolve_purviews(self.current_purview.ids()).await {
+            Ok(before) => before,
+            Err(error) => return error_to_call_result(error, nonce),
+        };
         let ids = self.current_purview.extend(&p.purviews);
-        let after = resolve_patterns(&ids, rows.as_ref());
-        self.purview_delta(nonce, before, after, ids, rows).await
+        let after = match self.resolve_purviews(ids.clone()).await {
+            Ok(after) => after,
+            Err(error) => return error_to_call_result(error, nonce),
+        };
+        let (revealed, _left) = pattern_delta(&before.patterns, &after.patterns);
+        let revealed = if revealed.is_empty() {
+            None
+        } else {
+            match self.signatures(revealed).await {
+                Ok(signatures) => Some(signatures),
+                Err(error) => return error_to_call_result(error, nonce),
+            }
+        };
+        success(
+            nonce,
+            &PurviewDeltaResult {
+                revealed,
+                current: ids,
+            },
+        )
     }
 }

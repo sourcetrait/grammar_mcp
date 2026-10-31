@@ -31,7 +31,13 @@ sample the test process.
 
 ## enum ToMcpSys
 The engine's own requests wrapped whole, so a tool sends the same request types it sent
-the engine, each with its own answer type; and the controller's answer to a host ask.
+the engine, each with its own answer type, the wire's and the engine's purview requests
+alike; and the controller's answer to a host ask.
+
+## fn forward_purview
+A purview request goes on to the engine as a wire request does, and one the engine could
+not take answers its failure in the request's own kind (`purview_refused`), so a tool
+never waits on one mcp dropped.
 
 ## enum FromMcpSys
 The engine's answers wrapped whole, the shutdown's, and an engine's host ask on its way

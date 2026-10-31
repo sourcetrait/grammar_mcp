@@ -8,9 +8,29 @@ request naming its answer type for subsys against `EngineSystem`.
 
 ## enum ToEngine
 ## enum FromEngine
-A subsys system takes one type each way, so the wire's pair rides one variant
-and the host's another: down, a request or a host answer; up, an answer or a
-host ask.
+A subsys system takes one type each way, so the wire's pair rides one variant,
+the engine's own requests another, and the host's a third: down, a request or a
+host answer; up, an answer or a host ask. A request of the engine's own is local
+to the process, never a new wire variant.
+
+## enum PurviewRequest
+The namespace's purviews as the engine keeps them beside its equip store: list
+them, configure an id's patterns, resolve ids to what they put in view, and
+adjust the rows for a rig installed or uninstalled (`equip/purview.rs`). Each
+answers the runtime's error beside its value, the purview refusal and the
+store's internal failures being the kinds those commands always answered.
+
+## struct PurviewRigRequest
+The session's view rides along, since a rig installed joins each purview it
+has in view, and the view is its controller's.
+
+## struct PurviewResolution
+One read answers what a view needs: the patterns to match, expanded; each id's
+own patterns, as `interface info` reports them; and the ids no purview answers
+to.
+
+## macro purview_request
+Each purview request names its answer, so a controller gets its own type back.
 
 ## enum HostAsk
 What an eval asks of the process hosting it. The Channel, the remote links,

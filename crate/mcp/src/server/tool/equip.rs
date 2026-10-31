@@ -60,9 +60,7 @@ impl NuSh {
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         match self.system.control(EngineCommand::EquipInstall { source: p.source }).await {
             Ok(ControlAnswer::Installed { equip, result }) => {
-                if rig_dir(&equip).exists() {
-                    purview_add_rig(&equip, &self.current_purview.ids());
-                }
+                self.purview_rig(equip, true).await;
                 success(
                     nonce,
                     &EquipResult {
@@ -101,10 +99,8 @@ impl NuSh {
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         match self.system.control(EngineCommand::EquipUninstall { source: p.source }).await {
             Ok(ControlAnswer::Uninstalled { equip }) => {
-                if let Some(equip) = equip
-                    && let Some(rows) = purview_remove_rig(&equip)
-                {
-                    self.current_purview.retain_known(Some(&rows));
+                if let Some(equip) = equip {
+                    self.purview_rig(equip, false).await;
                 }
                 success(nonce, &EquipResult { summary: None })
             }
@@ -114,70 +110,24 @@ impl NuSh {
     }
 }
 
-/// Bring a freshly installed rig into view.
 #[cfg(feature = "embedded-cli")]
-fn purview_add_rig(
-    rig: &str,
-    current_ids: &[String],
-) {
-    let _repo = equip_repo_lock();
-    let mut rows = match load_purviews() {
-        Ok(rows) => rows.unwrap_or_default(),
-        Err(e) => {
-            eprintln!("grammar: purview not updated for {rig}: {e:?}");
-            return;
-        }
-    };
-    let builtin = builtin_name(rig);
-    let pattern = match builtin {
-        Some(name) => {
-            seed_builtin(&mut rows, name);
-            format!("{PURVIEW_REF}{PURVIEW_CORE}")
-        }
-        None => format!("{rig}:"),
-    };
-    let mut targets: Vec<String> = vec![PURVIEW_DEFAULT.to_string()];
-    for id in current_ids {
-        if id != PURVIEW_ALL && !targets.contains(id) {
-            targets.push(id.clone());
+impl NuSh {
+    /// A rig installed or uninstalled: the engine's purviews adjusted, the view kept.
+    async fn purview_rig(
+        &self,
+        rig: String,
+        installed: bool,
+    ) {
+        let adjust = PurviewRigRequest {
+            rig: rig.clone(),
+            installed,
+            current: self.current_purview.ids(),
+        };
+        match self.system.request(adjust).await {
+            Ok(Ok(rows)) if !installed => self.current_purview.retain_known(&rows),
+            Ok(Ok(_)) => {}
+            Ok(Err(e)) => eprintln!("grammar: purview not updated for {rig}: {e:?}"),
+            Err(e) => eprintln!("grammar: purview not updated for {rig}: {e:?}"),
         }
     }
-    for id in targets {
-        if builtin.is_some() && (id == PURVIEW_CORE || builtin_equip(&id).is_some()) {
-            continue;
-        }
-        if let Some(row) = rows.iter_mut().find(|row| row.id == id) {
-            let present = row.namepath_patterns.contains(&pattern)
-                || row.namepath_patterns.iter().any(|p| is_rig_pattern(p, rig));
-            if !present {
-                row.namepath_patterns.push(pattern.clone());
-            }
-        }
-    }
-    prune_dangling(&mut rows);
-    if let Err(e) = save_purviews(&rows) {
-        eprintln!("grammar: purview not updated for {rig}: {e:?}");
-    }
-}
-
-/// Drop an uninstalled rig from every purview that named it; the rows saved.
-#[cfg(feature = "embedded-cli")]
-fn purview_remove_rig(rig: &str) -> Option<Vec<PurviewRow>> {
-    let _repo = equip_repo_lock();
-    let mut rows = match load_purviews() {
-        Ok(rows) => rows.unwrap_or_default(),
-        Err(e) => {
-            eprintln!("grammar: purview not updated for {rig}: {e:?}");
-            return None;
-        }
-    };
-    for row in rows.iter_mut() {
-        row.namepath_patterns.retain(|p| !is_rig_pattern(p, rig));
-    }
-    prune_dangling(&mut rows);
-    if let Err(e) = save_purviews(&rows) {
-        eprintln!("grammar: purview not updated for {rig}: {e:?}");
-        return None;
-    }
-    Some(rows)
 }

@@ -1,17 +1,73 @@
 use crate::*;
 
-/// What the engine's controller sends it: the wire's requests, or a host's answer.
+/// What the engine's controller sends: a wire request, its own, or a host answer.
 #[cereal::derived(Data)]
 pub enum ToEngine {
     Wire(ToEngineSys),
+    Purview(PurviewRequest),
     Host(HostAnswer),
 }
 
-/// What the engine sends its controller: the wire's answers, or a host request.
+/// What the engine sends its controller: the answers, or a host request.
 #[cereal::derived(Data)]
 pub enum FromEngine {
     Wire(FromEngineSys),
+    Purview(PurviewAnswer),
     Host(HostAsk),
+}
+
+/// The engine's own requests of its namespace's purviews.
+#[cereal::derived(Data)]
+pub enum PurviewRequest {
+    List(PurviewListRequest),
+    Configure(PurviewConfigureRequest),
+    Resolve(PurviewResolveRequest),
+    Rig(PurviewRigRequest),
+}
+
+/// Each purview request's answer.
+#[cereal::derived(Data)]
+pub enum PurviewAnswer {
+    Listed(Result<Vec<PurviewView>, RuntimeError>),
+    Rows(Result<Vec<PurviewRow>, RuntimeError>),
+    Resolved(Result<PurviewResolution, RuntimeError>),
+}
+
+/// Each configured purview, its patterns as stored.
+#[cereal::derived(Data, Copy, Eq)]
+pub struct PurviewListRequest;
+
+/// An id's patterns set, an empty list deleting it; the rows after.
+#[cereal::derived(Data, Eq)]
+pub struct PurviewConfigureRequest {
+    pub id: String,
+    pub patterns: Vec<String>,
+}
+
+/// Ids resolved to what they put in view, each reference expanded.
+#[cereal::derived(Data, Eq)]
+pub struct PurviewResolveRequest {
+    pub ids: Vec<String>,
+}
+
+/// A rig installed or uninstalled, the rows adjusted for it; the rows after.
+#[cereal::derived(Data, Eq)]
+pub struct PurviewRigRequest {
+    pub rig: String,
+    pub installed: bool,
+    /// The session's view, which a rig installed joins.
+    pub current: Vec<String>,
+}
+
+/// What a set of ids puts in view.
+#[cereal::derived(Data)]
+pub struct PurviewResolution {
+    /// The patterns, in order and deduplicated, each reference expanded.
+    pub patterns: Vec<String>,
+    /// Each id beside the patterns it names itself.
+    pub views: Vec<PurviewView>,
+    /// The ids no purview answers to.
+    pub unknown: Vec<String>,
 }
 
 /// What an eval asks of the process hosting it.
@@ -82,7 +138,60 @@ impl TryFrom<ToEngine> for HostAnswer {
     fn try_from(v: ToEngine) -> subsys::SubsysResult<Self> {
         match v {
             ToEngine::Host(answer) => Ok(answer),
-            ToEngine::Wire(_) => Err(subsys::SubsysError::ResponseType),
+            _ => Err(subsys::SubsysError::ResponseType),
+        }
+    }
+}
+
+/// Each purview request's way into `ToEngine`, and the answer it names.
+macro_rules! purview_request {
+    ($($ty:ty => $variant:ident, $answer:ty),* $(,)?) => {$(
+        impl From<$ty> for ToEngine {
+            fn from(v: $ty) -> Self { Self::Purview(PurviewRequest::$variant(v)) }
+        }
+
+        impl subsys::Request<EngineSystem> for $ty {
+            type ResponseType = $answer;
+        }
+    )*};
+}
+
+purview_request! {
+    PurviewListRequest => List, Result<Vec<PurviewView>, RuntimeError>,
+    PurviewConfigureRequest => Configure, Result<Vec<PurviewRow>, RuntimeError>,
+    PurviewResolveRequest => Resolve, Result<PurviewResolution, RuntimeError>,
+    PurviewRigRequest => Rig, Result<Vec<PurviewRow>, RuntimeError>,
+}
+
+impl TryFrom<FromEngine> for Result<Vec<PurviewView>, RuntimeError> {
+    type Error = subsys::SubsysError;
+
+    fn try_from(v: FromEngine) -> subsys::SubsysResult<Self> {
+        match v {
+            FromEngine::Purview(PurviewAnswer::Listed(answer)) => Ok(answer),
+            _ => Err(subsys::SubsysError::ResponseType),
+        }
+    }
+}
+
+impl TryFrom<FromEngine> for Result<Vec<PurviewRow>, RuntimeError> {
+    type Error = subsys::SubsysError;
+
+    fn try_from(v: FromEngine) -> subsys::SubsysResult<Self> {
+        match v {
+            FromEngine::Purview(PurviewAnswer::Rows(answer)) => Ok(answer),
+            _ => Err(subsys::SubsysError::ResponseType),
+        }
+    }
+}
+
+impl TryFrom<FromEngine> for Result<PurviewResolution, RuntimeError> {
+    type Error = subsys::SubsysError;
+
+    fn try_from(v: FromEngine) -> subsys::SubsysResult<Self> {
+        match v {
+            FromEngine::Purview(PurviewAnswer::Resolved(answer)) => Ok(answer),
+            _ => Err(subsys::SubsysError::ResponseType),
         }
     }
 }
@@ -113,7 +222,7 @@ impl TryFrom<FromEngine> for ValueAnswer {
     fn try_from(v: FromEngine) -> subsys::SubsysResult<Self> {
         match v {
             FromEngine::Wire(answer) => answer.try_into(),
-            FromEngine::Host(_) => Err(subsys::SubsysError::ResponseType),
+            _ => Err(subsys::SubsysError::ResponseType),
         }
     }
 }
@@ -124,7 +233,7 @@ impl TryFrom<FromEngine> for EngineResult<ControlAnswer> {
     fn try_from(v: FromEngine) -> subsys::SubsysResult<Self> {
         match v {
             FromEngine::Wire(answer) => answer.try_into(),
-            FromEngine::Host(_) => Err(subsys::SubsysError::ResponseType),
+            _ => Err(subsys::SubsysError::ResponseType),
         }
     }
 }

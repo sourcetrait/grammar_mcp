@@ -111,16 +111,35 @@ impl subsys::System for EngineSystem {
 
     async fn on_channel_recv(&mut self, pkt: subsys::Packet<ToEngine>) -> subsys::FlowResult<Self::Flow> {
         let (id, _nature, msg) = pkt.into_tuple();
-        let ToEngine::Wire(msg) = msg else {
-            return Ok(subsys::Flow::Continue);
-        };
         let core = self.core.clone();
         let tx = self.inner.channel.tx.clone();
-        tk::spawn(async move {
-            let answer = FromEngine::Wire(answer(core, msg).await);
-            let response = subsys::Packet::response(id, answer);
-            let _ = tx.send(subsys::MsgFromSys::Packet(response)).await;
-        });
+        match msg {
+            ToEngine::Wire(msg) => {
+                tk::spawn(async move {
+                    let answer = FromEngine::Wire(answer(core, msg).await);
+                    let response = subsys::Packet::response(id, answer);
+                    let _ = tx.send(subsys::MsgFromSys::Packet(response)).await;
+                });
+            }
+            ToEngine::Purview(req) => {
+                tk::spawn(async move {
+                    let shape = req.clone();
+                    let answer = match tk::spawn_blocking(move || purview_answer(req)).await {
+                        Ok(answer) => answer,
+                        Err(e) => purview_failed(
+                            &shape,
+                            RuntimeError::Internal {
+                                phase: "purview".to_string(),
+                                reason: format!("the request's task failed: {e}"),
+                            },
+                        ),
+                    };
+                    let response = subsys::Packet::response(id, FromEngine::Purview(answer));
+                    let _ = tx.send(subsys::MsgFromSys::Packet(response)).await;
+                });
+            }
+            ToEngine::Host(_) => {}
+        }
         Ok(subsys::Flow::Continue)
     }
 
@@ -156,6 +175,40 @@ async fn answer(
             FromEngineSys::Value(ValueAnswer { nonce, result })
         }
         ToEngineSys::Control(req) => FromEngineSys::Control(contained(serve_control(core, req)).await),
+    }
+}
+
+/// A purview request's answer, its store read and written under the equip lock.
+fn purview_answer(req: PurviewRequest) -> PurviewAnswer {
+    match req {
+        PurviewRequest::List(PurviewListRequest) => PurviewAnswer::Listed(purview_list()),
+        PurviewRequest::Configure(PurviewConfigureRequest { id, patterns }) => {
+            PurviewAnswer::Rows(purview_configure(&id, &patterns))
+        }
+        PurviewRequest::Resolve(PurviewResolveRequest { ids }) => {
+            PurviewAnswer::Resolved(purview_resolve(&ids))
+        }
+        PurviewRequest::Rig(PurviewRigRequest {
+            rig,
+            installed,
+            current,
+        }) => PurviewAnswer::Rows(match installed {
+            true if rig_dir(&rig).exists() => purview_add_rig(&rig, &current),
+            true => load_purviews().map(Option::unwrap_or_default),
+            false => purview_remove_rig(&rig),
+        }),
+    }
+}
+
+/// A purview request's failure, answered in its request's own kind.
+fn purview_failed(
+    req: &PurviewRequest,
+    error: RuntimeError,
+) -> PurviewAnswer {
+    match req {
+        PurviewRequest::List(_) => PurviewAnswer::Listed(Err(error)),
+        PurviewRequest::Resolve(_) => PurviewAnswer::Resolved(Err(error)),
+        PurviewRequest::Configure(_) | PurviewRequest::Rig(_) => PurviewAnswer::Rows(Err(error)),
     }
 }
 

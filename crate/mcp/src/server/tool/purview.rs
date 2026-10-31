@@ -4,14 +4,14 @@ use crate::*;
 #[cfg(feature = "embedded-cli")]
 #[derive(Debug, ser::Serialize)]
 pub(crate) struct PurviewSetResult {
-    /// `info`'s `signatures` for what this call brought INTO view, or null.
+    /// `info`'s `signatures` for what this call brought into view, or null.
     pub revealed: Option<String>,
 }
 
 /// Parameters for `interface purview set`.
 #[derive(Debug, ser::Deserialize, ser::Serialize)]
 pub struct PurviewParams {
-    /// The purview ids to put in view, REPLACING the current set.
+    /// The purview ids to put in view, replacing the current set.
     pub purviews: Vec<String>,
 }
 
@@ -23,33 +23,32 @@ impl NuSh {
         nonce: datum::Nonce,
         p: PurviewParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let rows = match load_purviews() {
-            Ok(rows) => rows,
-            Err(error) => return error_to_call_result(error, nonce),
-        };
         let want: Vec<String> = p
             .purviews
             .iter()
             .map(|id| purview_ref(id).unwrap_or(id).to_string())
             .collect();
-        for id in &want {
-            if !is_nameable_purview(id, rows.as_ref()) {
-                return error_to_call_result(
-                    GrammarMcpError::PurviewInvalidId {
-                        id: id.clone(),
-                        reason: "no such purview; configure it first".to_string(),
-                    },
-                    nonce,
-                );
-            }
+        let wanted = match self.resolve_purviews(want.clone()).await {
+            Ok(wanted) => wanted,
+            Err(error) => return error_to_call_result(error, nonce),
+        };
+        if let Some(id) = wanted.unknown.first() {
+            return error_to_call_result(unknown_purview(id), nonce);
         }
-        let before = resolve_patterns(&self.current_purview.ids(), rows.as_ref());
+        let before = match self.resolve_purviews(self.current_purview.ids()).await {
+            Ok(before) => before,
+            Err(error) => return error_to_call_result(error, nonce),
+        };
         let ids = self.current_purview.set(&want);
-        let after = resolve_patterns(&ids, rows.as_ref());
-        let (revealed, _hidden) = pattern_delta(
-            &expand_values(&before, rows.as_ref()),
-            &expand_values(&after, rows.as_ref()),
-        );
+        let after = if ids == want {
+            wanted
+        } else {
+            match self.resolve_purviews(ids).await {
+                Ok(after) => after,
+                Err(error) => return error_to_call_result(error, nonce),
+            }
+        };
+        let (revealed, _hidden) = pattern_delta(&before.patterns, &after.patterns);
         let block = if revealed.is_empty() {
             None
         } else {

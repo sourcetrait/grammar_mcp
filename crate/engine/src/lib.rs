@@ -7,6 +7,7 @@ pub(crate) mod embed;
 pub(crate) mod engine;
 pub(crate) mod equip {
     pub(crate) mod lifecycle;
+    pub(crate) mod purview;
     pub(crate) mod signature;
     pub(crate) mod store;
     pub(crate) mod validate;
@@ -51,6 +52,7 @@ mod tests {
     mod equip;
     mod health;
     mod namepath;
+    mod purview;
     mod schema;
 }
 
@@ -66,6 +68,10 @@ pub(crate) use crate::{
     embed::{StatefulEngine, eval_in_process, eval_stateless, merge_env_no_chdir},
     engine::startup,
     equip::{
+        purview::{
+            load_purviews, purview_add_rig, purview_configure, purview_list, purview_remove_rig,
+            purview_resolve,
+        },
         store::{
             EQUIP_DIR, EQUIP_KINDS, KIND_LIB, KIND_RIG, META_FILE, check_equip_name, equip_dir,
             index_to_nuon, is_valid_equip, is_valid_ident, is_valid_module_path, keypair_dir,
@@ -101,7 +107,8 @@ pub(crate) use crate::{
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
-    ChannelSendData, ChannelSpamErrorEmergency, RemoteSendData, reserved_prefix,
+    ChannelSendData, ChannelSpamErrorEmergency, PurviewRow, PurviewView, RemoteSendData,
+    RuntimeError, reserved_prefix,
 };
 
 pub(crate) use std::{
@@ -167,6 +174,7 @@ pub(crate) mod ser {
 pub(crate) mod tk {
     pub(crate) use tokio::{
         spawn,
+        task::spawn_blocking,
         sync::{
             Mutex as AsyncMutex, OwnedSemaphorePermit, RwLock as AsyncRwLock, Semaphore,
             oneshot,
@@ -186,6 +194,10 @@ pub use crate::{
             check_equip, check_source_dir, commit_equip, establish_equip, install_equip,
             scaffold_leaf, scaffold_leaf_exists, uninstall_equip,
         },
+        purview::{
+            PURVIEW_ALL, PURVIEW_CORE, PURVIEW_CURRENT, PURVIEW_DEFAULT, PURVIEW_REF,
+            ensure_default_purview, purview_ref, purviews_path, seed_builtin_purviews,
+        },
         signature::{index_node, inspect_impl, render_signatures_within},
         store::{
             AlreadyRegistered, IndexFunction, IndexModule, LibIndex, RigIndex, RigLocks,
@@ -198,7 +210,11 @@ pub use crate::{
     execute::{ExecuteDef, analyze_definition},
     executor::{Executor, eval_concurrency_cap},
     lint::lint_block,
-    msg::{FromEngine, HostAnswer, HostAsk, HostStop, PinAsk, ToEngine},
+    msg::{
+        FromEngine, HostAnswer, HostAsk, HostStop, PinAsk, PurviewAnswer, PurviewConfigureRequest,
+        PurviewListRequest, PurviewRequest, PurviewResolution, PurviewResolveRequest,
+        PurviewRigRequest, ToEngine,
+    },
     namepath::{
         Namepath, NamepathPattern, NamepathRef, NamepathStr, PATTERN_ALL, PATTERN_CURRENT,
         resolve_builtin,

@@ -22,8 +22,18 @@ every eval's asks reach the controller that started this system.
 
 ## fn on_channel_recv
 The answer is sent from the request's own task, on a clone of the system's sender; the
-loop has gone back to receiving by then. A host answer reaching here answers no waiter,
-its ask gone, and is dropped: the framework hands every other answer to its waiter first.
+loop has gone back to receiving by then. A purview request runs on a blocking thread, its
+store's file and the equip store's lock being blocking work. A host answer reaching here
+answers no waiter, its ask gone, and is dropped: the framework hands every other answer
+to its waiter first.
+
+## fn purview_answer
+An install adjusts the rows only for an equip with a rig, as the install always did; a
+lib alone answers the rows as they stand.
+
+## fn purview_failed
+A request whose task failed is answered in its own kind, so its waiter reads the failure
+rather than a type it never asked for.
 
 ## fn on_stop
 A halt tears down every call in flight, as the `Teardown` command does, so a system

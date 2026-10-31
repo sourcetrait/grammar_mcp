@@ -5,7 +5,7 @@ use crate::*;
 pub struct PurviewConfigureParams {
     /// The purview to set, created if absent; a path-like snake label.
     pub purview: String,
-    /// Its namepath patterns; an EMPTY list DELETES the purview.
+    /// Its namepath patterns; an empty list deletes the purview.
     pub namepaths: Vec<String>,
 }
 
@@ -25,77 +25,27 @@ impl NuSh {
         nonce: datum::Nonce,
         p: PurviewConfigureParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        if is_derived_purview(&p.purview) {
-            return error_to_call_result(
-                GrammarMcpError::PurviewInvalidId {
-                    id: p.purview.clone(),
-                    reason: "`.` and `*` are derived, not stored, so they cannot be configured"
-                        .to_string(),
-                },
-                nonce,
-            );
-        }
-        if !is_valid_purview_id(&p.purview) {
-            return error_to_call_result(
-                GrammarMcpError::PurviewInvalidId {
-                    id: p.purview.clone(),
-                    reason: "must be slash-separated snake components, bare relative \
-                             (no leading `/` or `./`)"
-                        .to_string(),
-                },
-                nonce,
-            );
-        }
-        for value in &p.namepaths {
-            if let Some(id) = purview_ref(value)
-                && !is_valid_purview_ref(id)
-            {
-                return error_to_call_result(
-                    GrammarMcpError::PurviewInvalidId {
-                        id: value.clone(),
-                        reason: "`@` must reference a configurable purview; `@.` and `@*` \
-                                 are derived and are never rows"
-                            .to_string(),
-                    },
-                    nonce,
-                );
-            }
-        }
-        let rows = {
-            let _repo = equip_repo_lock();
-            let mut rows = match load_purviews() {
-                Ok(rows) => rows.unwrap_or_default(),
+        let configure = PurviewConfigureRequest {
+            id: p.purview.clone(),
+            patterns: p.namepaths,
+        };
+        let rows = match self.system.request(configure).await {
+            Ok(Ok(rows)) => rows,
+            Ok(Err(error)) => return error_to_call_result(error, nonce),
+            Err(error) => return error_to_call_result(error, nonce),
+        };
+        self.current_purview.retain_known(&rows);
+        let signatures = if rows.iter().any(|row| row.id == p.purview) {
+            let view = match self.resolve_purviews(vec![p.purview]).await {
+                Ok(view) => view,
                 Err(error) => return error_to_call_result(error, nonce),
             };
-            rows.retain(|row| row.id != p.purview);
-            let namepaths = if p.namepaths.is_empty() && p.purview == PURVIEW_DEFAULT {
-                vec![PURVIEW_ALL.to_string()]
-            } else {
-                p.namepaths.clone()
-            };
-            if !namepaths.is_empty() {
-                rows.push(PurviewRow {
-                    id: p.purview.clone(),
-                    namepath_patterns: namepaths,
-                });
-            }
-            prune_dangling(&mut rows);
-            if let Err(error) = save_purviews(&rows) {
-                return error_to_call_result(error, nonce);
-            }
-            rows
-        };
-        self.current_purview.retain_known(Some(&rows));
-        let values = rows
-            .iter()
-            .find(|row| row.id == p.purview)
-            .map(|row| row.namepath_patterns.clone());
-        let signatures = match values {
-            None => None,
-            Some(values) => match self.signatures(expand_values(&values, Some(&rows))).await {
+            match self.signatures(view.patterns).await {
                 Ok(signatures) => Some(signatures),
                 Err(error) => return error_to_call_result(error, nonce),
-            },
+            }
+        } else {
+            None
         };
         success(nonce, &PurviewConfigureResult { signatures })
     }

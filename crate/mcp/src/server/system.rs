@@ -143,6 +143,8 @@ impl agnostic::HasAppPaths for McpSysPaths {
 #[cereal::derived(Data)]
 pub(crate) enum ToMcpSys {
     Engine(ToEngineSys),
+    /// A request of the engine's own, for its namespace's purviews.
+    Purview(PurviewRequest),
     Shutdown(ShutdownRequest),
     /// The controller's answer to an engine's host ask.
     Host(HostAnswer),
@@ -151,9 +153,63 @@ pub(crate) enum ToMcpSys {
 #[cereal::derived(Data)]
 pub(crate) enum FromMcpSys {
     Engine(FromEngineSys),
+    Purview(PurviewAnswer),
     ShutDown(ShutdownAnswer),
     /// An engine's host ask, sent up for the controller.
     Host(HostAsk),
+}
+
+/// Each purview request's way into `ToMcpSys`, and the answer it names.
+macro_rules! purview_request {
+    ($($ty:ty => $variant:ident, $answer:ty),* $(,)?) => {$(
+        impl From<$ty> for ToMcpSys {
+            fn from(v: $ty) -> Self { Self::Purview(PurviewRequest::$variant(v)) }
+        }
+
+        impl subsys::Request<McpSystem> for $ty {
+            type ResponseType = $answer;
+        }
+    )*};
+}
+
+purview_request! {
+    PurviewListRequest => List, Result<Vec<PurviewView>, RuntimeError>,
+    PurviewConfigureRequest => Configure, Result<Vec<PurviewRow>, RuntimeError>,
+    PurviewResolveRequest => Resolve, Result<PurviewResolution, RuntimeError>,
+    PurviewRigRequest => Rig, Result<Vec<PurviewRow>, RuntimeError>,
+}
+
+impl TryFrom<FromMcpSys> for Result<Vec<PurviewView>, RuntimeError> {
+    type Error = subsys::SubsysError;
+
+    fn try_from(v: FromMcpSys) -> subsys::SubsysResult<Self> {
+        match v {
+            FromMcpSys::Purview(PurviewAnswer::Listed(answer)) => Ok(answer),
+            _ => Err(subsys::SubsysError::ResponseType),
+        }
+    }
+}
+
+impl TryFrom<FromMcpSys> for Result<Vec<PurviewRow>, RuntimeError> {
+    type Error = subsys::SubsysError;
+
+    fn try_from(v: FromMcpSys) -> subsys::SubsysResult<Self> {
+        match v {
+            FromMcpSys::Purview(PurviewAnswer::Rows(answer)) => Ok(answer),
+            _ => Err(subsys::SubsysError::ResponseType),
+        }
+    }
+}
+
+impl TryFrom<FromMcpSys> for Result<PurviewResolution, RuntimeError> {
+    type Error = subsys::SubsysError;
+
+    fn try_from(v: FromMcpSys) -> subsys::SubsysResult<Self> {
+        match v {
+            FromMcpSys::Purview(PurviewAnswer::Resolved(answer)) => Ok(answer),
+            _ => Err(subsys::SubsysError::ResponseType),
+        }
+    }
 }
 
 impl subsys::Ask<McpSystem> for HostAsk {
@@ -299,6 +355,40 @@ async fn forward(
             };
             FromEngineSys::Control(answer)
         }
+    }
+}
+
+/// The engine's answer to a purview request, or its failure in the request's kind.
+async fn forward_purview(
+    engine: Option<Arc<EngineHandle>>,
+    req: PurviewRequest,
+) -> PurviewAnswer {
+    let Some(engine) = engine else {
+        return purview_refused(&req, "the engine's system has stopped".to_string());
+    };
+    let shape = req.clone();
+    let answer = match req {
+        PurviewRequest::List(req) => engine.request(req).await.map(PurviewAnswer::Listed),
+        PurviewRequest::Configure(req) => engine.request(req).await.map(PurviewAnswer::Rows),
+        PurviewRequest::Resolve(req) => engine.request(req).await.map(PurviewAnswer::Resolved),
+        PurviewRequest::Rig(req) => engine.request(req).await.map(PurviewAnswer::Rows),
+    };
+    answer.unwrap_or_else(|e| purview_refused(&shape, e.to_string()))
+}
+
+/// A purview request's failure, answered in its request's own kind.
+fn purview_refused(
+    req: &PurviewRequest,
+    reason: String,
+) -> PurviewAnswer {
+    let error = RuntimeError::Internal {
+        phase: "mcp::engine".to_string(),
+        reason,
+    };
+    match req {
+        PurviewRequest::List(_) => PurviewAnswer::Listed(Err(error)),
+        PurviewRequest::Resolve(_) => PurviewAnswer::Resolved(Err(error)),
+        PurviewRequest::Configure(_) | PurviewRequest::Rig(_) => PurviewAnswer::Rows(Err(error)),
     }
 }
 
@@ -473,6 +563,15 @@ impl subsys::System for McpSystem {
                 let tx = self.inner.channel.tx.clone();
                 tk::spawn(async move {
                     let answer = FromMcpSys::Engine(forward(engine, msg).await);
+                    let response = subsys::Packet::response(id, answer);
+                    let _ = tx.send(subsys::MsgFromSys::Packet(response)).await;
+                });
+            }
+            ToMcpSys::Purview(req) => {
+                let engine = self.engine.clone();
+                let tx = self.inner.channel.tx.clone();
+                tk::spawn(async move {
+                    let answer = FromMcpSys::Purview(forward_purview(engine, req).await);
                     let response = subsys::Packet::response(id, answer);
                     let _ = tx.send(subsys::MsgFromSys::Packet(response)).await;
                 });

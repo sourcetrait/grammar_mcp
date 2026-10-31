@@ -51,16 +51,10 @@ impl NuSh {
             Err(e) => return error_to_call_result(e, nonce),
         };
         let patterns = match pattern {
-            NamepathPattern::Current => {
-                let rows = match load_purviews() {
-                    Ok(rows) => rows,
-                    Err(error) => return error_to_call_result(error, nonce),
-                };
-                expand_values(
-                    &resolve_patterns(&self.current_purview.ids(), rows.as_ref()),
-                    rows.as_ref(),
-                )
-            }
+            NamepathPattern::Current => match self.resolve_purviews(self.current_purview.ids()).await {
+                Ok(view) => view.patterns,
+                Err(error) => return error_to_call_result(error, nonce),
+            },
             _ => vec![p.namepath],
         };
         match self.signatures(patterns).await {

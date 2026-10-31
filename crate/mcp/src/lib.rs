@@ -67,8 +67,6 @@ pub(crate) mod server {
         mod emergency;
         mod face;
         mod interface;
-        #[cfg(feature = "embedded-cli")]
-        mod purview;
     }
 }
 #[cfg(test)]
@@ -153,13 +151,7 @@ pub(crate) use crate::server::{
     host::{HostRoute, ensure_substrate, init_engine},
     oneshot::run_oneshot,
     operator::{OperatorWatch, spawn_observer},
-    purview::{
-        CurrentPurview, PURVIEW_ALL, PURVIEW_CORE, PURVIEW_DEFAULT, PURVIEW_REF,
-        is_derived_purview, is_rig_pattern, is_valid_purview_id, load_purviews,
-        ensure_default_purview, expand_values, is_nameable_purview, is_valid_purview_ref,
-        pattern_delta, prune_dangling, purview_ref, purview_views,
-        purviews_path, resolve_patterns, save_purviews, seed_builtin, seed_builtin_purviews,
-    },
+    purview::{CurrentPurview, pattern_delta, unknown_purview},
     run::run_server,
     system::{FromMcpSys, McpHandle, McpSystem, Notice, ToMcpSys, notice_status, start_system},
     tool::common::{NuSh, answer_value, unexpected},
@@ -169,11 +161,13 @@ pub(crate) use crate::server::{
 pub(crate) use sourcetrait_grammar_engine::{
     self as engine, EVAL_STACK_SIZE, EngineHandle, EngineParams, EngineSystem, FromEngine,
     GRIMM, HostAnswer, HostAsk, HostStop, LintEngine, NU_VERSION, NamepathPattern,
-    NamepathStr, ParseEngine, PinAsk, PluginInfo, ToEngine, analyze_definition, build_call_source,
-    build_execute_source, definition_file, ensure_equip_store, ensure_plugin_registry,
-    equip_repo_lock, equip_root, file_start, grimm_signatures, index_from_nuon,
-    install_builtins, lib_dir, lint_block, list_registered_plugins,
-    registered_rig_names, rig_dir, rig_meta_path, typedef_text,
+    NamepathStr, PURVIEW_ALL, PURVIEW_DEFAULT, ParseEngine, PinAsk, PluginInfo, PurviewAnswer,
+    PurviewConfigureRequest, PurviewListRequest, PurviewRequest, PurviewResolution,
+    PurviewResolveRequest, PurviewRigRequest, ToEngine, analyze_definition, build_call_source,
+    build_execute_source, definition_file, ensure_default_purview, ensure_equip_store,
+    ensure_plugin_registry, equip_root, file_start, grimm_signatures, index_from_nuon,
+    install_builtins, lib_dir, lint_block, list_registered_plugins, purview_ref,
+    purviews_path, rig_dir, rig_meta_path, seed_builtin_purviews, typedef_text,
 };
 
 pub(crate) use sourcetrait_grammar_channel::{
@@ -202,7 +196,7 @@ pub(crate) use sourcetrait_grammar_protocol::{
     CommitResult, ControlAnswer, ControlRequest, Diagnostic, EngineCommand, EngineError,
     EngineHealth, EngineResult, ExecuteRequest, FromEngineSys, Host, INTERFACE, InspectDoc,
     LINT_VIOLATION_CAP, RerunRequest, SignaturesDoc, Source, ToEngineSys, ValueAnswer,
-    builtin_equip, builtin_name, command_by_words, command_spec, span_to_line_col,
+    command_by_words, command_spec, span_to_line_col,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{Emergency, EmergencyKind, Observation};

@@ -1,6 +1,8 @@
+//! The purview table's text and a rig pattern's spellings.
 use crate::*;
-use crate::server::purview::{purviews_from_nuon, purviews_to_nuon};
+use crate::equip::purview::{is_rig_pattern, purviews_from_nuon, purviews_to_nuon};
 
+/// The table renders as nushell renders it and reads back whole.
 #[test]
 fn the_purview_table_writes_as_nushell_writes_it_and_reads_back() {
     let row = |id: &str, patterns: &[&str]| PurviewRow {
@@ -28,6 +30,7 @@ fn the_purview_table_writes_as_nushell_writes_it_and_reads_back() {
     assert_eq!(purviews_from_nuon(&text).expect("it reads back"), rows);
 }
 
+/// A builtin's whole-rig pattern is found under either of its spellings.
 #[test]
 fn a_rig_pattern_is_found_in_either_spelling() {
     assert!(is_rig_pattern("gram:", "sourcetrait/gram"));
