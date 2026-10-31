@@ -350,6 +350,16 @@ pub(crate) fn push_frames(
     payloads: Vec<(String, Vec<u8>)>,
     dests: Vec<String>,
 ) -> Result<(), String> {
+    let deliver = MsgFrame::Deliver {
+        id: id.to_string(),
+        model,
+        event_nuon,
+        files: dests,
+    };
+    let deliver = match checked(InitiatorToAcceptor::Msg(deliver))? {
+        InitiatorToAcceptor::Msg(deliver) => deliver,
+        _ => unreachable!("checked as a message frame"),
+    };
     let mut chunks = Vec::new();
     for (dest, bytes) in payloads {
         if bytes.is_empty() {
@@ -373,12 +383,6 @@ pub(crate) fn push_frames(
             });
         }
     }
-    let deliver = MsgFrame::Deliver {
-        id: id.to_string(),
-        model,
-        event_nuon,
-        files: dests,
-    };
     let chunks = chunks
         .into_iter()
         .map(|chunk| match checked(InitiatorToAcceptor::File(chunk))? {
@@ -386,10 +390,6 @@ pub(crate) fn push_frames(
             _ => unreachable!("checked as a file frame"),
         })
         .collect::<Result<Vec<_>, String>>()?;
-    let deliver = match checked(InitiatorToAcceptor::Msg(deliver))? {
-        InitiatorToAcceptor::Msg(deliver) => deliver,
-        _ => unreachable!("checked as a message frame"),
-    };
     let closing = || "remote link is closing".to_string();
     for chunk in chunks {
         file_out_tx.send(chunk).map_err(|_| closing())?;

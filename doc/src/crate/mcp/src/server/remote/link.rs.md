@@ -108,8 +108,10 @@ synchronous mpsc sends, so a grimm eval thread drives them. A mid-push failure
 means the driver is gone (the link went down at enqueue): the registration is
 forgotten and the error returned synchronously, with no id and no async notice,
 since nothing left the host. push_frames is the free helper doing the pushes;
-splitting it out keeps the register/forget bracket readable. It builds every
-frame of the send first and checks each as its peer will read it
+splitting it out keeps the register/forget bracket readable. It checks the
+Deliver first, since its model and file names can refuse a whole send before a
+byte of any payload is copied, then builds every chunk and checks each as its
+peer will read it
 (codec.rs's `check_outbound`), so a frame the peer would refuse, one inflating
 past the cap or one past the decode budget, refuses the whole send
 synchronously with nothing queued, rather than reaching the peer, which would

@@ -239,6 +239,54 @@ fn the_client_refuses_each_wrong_reply() {
 }
 
 #[test]
+fn the_client_holds_each_limit_to_the_hard_ceilings_whatever_it_asked() {
+    let greedy = Limits {
+        rpc_frame: u32::MAX,
+        decode_heap: u64::MAX,
+        concurrent_rpcs: u32::MAX,
+        control_slots: u32::MAX,
+        event_records: u32::MAX,
+        event_bytes: u64::MAX,
+    };
+    let expect = Expectation { requested: greedy, ..expectation() };
+    let past = [
+        ("rpc_frame", Limits { rpc_frame: LIMITS_HARD.rpc_frame + 1, ..LIMITS_HARD }),
+        ("decode_heap", Limits { decode_heap: LIMITS_HARD.decode_heap + 1, ..LIMITS_HARD }),
+        ("concurrent_rpcs", Limits { concurrent_rpcs: LIMITS_HARD.concurrent_rpcs + 1, ..LIMITS_HARD }),
+        ("control_slots", Limits { control_slots: LIMITS_HARD.control_slots + 1, ..LIMITS_HARD }),
+        ("event_records", Limits { event_records: LIMITS_HARD.event_records + 1, ..LIMITS_HARD }),
+        ("event_bytes", Limits { event_bytes: LIMITS_HARD.event_bytes + 1, ..LIMITS_HARD }),
+    ];
+    for (name, effective) in past {
+        let error = check_reply(HelloReply::Accepted(Box::new(ServerHello { effective, ..reply() })), &expect).expect_err(name);
+        assert_eq!(error.kind(), "daemon::invalid_frame", "{name}");
+        assert!(error.message().contains(name), "{name}: {}", error.message());
+    }
+    let at_the_ceilings = ServerHello { effective: LIMITS_HARD, ..reply() };
+    assert_eq!(check_reply(HelloReply::Accepted(Box::new(at_the_ceilings)), &expect).expect("accepted").limits, LIMITS_HARD);
+}
+
+#[test]
+fn a_resume_or_an_attachment_is_refused_from_another_generation() {
+    let grant = LeaseGrant { lease: LeaseId([1; 16]), token: LeaseToken([2; 32]), epoch: LeaseEpoch(1), heartbeat_ms: 10_000, expiry_ms: 30_000 };
+    let earlier = WorkerGeneration([0x43; 16]);
+    let cases = [
+        (StreamRole::Rpc, LeaseIntent::Resume { lease: grant.lease, token: grant.token, epoch: grant.epoch, generation: earlier }, LeaseBinding::Granted(grant.clone())),
+        (StreamRole::Events, LeaseIntent::Attach { lease: grant.lease, token: grant.token, epoch: grant.epoch, generation: earlier }, LeaseBinding::Attached { lease: grant.lease, epoch: grant.epoch }),
+    ];
+    for (role, lease, binding) in cases {
+        let name = lease.name();
+        // The reply's worker is GENERATION's, not the intent's.
+        let reply = ServerHello { role, lease: binding, ..reply() };
+        for last in [None, Some(earlier)] {
+            let expect = Expectation { role, lease: lease.clone(), last, ..expectation() };
+            let error = check_reply(HelloReply::Accepted(Box::new(reply.clone())), &expect).expect_err(name);
+            assert_eq!(error.kind(), "daemon::invalid_frame", "{name} with last {last:?}");
+        }
+    }
+}
+
+#[test]
 fn a_new_generation_is_reported_so_nothing_of_the_old_worker_carries_over() {
     let same = Expectation { last: Some(GENERATION), ..expectation() };
     assert!(!check_reply(HelloReply::Accepted(Box::new(reply())), &same).expect("accepted").new_generation);

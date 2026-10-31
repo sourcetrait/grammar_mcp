@@ -414,6 +414,18 @@ pub fn check_reply(reply: HelloReply, expect: &Expectation) -> Result<Session, T
             reason: format!("the worker raised {name} to {effective} past the {requested} requested"),
         });
     }
+    if let Some((name, effective, hard)) = hello.effective.past(&LIMITS_HARD) {
+        return Err(TransportError::InvalidFrame {
+            reason: format!("the worker granted {name} {effective} past the hard ceiling {hard}"),
+        });
+    }
+    if let LeaseIntent::Resume { generation, .. } | LeaseIntent::Attach { generation, .. } = &expect.lease
+        && *generation != hello.worker.generation
+    {
+        return Err(TransportError::InvalidFrame {
+            reason: format!("the worker answered a {} from another generation", expect.lease.name()),
+        });
+    }
     if let Some(name) = hello.effective.zero() {
         return Err(TransportError::InvalidFrame {
             reason: format!("the worker set {name} to zero"),
