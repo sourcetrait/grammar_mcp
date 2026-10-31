@@ -7,6 +7,7 @@ members = [
   "crate/channel",
   "crate/peer",
   "crate/interface",
+  "crate/scratch",
   "crate/engine",
   "crate/operator",
   "crate/client",
@@ -87,6 +88,7 @@ sourcetrait_grammar_interface = { path = "crate/interface" }
 sourcetrait_grammar_operator = { path = "crate/operator" }
 sourcetrait_grammar_peer = { path = "crate/peer" }
 sourcetrait_grammar_protocol = { path = "crate/protocol" }
+sourcetrait_grammar_scratch = { path = "crate/scratch" }
 
 sourcetrait_common = {
     path = "../common/crates/sourcetrait_common",

@@ -1,0 +1,16 @@
+# Owner: the process that made a scratch directory, the marker in that directory.
+#
+# It sits at <directory>/owner.nuon, written once as the directory is made. Its
+# uid, pid, and start name the process, the start in the platform's unit: clock
+# ticks since boot on Linux, microseconds since the epoch on macOS. The boot is
+# Linux's boot id, which a start counting from boot needs, and null on macOS.
+# The nonce is the guard's own, one a directory, so a guard removes only a
+# directory still marked as its own.
+
+record<
+    uid: int,
+    pid: int,
+    start: int,
+    boot: oneof<string, nothing>,
+    nonce: string
+>

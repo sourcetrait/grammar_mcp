@@ -22,5 +22,5 @@ grammard's command line and entry, behind `service`, the local CLI's declared
 stub among them (`cli/oneshot.rs`).
 
 ## pub use
-The runtime and its identity, the instance's types, the error and its kind,
-and, with `service`, grammard's entry.
+The runtime and its identity, the worker's scratch, the instance's types, the
+error and its kind, and, with `service`, grammard's entry.

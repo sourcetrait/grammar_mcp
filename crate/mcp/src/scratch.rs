@@ -140,29 +140,15 @@ fn make_dir(base: &Path) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-/// Remove each scratch directory whose owning process is gone.
+/// Sweep `base` of scratch whose owner is proven gone, reporting what it keeps.
 fn sweep_stale(base: &Path) {
-    let Ok(entries) = fs::read_dir(base) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        if !name.to_str().is_some_and(|name| name.starts_with(SCRATCH_PREFIX)) {
-            continue;
-        }
-        let dir = entry.path();
-        let Some((pid, start)) = read_owner(&dir) else {
-            continue;
-        };
-        if sourcetrait_process::start_time(pid) != Some(start) {
-            let _ = fs::remove_dir_all(&dir);
-        }
+    let report = sourcetrait_grammar_scratch::sweep(
+        base,
+        SCRATCH_PREFIX,
+        sourcetrait_grammar_scratch::current_uid(),
+        &sourcetrait_grammar_scratch::HostProbe,
+    );
+    for line in report.diagnostics() {
+        eprintln!("grammar: {line}");
     }
-}
-
-/// A scratch directory's owner, none when its marker is absent or unreadable.
-fn read_owner(dir: &Path) -> Option<(u32, u64)> {
-    let text = fs::read_to_string(dir.join(OWNER_FILE)).ok()?;
-    let mut parts = text.split_whitespace();
-    Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
 }

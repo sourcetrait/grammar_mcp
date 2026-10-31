@@ -20,6 +20,7 @@ pub(crate) mod rpc {}
 #[cfg(feature = "service")]
 pub(crate) mod run;
 pub(crate) mod runtime {
+    pub(crate) mod scratch;
     pub(crate) mod start;
 }
 pub(crate) mod session {}
@@ -48,6 +49,7 @@ pub(crate) use nuval::NuVal;
 pub(crate) use sha2::{Digest, Sha256};
 
 pub(crate) use sourcetrait_grammar_protocol::Capabilities;
+pub(crate) use sourcetrait_grammar_scratch::{HostProbe, OwnedDir, Owner, current_uid, sweep};
 
 pub(crate) mod ser {
     pub(crate) use ::serde::Deserialize;
@@ -61,7 +63,10 @@ pub use crate::{
         key::InstanceKey,
         name::InstanceName,
     },
-    runtime::start::{Runtime, RuntimeIdentity},
+    runtime::{
+        scratch::WorkerScratch,
+        start::{Runtime, RuntimeIdentity},
+    },
 };
 
 #[cfg(feature = "service")]

@@ -6689,6 +6689,7 @@ dependencies = [
  "sourcetrait_grammar_engine",
  "sourcetrait_grammar_operator",
  "sourcetrait_grammar_protocol",
+ "sourcetrait_grammar_scratch",
  "tempfile",
 ]
 
@@ -6787,6 +6788,7 @@ dependencies = [
  "sourcetrait_grammar_operator",
  "sourcetrait_grammar_peer",
  "sourcetrait_grammar_protocol",
+ "sourcetrait_grammar_scratch",
  "sourcetrait_process",
  "srcert_lib",
  "tempfile",
@@ -6851,6 +6853,18 @@ dependencies = [
  "syn 3.0.9",
  "tokio",
  "tokio-util",
+]
+
+[[package]]
+name = "sourcetrait_grammar_scratch"
+version = "0.0.0-9"
+dependencies = [
+ "nix",
+ "nutype",
+ "nuval",
+ "serde",
+ "sourcetrait_process",
+ "tempfile",
 ]
 
 [[package]]

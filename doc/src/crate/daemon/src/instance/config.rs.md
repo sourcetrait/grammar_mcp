@@ -7,7 +7,9 @@ beside it.
 
 ## const SUN_PATH_MAX
 `sockaddr_un`'s path capacity, its terminator among its bytes: 108 on Linux,
-104 on macOS and the BSDs.
+104 on macOS and the BSDs. With the key's 64 characters between `grammard/` and
+`.sock`, a socket leaves the runtime home 28 bytes of its path on Linux and 24
+on macOS.
 
 ## struct SupervisorLines
 The MCP's four `supervisor.*` lines, by the same names.

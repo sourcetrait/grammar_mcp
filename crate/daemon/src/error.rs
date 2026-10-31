@@ -34,6 +34,8 @@ pub enum DaemonError {
     ConfigInvalid { path: PathBuf, reason: String },
     /// An instance file not to trust: another's, open to others, or not plain.
     ConfigUnsafe { path: PathBuf, reason: String },
+    /// A scratch directory the worker cannot make or remove.
+    ScratchUnavailable { path: PathBuf, reason: String },
 }
 
 /// Payload-less mirror of `DaemonError`.
@@ -47,6 +49,7 @@ pub enum DaemonErrorKind {
     ConfigMissing,
     ConfigInvalid,
     ConfigUnsafe,
+    ScratchUnavailable,
 }
 
 impl DaemonErrorKind {
@@ -61,6 +64,7 @@ impl DaemonErrorKind {
             Self::ConfigMissing => "instance::config_missing",
             Self::ConfigInvalid => "instance::config_invalid",
             Self::ConfigUnsafe => "instance::config_unsafe",
+            Self::ScratchUnavailable => "scratch::unavailable",
         }
     }
 }
@@ -77,6 +81,7 @@ impl DaemonError {
             Self::ConfigMissing { .. } => DaemonErrorKind::ConfigMissing,
             Self::ConfigInvalid { .. } => DaemonErrorKind::ConfigInvalid,
             Self::ConfigUnsafe { .. } => DaemonErrorKind::ConfigUnsafe,
+            Self::ScratchUnavailable { .. } => DaemonErrorKind::ScratchUnavailable,
         }
     }
 
@@ -91,6 +96,7 @@ impl DaemonError {
             | DaemonErrorKind::ConfigMissing
             | DaemonErrorKind::ConfigInvalid
             | DaemonErrorKind::ConfigUnsafe => 78,
+            DaemonErrorKind::ScratchUnavailable => 73,
         }
     }
 }
@@ -117,6 +123,9 @@ impl fmt::Display for DaemonError {
             }
             Self::ConfigUnsafe { path, reason } => {
                 write!(f, "the instance file {} is refused: {reason}", path.display())
+            }
+            Self::ScratchUnavailable { path, reason } => {
+                write!(f, "scratch under {}: {reason}", path.display())
             }
         }
     }

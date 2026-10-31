@@ -1,0 +1,93 @@
+//! Whether a marker's owner still runs: alive, proven dead, or unknown.
+use crate::*;
+
+/// What a probe answers of the process holding a pid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProcessAnswer {
+    /// A process holds the pid, started at `start`, a zombie once it exits unreaped.
+    Started { start: u64, zombie: bool },
+    /// No process holds the pid.
+    Absent,
+    /// Another user's process holds the pid.
+    Denied,
+    /// A process holds the pid, and its start can't be read.
+    Unreadable,
+}
+
+/// The process table a liveness check asks.
+pub trait Probe {
+    /// The process holding `pid`.
+    fn process(
+        &self,
+        pid: u32,
+    ) -> ProcessAnswer;
+
+    /// The running boot's identity, none where it can't be read or isn't kept.
+    fn boot(&self) -> Option<String>;
+}
+
+/// The host's table: its process records, then a null signal where they fail.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HostProbe;
+
+impl Probe for HostProbe {
+    fn process(
+        &self,
+        pid: u32,
+    ) -> ProcessAnswer {
+        if let Some(process) = sourcetrait_process::process(pid) {
+            return ProcessAnswer::Started {
+                start: process.start_time,
+                zombie: process.zombie,
+            };
+        }
+        let Ok(raw) = i32::try_from(pid) else {
+            return ProcessAnswer::Unreadable;
+        };
+        if raw <= 0 {
+            return ProcessAnswer::Unreadable;
+        }
+        match nix::sys::signal::kill(nix::unistd::Pid::from_raw(raw), None) {
+            Err(nix::errno::Errno::ESRCH) => ProcessAnswer::Absent,
+            Err(nix::errno::Errno::EPERM) => ProcessAnswer::Denied,
+            _ => ProcessAnswer::Unreadable,
+        }
+    }
+
+    fn boot(&self) -> Option<String> {
+        owner::current_boot()
+    }
+}
+
+/// Whether a marker's owner runs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Liveness {
+    /// It runs.
+    Alive,
+    /// It is proven gone, and how.
+    Dead(&'static str),
+    /// Neither is proven, and why.
+    Unknown(&'static str),
+}
+
+/// `owner`'s liveness as `probe` answers it.
+pub fn liveness(
+    owner: &Owner,
+    probe: &impl Probe,
+) -> Liveness {
+    if let (Some(then), Some(now)) = (&owner.boot, probe.boot())
+        && *then != now
+    {
+        return Liveness::Dead("it started in an earlier boot");
+    }
+    match probe.process(owner.pid) {
+        ProcessAnswer::Started { start, zombie: false } if start == owner.start => Liveness::Alive,
+        ProcessAnswer::Started { start, zombie: true } if start == owner.start => {
+            Liveness::Dead("it has exited, its parent yet to reap it")
+        }
+        ProcessAnswer::Started { .. } => Liveness::Dead("another process holds its pid"),
+        ProcessAnswer::Absent => Liveness::Dead("no process holds its pid"),
+        ProcessAnswer::Denied => Liveness::Unknown("another user's process holds its pid"),
+        ProcessAnswer::Unreadable => Liveness::Unknown("the process holding its pid can't be read"),
+    }
+}

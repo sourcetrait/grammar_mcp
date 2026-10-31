@@ -27,12 +27,12 @@ other than a deliberate close leaves its inbox for the agent to read, and the
 next open makes another, so the end removes each.
 
 ## const OWNER_FILE
-The owner's pid and its start time from the process table (`sourcetrait_process`),
-the identity the operator's pins use: a pid alone is recycled, and the pair is not.
-The start time is in the platform's unit, clock ticks since boot on Linux and
-microseconds since the epoch on macOS, and a pair is only checked on the host that
-wrote it. Where no table is read no marker is written, and a sweep finds none to
-act on.
+The owner's pid and its start time from the process table
+(`sourcetrait_process`), the identity the operator's pins use: a pid alone is
+recycled, and the pair is not within a boot. The start time is in the
+platform's unit, clock ticks since boot on Linux and microseconds since the
+epoch on macOS, and a pair is only checked on the host that wrote it. Where no
+table is read no marker is written, and a sweep keeps the directory unmarked.
 
 ## const SCRATCH_MODE
 Asked of `tempfile` outright: its directories default to 0777 less the umask,
@@ -78,10 +78,10 @@ name later is someone else's, which the end must leave.
 
 ## fn remove_scratch_dirs
 Every ordinary end calls it, the client's, the test driver's, the one-shot's, a
-failed start's, and a signal's (`run.rs`, `server/channel/face.rs`). The inboxes go first, each one the
-process made; a directory already gone, an inbox a deliberate close removed
-among them, is no error. A host killed outright leaves its inbox, which nothing
-sweeps.
+failed start's, and a signal's (`run.rs`, `server/channel/face.rs`). The
+inboxes go first, each one the process made; a directory already gone, an inbox
+a deliberate close removed among them, is no error. A host killed outright
+leaves its inbox, which nothing sweeps.
 
 ## fn make_dir
 `tempfile`'s builder, as `mkdtemp` makes one: the name unguessable and the mode
@@ -91,7 +91,8 @@ exists; a sweep meeting a directory between the two finds no marker and leaves
 it.
 
 ## fn sweep_stale
-Removes a directory only when its marker names a pair that is no longer a live
-process. A directory without a readable marker is left alone: it may be a
-host's still between its creation and its marker, or another user's, which the
-mode keeps unreadable anyway.
+The shared guard's sweep (`sourcetrait_grammar_scratch`), the worker's own: a
+directory goes only when the UID owns it and its marker's owner is proven gone,
+and a process that can't be read is unknown, never dead. A directory without a
+readable marker is kept: it may be a host's still between its creation and its
+marker. Each directory kept with no running owner is reported on stderr.
