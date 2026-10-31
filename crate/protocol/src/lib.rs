@@ -5,6 +5,7 @@ pub(crate) mod codec;
 pub(crate) mod command;
 pub(crate) mod engine;
 pub(crate) mod error;
+pub(crate) mod event;
 pub(crate) mod hello;
 pub(crate) mod lease;
 pub(crate) mod limits;
@@ -59,6 +60,10 @@ pub use crate::{
         ValueAnswer, builtin_equip, builtin_name, display_equip, span_to_line_col,
     },
     error::{LOCAL_HOST, RuntimeError, TransportError},
+    event::{
+        ChannelGate, Delivery, EventAck, EventArtifact, EventBacklog, EventCursor, EventFrame,
+        EventPayload, EventRecord, EventResume,
+    },
     hello::{
         AUTH_DEADLINE, ClientHello, Expectation, HELLO_BUDGET, HELLO_DEADLINE, HelloReply,
         HelloState, Instance, InstanceKey, LIMITS_DEFAULT, LIMITS_HARD, Limits, PROTOCOL_VERSION,
