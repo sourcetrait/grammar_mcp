@@ -13,10 +13,14 @@ operation journal, `peer` the retained mTLS remote Channel manager, `rpc` the
 dispatch, `session` the controller's lease, and `transport` the listeners and
 their admission.
 
+## mod instance
+The instance a worker starts as: its names, its key, its homes, and its file,
+resolved before anything runs.
+
 ## mod cli, mod run
 grammard's command line and entry, behind `service`, the local CLI's declared
 stub among them (`cli/oneshot.rs`).
 
 ## pub use
-The runtime and its identity, the error and its kind, and, with `service`,
-grammard's entry.
+The runtime and its identity, the instance's types, the error and its kind,
+and, with `service`, grammard's entry.

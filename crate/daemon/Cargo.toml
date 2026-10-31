@@ -31,10 +31,19 @@ test-hooks = ["sourcetrait_grammar_engine/test-hooks"]
 
 [dependencies]
 clap = { workspace = true, optional = true }
+nix.workspace = true
+nutype.workspace = true
+nuval.workspace = true
+serde.workspace = true
+sha2.workspace = true
 
 sourcetrait_grammar_engine.workspace = true
 sourcetrait_grammar_operator.workspace = true
 sourcetrait_grammar_protocol.workspace = true
+
+[dev-dependencies]
+directories.workspace = true
+tempfile.workspace = true
 
 [package.metadata]
 rein = "ai"

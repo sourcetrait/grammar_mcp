@@ -1,0 +1,40 @@
+# Instance: one grammard worker's identity and settings, the file its start reads.
+#
+# It sits at <config>/grammar/grammard/instances/<key>.nuon, owned by the worker's
+# own UID and private to it, and names the instance it is for three ways: its id,
+# its namespace, and their key. A start refuses a file whose three disagree with
+# the instance it was asked to start, so one file can never serve another.
+#
+# The workdir is the worker's own, fixed here: a client's expectation never moves
+# it. The other settings are optional, null leaving the built-in default: the
+# peer links' config file, the supervisor's four lines, and the bounds the worker
+# offers each hello, each the most it grants.
+
+record<
+    id: string,
+    namespace: string,
+    key: string,
+    workdir: path,
+    peer_config: oneof<path, nothing>,
+    supervisor: oneof<
+        record<
+            cpu_warn_fraction: float,
+            ram_warn_fraction: float,
+            vram_warn_headroom_mib: int,
+            disk_warn_fraction: float
+        >,
+        nothing
+    >,
+    limits: oneof<
+        record<
+            rpc_frame: int,
+            decode_heap: int,
+            concurrent_rpcs: int,
+            control_slots: int,
+            event_records: int,
+            event_bytes: int,
+            streams: int
+        >,
+        nothing
+    >
+>

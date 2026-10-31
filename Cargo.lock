@@ -6680,9 +6680,16 @@ name = "sourcetrait_grammar_daemon"
 version = "0.0.0-9"
 dependencies = [
  "clap",
+ "directories",
+ "nix",
+ "nutype",
+ "nuval",
+ "serde",
+ "sha2",
  "sourcetrait_grammar_engine",
  "sourcetrait_grammar_operator",
  "sourcetrait_grammar_protocol",
+ "tempfile",
 ]
 
 [[package]]
