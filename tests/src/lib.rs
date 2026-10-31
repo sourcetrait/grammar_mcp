@@ -25,6 +25,11 @@ pub use nuval::NuVal;
 pub mod remote;
 pub use remote::*;
 
+#[cfg(unix)]
+pub mod sshd;
+#[cfg(unix)]
+pub use sshd::*;
+
 /// The `grammar-mcp` host binary, beside the running test binary's `deps/`.
 ///
 /// The test binary's own path with its file name and `deps/` popped: the
@@ -377,10 +382,15 @@ impl Host {
     /// `read_id` rather than dropped; a notification, which carries no id, is
     /// skipped.
     pub fn read_id(&mut self, expected_id: u64) -> Value {
+        self.read_id_within(expected_id, Duration::from_secs(15))
+    }
+
+    /// The response to `expected_id`, waited for up to `wait`, as `read_id` reads it.
+    pub fn read_id_within(&mut self, expected_id: u64, wait: Duration) -> Value {
         if let Some(msg) = self.pending.remove(&expected_id) {
             return msg;
         }
-        let deadline = Instant::now() + Duration::from_secs(15);
+        let deadline = Instant::now() + wait;
         loop {
             if Instant::now() >= deadline {
                 panic!("timed out waiting for response id {expected_id}");

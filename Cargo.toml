@@ -39,7 +39,7 @@ ignore = { version = "0.4" }
 indoc = { version = "2" }
 liquid = { version = "0.26" }
 miette = { version = "7.6", features = ["fancy-no-backtrace"] }
-nix = { version = "0.31", features = ["fs", "process", "signal", "socket", "user"] }
+nix = { version = "0.31", features = ["fs", "process", "signal", "user"] }
 rkyv = { version = "0.8" }
 rmcp = { version = "3.8", features = ["server", "transport-io", "schemars", "macros"] }
 russh = { version = "=0.65.0", default-features = false, features = ["ring", "rsa"] }

@@ -40,8 +40,8 @@ pub struct Instance {
     pub namespace: String,
 }
 
-/// Whether `name` is a valid id or namespace.
-fn valid_name(name: &str) -> bool {
+/// Whether `name` is a valid id, namespace, or engine alias.
+pub fn valid_name(name: &str) -> bool {
     let bytes = name.as_bytes();
     (1..=64).contains(&bytes.len())
         && bytes[0].is_ascii_alphanumeric()

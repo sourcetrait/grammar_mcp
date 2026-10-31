@@ -47,6 +47,8 @@ pub(crate) struct McpController {
     pub(crate) face: ChannelFace,
     /// The engine's system, none before its start and once the shutdown takes it.
     engine: std::sync::Mutex<Option<Arc<EngineHandle>>>,
+    /// The remote engines' system, none before its start or once the shutdown takes it.
+    remote: std::sync::Mutex<Option<Arc<RemoteHandle>>>,
     /// The operator and its observer, when the controller supervises.
     supervision: std::sync::Mutex<Option<Supervision>>,
     /// The namespace's lock, released once the engine and the operator stop.
@@ -60,7 +62,7 @@ pub(crate) struct McpController {
 }
 
 impl McpController {
-    /// The face's systems, the engine's, and the operator's, holding `lock`.
+    /// The systems started in order, the face's first, `lock` held for their life.
     pub(crate) async fn start(
         config: Arc<Config>,
         supervise: bool,
@@ -69,6 +71,7 @@ impl McpController {
         let face = Self::start_face(&config).await?;
         let controller = Self::of(config, face, lock);
         controller.start_engine(supervise).await?;
+        controller.start_remote().await?;
         Ok(Arc::new(controller))
     }
 
@@ -88,6 +91,7 @@ impl McpController {
             config,
             face,
             engine: std::sync::Mutex::new(None),
+            remote: std::sync::Mutex::new(None),
             supervision: std::sync::Mutex::new(None),
             lock: std::sync::Mutex::new(lock),
             stopping: Arc::new(AtomicBool::new(false)),
@@ -119,6 +123,21 @@ impl McpController {
             *held(&self.supervision) = Some(supervision);
         }
         *held(&self.engine) = Some(engine);
+        Ok(())
+    }
+
+    /// The remote engines' system on the config's engines, their asks routed here.
+    async fn start_remote(&self) -> Result<(), String> {
+        let paths = RemoteSysPaths::new(self.config.data_home(), self.config.cache_home());
+        let params = RemoteSysParams {
+            endpoints: self.config.engines.clone(),
+            limits: LIMITS_DEFAULT,
+        };
+        let route = RemoteRoute {
+            stopping: self.stopping.clone(),
+        };
+        let remote = RemoteHandle::start(paths, params, route).await?;
+        *held(&self.remote) = Some(Arc::new(remote));
         Ok(())
     }
 
@@ -170,6 +189,20 @@ impl McpController {
         self.engine()?.control(command).await
     }
 
+    /// Sends a request to the remote engine `alias` names and awaits its response.
+    pub(crate) async fn remote(
+        &self,
+        alias: &str,
+        request: EngineRequest,
+    ) -> Result<EngineResponse, TransportError> {
+        let Some(remote) = held(&self.remote).clone() else {
+            return Err(TransportError::Unavailable {
+                reason: "the remote engines' system has stopped".to_string(),
+            });
+        };
+        remote.request(alias, request).await
+    }
+
     /// Sweep on TERM, INT, or HUP: the systems stopped, then the process's exit.
     pub(crate) fn sweep_signals(self: &Arc<Self>) {
         let controller = self.clone();
@@ -188,17 +221,29 @@ impl McpController {
         self.stop().await;
     }
 
-    /// The Channel closed, the engine's side stopped, and the lock released, once.
+    /// The sessions, the Channel, and the engine stopped, the lock released, once.
     async fn stop(&self) {
         let mut stopped = self.stopped.lock().await;
         if *stopped {
             return;
         }
         self.stopping.store(true, Ordering::SeqCst);
+        self.stop_remote().await;
         self.face.closer().close_for_shutdown().await;
         self.stop_engine().await;
         drop(held(&self.lock).take());
         *stopped = true;
+    }
+
+    /// Every remote session closed, its requests let go, then the system stopped.
+    async fn stop_remote(&self) {
+        let Some(remote) = held(&self.remote).take() else {
+            return;
+        };
+        remote.close().await;
+        if let Err(e) = RemoteHandle::stop(remote).await {
+            eprintln!("{e}");
+        }
     }
 
     /// The observer, then the engine's calls, the operator, and the engine stopped.

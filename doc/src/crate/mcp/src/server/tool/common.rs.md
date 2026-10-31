@@ -28,12 +28,27 @@ operator and the emergency log are keyed by it too.
 `mint_nonce` on the server's generator (`server/identity.rs`).
 The request carries the nonce to the engine, which runs the call under it.
 
-## fn resolve_host
+## enum Route
+Where a tool's `host` sends its request: the MCP's own engine, or a configured
+remote engine by its alias.
+
+## fn NuSh::route
 Every tool takes `host`, required, User's ruling: an agent working beside remote hosts,
 possibly several, names where each call runs rather than leaving it to a default it might
-assume wrongly. Each tool resolves it right after minting its nonce, so an unknown alias
-is refused, nonce and all, before the tool's own checks. The match is exact, so a case
-or a space makes another alias.
+assume wrongly. Each tool routes it right after minting its nonce, so an unknown alias
+is refused, nonce and all, before the tool's own checks. `local` is the MCP's engine and
+each `[[engine]]` alias a remote one (`config.rs`); the match is exact, so a case or a
+space makes another alias.
+
+## fn NuSh::value
+`execute`, `rerun`, and `call` share it. The request carries `Host::Local` either way:
+a worker's engine is local to itself, and the MCP routes before any engine sees the
+request. A remote request goes to the remote engines' system as the engine's own wire
+request (`server/controller.rs`).
+
+## fn remote_value
+A worker's answer is the engine's own value answer, or a refusal the worker made before
+its engine took the request; the transport's errors answer under their `daemon::` kinds.
 
 ## fn unexpected
 An answer of another command's kind is the engine breaking its own protocol, so it is
@@ -53,5 +68,6 @@ it is, so a duration stays a duration. A tool answering nothing carries `{nonce,
 
 ## fn answer_value
 An eval's value crosses back as a `NuVal` and is rebuilt here into the nushell value the
-envelope renders. A request the engine's system could not answer and a refusal the engine
-made fold into one error, which the tool's envelope carries either way.
+envelope renders, a local engine's and a worker's alike. A request the engine's system
+could not answer and a refusal the engine made fold into one error, which the tool's
+envelope carries either way.

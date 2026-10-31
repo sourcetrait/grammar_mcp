@@ -13,6 +13,7 @@ pub(crate) mod server {
     pub(crate) mod oneshot;
     pub(crate) mod operator;
     pub(crate) mod purview;
+    pub(crate) mod remote;
     pub(crate) mod run;
     pub(crate) mod tool {
         pub(crate) mod call;
@@ -91,7 +92,7 @@ pub(crate) use crate::{
         tool::{
             call::CallParams,
             common::{
-                envelope_text, now_millis, resolve_host, serde_to_nu, success, success_value,
+                Route, envelope_text, now_millis, serde_to_nu, success, success_value,
                 success_void,
             },
             interface::{
@@ -112,8 +113,14 @@ pub(crate) use crate::server::{
     oneshot::run_oneshot,
     operator::{OperatorWatch, spawn_observer},
     purview::{CurrentPurview, pattern_delta, unknown_purview},
+    remote::RemoteRoute,
     run::run_server,
-    tool::common::{NuSh, answer_value, unexpected},
+    tool::common::{NuSh, unexpected},
+};
+
+pub(crate) use sourcetrait_grammar_client::{
+    ENGINE_NAMESPACE, Endpoint, FromRemote, RemoteAsk, RemoteEmergency, RemoteHandle,
+    RemoteSysParams, RemoteSysPaths, RemoteSystem, SSH_PORT, ToRemote,
 };
 
 pub(crate) use sourcetrait_grammar_engine::{
@@ -152,9 +159,9 @@ pub(crate) use sourcetrait_grammar_peer::{
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
-    ChannelEpoch, ChannelPhase, ChannelSendData, LOCAL_HOST, MAX_FRAME_BYTES, PreparedSend,
-    PurviewRow, PurviewView, RemoteResult, RemoteSendData, RuntimeError, SpamThresholdsData,
-    TransportError,
+    ChannelEpoch, ChannelPhase, ChannelSendData, EngineRequest, EngineResponse, FromEngineSys,
+    LIMITS_DEFAULT, LOCAL_HOST, MAX_FRAME_BYTES, PreparedSend, PurviewRow, PurviewView,
+    RemoteResult, RemoteSendData, RuntimeError, SpamThresholdsData, ToEngineSys, TransportError,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{

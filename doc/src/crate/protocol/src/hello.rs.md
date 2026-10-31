@@ -32,9 +32,14 @@ A hello decodes within 64 elements and its frame's 64 KiB of heap, far tighter
 than a frame's budget, since it arrives before anything is negotiated.
 
 ## struct Instance
-An id and a namespace, each an ASCII letter or digit and up to 63 more of
-those, `.`, `_`, or `-`, which leaves `.` and `..` out. A name outside that is
+An id and a namespace, each held to `valid_name`. A name outside it is
 refused, never sanitized, so two names can never be folded into one namespace.
+
+## fn valid_name
+An ASCII letter or digit and up to 63 more of those, `.`, `_`, or `-`, which
+leaves `.` and `..` out and makes every name one plain path component. The one
+rule for an id, a namespace, and a remote engine's alias, the worker's
+instance names and the MCP's config holding to it alike.
 
 ## struct Limits
 The bounds a hello negotiates: the frame ceiling, the heap a frame's payload

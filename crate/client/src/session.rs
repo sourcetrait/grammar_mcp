@@ -26,23 +26,48 @@ impl Responder {
     }
 }
 
+/// What the writer takes next: a frame, the stream's last frame, or its stop.
+#[derive(Debug)]
+enum Out {
+    Frame(tku::Bytes),
+    /// The close's frame, after which the stream ends.
+    Last(tku::Bytes),
+    /// The stream's end, with nothing more written.
+    Stop,
+}
+
 /// The frames a session writes, encoded and held to its ceiling before they queue.
 #[derive(Debug, Clone)]
 struct Outbox {
-    tx: tk::UnboundedSender<tku::Bytes>,
+    tx: tk::UnboundedSender<Out>,
     ceiling: u32,
 }
 
 impl Outbox {
     /// `frame` encoded and queued, refused past the ceiling or after the end.
     fn frame(&self, frame: &McpFrame) -> Result<(), TransportError> {
+        self.queue(frame, Out::Frame)
+    }
+
+    /// `frame` queued as the stream's last.
+    fn last(&self, frame: &McpFrame) -> Result<(), TransportError> {
+        self.queue(frame, Out::Last)
+    }
+
+    /// The writer stopped once what is queued before is written.
+    fn stop(&self) {
+        let _ = self.tx.send(Out::Stop);
+    }
+
+    /// `frame` encoded, held to the ceiling, and queued as `kind` makes it.
+    fn queue(&self, frame: &McpFrame, kind: fn(tku::Bytes) -> Out) -> Result<(), TransportError> {
         let bytes = payload(frame);
         if bytes.len() > self.ceiling as usize {
             return Err(TransportError::InvalidFrame {
                 reason: format!("a frame of {} bytes passes the session's {}-byte ceiling", bytes.len(), self.ceiling),
             });
         }
-        self.tx.send(bytes).map_err(|_| TransportError::SessionLost {
+        self.tx.send(kind(bytes)).map_err(|_| TransportError::SessionLost {
             reason: "the session has ended".to_string(),
         })
     }
@@ -95,6 +120,8 @@ pub struct Session {
     shared: Arc<Shared>,
     /// The reader and the pinger, which the drop stops; the writer flushes its close.
     tasks: Vec<tk::JoinHandle<()>>,
+    /// The writer, which a finish awaits so the close leaves before the stream ends.
+    writer: std::sync::Mutex<Option<tk::JoinHandle<()>>>,
 }
 
 impl Session {
@@ -125,7 +152,7 @@ impl Session {
         let out = Outbox { tx, ceiling: limits.frame };
         let shared = Arc::new(Shared::default());
         let (events_tx, events) = tk::unbounded_channel();
-        tk::spawn(write_loop(sink, rx, shared.clone(), events_tx.clone()));
+        let writer = tk::spawn(write_loop(sink, rx, shared.clone(), events_tx.clone()));
         let tasks = vec![
             tk::spawn(read_loop(frames, limits.decode_budget(), out.clone(), shared.clone(), events_tx)),
             tk::spawn(ping_loop(out.clone(), shared.clone())),
@@ -137,6 +164,7 @@ impl Session {
                 out,
                 shared,
                 tasks,
+                writer: std::sync::Mutex::new(Some(writer)),
             },
             events,
         ))
@@ -170,10 +198,21 @@ impl Session {
         self.shared.has_ended()
     }
 
-    /// The session ended by the MCP: a close sent, every request let go.
+    /// The session ended by the MCP: its close the last frame, every request let go.
     pub fn close(&self) {
-        let _ = self.out.frame(&McpFrame::Close(SessionClose { error: None }));
+        if !self.shared.has_ended() {
+            let _ = self.out.last(&McpFrame::Close(SessionClose { error: None }));
+        }
         self.shared.end(lost_text("the MCP closed the session".to_string()));
+    }
+
+    /// The session closed, its close written and its stream ended within `deadline`.
+    pub async fn finish(&self, deadline: Duration) {
+        self.close();
+        let writer = self.writer.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(writer) = writer {
+            let _ = tk::timeout(deadline, writer).await;
+        }
     }
 }
 
@@ -203,21 +242,26 @@ fn ended(shared: &Shared, events: &tk::UnboundedSender<SessionEvent>, reason: Tr
     }
 }
 
-/// Each queued frame written in order; a close's frame is the last.
+/// Frames written in queue order until the last or the stop, then the stream ended.
 async fn write_loop<W>(
     mut sink: tku::FramedWrite<W, FrameCodec>,
-    mut rx: tk::UnboundedReceiver<tku::Bytes>,
+    mut rx: tk::UnboundedReceiver<Out>,
     shared: Arc<Shared>,
     events: tk::UnboundedSender<SessionEvent>,
 ) where
     W: tk::AsyncWrite + Unpin + Send + 'static,
 {
-    while let Some(bytes) = rx.recv().await {
+    while let Some(out) = rx.recv().await {
+        let (bytes, last) = match out {
+            Out::Frame(bytes) => (bytes, false),
+            Out::Last(bytes) => (bytes, true),
+            Out::Stop => break,
+        };
         if let Err(e) = sink.send(bytes).await {
             ended(&shared, &events, lost(e.transport()));
             return;
         }
-        if shared.has_ended() && rx.is_empty() {
+        if last {
             break;
         }
     }
@@ -266,6 +310,7 @@ async fn read_loop<R>(
         }
     };
     ended(&shared, &events, reason);
+    out.stop();
 }
 
 /// A ping each interval while the session lasts, so a quiet one stays live.

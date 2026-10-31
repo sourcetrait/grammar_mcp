@@ -3419,15 +3419,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "memoffset"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
-dependencies = [
- "autocfg",
-]
-
-[[package]]
 name = "miette"
 version = "5.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3639,7 +3630,6 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
- "memoffset",
 ]
 
 [[package]]
@@ -6618,8 +6608,12 @@ dependencies = [
 name = "sourcetrait_grammar_client"
 version = "0.0.0-9"
 dependencies = [
+ "bitcode",
  "futures-util",
+ "rkyv",
  "russh",
+ "serde",
+ "sourcetrait_common",
  "sourcetrait_grammar_protocol",
  "tokio",
  "tokio-util",
@@ -6831,9 +6825,13 @@ dependencies = [
  "nix",
  "nu-config",
  "nuval",
+ "russh",
  "serde_json",
  "sourcetrait_common",
+ "sourcetrait_grammar_client",
+ "sourcetrait_grammar_protocol",
  "srcert_lib",
+ "tempfile",
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",

@@ -37,6 +37,11 @@ each use, so they change with no restart.
 The embedded base and the agent's file share this shape. A `[[remote]]` here
 is an unknown field, so a file from before the remotes moved fails loudly.
 
+## struct EngineConfigToml
+One remote engine, `[[engine]]`, the agent's file's alone: the base names
+none. Each field is optional here so a missing one is refused by its name at
+resolve, and `port` and `namespace` take their defaults there.
+
 ## struct IdentityConfigToml
 The host's own key pair, one for everything it presents: the Channel's TLS and
 every remote link's mTLS. An agent is one identity, so a pair for each link
@@ -83,6 +88,11 @@ neither runs without one.
 The config file's sibling, whichever file the config came from, so `--config`
 moves the remotes with it.
 
+### field engines
+The remote engines a tool's `host` names, each checked at load. They are read
+once, at the start, as the rest of the file is; the remote engines' system
+starts on them (`server/controller.rs`).
+
 ## struct ChannelConfig
 
 ### field spam
@@ -102,6 +112,15 @@ command gets flagged. That is why erring permissive is right here.
 ## fn resolved_identity
 Both files are required and expanded at load, so a missing one or an
 unresolvable variable fails at startup with its name, not at the first open.
+
+## fn resolved_engines
+Each entry's required fields are present or refused by name, `port` defaults
+to 22 and `namespace` to `default`, and the key file expands as every other
+path here does. The command and the workdir are the host's paths, not this
+one's, so they never expand. Each entry is held to the client's `check`
+(`crate/client`'s `endpoint.rs`), and an alias may name one engine alone. An
+engine's alias and a remote channel's never meet in one command, so the two
+may share a name.
 
 ## fn merged_supervisor
 The operator reads the table, through `Config.supervisor`.

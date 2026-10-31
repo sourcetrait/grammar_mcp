@@ -3,11 +3,12 @@
 mcp's controller, the one the process owns: it starts the systems it serves
 on, routes between them, and stops them in order. It holds the face, which
 starts and routes the Channel's and the peer links' systems
-(`server/channel/face.rs`), and starts the engine's system, and the operator's
-when it supervises. A system never calls another: each handler it hands a
-system holds what that system's routes need, the engine's `HostRoute` the
-face's two systems (`server/host.rs`), the operator's `OperatorWatch` the
-emergency policy (`server/operator.rs`).
+(`server/channel/face.rs`), and starts the engine's system, the remote
+engines', and the operator's when it supervises. A system never calls
+another: each handler it hands a system holds what that system's routes need,
+the engine's `HostRoute` the face's two systems (`server/host.rs`), the
+operator's `OperatorWatch` the emergency policy (`server/operator.rs`), and
+the remote engines' `RemoteRoute` their workers' asks (`server/remote.rs`).
 
 ## fn log_status
 A system's status change is logged from its handler, on the system's control
@@ -34,6 +35,10 @@ Behind a lock, so the shutdown can take it while a tool's request holds a
 clone: a request takes its own clone first, and one arriving after the
 shutdown took the engine answers the stopped engine's failure.
 
+### field remote
+The remote engines' system, behind a lock as the engine's is, so a request
+arriving after the shutdown took it answers `daemon::unavailable`.
+
 ### field lock
 The namespace's lock its entry took before the engine (`run.rs`), held for the
 systems' life and released by the stop once the engine and the operator have
@@ -56,10 +61,15 @@ under it. The sweep takes itself out of the slot when its signal comes, so the
 ordinary end never aborts a sweep that has begun stopping.
 
 ### fn start
-The face's systems first, then the engine's, whose host asks reach the face's.
-`supervise` is the serve path's: the operator, its observer, and the policy's
-hold on the Channel's spam pair. The one-shot CLI and the in-process harness
-start unsupervised.
+The face's systems first, then the engine's, whose host asks reach the face's,
+then the remote engines'. `supervise` is the serve path's: the operator, its
+observer, and the policy's hold on the Channel's spam pair. The one-shot CLI
+and the in-process harness start unsupervised.
+
+### fn start_remote
+The system starts on the config's engines whether it names any or not, so
+every controller holds one and stops it the same way; no session opens until a
+tool names an engine.
 
 ### fn start_engine
 The policy is made before the engine, and a supervised start puts it in the
@@ -71,17 +81,26 @@ The tools' requests go to the engine directly, each on its caller's own task,
 so a long eval holds no other request up; the engine's system answers each
 from a task of its own.
 
+### fn remote
+A request of a remote engine, on its caller's task as the engine's are.
+
 ### fn sweep_signals
 The sweep's shutdown is the controller's stop, after which the sweep removes
 the scratch directories and exits (`server/channel/face.rs`).
 
 ### fn stop
-The order is the shutdown's point. The Channel's peer is told first that the
-host is going away (`ChannelCloser::close_for_shutdown`); then the observer
-stops, so nothing observes a stopping engine; the engine's `Teardown` cancels
-the calls in flight and reaps their trees; the operator stops next; the
-engine's system stops once no request holds it; and the namespace's lock goes
-last, as late as anything that still works on the namespace.
+The order is the shutdown's point. The remote sessions close first, so every
+worker's work ends with its session as the MCP goes; then the Channel's peer
+is told that the host is going away (`ChannelCloser::close_for_shutdown`);
+then the observer stops, so nothing observes a stopping engine; the engine's
+`Teardown` cancels the calls in flight and reaps their trees; the operator
+stops next; the engine's system stops once no request holds it; and the
+namespace's lock goes last, as late as anything that still works on the
+namespace.
+
+### fn stop_remote
+Every session is closed before the system stops, so a request in flight lets
+the system go at once, answered `daemon::session_lost`.
 
 The Channel's and the peer links' systems end with the process: their handles
 are shared by the routes, the hubs, and the policy, whose tasks live until

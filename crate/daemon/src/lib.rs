@@ -49,6 +49,7 @@ pub(crate) use sourcetrait_grammar_protocol::{
     Instance, LIMITS_DEFAULT, Limits, McpFrame, NuVal, Observation, PurviewAnswer,
     PurviewRequest, RuntimeError, SESSION_IDLE, SessionAsk, SessionClose, ToEngineSys,
     TransportError, ValueAnswer, WorkerFrame, WorkerInfo, WorkerProfile, decode_payload, payload,
+    valid_name,
 };
 pub(crate) use sourcetrait_grammar_scratch::{
     HostProbe, LOCK_FILE, LockError, LockRecord, NamespaceLock, OwnedDir, Owner, current_uid, sweep,

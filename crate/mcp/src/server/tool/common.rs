@@ -48,14 +48,57 @@ impl NuSh {
     }
 }
 
-/// A tool's `host` alias as the engine's host; `local` is the one known.
-pub(crate) fn resolve_host(alias: &str) -> GrammarMcpResult<Host> {
-    if alias == LOCAL_HOST {
-        Ok(Host::Local)
-    } else {
+/// Where a tool's `host` sends its request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Route {
+    /// The MCP's own engine.
+    Local,
+    /// The configured remote engine of this alias.
+    Remote(String),
+}
+
+impl NuSh {
+    /// A tool's `host` as its route: `local`, a configured engine's alias, or unknown.
+    pub(crate) fn route(&self, alias: &str) -> GrammarMcpResult<Route> {
+        if alias == LOCAL_HOST {
+            return Ok(Route::Local);
+        }
+        if self.controller.config.engines.iter().any(|engine| engine.alias == alias) {
+            return Ok(Route::Remote(alias.to_string()));
+        }
         Err(GrammarMcpError::HostUnknown {
             host: alias.to_string(),
         })
+    }
+
+    /// An eval's, a rerun's, or a call's value from the engine its route names.
+    pub(crate) async fn value<T>(
+        &self,
+        route: Route,
+        request: T,
+    ) -> GrammarMcpResult<nu::Value>
+    where
+        T: subsys::Request<EngineSystem, ResponseType = ValueAnswer> + Into<ToEngineSys>,
+    {
+        let answer = match route {
+            Route::Local => self.controller.request(request).await,
+            Route::Remote(alias) => {
+                let response = self.controller.remote(&alias, EngineRequest::Wire(request.into())).await;
+                remote_value(response)?
+            }
+        };
+        answer_value(answer)
+    }
+}
+
+/// A remote engine's response as its value answer, or its transport's error.
+fn remote_value(
+    response: Result<EngineResponse, TransportError>,
+) -> GrammarMcpResult<EngineResult<ValueAnswer>> {
+    match response? {
+        EngineResponse::Wire(FromEngineSys::Value(answer)) => Ok(Ok(answer)),
+        EngineResponse::Refused(refusal) => Err(GrammarMcpError::Transport(refusal)),
+        _ => Err(unexpected("value")),
     }
 }
 

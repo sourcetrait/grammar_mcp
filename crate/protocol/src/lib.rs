@@ -52,7 +52,7 @@ pub use crate::{
     hello::{
         AUTH_DEADLINE, ClientHello, HELLO_BUDGET, HELLO_DEADLINE, HelloReply, Instance,
         LIMITS_DEFAULT, LIMITS_HARD, Limits, PROTOCOL_VERSION, ProtocolVersion, REPLY_DEADLINE,
-        WorkerHello, WorkerProfile, check_reply,
+        WorkerHello, WorkerProfile, check_reply, valid_name,
     },
     limits::{DECODE_BUDGET_DEFAULT, DECODE_HEAP_HARD, DecodeBudget, FRAME_DEFAULT, FRAME_HARD, HELLO_FRAME_MAX},
     operator::{

@@ -1,14 +1,30 @@
 # lib.rs
 
-The MCP's side of a session with a remote worker. It takes the protocol and
-portable utilities alone, never the engine, the operator, or the daemon, so a
-product that drives a worker links it without an engine of its own. The SSH
-transport that opens a session joins it with RemoteClient.
+The MCP's side of its remote engines: a session with a worker over SSH, and
+the system that holds one a host. It takes the protocol, russh, and
+sourcetrait_common alone, never the engine, the operator, or the daemon, so a
+product that drives a worker links it without an engine of its own.
+
+## mod endpoint
+A remote engine's entry, held to its rules once, at the config's load.
 
 ## mod session
 The MCP's end of a session over any reader and writer, an SSH channel's or a
 child's pipes, so the daemon's tests drive a real worker through the same
-code the MCP will.
+code the MCP does.
+
+## mod ssh
+The SSH connection a session rides, its exec channel, and the channel's
+streams.
+
+## mod system
+The remote engines as a subsys system under the MCP's controller.
+
+## deps
+`bitcode`, `rkyv`, and `serde` are the cereal derive's own, every crate that
+derives `Data` naming them.
 
 ## pub use
-The session, its events, and an ask's responder.
+The endpoint and its defaults, the session, its events and an ask's
+responder, the SSH open and its session, and the system with its messages,
+parameters, paths, and handle.

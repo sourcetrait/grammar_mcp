@@ -24,21 +24,18 @@ impl NuSh {
         mcp::Parameters(p): mcp::Parameters<ExecuteParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         let nonce = self.mint("execute", &p).to_nonce();
-        let host = match resolve_host(&p.host) {
-            Ok(host) => host,
+        let route = match self.route(&p.host) {
+            Ok(route) => route,
             Err(error) => return error_to_call_result(error, nonce),
         };
-        let answer = self
-            .controller
-            .request(ExecuteRequest {
-                host,
-                nonce,
-                definition: p.definition,
-                data: p.data,
-                timeout: p.timeout,
-            })
-            .await;
-        match answer_value(answer) {
+        let request = ExecuteRequest {
+            host: Host::Local,
+            nonce,
+            definition: p.definition,
+            data: p.data,
+            timeout: p.timeout,
+        };
+        match self.value(route, request).await {
             Ok(value) => success_value(nonce, value),
             Err(error) => error_to_call_result(error, nonce),
         }

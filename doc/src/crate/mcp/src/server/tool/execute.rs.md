@@ -17,5 +17,6 @@ wrote it. The doc lint's list-indent rule is allowed on this one fn: the text is
 for the agent, not for rustdoc, and it stays as he wrote it.
 
 The nonce is minted FIRST, over the parameters, so every refusal carries it; the host
-is resolved next (`resolve_host`, `common.rs`). The rest go to the engine as the agent
-sent them: the contract is checked by the engine that runs the call, never twice.
+is routed next (`NuSh::route`, `common.rs`). The rest go to the routed engine as the
+agent sent them: the contract is checked by the engine that runs the call, the MCP's or
+a worker's, never twice.

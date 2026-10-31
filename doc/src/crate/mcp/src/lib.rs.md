@@ -5,9 +5,10 @@ what a reader of it could reasonably get wrong.
 
 ## mod server
 One build: the server and the one-shot CLI run on the process's own engine,
-the controller over the face's systems, the engine's, and the operator's
-(User). The Channel's and the peer links' systems (`crate/channel`,
-`crate/peer`) are the MCP's own.
+the controller over the face's systems, the engine's, the remote engines', and
+the operator's (User). The Channel's and the peer links' systems
+(`crate/channel`, `crate/peer`) are the MCP's own, and the remote engines'
+(`crate/client`) its sessions with its workers.
 
 ## use sourcetrait_grammar_scratch
 The namespace lock is the scratch crate's, shared with grammard, so both

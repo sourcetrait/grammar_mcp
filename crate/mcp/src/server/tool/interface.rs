@@ -80,11 +80,12 @@ impl NuSh {
         mcp::Parameters(p): mcp::Parameters<InterfaceParams>,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         let nonce = self.mint(INTERFACE_TOOL, &p).to_nonce();
-        if let Err(error) = resolve_host(&p.host) {
-            return error_to_call_result(error, nonce);
-        }
+        let route = match self.route(&p.host) {
+            Ok(route) => route,
+            Err(error) => return error_to_call_result(error, nonce),
+        };
         match parse_command(&self.interface_engine, &p.command) {
-            Ok(command) => self.run_interface(nonce, command).await,
+            Ok(command) => self.run_interface(nonce, route, command).await,
             Err(diagnostics) => {
                 error_to_call_result(GrammarMcpError::InterfaceViolations { diagnostics }, nonce)
             }
@@ -97,13 +98,17 @@ impl NuSh {
     pub(crate) async fn run_interface(
         &self,
         nonce: datum::Nonce,
+        route: Route,
         command: InterfaceCommand,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         let face = &self.controller.face;
-        match command {
-            InterfaceCommand::Channel(command) => face.run_channel(nonce, command).await,
-            InterfaceCommand::Peer(command) => face.run_peer(nonce, command).await,
-            InterfaceCommand::Engine(command) => self.run_engine(nonce, command).await,
+        match (command, route) {
+            (InterfaceCommand::Channel(command), _) => face.run_channel(nonce, command).await,
+            (InterfaceCommand::Peer(command), _) => face.run_peer(nonce, command).await,
+            (InterfaceCommand::Engine(command), Route::Local) => self.run_engine(nonce, command).await,
+            (InterfaceCommand::Engine(_), Route::Remote(host)) => {
+                error_to_call_result(EngineError::HostUnserved { host }, nonce)
+            }
         }
     }
 
