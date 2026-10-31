@@ -162,6 +162,8 @@ pub enum TransportError {
     /// The request may have run: its operation's outcome is unknown.
     UnknownOutcome { operation: OperationId, reason: String },
     Unavailable { reason: String },
+    /// A hello required a feature the other end doesn't have on.
+    UnsupportedFeature { feature: String },
 }
 
 impl TransportError {
@@ -172,6 +174,7 @@ impl TransportError {
             Self::SchemaMismatch { .. } => "daemon::schema_mismatch",
             Self::CodecMismatch { .. } => "daemon::codec_mismatch",
             Self::WrongWorker { .. } => "daemon::wrong_worker",
+            Self::UnsupportedFeature { .. } => "daemon::unsupported_feature",
             Self::Unauthorized { .. } => "daemon::unauthorized",
             Self::AuthenticationFailed { .. } => "daemon::authentication_failed",
             Self::LeaseInvalid { .. } => "daemon::lease_invalid",
@@ -198,6 +201,9 @@ impl TransportError {
             }
             Self::WrongWorker { expected, found } => {
                 format!("the worker is {found}, not the expected {expected}")
+            }
+            Self::UnsupportedFeature { feature } => {
+                format!("the required feature `{feature}` is not on")
             }
             Self::Unauthorized { reason } => format!("the worker refused this peer: {reason}"),
             Self::AuthenticationFailed { reason } => {

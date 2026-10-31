@@ -25,4 +25,16 @@ impl Capabilities {
         artifacts: false,
         service: false,
     };
+
+    /// The capability a hello's required feature names, if it names one.
+    pub fn named(&self, feature: &str) -> Option<bool> {
+        match feature {
+            "wire" => Some(self.wire),
+            "runtime" => Some(self.runtime),
+            "client" => Some(self.client),
+            "artifacts" => Some(self.artifacts),
+            "service" => Some(self.service),
+            _ => None,
+        }
+    }
 }

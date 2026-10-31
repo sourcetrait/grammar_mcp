@@ -79,6 +79,7 @@
   [transport_error/unauthorized,            "040d70656572207569642031303031"],
   [transport_error/unavailable,             "0c086e6f20726f757465"],
   [transport_error/unknown_outcome,         "0b09110000117468652073747265616d20636c6f736564"],
+  [transport_error/unsupported_feature,     "0d09617274696661637473"],
   [transport_error/version_mismatch,        "0003312e3003322e30"],
   [transport_error/wrong_worker,            "030f666978747572652f64656661756c740c666978747572652f74657374"]
 ]

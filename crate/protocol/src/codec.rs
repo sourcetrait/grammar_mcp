@@ -9,7 +9,7 @@ pub const CODEC_ID: &str = "bitcode-0.6.9";
 
 /// The SHA-256 of `schema/v1.nuon`'s canonical form, named by both hellos.
 pub const SCHEMA_ID: [u8; 32] =
-    schema_id("71923254e41bb6aa9451799698698dbff417405e322722dbd639c02e5996d235");
+    schema_id("f104ea4d28d57566b3d86a9b4daa7b1e6be9bd290a22df5be48c25549e883260");
 
 /// An ID's 32 bytes from its 64 lowercase hex digits, checked as it builds.
 const fn schema_id(hex: &str) -> [u8; 32] {

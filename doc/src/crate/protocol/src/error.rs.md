@@ -52,3 +52,5 @@ The path to a worker failing, never the worker's answer, each under a stable
 `UnknownOutcome` means the request may have run, so it names the operation whose
 status the caller can look up; an agent can tell a retry that is safe from one
 that may repeat an effect. `Busy` admits no operation at all.
+`UnsupportedFeature` is a hello's required feature the other end doesn't have
+on; it sits last so the variants before it keep their wire indices.

@@ -19,7 +19,8 @@ subscriber is a gap or a disconnect, never a backlog of large frames.
 
 ## enum StreamRole
 The three roles the contract names, fixed for a stream's life by its hello.
-Status takes RPC's ceilings, the contract naming none of its own.
+Status takes RPC's ceilings, the contract naming none of its own. It is cereal
+data because the hello carries it.
 
 ## type DecodeBudget
 bitcode's `Budget` from sourcetrait's fork, so the bounds a payload decodes

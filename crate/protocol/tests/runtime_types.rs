@@ -237,6 +237,7 @@ fn transport_errors() -> Vec<(&'static str, TransportError)> {
         ("schema_mismatch", T::SchemaMismatch { expected: "a".into(), found: "b".into() }),
         ("codec_mismatch", T::CodecMismatch { expected: "bitcode-0.6.9".into(), found: "bitcode-0.7.0".into() }),
         ("wrong_worker", T::WrongWorker { expected: "fixture/default".into(), found: "fixture/test".into() }),
+        ("unsupported_feature", T::UnsupportedFeature { feature: "artifacts".into() }),
         ("unauthorized", T::Unauthorized { reason: "peer uid 1001".into() }),
         ("authentication_failed", T::AuthenticationFailed { reason: "publickey".into() }),
         ("lease_invalid", T::LeaseInvalid { reason: "another epoch".into() }),
@@ -551,7 +552,7 @@ fn every_variant_has_its_vector() {
         .collect();
     assert_eq!(kinds.len(), 15);
     let transport: BTreeSet<_> = transport_errors().iter().map(|(_, e)| e.kind()).collect();
-    assert_eq!(transport.len(), 13);
+    assert_eq!(transport.len(), 14);
 }
 
 #[test]

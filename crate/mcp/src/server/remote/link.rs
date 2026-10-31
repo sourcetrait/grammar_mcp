@@ -379,8 +379,6 @@ pub(crate) fn push_frames(
         event_nuon,
         files: dests,
     };
-    // Every frame is checked before any is queued, so a refused send queues
-    // nothing. Both wire enums encode a Msg or File frame alike.
     let chunks = chunks
         .into_iter()
         .map(|chunk| match checked(InitiatorToAcceptor::File(chunk))? {

@@ -12,3 +12,7 @@ The set is cereal data because it crosses the wire in the hello, and it is
 ## const NONE
 Every flag off: what a build advertises before any gate passes, and what the
 client, the runtime, and the probe's inventory report for now.
+
+## fn named
+A hello's required feature by its flag's name. A name no flag carries is
+`None`, which the handshake refuses as it refuses a flag that is off.
