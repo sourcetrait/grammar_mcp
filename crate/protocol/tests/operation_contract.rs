@@ -294,6 +294,9 @@ fn tickets_awaiting_submission_are_bounded() {
 fn each_request_has_its_class() {
     let control = |command| RuntimeRequest::Engine(ToEngineSys::Control(ControlRequest { host: Host::Local, command }));
     let interface = |text: &str| RuntimeRequest::Interface { command: text.to_string() };
+    let artifact = RuntimeRequest::Artifact;
+    let read_log = ReadLog { operation: op(1), stream: LogStream::Stdout, offset: 0, max_bytes: LOG_READ_MAX };
+    let reserve = ReserveUpload { purpose: ArtifactPurpose::EquipSource, display_name: "geo.tar".to_string(), size: 1, sha256: [3; 32] };
     let cases = [
         ("info", RuntimeRequest::Info, RequestClass::Query),
         ("a lookup", RuntimeRequest::OperationLookup { operation: op(1) }, RequestClass::Query),
@@ -309,8 +312,12 @@ fn each_request_has_its_class() {
         ("interface process kill", interface("interface process kill abc"), RequestClass::Mutating),
         ("interface purview set", interface("interface purview set ['core']"), RequestClass::Mutating),
         ("an unknown command", interface("interface teleport home"), RequestClass::Mutating),
-        ("a describe", RuntimeRequest::Artifact(ArtifactRequest::Describe { id: ArtifactId([1; 16]) }), RequestClass::Query),
-        ("a publish", RuntimeRequest::Artifact(ArtifactRequest::Publish { id: ArtifactId([1; 16]) }), RequestClass::Mutating),
+        ("an inspect", artifact(ArtifactRequest::Inspect(InspectArtifact { id: ArtifactId([1; 16]) })), RequestClass::Query),
+        ("a describe", artifact(ArtifactRequest::Describe(DescribeArtifact { id: ArtifactId([1; 16]) })), RequestClass::Query),
+        ("a log read", artifact(ArtifactRequest::ReadLog(read_log)), RequestClass::Query),
+        ("a reserve", artifact(ArtifactRequest::Reserve(reserve)), RequestClass::Mutating),
+        ("a publish", artifact(ArtifactRequest::Publish(PublishUpload { id: ArtifactId([1; 16]) })), RequestClass::Mutating),
+        ("an abort", artifact(ArtifactRequest::Abort(AbortUpload { id: ArtifactId([1; 16]) })), RequestClass::Mutating),
         ("a cancellation", RuntimeRequest::Cancel { target: op(1) }, RequestClass::Mutating),
         ("a policy", RuntimeRequest::Policy(ControllerPolicy { deny_tools: Vec::new(), deny_commands: Vec::new() }), RequestClass::Mutating),
     ];

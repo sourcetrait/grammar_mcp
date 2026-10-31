@@ -16,7 +16,8 @@ use `?` freely rather than mapping at every filesystem call.
 `From<EngineError>` wraps the engine's error whole: its kinds and messages are the
 engine's, the equips' refusals and an eval's failure among them, as the wire has always
 carried them. `From<TransportError>` wraps a transport failure whole under its
-`daemon::` kind.
+`daemon::` kind. `Artifact` holds a worker's artifact refusal whole, under its
+`artifact::` kind.
 
 ### fn as_runtime
 Every variant but the engine's and the transport's is the runtime's portable

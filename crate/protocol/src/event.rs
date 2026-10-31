@@ -1,11 +1,8 @@
-//! The worker's event stream: each record's generation, sequence, and Channel
-//! epoch, cursors and their resumption, gaps and resets, and the backlog and
-//! the Channel gate a worker keeps.
+//! The worker's event stream, its cursors, and the backlog and Channel gate.
 use crate::*;
 use std::collections::VecDeque;
 
-/// Where a subscriber stands: the generation and the last sequence it holds
-/// contiguously.
+/// Where a subscriber stands: a generation and the last sequence it holds.
 #[cereal::derived(Data, Copy, Eq, Hash)]
 pub struct EventCursor {
     pub generation: WorkerGeneration,
@@ -24,7 +21,7 @@ pub enum EventPayload {
 #[cereal::derived(Data)]
 pub struct EventArtifact {
     pub artifact: ArtifactRef,
-    /// Its destination within the event's delivery, never a frontend path.
+    /// Its destination within the delivery, held to `check_dest`.
     pub dest: String,
 }
 
@@ -55,8 +52,7 @@ pub struct EventResume {
     pub cursor: Option<EventCursor>,
 }
 
-/// A subscriber's receipt of every event up to its cursor, and nothing more:
-/// no operation's state moves with it.
+/// A subscriber's receipt of every event up to its cursor, and nothing more.
 #[cereal::derived(Data, Copy, Eq)]
 pub struct EventAck {
     pub cursor: EventCursor,
@@ -70,8 +66,7 @@ pub enum Delivery {
     Close { behind: u64 },
 }
 
-/// A generation's numbered events, held to the negotiated records and bytes,
-/// the oldest dropped past either.
+/// A generation's numbered events, held to the negotiated records and bytes.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EventBacklog {
     generation: WorkerGeneration,
@@ -106,13 +101,16 @@ impl EventBacklog {
         self.next.checked_sub(1).filter(|newest| *newest > 0)
     }
 
-    /// An event numbered and held: its sequence, or refused past the event frame.
+    /// An event numbered and held: its sequence, or refused.
     pub fn push(
         &mut self,
         channel: Option<ChannelEpoch>,
         payload: EventPayload,
         artifacts: Vec<EventArtifact>,
     ) -> Result<u64, TransportError> {
+        for artifact in &artifacts {
+            check_dest(&artifact.dest).map_err(|e| TransportError::InvalidFrame { reason: e.message() })?;
+        }
         let record = EventRecord { generation: self.generation, sequence: self.next, channel, payload, artifacts };
         let size = bitcode::encode(&EventFrame::Record(Box::new(record.clone()))).len() as u64;
         if size > u64::from(EVENT_FRAME_MAX) {
@@ -128,9 +126,7 @@ impl EventBacklog {
         Ok(self.next - 1)
     }
 
-    /// The frames a subscriber after `cursor` reads, at most `max` records:
-    /// a reset for another generation's cursor, a gap where records it wanted
-    /// were dropped, and a cursor past the newest refused.
+    /// The frames a subscriber after `cursor` reads, at most `max` records.
     pub fn read(&self, cursor: Option<EventCursor>, max: usize) -> Result<Vec<EventFrame>, TransportError> {
         let mut frames = Vec::new();
         let wanted = match cursor {
@@ -161,8 +157,7 @@ impl EventBacklog {
         Ok(frames)
     }
 
-    /// A subscriber at `cursor` served, closed instead when it is more than
-    /// `window` events behind the newest.
+    /// A subscriber at `cursor` served, or closed past `window` events behind.
     pub fn deliver(&self, cursor: Option<EventCursor>, window: u64, max: usize) -> Result<Delivery, TransportError> {
         if let Some(cursor) = cursor.filter(|cursor| cursor.generation == self.generation) {
             let behind = self.newest().unwrap_or(0).saturating_sub(cursor.sequence);
@@ -173,8 +168,7 @@ impl EventBacklog {
         self.read(cursor, max).map(Delivery::Frames)
     }
 
-    /// The receipt cursor after `ack`, from the subscriber's `acked`: its own
-    /// generation's, never past the newest, never backwards.
+    /// The receipt cursor after `ack`, from the subscriber's `acked`.
     pub fn ack(&self, acked: Option<EventCursor>, ack: EventAck) -> Result<EventCursor, TransportError> {
         if ack.cursor.generation != self.generation {
             return Err(TransportError::InvalidFrame { reason: "an ack of another generation's events".to_string() });
@@ -189,8 +183,7 @@ impl EventBacklog {
     }
 }
 
-/// The Channel's epoch and phase as its worker gates them: a verification
-/// holds for its own epoch alone.
+/// The Channel's epoch and phase, its verification its own epoch's alone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChannelGate {
     epoch: ChannelEpoch,

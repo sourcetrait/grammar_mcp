@@ -1,5 +1,4 @@
-//! An operation's identity, ticket, admission, status, and outcome, and the
-//! model a worker keeps of them before its journal makes them durable.
+//! An operation's ticket, admission, status, and outcome, and the worker's model.
 use crate::*;
 use std::collections::HashMap;
 
@@ -108,8 +107,7 @@ fn command_class(kind: CommandKind) -> RequestClass {
     }
 }
 
-/// The command an `interface` text names: its longest run of leading words
-/// that is a command's, `interface` itself skipped.
+/// The command an `interface` text names by its longest run of leading words.
 fn named_command(text: &str) -> Option<CommandKind> {
     let words: Vec<&str> = text.split_whitespace().collect();
     let words = match words.first() {
@@ -119,8 +117,7 @@ fn named_command(text: &str) -> Option<CommandKind> {
     (1..=words.len()).rev().find_map(|n| command_by_words(&words[..n].join(" ")).map(|spec| spec.kind))
 }
 
-/// A request's class, decided for every variant with no default, so a new
-/// request is a build error until it is classed.
+/// A request's class, decided for every variant with no default.
 pub fn request_class(request: &RuntimeRequest) -> RequestClass {
     match request {
         RuntimeRequest::Engine(engine) => match engine {
@@ -144,16 +141,17 @@ pub fn request_class(request: &RuntimeRequest) -> RequestClass {
         RuntimeRequest::Info | RuntimeRequest::OperationLookup { .. } => RequestClass::Query,
         RuntimeRequest::Policy(_) | RuntimeRequest::Channel(_) | RuntimeRequest::Cancel { .. } => RequestClass::Mutating,
         RuntimeRequest::Artifact(artifact) => match artifact {
-            ArtifactRequest::Describe { .. } | ArtifactRequest::ReadLog(_) => RequestClass::Query,
-            ArtifactRequest::Reserve(_) | ArtifactRequest::Publish { .. } | ArtifactRequest::Abort { .. } => {
+            ArtifactRequest::Inspect(_) | ArtifactRequest::Describe(_) | ArtifactRequest::ReadLog(_) => {
+                RequestClass::Query
+            }
+            ArtifactRequest::Reserve(_) | ArtifactRequest::Publish(_) | ArtifactRequest::Abort(_) => {
                 RequestClass::Mutating
             }
         },
     }
 }
 
-/// A request's operation hash: the SHA-256 of its typed value re-encoded by
-/// the pinned bitcode, so every byte form that decodes to it shares the hash.
+/// A request's operation hash: the SHA-256 of its typed value re-encoded.
 pub fn payload_hash(request: &RuntimeRequest) -> [u8; 32] {
     use sha2::{Digest, Sha256};
     Sha256::digest(bitcode::encode(request)).into()
@@ -265,8 +263,7 @@ struct Record {
     retired: bool,
 }
 
-/// A worker's operations: tickets awaiting submission, and every operation
-/// admitted, its state, and its payload's hash.
+/// A worker's operations: tickets awaiting submission, and each one admitted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationTable {
     generation: WorkerGeneration,
@@ -285,8 +282,7 @@ impl OperationTable {
         Self { generation, issued: HashMap::new(), records: HashMap::new() }
     }
 
-    /// A worker's table from its journal's records: each unfinished one now
-    /// `UnknownAfterRestart`, never run again.
+    /// A worker's table from its journal's records, each unfinished one unknown.
     pub fn recover(generation: WorkerGeneration, records: impl IntoIterator<Item = (OperationId, [u8; 32], OperationState)>) -> Self {
         let records = records
             .into_iter()
@@ -303,8 +299,7 @@ impl OperationTable {
         self.issued.retain(|_, issued| now_ms < issued.deadline_ms);
     }
 
-    /// A ticket for `operation`, its nonce minted, under the lease's `epoch`,
-    /// or `Busy` while too many await submission.
+    /// A ticket for `operation` under the lease's `epoch`, its nonce minted.
     pub fn issue(&mut self, now_ms: u64, operation: OperationId, nonce: datum::Nonce, epoch: LeaseEpoch) -> Result<OperationTicket, TransportError> {
         self.expire(now_ms);
         if self.issued.len() >= TICKETS_MAX || self.issued.contains_key(&operation) || self.records.contains_key(&operation) {
@@ -322,8 +317,7 @@ impl OperationTable {
         Ok(ticket)
     }
 
-    /// `submission` at `now_ms` under the lease's `epoch`: its admission, and
-    /// the one execution an admission asks for.
+    /// `submission` under the lease's `epoch`: its admission, and any execution.
     pub fn submit(&mut self, now_ms: u64, submission: &Submission, epoch: LeaseEpoch) -> (Admission, Option<Execute>) {
         let operation = submission.ticket.operation;
         let answer = |outcome| Admission { correlation: submission.correlation, operation, outcome };
@@ -366,8 +360,7 @@ impl OperationTable {
         }
     }
 
-    /// `operation` moved by `event`: its new state, or none where the move
-    /// isn't legal or the operation unknown, the state left as it was.
+    /// `operation` moved by `event`: its new state, or none for an illegal move.
     pub fn advance(&mut self, operation: OperationId, event: OperationEvent) -> Option<OperationState> {
         let record = self.records.get_mut(&operation).filter(|record| !record.retired)?;
         let next = transition(record.state, event)?;
@@ -375,8 +368,7 @@ impl OperationTable {
         Some(next)
     }
 
-    /// A terminal operation's result let go, its tombstone kept so its id
-    /// never runs again; false for an operation not yet terminal.
+    /// A terminal operation's result let go, its tombstone kept.
     pub fn retire(&mut self, operation: OperationId) -> bool {
         match self.records.get_mut(&operation) {
             Some(record) if record.state.terminal() => {

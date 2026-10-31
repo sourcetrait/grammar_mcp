@@ -59,7 +59,9 @@ after which the worker closes the stream. A required feature is a capability's
 name as a string, so a later minor can add a feature without a layout change,
 and a name the worker doesn't know is refused like one it has off. The hello
 carries the stream's lease intent and the reply its binding (lease.rs).
-`Accepted` boxes its hello, some 280 bytes beside a refusal's 56.
+`Accepted` boxes its hello, some 280 bytes beside a refusal's 56. The reply
+advertises the artifact store's bounds, the worker's own to set within the
+contract and never negotiated (artifact.rs).
 
 ## fn check_hello
 The worker's side, before any lease is bound: the version, schema, and codec;
@@ -71,10 +73,17 @@ hard ceilings. A hello it refuses binds no lease.
 ## fn check_reply
 The client's side of the same checks, and what only the client can check: the
 worker's UID and instance its endpoint expects, the key derived from that
-instance, the role echoed, no bound raised past the request, the binding the
-one its intent asked for, and the generation against the last one seen. A new generation is reported in
-`Session::new_generation`, so a caller drops what it held of the old worker, a
-lease to resume or a verified Channel, rather than carrying it over.
+instance, the role echoed, no bound raised past the request, the store's
+advertised bounds within the contract, the binding the one its intent asked
+for, and the generation against the last one seen. A new generation is
+reported in `Session::new_generation`, so a caller drops what it held of the
+old worker, a lease to resume or a verified Channel, rather than carrying it
+over.
+
+## fn bound_as_asked
+A grant answers a claim or a takeover; a resume needs its own lease, token,
+and epoch granted back; an attachment its lease and epoch; and a Status
+stream no binding at all.
 
 ## enum HelloState
 One stream's handshake on the worker. `on_hello` checks the hello, then binds

@@ -50,6 +50,11 @@ An outcome and the actions taken to reach it, apart, since an expiry found
 on the way to a refusal still has its loss to act on.
 
 ## struct LeaseTable
+### fn holder
+The live lease a message names, its token matched in constant time. A wrong
+token is `LeaseInvalid`; a lease that lapsed is `LeaseExpired`; one released
+or taken over is `LeaseInvalid`, naming which; an id never granted is
+`LeaseInvalid` too.
 ### fn tick
 A lease lives while the clock is before its deadline and is lost at it.
 ### fn bind

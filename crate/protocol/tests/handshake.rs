@@ -30,6 +30,7 @@ fn worker() -> WorkerProfile {
         instance: instance(),
         generation: GENERATION,
         limits: LIMITS_DEFAULT,
+        artifacts: ARTIFACT_LIMITS_DEFAULT,
         capabilities: Capabilities { wire: true, ..Capabilities::NONE },
     }
 }
@@ -194,7 +195,13 @@ fn the_client_accepts_the_worker_it_expects() {
     assert_eq!(session.worker.uid, UID);
     assert_eq!(session.worker.instance, instance());
     assert_eq!(session.limits, LIMITS_DEFAULT);
+    assert_eq!(session.artifacts, ARTIFACT_LIMITS_DEFAULT);
     assert!(!session.new_generation);
+    // A worker's store bounds below the defaults are its own to set.
+    let lower = ArtifactLimits { reservations: 2, store_bytes: ARTIFACT_MAX_BYTES, ..ARTIFACT_LIMITS_DEFAULT };
+    let session = check_reply(HelloReply::Accepted(Box::new(ServerHello { artifacts: lower, ..reply() })), &expectation())
+        .expect("accepted");
+    assert_eq!(session.artifacts, lower);
 }
 
 #[test]
@@ -228,6 +235,16 @@ fn the_client_refuses_each_wrong_reply() {
         ),
         ("a claim left unbound", ServerHello { lease: LeaseBinding::Unbound, ..reply() }, "daemon::invalid_frame"),
         ("a feature off", ServerHello { capabilities: Capabilities::NONE, ..reply() }, "daemon::unsupported_feature"),
+        (
+            "an artifact bound past its ceiling",
+            ServerHello { artifacts: ArtifactLimits { reservations: 9, ..ARTIFACT_LIMITS_DEFAULT }, ..reply() },
+            "daemon::invalid_frame",
+        ),
+        (
+            "a retention short of the result window",
+            ServerHello { artifacts: ArtifactLimits { retention_secs: 3600, ..ARTIFACT_LIMITS_DEFAULT }, ..reply() },
+            "daemon::invalid_frame",
+        ),
     ];
     for (name, hello, kind) in cases {
         let error = check_reply(HelloReply::Accepted(Box::new(hello)), &expectation()).expect_err(name);

@@ -11,7 +11,10 @@ so this host's alias can never be configured away.
 
 ## enum RuntimeError
 What the runtime refuses outside the engine: an interface call's violations, an
-unknown host, a schema, a purview, the Channel, and the retained remote Channel.
+unknown host, a schema, a purview, the Channel, the retained remote Channel, and
+an artifact request. `Artifact` carries an `ArtifactError` whole, its kinds and
+messages the artifact module's own (artifact.rs), and it goes last, so the
+variants before it keep their wire indices.
 
 ### fn kind
 The violations variant `unreachable!()`s here deliberately: it renders through

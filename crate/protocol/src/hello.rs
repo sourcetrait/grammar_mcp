@@ -1,5 +1,4 @@
-//! A stream's opening exchange: the client's hello, the worker's reply, and the
-//! validation both ends share.
+//! A stream's opening exchange: both hellos and the validation both ends share.
 use crate::*;
 
 /// The protocol version a hello names.
@@ -41,8 +40,7 @@ pub struct Instance {
     pub namespace: String,
 }
 
-/// Whether `name` is a valid id or namespace: an ASCII letter or digit, then
-/// up to 63 more of those, `.`, `_`, or `-`.
+/// Whether `name` is a valid id or namespace.
 fn valid_name(name: &str) -> bool {
     let bytes = name.as_bytes();
     (1..=64).contains(&bytes.len())
@@ -107,8 +105,7 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// The bounds a hello negotiates, each the least of what the client asks and
-/// what the worker allows.
+/// The bounds a hello negotiates, each the least of both ends'.
 #[cereal::derived(Data, Copy, Eq)]
 pub struct Limits {
     /// The RPC and Status streams' frame ceiling.
@@ -244,19 +241,19 @@ pub struct ServerHello {
     pub lease: LeaseBinding,
     /// The negotiated bounds.
     pub effective: Limits,
+    /// The worker's artifact store's bounds, its own to set within the contract.
+    pub artifacts: ArtifactLimits,
     pub capabilities: Capabilities,
 }
 
-/// A stream's first frame from its worker: the hello accepted, or refused
-/// before the worker closes the stream.
+/// A stream's first frame from its worker: the hello accepted, or refused.
 #[cereal::derived(Data)]
 pub enum HelloReply {
     Accepted(Box<ServerHello>),
     Refused(TransportError),
 }
 
-/// The version, schema, and codec a peer named, held to this build's: the
-/// major and the schema exactly, so a minor differs only beneath one layout.
+/// The version, schema, and codec a peer named, held to this build's.
 fn agree(version: ProtocolVersion, schema: &[u8; 32], codec: &str) -> Result<(), TransportError> {
     if version.major != PROTOCOL_VERSION.major {
         return Err(TransportError::VersionMismatch {
@@ -294,6 +291,8 @@ pub struct WorkerProfile {
     pub generation: WorkerGeneration,
     /// The bounds the worker allows, held to `LIMITS_HARD` as it negotiates.
     pub limits: Limits,
+    /// The artifact store's bounds, advertised as they are.
+    pub artifacts: ArtifactLimits,
     pub capabilities: Capabilities,
 }
 
@@ -336,6 +335,7 @@ fn accepted(hello: &ClientHello, worker: &WorkerProfile, effective: Limits, leas
         role: hello.role,
         lease,
         effective,
+        artifacts: worker.artifacts,
         capabilities: worker.capabilities,
     }
 }
@@ -379,9 +379,10 @@ pub struct Session {
     pub role: StreamRole,
     pub lease: LeaseBinding,
     pub limits: Limits,
+    /// The worker's artifact store's bounds.
+    pub artifacts: ArtifactLimits,
     pub capabilities: Capabilities,
-    /// Whether the worker's generation is new since the expectation's last,
-    /// so nothing held of the earlier worker carries over.
+    /// Whether the worker's generation is new since the expectation's last.
     pub new_generation: bool,
 }
 
@@ -431,6 +432,11 @@ pub fn check_reply(reply: HelloReply, expect: &Expectation) -> Result<Session, T
             reason: format!("the worker set {name} to zero"),
         });
     }
+    if let Some(bound) = hello.artifacts.out_of_contract() {
+        return Err(TransportError::InvalidFrame {
+            reason: format!("the worker advertised {bound}"),
+        });
+    }
     provide(&expect.required, hello.capabilities)?;
     if !bound_as_asked(&expect.lease, &hello.lease) {
         return Err(TransportError::InvalidFrame {
@@ -443,13 +449,12 @@ pub fn check_reply(reply: HelloReply, expect: &Expectation) -> Result<Session, T
         role: hello.role,
         lease: hello.lease,
         limits: hello.effective,
+        artifacts: hello.artifacts,
         capabilities: hello.capabilities,
     })
 }
 
-/// Whether `binding` answers `intent`: a grant for a claim or a takeover, the
-/// same lease, token, and epoch for a resume, the same lease and epoch for an
-/// attachment, and nothing for a Status stream.
+/// Whether `binding` answers `intent`.
 fn bound_as_asked(intent: &LeaseIntent, binding: &LeaseBinding) -> bool {
     match (intent, binding) {
         (LeaseIntent::Claim | LeaseIntent::Takeover, LeaseBinding::Granted(_)) => true,
@@ -464,8 +469,7 @@ fn bound_as_asked(intent: &LeaseIntent, binding: &LeaseBinding) -> bool {
     }
 }
 
-/// One stream's handshake on the worker: awaiting its hello, ready under the
-/// hello it accepted, or closed by a refusal.
+/// One stream's handshake on the worker: awaiting, ready, or closed.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum HelloState {
     #[default]
@@ -475,9 +479,7 @@ pub enum HelloState {
 }
 
 impl HelloState {
-    /// The reply to `hello` at `now_ms`, its lease bound in `leases`, `fresh`
-    /// drawn for a grant, with the lease's actions: the stream ready on
-    /// acceptance, closed on a refusal, and a second hello refused.
+    /// The reply to `hello` at `now_ms`, its lease bound, and the lease's actions.
     pub fn on_hello(
         &mut self,
         hello: &ClientHello,

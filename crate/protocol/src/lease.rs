@@ -1,5 +1,4 @@
-//! A namespace's controller lease: its messages, the hello's intent, and the
-//! table a worker keeps, driven by a clock its caller passes in.
+//! A namespace's controller lease: its messages, intents, and the worker's table.
 use crate::*;
 
 /// How often a controller heartbeats its lease.
@@ -130,8 +129,7 @@ pub enum LeaseNotice {
     },
 }
 
-/// What the runtime does as a lease changes. None touches an operation:
-/// those the Operation contract governs.
+/// What the runtime does as a lease changes, none of it to an operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LeaseAction {
     /// Tell the lost lease's Events stream why.
@@ -237,8 +235,7 @@ impl LeaseTable {
         }
     }
 
-    /// The live lease `lease` names, its token `token`: refused as lapsed or
-    /// as invalid otherwise.
+    /// The live lease `lease` names with its token, or refused.
     fn holder(&mut self, lease: LeaseId, token: &LeaseToken) -> Result<&mut Live, TransportError> {
         let lost = self.lost;
         match self.live.as_mut() {
@@ -260,8 +257,7 @@ impl LeaseTable {
         }
     }
 
-    /// A stream's hello intent bound at `now_ms`: the binding its reply names,
-    /// `fresh` drawn for a grant, and every action the change takes.
+    /// A stream's hello intent bound at `now_ms`, `fresh` drawn for a grant.
     pub fn bind(&mut self, now_ms: u64, role: StreamRole, intent: &LeaseIntent, fresh: Fresh) -> Change<LeaseBinding> {
         let mut actions = self.tick(now_ms);
         let outcome = self.bind_ticked(now_ms, role, intent, fresh, &mut actions);

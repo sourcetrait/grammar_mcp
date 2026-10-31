@@ -52,6 +52,8 @@ pub enum RuntimeError {
         phase: String,
         reason: String,
     },
+    /// An artifact request refused, nothing changed by it.
+    Artifact(ArtifactError),
 }
 
 impl RuntimeError {
@@ -73,6 +75,7 @@ impl RuntimeError {
             Self::RemoteChannelUnverified => "remote::channel::unverified",
             Self::RemotesFile { .. } => "remote::file",
             Self::Internal { .. } => "internal",
+            Self::Artifact(error) => error.kind(),
             Self::InterfaceViolations { .. } => {
                 unreachable!("a violations error renders through its rows, not a kind")
             }
@@ -128,6 +131,7 @@ impl RuntimeError {
                 .to_string(),
             Self::RemotesFile { reason } => format!("the remotes file: {reason}"),
             Self::Internal { phase, reason } => format!("internal error [{phase}]: {reason}"),
+            Self::Artifact(error) => error.message(),
             Self::InterfaceViolations { .. } => {
                 unreachable!("a violations error renders through its rows, not a message")
             }

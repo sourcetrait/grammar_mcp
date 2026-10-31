@@ -201,8 +201,9 @@ pub(crate) use sourcetrait_grammar_engine::{
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
-    ChannelPhase, DECODE_BUDGET_DEFAULT, EVENT_BYTES_KEY, EVENT_SPILL_DEST, EVENT_SPILL_KEY,
-    LOCAL_HOST, MAX_FRAME_BYTES, MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT,
+    ArtifactError, ChannelPhase, DECODE_BUDGET_DEFAULT, EVENT_BYTES_KEY, EVENT_SPILL_DEST,
+    EVENT_SPILL_KEY, LOCAL_HOST, MAX_FRAME_BYTES, MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT,
+    MODEL_UNSENT,
     NOTIFICATION_CAP, PurviewRow, PurviewView, RuntimeError, TransportError,
     REMOTE_RESERVED_PREFIX, RemoteChannelRow, RemoteLinkState, RemoteListenResult,
     SYNC_QUEUE_CAP, decode_payload, reserved_prefix,

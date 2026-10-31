@@ -32,10 +32,15 @@ pub(crate) mod tku {
 
 pub use crate::{
     artifact::{
-        ACTIVE_RESERVATIONS, ARTIFACT_MAX_BYTES, ArtifactDescription, ArtifactId, ArtifactPurpose,
-        ArtifactRef, ArtifactReply, ArtifactRequest, ArtifactState, LOG_READ_MAX, LogChunk,
-        LogStream, RESERVATION_EXPIRY_SECS, ReadLog, ReserveUpload, SFTP_CHUNK_MAX,
-        SFTP_PACKET_MAX, STORE_QUOTA_BYTES, UploadReservation,
+        ACTIVE_RESERVATIONS, ARTIFACT_LIMITS_DEFAULT, ARTIFACT_MAX_BYTES, AbortUpload,
+        ArtifactAction, ArtifactDescription, ArtifactError, ArtifactHold, ArtifactId,
+        ArtifactLimits, ArtifactPurpose, ArtifactRecord, ArtifactRef, ArtifactReply,
+        ArtifactRequest, ArtifactState, ArtifactStatus, ArtifactStore, COMPONENT_MAX,
+        DISPLAY_NAME_MAX, DescribeArtifact, EMPTY_SHA256, Found, InspectArtifact, LOG_READ_MAX,
+        LogChunk, LogExtent, LogStream, PATH_MAX, PublishOutcome, PublishPlan, PublishStart,
+        PublishUpload, QuotaBound, RESERVATION_EXPIRY_SECS, RESULT_RETENTION_SECS, ReadLog,
+        RemotePath, ReserveUpload, SFTP_CHUNK_MAX, SFTP_PACKET_MAX, STORE_QUOTA_BYTES,
+        UploadReservation, check_dest, check_display_name,
     },
     capability::Capabilities,
     channel::{

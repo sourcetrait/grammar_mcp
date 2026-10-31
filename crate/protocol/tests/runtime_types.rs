@@ -225,6 +225,7 @@ fn runtime_errors() -> Vec<(&'static str, RuntimeError)> {
         ("remote_channel_unverified", R::RemoteChannelUnverified),
         ("remotes_file", R::RemotesFile { reason: "line 3".into() }),
         ("internal", R::Internal { phase: "io".into(), reason: "denied".into() }),
+        ("artifact", R::Artifact(ArtifactError::Unknown { id: ARTIFACT })),
     ]
 }
 
@@ -258,13 +259,10 @@ fn epoch() -> ChannelEpoch {
 
 fn description() -> ArtifactDescription {
     ArtifactDescription {
-        id: ARTIFACT,
+        artifact: ArtifactRef { id: ARTIFACT, size: ARTIFACT_MAX_BYTES, sha256: HASH },
         purpose: ArtifactPurpose::OperationResult,
         display_name: "result ✓.nuon".into(),
-        size: ARTIFACT_MAX_BYTES,
-        sha256: HASH,
-        sftp_path: "/srv/runs/objects/2222".into(),
-        state: ArtifactState::Published,
+        sftp_path: RemotePath::new("/srv/runs/objects/22222222222222222222222222222222").expect("a remote path"),
     }
 }
 
@@ -361,13 +359,16 @@ fn peer() -> Vec<(&'static str, RemoteChannelEvent)> {
 fn artifacts() -> Vec<(&'static str, ArtifactRequest, ArtifactReply)> {
     let reserve = ReserveUpload { purpose: ArtifactPurpose::ChannelAttachment, display_name: String::new(), size: 0, sha256: HASH };
     let log = ReadLog { operation: OPERATION, stream: LogStream::Stderr, offset: u64::MAX, max_bytes: LOG_READ_MAX };
-    let chunk = LogChunk { generation: 1, offset: 10, bytes: vec![0, 0xff], eof: true, done: false };
-    let reservation = UploadReservation { id: ARTIFACT, staging_path: "/srv/state/staging/2222".into(), expires_at_ms: u64::MAX };
+    let chunk = LogChunk { generation: WorkerGeneration([0x44; 16]), offset: 10, bytes: vec![0, 0xff], eof: true, done: false };
+    let staging = RemotePath::new("/srv/state/staging/22222222222222222222222222222222").expect("a remote path");
+    let reservation = UploadReservation { id: ARTIFACT, staging_path: staging, expires_ms: u32::MAX };
+    let publishing = ArtifactStatus::Known { id: ARTIFACT, state: ArtifactState::Publishing };
     vec![
         ("reserve", ArtifactRequest::Reserve(reserve), ArtifactReply::Reserved(reservation)),
-        ("publish", ArtifactRequest::Publish { id: ARTIFACT }, ArtifactReply::Published(description())),
-        ("abort", ArtifactRequest::Abort { id: ARTIFACT }, ArtifactReply::Aborted { id: ARTIFACT }),
-        ("describe", ArtifactRequest::Describe { id: ARTIFACT }, ArtifactReply::Described(description())),
+        ("publish", ArtifactRequest::Publish(PublishUpload { id: ARTIFACT }), ArtifactReply::Published(description())),
+        ("inspect", ArtifactRequest::Inspect(InspectArtifact { id: ARTIFACT }), ArtifactReply::Inspected(publishing)),
+        ("abort", ArtifactRequest::Abort(AbortUpload { id: ARTIFACT }), ArtifactReply::Aborted { id: ARTIFACT }),
+        ("describe", ArtifactRequest::Describe(DescribeArtifact { id: ARTIFACT }), ArtifactReply::Described(description())),
         ("read_log", ArtifactRequest::ReadLog(log), ArtifactReply::Log(chunk)),
     ]
 }
@@ -542,19 +543,20 @@ fn every_variant_has_its_vector() {
         .iter()
         .map(|(_, r, _)| match r {
             ArtifactRequest::Reserve(_) => "reserve",
-            ArtifactRequest::Publish { .. } => "publish",
-            ArtifactRequest::Abort { .. } => "abort",
-            ArtifactRequest::Describe { .. } => "describe",
+            ArtifactRequest::Publish(_) => "publish",
+            ArtifactRequest::Inspect(_) => "inspect",
+            ArtifactRequest::Abort(_) => "abort",
+            ArtifactRequest::Describe(_) => "describe",
             ArtifactRequest::ReadLog(_) => "read_log",
         })
         .collect();
-    assert_eq!(artifact_requests.len(), 5);
+    assert_eq!(artifact_requests.len(), 6);
     let kinds: BTreeSet<_> = runtime_errors()
         .into_iter()
         .filter(|(_, e)| !matches!(e, RuntimeError::InterfaceViolations { .. }))
         .map(|(_, e)| e.kind())
         .collect();
-    assert_eq!(kinds.len(), 15);
+    assert_eq!(kinds.len(), 16);
     let transport: BTreeSet<_> = transport_errors().iter().map(|(_, e)| e.kind()).collect();
     assert_eq!(transport.len(), 16);
 }
