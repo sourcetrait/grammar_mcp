@@ -8,5 +8,6 @@ when absent, so an entry's shape says which tool produced it without a discrimin
 command shows ALL in-flight work on the host - a subagent sees the primary's calls and vice
 versa.
 
-PROCESS-SCOPED. The rows are this host's engine's, so a one-shot CLI invocation, which
-starts an engine of its own, reports nothing rather than reaching into another host.
+ENGINE-SCOPED. The rows are the routed engine's, the MCP's own or a worker's, so a call in
+flight on one host never shows on another, and a one-shot CLI invocation, which starts an
+engine of its own, reports nothing rather than reaching into another host.

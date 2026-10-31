@@ -40,6 +40,7 @@ fn the_instructions_open_with_the_envelope_schema() {
     let instructions = s.instructions();
     assert!(instructions.starts_with(MCP_DOC), "{instructions}");
     assert!(instructions.contains("/execute/<nonce>/definition.nu"), "{instructions}");
+    assert!(instructions.contains("the paths in its results are that host's own"), "{instructions}");
 }
 
 #[test]

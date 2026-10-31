@@ -47,9 +47,14 @@ The current view alone: the command takes no argument, so what it renders is
 what the session has in view, and `interface purview set` is how a view changes
 (User).
 
-The view is the host's, the block the engine's: purviews are mcp's own state,
-so the host resolves the session's view into patterns and the engine's
-`Signatures` renders the rigs within them.
+The view is the session's, the block the engine's: the routed engine resolves
+the session's view on it into patterns and its `Signatures` renders the rigs
+within them.
+
+A remote engine's info is its worker's: the version and the nushell its build
+carries, its id, namespace, and nom, its workdir and scratch directories, and
+its plugins, from the session's info request, so every path it names is that
+host's. The name stays the MCP's, the one server the agent talks to.
 
 Filtering expands `@` references while the reported `purview` field carries the
 raw configuration - the two go through different functions on purpose, so a

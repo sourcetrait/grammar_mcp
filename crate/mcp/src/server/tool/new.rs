@@ -11,12 +11,13 @@ impl NuSh {
     pub(crate) async fn equip_scaffold(
         &self,
         nonce: datum::Nonce,
+        route: &Route,
         p: NewParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         let command = EngineCommand::EquipScaffold {
             namepaths: p.namepaths,
         };
-        match self.controller.control(command).await {
+        match self.control_on(route, command).await {
             Ok(ControlAnswer::Created(created)) => success(nonce, &NewResult { created }),
             Ok(_) => error_to_call_result(unexpected("equip_scaffold"), nonce),
             Err(e) => error_to_call_result(e, nonce),

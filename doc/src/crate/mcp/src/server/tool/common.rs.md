@@ -16,6 +16,10 @@ Built once, from the deny set `NuSh::new` is handed, so a denied command is unkn
 parse for the host's whole life; nothing evaluates on it, so it is shared rather than
 cloned per call.
 
+### field views
+The session's current purview on each engine (`server/purview.rs`), the MCP's own and each
+remote engine's.
+
 ## fn NuSh::new
 The deny set is a parameter rather than read from the config, because the one-shot CLI
 builds its interface with none: deny gates an agent's surface, and the operator's path
@@ -27,6 +31,18 @@ operator and the emergency log are keyed by it too.
 ## fn NuSh::mint
 `mint_nonce` on the server's generator (`server/identity.rs`).
 The request carries the nonce to the engine, which runs the call under it.
+
+## fn NuSh::control_on
+A control command on the routed engine: the MCP's own through its controller, or a
+worker's as the engine's own wire request, the request's host local there. The interface's
+engine commands all reach their engine through it, so a command answers alike on every
+host.
+
+## fn NuSh::worker_info
+A remote engine's worker as its session's info request answers it, for `interface info`.
+
+## fn NuSh::signatures
+The routed engine's signature block within the patterns.
 
 ## enum Route
 Where a tool's `host` sends its request: the MCP's own engine, or a configured

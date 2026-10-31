@@ -102,38 +102,36 @@ impl NuSh {
         command: InterfaceCommand,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         let face = &self.controller.face;
-        match (command, route) {
-            (InterfaceCommand::Channel(command), _) => face.run_channel(nonce, command).await,
-            (InterfaceCommand::Peer(command), _) => face.run_peer(nonce, command).await,
-            (InterfaceCommand::Engine(command), Route::Local) => self.run_engine(nonce, command).await,
-            (InterfaceCommand::Engine(_), Route::Remote(host)) => {
-                error_to_call_result(EngineError::HostUnserved { host }, nonce)
-            }
+        match command {
+            InterfaceCommand::Channel(command) => face.run_channel(nonce, command).await,
+            InterfaceCommand::Peer(command) => face.run_peer(nonce, command).await,
+            InterfaceCommand::Engine(command) => self.run_engine(nonce, &route, command).await,
         }
     }
 
-    /// An engine command, routed to the engine's system with the session's view.
+    /// An engine command, routed to its host's engine with the session's view there.
     async fn run_engine(
         &self,
         nonce: datum::Nonce,
+        route: &Route,
         command: EngineInterfaceCommand,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
         use EngineInterfaceCommand as E;
         match command {
-            E::Info => self.info(nonce).await,
-            E::Help(p) => self.help(nonce, p).await,
-            E::ProcessList => self.process_list(nonce).await,
-            E::ProcessKill(p) => self.process_kill(nonce, p).await,
-            E::PurviewList => self.purview_list(nonce).await,
-            E::PurviewSet(p) => self.purview_set(nonce, p).await,
-            E::PurviewExtend(p) => self.purview_extend(nonce, p).await,
-            E::PurviewConfigure(p) => self.purview_configure(nonce, p).await,
-            E::EquipNew(p) => self.equip_new(nonce, p).await,
-            E::EquipInstall(p) => self.equip_install(nonce, p).await,
-            E::EquipCheck(p) => self.equip_check(nonce, p).await,
-            E::EquipUninstall(p) => self.equip_uninstall(nonce, p).await,
-            E::EquipScaffold(p) => self.equip_scaffold(nonce, p).await,
-            E::EquipCommit(p) => self.equip_commit(nonce, p).await,
+            E::Info => self.info(nonce, route).await,
+            E::Help(p) => self.help(nonce, route, p).await,
+            E::ProcessList => self.process_list(nonce, route).await,
+            E::ProcessKill(p) => self.process_kill(nonce, route, p).await,
+            E::PurviewList => self.purview_list(nonce, route).await,
+            E::PurviewSet(p) => self.purview_set(nonce, route, p).await,
+            E::PurviewExtend(p) => self.purview_extend(nonce, route, p).await,
+            E::PurviewConfigure(p) => self.purview_configure(nonce, route, p).await,
+            E::EquipNew(p) => self.equip_new(nonce, route, p).await,
+            E::EquipInstall(p) => self.equip_install(nonce, route, p).await,
+            E::EquipCheck(p) => self.equip_check(nonce, route, p).await,
+            E::EquipUninstall(p) => self.equip_uninstall(nonce, route, p).await,
+            E::EquipScaffold(p) => self.equip_scaffold(nonce, route, p).await,
+            E::EquipCommit(p) => self.equip_commit(nonce, route, p).await,
         }
     }
 }

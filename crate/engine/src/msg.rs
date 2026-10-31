@@ -60,6 +60,27 @@ impl TryFrom<ToEngine> for HostAnswer {
     }
 }
 
+impl From<PurviewRequest> for ToEngine {
+    fn from(v: PurviewRequest) -> Self {
+        Self::Purview(v)
+    }
+}
+
+impl subsys::Request<EngineSystem> for PurviewRequest {
+    type ResponseType = PurviewAnswer;
+}
+
+impl TryFrom<FromEngine> for PurviewAnswer {
+    type Error = subsys::SubsysError;
+
+    fn try_from(v: FromEngine) -> subsys::SubsysResult<Self> {
+        match v {
+            FromEngine::Purview(answer) => Ok(answer),
+            _ => Err(subsys::SubsysError::ResponseType),
+        }
+    }
+}
+
 /// Each purview request's way into `ToEngine`, and the answer it names.
 macro_rules! purview_request {
     ($($ty:ty => $variant:ident, $answer:ty),* $(,)?) => {$(

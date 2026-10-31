@@ -53,7 +53,9 @@ impl mcp::ServerHandler for NuSh {
                  Installed equips live in a signed git repo at \
                  {data}/equip/; signing keypair at \
                  {data}/keypair/. \
-                 This server's namespace: id `{id}`, namespace `{namespace}`.",
+                 This server's namespace: id `{id}`, namespace `{namespace}`. \
+                 A tool whose `host` names a remote engine runs on that host, \
+                 and the paths in its results are that host's own.",
                 cache = config.cache_home().display(),
                 data = config.data_home().display(),
             ))

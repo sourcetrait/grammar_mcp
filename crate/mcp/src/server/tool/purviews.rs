@@ -10,21 +10,21 @@ pub(crate) struct PurviewsResult {
 }
 
 impl NuSh {
-    /// `interface purview list`: every configured purview, and what is in view.
+    /// `interface purview list`: every purview the routed engine holds, and what is in view.
     pub(crate) async fn purview_list(
         &self,
         nonce: datum::Nonce,
+        route: &Route,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let purviews = match self.controller.request(PurviewListRequest).await {
-            Ok(Ok(purviews)) => purviews,
-            Ok(Err(error)) => return error_to_call_result(error, nonce),
+        let purviews = match self.purviews_on(route).await {
+            Ok(purviews) => purviews,
             Err(error) => return error_to_call_result(error, nonce),
         };
         success(
             nonce,
             &PurviewsResult {
                 purviews,
-                current: self.current_purview.ids(),
+                current: self.views.of(route).ids(),
             },
         )
     }

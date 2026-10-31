@@ -7,7 +7,7 @@ not looking through - the common case - it answers nothing at all (several disti
 would all report an identical null delta).
 
 ## fn purview_configure
-The write is the engine's (`crate/engine/src/equip/purview.rs`'s `purview_configure`),
+The write is the routed engine's (`crate/engine/src/equip/purview.rs`'s `purview_configure`),
 which refuses the id and each reference and answers the rows after. The `@id` values are
 validated for shape only: whether the referenced purview exists yet is the prune's
 business, not the parser's, because `a -> @b` is legitimately written before `b`.

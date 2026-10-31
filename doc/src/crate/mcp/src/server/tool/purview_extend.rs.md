@@ -11,7 +11,8 @@ The delta is computed on expanded values on both sides, the engine's resolution 
 view, so a `@ref` to something already in view reveals nothing.
 
 ## fn purview_extend
-An unknown id is refused rather than ignored. Contributing nothing in silence would turn a
+The view extended is the session's on the routed engine. An unknown id is refused rather
+than ignored. Contributing nothing in silence would turn a
 typo into a view that simply fails to widen, which looks identical to a purview that is
 genuinely empty. The ids asked are resolved first, so the refusal names the first unknown
 one before the view changes.

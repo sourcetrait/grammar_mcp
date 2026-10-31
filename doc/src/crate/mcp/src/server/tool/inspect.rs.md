@@ -21,3 +21,7 @@ render the current view rather than an empty block.
 An EXACT namepath is the engine's `Help`, read under its one equip's lock. A PATTERN SPANS
 EQUIPS, so it renders as a signature block through the engine's `Signatures`, whose
 renderer takes each equip's lock itself.
+
+The two words answer the MCP's own blocks whatever the host, the interface being the
+MCP's and grimm the same on every engine; a namepath or a pattern goes to the routed
+engine, `.` resolving against the session's view there.

@@ -36,9 +36,10 @@ tellable-apart in the client's own listing.
 
 `instructions` opens with `MCP_DOC`, then renders the cache and data paths live as this host
 resolved them, rather than as a static string or as a variable an agent's own environment
-might resolve differently, so what it names is what this host actually uses. The
-agent-facing operational craft beyond the envelope and those paths lives in the skills, not
-here.
+might resolve differently, so what it names is what this host actually uses. A remote
+engine's results name its own host's paths, which the instructions say once, so an agent
+reads a remote call's paths on that host. The agent-facing operational craft beyond the
+envelope and those paths lives in the skills, not here.
 
 The same config answers `server/discover` in the 2026-07-28 era, rmcp building the
 DiscoverResult from it, so a client that never sends `initialize` still gets the title and

@@ -10,25 +10,27 @@ pub(crate) struct PurviewDeltaResult {
 }
 
 impl NuSh {
-    /// `interface purview extend`: bring more purviews into the current view.
+    /// `interface purview extend`: bring more purviews into the routed engine's view.
     pub(crate) async fn purview_extend(
         &self,
         nonce: datum::Nonce,
+        route: &Route,
         p: PurviewExtendParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let asked = match self.resolve_purviews(p.purviews.clone()).await {
+        let asked = match self.resolve_purviews(route, p.purviews.clone()).await {
             Ok(asked) => asked,
             Err(error) => return error_to_call_result(error, nonce),
         };
         if let Some(id) = asked.unknown.first() {
             return error_to_call_result(unknown_purview(id), nonce);
         }
-        let before = match self.resolve_purviews(self.current_purview.ids()).await {
+        let current = self.views.of(route);
+        let before = match self.resolve_purviews(route, current.ids()).await {
             Ok(before) => before,
             Err(error) => return error_to_call_result(error, nonce),
         };
-        let ids = self.current_purview.extend(&p.purviews);
-        let after = match self.resolve_purviews(ids.clone()).await {
+        let ids = current.extend(&p.purviews);
+        let after = match self.resolve_purviews(route, ids.clone()).await {
             Ok(after) => after,
             Err(error) => return error_to_call_result(error, nonce),
         };
@@ -36,7 +38,7 @@ impl NuSh {
         let revealed = if revealed.is_empty() {
             None
         } else {
-            match self.signatures(revealed).await {
+            match self.signatures(route, revealed).await {
                 Ok(signatures) => Some(signatures),
                 Err(error) => return error_to_call_result(error, nonce),
             }

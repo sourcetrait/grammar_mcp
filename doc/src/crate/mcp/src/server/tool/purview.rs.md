@@ -9,6 +9,8 @@ neither does naming a purview whose rigs were already visible under another id.
 `interface info` is the check for what is actually in view.
 
 ## fn purview_set
+The view set is the session's on the routed engine, resolved against that engine's rows.
+
 `@fae` and `fae` name the same purview, as they do for `interface info`, so a reference
 copied out of a configuration works unchanged.
 

@@ -1,4 +1,4 @@
-//! The session's current purview, the ids it has in view, resolved by the engine.
+//! Each host's current purview, the ids it has in view, resolved by that host's engine.
 use crate::*;
 
 /// What changed between two pattern sets, as `(added, removed)`.
@@ -19,7 +19,7 @@ pub(crate) fn pattern_delta(
     (added, removed)
 }
 
-/// The current purview: which ids this host process has in view.
+/// The current purview: which ids this host process has in view on one engine.
 pub(crate) struct CurrentPurview {
     ids: std::sync::Mutex<Vec<String>>,
 }
@@ -89,6 +89,32 @@ impl CurrentPurview {
     }
 }
 
+/// Each engine's current view: the MCP's own, and a remote engine's from its first use.
+#[derive(Default)]
+pub(crate) struct Views {
+    local: Arc<CurrentPurview>,
+    remote: std::sync::Mutex<HashMap<String, Arc<CurrentPurview>>>,
+}
+
+impl Views {
+    /// The current view on the engine `route` names.
+    pub(crate) fn of(
+        &self,
+        route: &Route,
+    ) -> Arc<CurrentPurview> {
+        match route {
+            Route::Local => self.local.clone(),
+            Route::Remote(alias) => self
+                .remote
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .entry(alias.clone())
+                .or_default()
+                .clone(),
+        }
+    }
+}
+
 /// The refusal of a view naming an id no purview answers to.
 pub(crate) fn unknown_purview(id: &str) -> GrammarMcpError {
     GrammarMcpError::PurviewInvalidId {
@@ -98,11 +124,54 @@ pub(crate) fn unknown_purview(id: &str) -> GrammarMcpError {
 }
 
 impl NuSh {
-    /// What a set of ids puts in view, as the engine resolves it.
+    /// A purview request's answer from the engine `route` names.
+    pub(crate) async fn purview_on(
+        &self,
+        route: &Route,
+        request: PurviewRequest,
+    ) -> GrammarMcpResult<PurviewAnswer> {
+        match route {
+            Route::Local => Ok(self.controller.request(request).await?),
+            Route::Remote(alias) => match self.controller.remote(alias, EngineRequest::Purview(request)).await? {
+                EngineResponse::Purview(answer) => Ok(answer),
+                EngineResponse::Refused(refusal) => Err(GrammarMcpError::Transport(refusal)),
+                _ => Err(unexpected("purview")),
+            },
+        }
+    }
+
+    /// What a set of ids puts in view, as the engine `route` names resolves it.
     pub(crate) async fn resolve_purviews(
         &self,
+        route: &Route,
         ids: Vec<String>,
     ) -> GrammarMcpResult<PurviewResolution> {
-        Ok(self.controller.request(PurviewResolveRequest { ids }).await??)
+        match self.purview_on(route, PurviewRequest::Resolve(PurviewResolveRequest { ids })).await? {
+            PurviewAnswer::Resolved(resolution) => Ok(resolution?),
+            _ => Err(unexpected("purview resolve")),
+        }
+    }
+
+    /// Every purview the engine `route` names holds.
+    pub(crate) async fn purviews_on(
+        &self,
+        route: &Route,
+    ) -> GrammarMcpResult<Vec<PurviewView>> {
+        match self.purview_on(route, PurviewRequest::List(PurviewListRequest)).await? {
+            PurviewAnswer::Listed(purviews) => Ok(purviews?),
+            _ => Err(unexpected("purview list")),
+        }
+    }
+
+    /// The purview rows a configure or a rig's change leaves on the engine `route` names.
+    pub(crate) async fn purview_rows_on(
+        &self,
+        route: &Route,
+        request: PurviewRequest,
+    ) -> GrammarMcpResult<Vec<PurviewRow>> {
+        match self.purview_on(route, request).await? {
+            PurviewAnswer::Rows(rows) => Ok(rows?),
+            _ => Err(unexpected("purview rows")),
+        }
     }
 }

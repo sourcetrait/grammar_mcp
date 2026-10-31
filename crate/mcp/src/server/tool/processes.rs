@@ -1,12 +1,13 @@
 use crate::*;
 
 impl NuSh {
-    /// `interface process list`: every call in flight on the host.
+    /// `interface process list`: every call in flight on the routed engine.
     pub(crate) async fn process_list(
         &self,
         nonce: datum::Nonce,
+        route: &Route,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let rows = match self.controller.control(EngineCommand::Processes).await {
+        let rows = match self.control_on(route, EngineCommand::Processes).await {
             Ok(ControlAnswer::Processes(rows)) => rows,
             Ok(_) => return error_to_call_result(unexpected("processes"), nonce),
             Err(error) => return error_to_call_result(error, nonce),

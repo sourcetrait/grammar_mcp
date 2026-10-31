@@ -10,8 +10,9 @@ as `interface equip commit`'s carry them. `check` keeps both buckets, `errors` a
 refusal.
 
 ## fn equip_install
-The install is the engine's and the view the session's, so the purview update follows the
-engine's answer, outside the equip's lock (the engine's `serve.rs`). An uninstall landing
+Each action runs on the routed engine, a source path being that host's own. The install is
+the engine's and the view the session's, so the purview update follows the engine's
+answer, on the same engine, outside the equip's lock (the engine's `serve.rs`). An uninstall landing
 in between leaves nothing behind: the update's own prune judges by registration, and drops
 the pattern it just added for a rig no longer there.
 

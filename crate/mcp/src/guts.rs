@@ -249,7 +249,7 @@ impl TestServer {
             namepath: namepath.to_string(),
         };
         let nonce = self.interface_nonce(&p);
-        Self::envelope(self.rt.block_on(self.nush.equip_commit(nonce, p)))
+        Self::envelope(self.rt.block_on(self.nush.equip_commit(nonce, &Route::Local, p)))
     }
 
     /// An `interface equip` action on a source; an unknown one goes to the parse.
@@ -259,10 +259,10 @@ impl TestServer {
         };
         let nonce = self.interface_nonce(&p);
         let result = match action {
-            "new" => self.rt.block_on(self.nush.equip_new(nonce, p)),
-            "install" => self.rt.block_on(self.nush.equip_install(nonce, p)),
-            "check" => self.rt.block_on(self.nush.equip_check(nonce, p)),
-            "uninstall" => self.rt.block_on(self.nush.equip_uninstall(nonce, p)),
+            "new" => self.rt.block_on(self.nush.equip_new(nonce, &Route::Local, p)),
+            "install" => self.rt.block_on(self.nush.equip_install(nonce, &Route::Local, p)),
+            "check" => self.rt.block_on(self.nush.equip_check(nonce, &Route::Local, p)),
+            "uninstall" => self.rt.block_on(self.nush.equip_uninstall(nonce, &Route::Local, p)),
             other => return self.interface(&format!("{INTERFACE} equip {other} '{source_dir}'")),
         };
         Self::envelope(result)
@@ -285,7 +285,7 @@ impl TestServer {
             namepaths: namepaths.iter().map(|s| s.to_string()).collect(),
         };
         let nonce = self.interface_nonce(&p);
-        Self::envelope(self.rt.block_on(self.nush.equip_scaffold(nonce, p)))
+        Self::envelope(self.rt.block_on(self.nush.equip_scaffold(nonce, &Route::Local, p)))
     }
 
     /// `interface help` on a namepath or a pattern.
@@ -294,19 +294,19 @@ impl TestServer {
             namepath: namepath.to_string(),
         };
         let nonce = self.interface_nonce(&p);
-        Self::envelope(self.rt.block_on(self.nush.help(nonce, p)))
+        Self::envelope(self.rt.block_on(self.nush.help(nonce, &Route::Local, p)))
     }
 
     /// `interface info`, the current view's.
     pub fn info(&self) -> NuVal {
         let nonce = self.interface_nonce(&"info");
-        Self::envelope(self.rt.block_on(self.nush.info(nonce)))
+        Self::envelope(self.rt.block_on(self.nush.info(nonce, &Route::Local)))
     }
 
     /// `interface purview list`.
     pub fn purviews(&self) -> NuVal {
         let nonce = self.interface_nonce(&"purview list");
-        Self::envelope(self.rt.block_on(self.nush.purview_list(nonce)))
+        Self::envelope(self.rt.block_on(self.nush.purview_list(nonce, &Route::Local)))
     }
 
     /// Set a purview's namepath patterns; an EMPTY `namepaths` deletes it.
@@ -320,7 +320,7 @@ impl TestServer {
             namepaths: namepaths.iter().map(|s| s.to_string()).collect(),
         };
         let nonce = self.interface_nonce(&p);
-        Self::envelope(self.rt.block_on(self.nush.purview_configure(nonce, p)))
+        Self::envelope(self.rt.block_on(self.nush.purview_configure(nonce, &Route::Local, p)))
     }
 
     pub fn purview_extend(
@@ -331,7 +331,7 @@ impl TestServer {
             purviews: purviews.iter().map(|s| s.to_string()).collect(),
         };
         let nonce = self.interface_nonce(&p);
-        Self::envelope(self.rt.block_on(self.nush.purview_extend(nonce, p)))
+        Self::envelope(self.rt.block_on(self.nush.purview_extend(nonce, &Route::Local, p)))
     }
 
     /// `interface purview set`.
@@ -343,7 +343,7 @@ impl TestServer {
             purviews: purviews.iter().map(|s| (*s).to_string()).collect(),
         };
         let nonce = self.interface_nonce(&p);
-        Self::envelope(self.rt.block_on(self.nush.purview_set(nonce, p)))
+        Self::envelope(self.rt.block_on(self.nush.purview_set(nonce, &Route::Local, p)))
     }
 
     /// Where this namespace's purview table lands.
@@ -354,7 +354,7 @@ impl TestServer {
     /// `interface process list`.
     pub fn processes(&self) -> NuVal {
         let nonce = self.interface_nonce(&"process list");
-        Self::envelope(self.rt.block_on(self.nush.process_list(nonce)))
+        Self::envelope(self.rt.block_on(self.nush.process_list(nonce, &Route::Local)))
     }
 
     /// `interface process kill`; its result is null on success.
@@ -363,7 +363,7 @@ impl TestServer {
             nonce: nonce.to_string(),
         };
         let call_nonce = self.interface_nonce(&p);
-        Self::envelope(self.rt.block_on(self.nush.process_kill(call_nonce, p)))
+        Self::envelope(self.rt.block_on(self.nush.process_kill(call_nonce, &Route::Local, p)))
     }
 
     /// `interface channel ready`; its result is null.

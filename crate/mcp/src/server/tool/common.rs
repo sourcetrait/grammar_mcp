@@ -9,8 +9,8 @@ pub struct NuSh {
     pub(crate) mcp_nom: datum::NomPair,
     /// The engine an interface command parses on: its commands, nothing else.
     pub(crate) interface_engine: Arc<nu::EngineState>,
-    /// Which purview ids this host has in view, the session's own.
-    pub(crate) current_purview: Arc<CurrentPurview>,
+    /// Which purview ids this session has in view on each engine.
+    pub(crate) views: Arc<Views>,
     pub(crate) tool_router: mcp::ToolRouter<NuSh>,
 }
 
@@ -24,7 +24,7 @@ impl NuSh {
             nonce_gen: controller.face.nonce_gen.clone(),
             mcp_nom: controller.face.mcp_nom.clone(),
             interface_engine: Arc::new(interface_engine_for(deny)),
-            current_purview: Arc::new(CurrentPurview::new()),
+            views: Arc::new(Views::default()),
             tool_router: Self::tool_router(&controller.config.deny),
             controller,
         }
@@ -39,9 +39,47 @@ impl NuSh {
         mint_nonce(&self.nonce_gen, tool, params)
     }
 
-    /// The signature block within pattern strings, as the engine renders it.
-    pub(crate) async fn signatures(&self, patterns: Vec<String>) -> GrammarMcpResult<String> {
-        match self.controller.control(EngineCommand::Signatures { patterns }).await? {
+    /// A control command's answer from the engine `route` names.
+    pub(crate) async fn control_on(
+        &self,
+        route: &Route,
+        command: EngineCommand,
+    ) -> GrammarMcpResult<ControlAnswer> {
+        match route {
+            Route::Local => Ok(self.controller.control(command).await?),
+            Route::Remote(alias) => {
+                let request = EngineRequest::Wire(ToEngineSys::Control(ControlRequest {
+                    host: Host::Local,
+                    command,
+                }));
+                match self.controller.remote(alias, request).await? {
+                    EngineResponse::Wire(FromEngineSys::Control(answer)) => Ok(answer?),
+                    EngineResponse::Refused(refusal) => Err(GrammarMcpError::Transport(refusal)),
+                    _ => Err(unexpected("control")),
+                }
+            }
+        }
+    }
+
+    /// A remote engine's worker: its identity, its homes, and its plugins.
+    pub(crate) async fn worker_info(
+        &self,
+        alias: &str,
+    ) -> GrammarMcpResult<WorkerInfo> {
+        match self.controller.remote(alias, EngineRequest::Info).await? {
+            EngineResponse::Info(info) => Ok(info),
+            EngineResponse::Refused(refusal) => Err(GrammarMcpError::Transport(refusal)),
+            _ => Err(unexpected("info")),
+        }
+    }
+
+    /// The signature block within pattern strings, as the engine `route` names renders it.
+    pub(crate) async fn signatures(
+        &self,
+        route: &Route,
+        patterns: Vec<String>,
+    ) -> GrammarMcpResult<String> {
+        match self.control_on(route, EngineCommand::Signatures { patterns }).await? {
             ControlAnswer::Signatures(block) => Ok(block),
             _ => Err(unexpected("signatures")),
         }

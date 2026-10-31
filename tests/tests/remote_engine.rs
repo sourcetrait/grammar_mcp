@@ -114,8 +114,78 @@ fn a_remote_hosts_refusals_answer_by_kind() {
     assert_eq!(envelope_error_kind(&refused).as_deref(), Some("daemon::host_key_rejected"), "{refused}");
     let unknown = host.call("execute", json!({"host": "elsewhere", "definition": WHERE, "data": "null"}));
     assert_eq!(envelope_error_kind(&unknown).as_deref(), Some("host::unknown"), "{unknown}");
-    let info = host.call("interface", json!({"host": "lab", "command": "interface info"}));
-    assert_eq!(envelope_error_kind(&info).as_deref(), Some("host::unserved"), "{info}");
-    let channel = host.call("interface", json!({"host": "lab", "command": "interface channel config"}));
+    let unknown = host.call("interface", json!({"host": "elsewhere", "command": "interface info"}));
+    assert_eq!(envelope_error_kind(&unknown).as_deref(), Some("host::unknown"), "{unknown}");
+    let refused = host.call("interface", json!({"host": "stranger", "command": "interface process list"}));
+    assert_eq!(envelope_error_kind(&refused).as_deref(), Some("daemon::host_key_rejected"), "{refused}");
+    let channel = host.call("interface", json!({"host": "stranger", "command": "interface channel config"}));
     assert!(!has_error_path(&channel), "the Channel's commands answer on the MCP for any host: {channel}");
+}
+
+/// A definition that sleeps past any test's wait, until it is killed.
+const SLEEP: &str = "def execute [data: nothing]: nothing -> nothing { sleep 30sec }";
+
+/// The ids of a `purview list`'s purviews, each an `[id, patterns]` pair.
+fn purview_ids(list: &NuVal) -> Vec<String> {
+    list["result"]["purviews"]
+        .as_list()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|pair| pair.as_list().and_then(|pair| pair.first()).and_then(NuVal::as_str).map(str::to_string))
+        .collect()
+}
+
+#[test]
+fn the_interface_commands_run_on_the_engine_their_host_names() {
+    let sshd = Sshd::start();
+    let worker = TestWorker::new();
+    let root = tempfile::tempdir().expect("a scratch root");
+    let mut host = host_with(root.path(), &[sshd.endpoint("lab", &worker)]);
+
+    let id = host.request("interface", json!({"host": "lab", "command": "interface info"}));
+    let info = host.read_id_within(id, FIRST_CALL);
+    let remote = extract_envelope(&info).unwrap_or_else(|| panic!("info: {}", error_message(&info)));
+    assert_eq!(remote["result"]["work_dir"].as_str(), Some(worker.workdir().display().to_string().as_str()), "{info}");
+    assert_eq!(remote["result"]["id"].as_str(), Some(WORKER_ID), "{info}");
+    let local = envelope(&host.info());
+    assert_ne!(remote["result"]["nom"].as_str(), local["result"]["nom"].as_str(), "the worker's nom, not the MCP's");
+
+    let source = worker.workdir().join("equip").join("sourcetrait").join("probe");
+    let made = host.call("interface", json!({"host": "lab", "command": format!("interface equip new '{}'", source.display())}));
+    assert!(!has_error_path(&made), "equip new on the worker: {made}");
+    let rig = source.join("rig");
+    write_source(&rig, "mod.nu", "export module m\n");
+    write_source(&rig, "m/mod.nu", "export use which\n");
+    write_source(&rig, "m/which/mod.nu", &valid_function_source("x: int", "from: string", "{ from: 'worker' }"));
+    let committed = host.call("interface", json!({"host": "lab", "command": "interface equip commit 'sourcetrait/probe'"}));
+    assert!(!has_error_path(&committed), "the commit on the worker: {committed}");
+    let called = host.call("call", json!({"host": "lab", "namepath": "sourcetrait/probe:m:which", "data": "{x: 1}"}));
+    assert_eq!(envelope(&called)["result"]["from"].as_str(), Some("worker"), "{called}");
+    let local = host.call_np("sourcetrait/probe:m:which", "{x: 1}");
+    assert!(has_error_path(&local), "the MCP holds no rig the worker committed: {local}");
+
+    let configured = host.call("interface", json!({"host": "lab", "command": "interface purview configure probe ['sourcetrait/probe:']"}));
+    assert!(!has_error_path(&configured), "{configured}");
+    let remote_list = envelope(&host.call("interface", json!({"host": "lab", "command": "interface purview list"})));
+    let local_list = envelope(&host.interface("interface purview list"));
+    assert!(purview_ids(&remote_list).contains(&"probe".to_string()), "{remote_list}");
+    assert!(!purview_ids(&local_list).contains(&"probe".to_string()), "a host's purviews are its own: {local_list}");
+
+    let call = host.request("execute", json!({"host": "lab", "definition": SLEEP, "data": "null"}));
+    let mut listed = None;
+    for _ in 0..100 {
+        let rows = envelope(&host.call("interface", json!({"host": "lab", "command": "interface process list"})));
+        if let Some(row) = rows["result"]["processes"].as_list().unwrap_or_default().first() {
+            listed = row["nonce"].as_str().map(str::to_string);
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let listed = listed.expect("the call in flight on the worker");
+    let local_rows = envelope(&host.interface("interface process list"));
+    assert!(local_rows["result"]["processes"].as_list().unwrap_or_default().is_empty(), "nothing in flight on the MCP");
+    let killed = host.call("interface", json!({"host": "lab", "command": format!("interface process kill '{listed}'")}));
+    assert!(!has_error_path(&killed), "{killed}");
+    let ended = host.read_id_within(call, END_WAIT);
+    assert!(has_error_path(&ended), "the killed call answers its failure: {ended}");
 }

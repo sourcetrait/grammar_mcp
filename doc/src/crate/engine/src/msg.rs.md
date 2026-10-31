@@ -13,6 +13,11 @@ A subsys system takes one type each way, so the wire's pair rides one variant,
 the purview requests another, and the host's a third: down, a request or a host
 answer; up, an answer or a host ask.
 
+## impl subsys::Request for PurviewRequest
+A purview request whole answers the purview answer whole, so a controller that
+routes requests by host, the MCP's to its own engine or a worker's, sends one
+request and reads one answer whichever engine serves it.
+
 ## macro purview_request
 Each purview request names its answer, so a controller gets its own type back.
 

@@ -27,9 +27,10 @@ impl NuSh {
     pub(crate) async fn equip_new(
         &self,
         nonce: datum::Nonce,
+        route: &Route,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        match self.controller.control(EngineCommand::EquipNew { source: p.source }).await {
+        match self.control_on(route, EngineCommand::EquipNew { source: p.source }).await {
             Ok(ControlAnswer::Created(created)) => success(
                 nonce,
                 &EquipResult {
@@ -45,11 +46,12 @@ impl NuSh {
     pub(crate) async fn equip_install(
         &self,
         nonce: datum::Nonce,
+        route: &Route,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        match self.controller.control(EngineCommand::EquipInstall { source: p.source }).await {
+        match self.control_on(route, EngineCommand::EquipInstall { source: p.source }).await {
             Ok(ControlAnswer::Installed { equip, result }) => {
-                self.purview_rig(equip, true).await;
+                self.purview_rig(route, equip, true).await;
                 success(
                     nonce,
                     &EquipResult {
@@ -66,9 +68,10 @@ impl NuSh {
     pub(crate) async fn equip_check(
         &self,
         nonce: datum::Nonce,
+        route: &Route,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        match self.controller.control(EngineCommand::EquipCheck { source: p.source }).await {
+        match self.control_on(route, EngineCommand::EquipCheck { source: p.source }).await {
             Ok(ControlAnswer::Checked(summary)) => success(
                 nonce,
                 &EquipResult {
@@ -84,12 +87,13 @@ impl NuSh {
     pub(crate) async fn equip_uninstall(
         &self,
         nonce: datum::Nonce,
+        route: &Route,
         p: EquipParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        match self.controller.control(EngineCommand::EquipUninstall { source: p.source }).await {
+        match self.control_on(route, EngineCommand::EquipUninstall { source: p.source }).await {
             Ok(ControlAnswer::Uninstalled { equip }) => {
                 if let Some(equip) = equip {
-                    self.purview_rig(equip, false).await;
+                    self.purview_rig(route, equip, false).await;
                 }
                 success(nonce, &EquipResult { summary: None })
             }
@@ -100,21 +104,22 @@ impl NuSh {
 }
 
 impl NuSh {
-    /// A rig installed or uninstalled: the engine's purviews adjusted, the view kept.
+    /// A rig installed or uninstalled: the routed engine's purviews adjusted, its view kept.
     async fn purview_rig(
         &self,
+        route: &Route,
         rig: String,
         installed: bool,
     ) {
-        let adjust = PurviewRigRequest {
+        let current = self.views.of(route);
+        let adjust = PurviewRequest::Rig(PurviewRigRequest {
             rig: rig.clone(),
             installed,
-            current: self.current_purview.ids(),
-        };
-        match self.controller.request(adjust).await {
-            Ok(Ok(rows)) if !installed => self.current_purview.retain_known(&rows),
-            Ok(Ok(_)) => {}
-            Ok(Err(e)) => eprintln!("grammar: purview not updated for {rig}: {e:?}"),
+            current: current.ids(),
+        });
+        match self.purview_rows_on(route, adjust).await {
+            Ok(rows) if !installed => current.retain_known(&rows),
+            Ok(_) => {}
             Err(e) => eprintln!("grammar: purview not updated for {rig}: {e:?}"),
         }
     }

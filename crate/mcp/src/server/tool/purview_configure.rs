@@ -8,28 +8,28 @@ pub(crate) struct PurviewConfigureResult {
 }
 
 impl NuSh {
-    /// `interface purview configure`: set a purview's patterns; empty deletes it.
+    /// `interface purview configure`: set a purview's patterns on the routed engine; empty deletes it.
     pub(crate) async fn purview_configure(
         &self,
         nonce: datum::Nonce,
+        route: &Route,
         p: PurviewConfigureParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let configure = PurviewConfigureRequest {
+        let configure = PurviewRequest::Configure(PurviewConfigureRequest {
             id: p.purview.clone(),
             patterns: p.namepaths,
-        };
-        let rows = match self.controller.request(configure).await {
-            Ok(Ok(rows)) => rows,
-            Ok(Err(error)) => return error_to_call_result(error, nonce),
+        });
+        let rows = match self.purview_rows_on(route, configure).await {
+            Ok(rows) => rows,
             Err(error) => return error_to_call_result(error, nonce),
         };
-        self.current_purview.retain_known(&rows);
+        self.views.of(route).retain_known(&rows);
         let signatures = if rows.iter().any(|row| row.id == p.purview) {
-            let view = match self.resolve_purviews(vec![p.purview]).await {
+            let view = match self.resolve_purviews(route, vec![p.purview]).await {
                 Ok(view) => view,
                 Err(error) => return error_to_call_result(error, nonce),
             };
-            match self.signatures(view.patterns).await {
+            match self.signatures(route, view.patterns).await {
                 Ok(signatures) => Some(signatures),
                 Err(error) => return error_to_call_result(error, nonce),
             }

@@ -112,7 +112,7 @@ pub(crate) use crate::server::{
     host::{HostRoute, ensure_substrate, init_engine},
     oneshot::run_oneshot,
     operator::{OperatorWatch, spawn_observer},
-    purview::{CurrentPurview, pattern_delta, unknown_purview},
+    purview::{Views, pattern_delta, unknown_purview},
     remote::RemoteRoute,
     run::run_server,
     tool::common::{NuSh, unexpected},
@@ -159,9 +159,10 @@ pub(crate) use sourcetrait_grammar_peer::{
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
-    ChannelEpoch, ChannelPhase, ChannelSendData, EngineRequest, EngineResponse, FromEngineSys,
-    LIMITS_DEFAULT, LOCAL_HOST, MAX_FRAME_BYTES, PreparedSend, PurviewRow, PurviewView,
-    RemoteResult, RemoteSendData, RuntimeError, SpamThresholdsData, ToEngineSys, TransportError,
+    ChannelEpoch, ChannelPhase, ChannelSendData, ControlRequest, EngineRequest, EngineResponse,
+    FromEngineSys, LIMITS_DEFAULT, LOCAL_HOST, MAX_FRAME_BYTES, PreparedSend, PurviewAnswer,
+    PurviewRequest, PurviewRow, PurviewView, RemoteResult, RemoteSendData, RuntimeError,
+    SpamThresholdsData, ToEngineSys, TransportError, WorkerInfo,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{

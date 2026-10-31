@@ -37,12 +37,13 @@ each command's method takes the nonce rather than minting its own.
 
 ## fn run_interface
 Each group to its system: the face's two whatever the host, since the Channel
-and the remote channels are the MCP's, and the engine's to `run_engine` on
-`local`. An engine command for a remote engine answers `host::unserved`. No
-command dispatches an eval, so none appears in `interface process list`'s table
-and none takes a lane or a permit; a command's own locks are taken inside its
-method as its tool took them.
+and the remote channels are the MCP's, and the engine's to `run_engine` on the
+host's engine. The deny set applies at the parse, before any routing, so a
+denied command is withheld the same for every host. No command dispatches an
+eval, so none appears in `interface process list`'s table and none takes a
+lane or a permit; a command's own locks are taken inside its method as its
+tool took them.
 
 ## fn run_engine
-The engine's group, each command its method, the purviews', `info`'s, and
-`help`'s with the session's view.
+The engine's group, each command its method on the routed engine, the
+purviews', `info`'s, and `help`'s with the session's view there.
