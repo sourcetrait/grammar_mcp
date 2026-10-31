@@ -35,6 +35,11 @@ name = "controller_lease"
 path = "tests/controller_lease.rs"
 required-features = ["service"]
 
+[[test]]
+name = "operation_journal"
+path = "tests/operation_journal.rs"
+required-features = ["service"]
+
 [features]
 default = ["service"]
 # grammard's adapters over the runtime library: its command line, the user
@@ -58,6 +63,7 @@ tokio-util.workspace = true
 
 sourcetrait_common.workspace = true
 sourcetrait_grammar_engine.workspace = true
+sourcetrait_grammar_journal.workspace = true
 sourcetrait_grammar_operator.workspace = true
 sourcetrait_grammar_protocol.workspace = true
 sourcetrait_grammar_scratch.workspace = true

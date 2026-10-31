@@ -6700,6 +6700,7 @@ dependencies = [
  "sha2",
  "sourcetrait_common",
  "sourcetrait_grammar_engine",
+ "sourcetrait_grammar_journal",
  "sourcetrait_grammar_operator",
  "sourcetrait_grammar_protocol",
  "sourcetrait_grammar_scratch",
@@ -6774,6 +6775,22 @@ dependencies = [
  "nuval",
  "serde",
  "sourcetrait_grammar_protocol",
+]
+
+[[package]]
+name = "sourcetrait_grammar_journal"
+version = "0.0.0-9"
+dependencies = [
+ "bitcode",
+ "nix",
+ "nuval",
+ "rkyv",
+ "serde",
+ "sha2",
+ "sourcetrait_common",
+ "sourcetrait_grammar_protocol",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]

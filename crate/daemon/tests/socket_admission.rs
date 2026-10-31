@@ -222,9 +222,11 @@ async fn two_data_homes_cannot_share_one_socket() {
     let instance = TestInstance::new("two", "default");
     let first = start(&instance, "default").expect("the first worker");
     let mut env = instance.env.clone();
-    let other = instance.home("other-data");
-    std::fs::create_dir_all(&other).unwrap();
-    env.insert("UENV_USR_DATA".to_string(), other.to_string_lossy().into_owned());
+    for (var, home) in [("UENV_USR_DATA", "other-data"), ("UENV_USR_STATE", "other-state")] {
+        let other = instance.home(home);
+        std::fs::create_dir_all(&other).unwrap();
+        env.insert(var.to_string(), other.to_string_lossy().into_owned());
+    }
     let refused = start_with(&instance, "default", &env).err().expect("the socket's lock is held");
     assert_eq!(refused.status.code(), Some(73), "{refused:?}");
     assert!(String::from_utf8_lossy(&refused.stderr).contains("another worker holds its lock"), "{refused:?}");

@@ -192,8 +192,49 @@ fn a_duplicate_claiming_the_first_hash_over_another_body_is_refused() {
     let terminal = table.advance(op(1), OperationEvent::Succeed).expect("the operation completes");
     assert!(table.retire(op(1)), "the terminal record retires");
     refused(&mut table, "after its retirement");
-    let mut recovered = OperationTable::recover(GENERATION, [(op(1), first.hash, terminal)]);
+    let mut recovered = OperationTable::recover(GENERATION, [(op(1), first.hash, ticket.nonce, terminal)]);
     refused(&mut recovered, "after a recovery");
+}
+
+#[test]
+fn no_two_operations_share_an_engine_nonce() {
+    let (mut table, ticket) = issued(1);
+    assert!(table.holds(op(9), ticket.nonce), "a waiting ticket holds its nonce");
+    assert_eq!(table.issue(0, op(2), ticket.nonce, EPOCH).expect_err("a held nonce").kind(), "daemon::busy");
+    admit(&mut table, &ticket, 0);
+    assert!(table.holds(op(9), ticket.nonce), "and its record, once admitted");
+    assert_eq!(table.issue(1, op(2), ticket.nonce, EPOCH).expect_err("still held").kind(), "daemon::busy");
+    table.advance(op(1), OperationEvent::Dispatch);
+    table.advance(op(1), OperationEvent::Succeed);
+    assert!(table.retire(op(1)));
+    assert!(table.holds(op(9), ticket.nonce), "and its tombstone");
+    // A ticket that expires unused lets its nonce go.
+    let lapsed = table.issue(0, op(3), nonce(30), EPOCH).expect("issued");
+    assert!(table.holds(op(9), lapsed.nonce));
+    assert!(table.issue(EXPIRY_MS, op(4), lapsed.nonce, EPOCH).is_ok(), "the lapsed ticket's nonce is free");
+    // A recovery holds every recovered record's nonce.
+    let hash = payload_hash(&an_execute(nonce(40), "null"));
+    let recovered = OperationTable::recover(GENERATION, [(op(5), hash, nonce(40), OperationState::Running)]);
+    assert!(recovered.holds(op(9), nonce(40)) && recovered.holds(op(5), nonce(41)));
+}
+
+#[test]
+fn a_check_answers_as_a_submission_would_and_commits_nothing() {
+    let (mut table, ticket) = issued(1);
+    let good = submission(&ticket, an_execute(ticket.nonce, "null"));
+    assert!(table.check(1, &good, EPOCH).is_none(), "admissible");
+    assert_eq!(table.lookup(op(1)), OperationStatus::Unknown { operation: op(1) }, "nothing admitted");
+    let wrong = Submission { hash: [0; 32], ..good.clone() };
+    assert_eq!(refused_kind(&table.check(1, &wrong, EPOCH).expect("refused")), "daemon::invalid_frame");
+    assert_eq!(refused_kind(&table.check(1, &good, LeaseEpoch(4)).expect("refused")), "daemon::ticket_invalid");
+    let (admission, execute) = table.submit(1, &good, EPOCH);
+    assert_eq!(admission.outcome, AdmissionOutcome::Admitted, "the ticket stayed for its submission");
+    assert!(execute.is_some());
+    let existing = table.check(2, &good, EPOCH).expect("answered");
+    assert_eq!(existing.outcome, AdmissionOutcome::Existing(OperationStatus::Known { operation: op(1), state: OperationState::Admitted }));
+    let late = table.issue(0, op(2), nonce(2), EPOCH).expect("issued");
+    let at_expiry = table.check(EXPIRY_MS, &submission(&late, an_execute(late.nonce, "null")), EPOCH).expect("refused");
+    assert_eq!(refused_kind(&at_expiry), "daemon::ticket_invalid", "a check at the expiry");
 }
 
 #[test]
@@ -266,7 +307,7 @@ fn a_cancellation_racing_a_completion_ends_in_one_terminal() {
 #[test]
 fn a_restart_leaves_every_unfinished_operation_unknown_and_runs_none_again() {
     let hash = payload_hash(&an_execute(nonce(1), "null"));
-    let records = STATES.iter().enumerate().map(|(n, state)| (op(n as u8), hash, *state));
+    let records = STATES.iter().enumerate().map(|(n, state)| (op(n as u8), hash, nonce(n as u64), *state));
     let table = OperationTable::recover(WorkerGeneration([0x45; 16]), records);
     for (n, state) in STATES.iter().enumerate() {
         let expected = if state.terminal() { *state } else { OperationState::UnknownAfterRestart };

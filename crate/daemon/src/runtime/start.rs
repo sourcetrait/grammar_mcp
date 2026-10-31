@@ -10,11 +10,11 @@ const LOCK_HOLDER: &str = "grammard";
 /// The source of every random id the worker draws.
 const URANDOM: &str = "/dev/urandom";
 
-/// How long a shutdown waits for the socket's tasks to end.
+/// How long a shutdown waits for the worker's tasks to end.
 const SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
 
-/// The threads the socket's tasks run on.
-const SOCKET_THREADS: usize = 2;
+/// The threads the worker's systems and its socket's tasks run on.
+const TASK_THREADS: usize = 2;
 
 /// A worker's immutable identity: its effective UID, MCP id, and namespace.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,15 +34,16 @@ pub struct Runtime {
     generation: WorkerGeneration,
     scratch: WorkerScratch,
     diagnostics: Vec<String>,
+    tasks: tk::runtime::Runtime,
+    controller: GrammardController,
     serving: Option<Serving>,
     lock: NamespaceLock,
 }
 
-/// The engine socket's service: its listener, its tasks' runtime, and their stop.
+/// The engine socket's service: its listener, and its tasks' stop.
 #[derive(Debug)]
 struct Serving {
     listener: EngineListener,
-    tasks: tk::runtime::Runtime,
     stop: tk::sync::watch::Sender<bool>,
 }
 
@@ -52,15 +53,32 @@ impl Runtime {
         if STARTED.swap(true, Ordering::AcqRel) {
             return Err(DaemonError::AlreadyStarted);
         }
-        let (lock, generation, scratch) = claim(&config).inspect_err(|_| STARTED.store(false, Ordering::Release))?;
+        let given_back = |e: DaemonError| {
+            STARTED.store(false, Ordering::Release);
+            e
+        };
+        let (lock, generation, scratch) = claim(&config).map_err(given_back)?;
+        let started = tasks().and_then(|tasks| {
+            let controller = tasks.block_on(GrammardController::start(&config, generation))?;
+            Ok((tasks, controller))
+        });
+        let (tasks, controller) = match started {
+            Ok(started) => started,
+            Err(e) => {
+                let _ = scratch.remove();
+                return Err(given_back(e));
+            }
+        };
         let mut diagnostics = scratch.diagnostics().to_vec();
         let serving = start_engine(&config, &scratch, &mut diagnostics).and_then(|()| match &config.paths.socket {
-            Some(path) => serve(path, &config, generation).map(Some),
+            Some(path) => serve(path, &config, generation, &tasks).map(Some),
             None => Ok(None),
         });
         let serving = match serving {
             Ok(serving) => serving,
             Err(e) => {
+                tasks.block_on(controller.shutdown());
+                tasks.shutdown_timeout(SHUTDOWN_GRACE);
                 let _ = scratch.remove();
                 return Err(e);
             }
@@ -70,6 +88,8 @@ impl Runtime {
             generation,
             scratch,
             diagnostics,
+            tasks,
+            controller,
             serving,
             lock,
         })
@@ -105,30 +125,45 @@ impl Runtime {
         Capabilities::NONE
     }
 
-    /// Shuts the runtime down: its socket closed, its scratch removed, its lock last.
+    /// Shuts the runtime down: its socket, its systems, its scratch, its lock last.
     pub fn shutdown(self) -> DaemonResult<()> {
         let Self {
             scratch,
+            tasks,
+            controller,
             serving,
             lock,
             ..
         } = self;
-        if let Some(Serving { listener, tasks, stop }) = serving {
+        let listener = serving.map(|Serving { listener, stop }| {
             let _ = stop.send(true);
-            tasks.shutdown_timeout(SHUTDOWN_GRACE);
-            drop(listener);
-        }
+            listener
+        });
+        tasks.block_on(controller.shutdown());
+        tasks.shutdown_timeout(SHUTDOWN_GRACE);
+        drop(listener);
         let removed = scratch.remove();
         drop(lock);
         removed
     }
 }
 
-/// The engine socket bound at `path`, its streams admitted on tasks of their own.
+/// The worker's task runtime, its systems' and its socket's threads.
+fn tasks() -> DaemonResult<tk::runtime::Runtime> {
+    tk::runtime::Builder::new_multi_thread()
+        .worker_threads(TASK_THREADS)
+        .thread_name("grammard")
+        .enable_all()
+        .build()
+        .map_err(|e| DaemonError::TasksUnavailable { reason: e.to_string() })
+}
+
+/// The engine socket bound at `path`, its streams admitted on the worker's tasks.
 fn serve(
     path: &Path,
     config: &InstanceConfig,
     generation: WorkerGeneration,
+    tasks: &tk::runtime::Runtime,
 ) -> DaemonResult<Serving> {
     let unavailable = |reason: String| DaemonError::SocketUnavailable {
         path: path.to_path_buf(),
@@ -144,12 +179,6 @@ fn serve(
         artifacts: ARTIFACT_LIMITS_DEFAULT,
         capabilities: Capabilities::NONE,
     };
-    let tasks = tk::runtime::Builder::new_multi_thread()
-        .worker_threads(SOCKET_THREADS)
-        .thread_name("grammard")
-        .enable_all()
-        .build()
-        .map_err(|e| unavailable(format!("its tasks' runtime: {e}")))?;
     let bound = listener.take().ok_or_else(|| unavailable("its listener is gone".to_string()))?;
     let accepted = {
         let _entered = tasks.enter();
@@ -161,7 +190,7 @@ fn serve(
     let (stop, stopped) = tk::sync::watch::channel(false);
     tasks.spawn(accept(accepted, Arc::new(Admission::new(profile, sessions.clone())), stopped.clone()));
     tasks.spawn(ticker(sessions, stopped));
-    Ok(Serving { listener, tasks, stop })
+    Ok(Serving { listener, stop })
 }
 
 

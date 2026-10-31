@@ -746,7 +746,8 @@
     [TransportError,     12,    Unavailable],
     [TransportError,     13,    UnsupportedFeature],
     [TransportError,     14,    OperationConflict],
-    [TransportError,     15,    TicketInvalid]
+    [TransportError,     15,    TicketInvalid],
+    [TransportError,     16,    StorageFull]
   ],
   fields: [
     [owner,                          variant,                 index, name,              type];
@@ -1304,6 +1305,7 @@
     [TransportError,                 UnsupportedFeature,      0,     feature,           String],
     [TransportError,                 OperationConflict,       0,     operation,         OperationId],
     [TransportError,                 TicketInvalid,           0,     reason,            String],
+    [TransportError,                 StorageFull,             0,     reason,            String],
     [TypedRangeData,                 null,                    0,     start,             T],
     [TypedRangeData,                 null,                    1,     step,              T],
     [TypedRangeData,                 null,                    2,     end,               Bounded<T>],

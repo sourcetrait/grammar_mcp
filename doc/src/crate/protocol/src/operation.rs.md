@@ -55,11 +55,23 @@ stream, never stands for an operation, and a caller whose reply was lost
 still holds the id to look up.
 
 ## struct OperationTable
-Tickets awaiting submission, and every operation admitted with its state and
-its payload's hash.
+Tickets awaiting submission, and every operation admitted with its state, its
+payload's hash, and its engine nonce, the nonces indexed apart so a ticket's
+check costs no walk of the records.
+### fn holds
+Whether an id or a nonce is taken, by a waiting ticket or a record, a retired
+one's tombstone among them: the worker draws again for a held one before it
+issues, since the engine keys its calls, their caches, and their logs by
+nonce.
 ### fn issue
-An id already issued or admitted is `Busy`, as a full table is, so no ticket
-ever names an operation twice.
+An id or a nonce already issued or admitted is `Busy`, as a full table is, so
+no ticket ever names an operation or an engine nonce twice. A ticket that
+expires unused lets its nonce go.
+### fn check
+The verdict `submit` reaches, committing nothing but the tickets' expiry: the
+journal syncs an admission's entry between the two, so the model never holds
+an admission the disk doesn't. Both take the same `now_ms`, so a ticket can't
+expire between them.
 ### fn submit
 An operation admitted before answers what it is, its result or its
 tombstone, whatever its ticket's state, and a different payload under its id
@@ -73,7 +85,7 @@ supplied hash the request's own; a refusal leaves the ticket for its own
 submission. Only an admission returns an `Execute`.
 ### fn recover
 A journal's records at a new generation, every unfinished one unknown, so a
-restart never runs anything again.
+restart never runs anything again, and each one's nonce held again.
 ### fn advance
 A move the contract has no such transition for, or one of an unknown or
 retired operation, answers none and leaves the state as it was.

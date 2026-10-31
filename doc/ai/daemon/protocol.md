@@ -61,7 +61,9 @@ cancellation. A close is an orderly detach and never shuts the worker down.
 - Nothing runs without a ticket the worker issued, unexpired, unused, of its
   generation and the lease's epoch, under the request's own payload hash:
   `daemon::ticket_invalid` otherwise, and `daemon::operation_conflict` for an
-  operation admitted before with another payload.
+  operation admitted before with another payload. An admission with no room,
+  its journal's cap reached or the filesystem short of its worst case, is
+  `daemon::storage_full`, nothing admitted.
 - A peer's packet is data: its nom and delivery id are base62, its model
   outside the `mcp/` and `remote/` reservations, and its files' destinations
   held to every client OS's rules before any event is numbered.

@@ -58,5 +58,9 @@ that may repeat an effect. `Busy` admits no operation at all.
 `UnsupportedFeature` is a hello's required feature the other end doesn't have
 on. `OperationConflict` is an operation admitted before with another payload,
 and `TicketInvalid` a ticket unknown, expired, used, or another worker's or
-epoch's; neither ran anything. Each new variant goes last, so the ones before
+epoch's; neither ran anything. `StorageFull` is an admission refused for room,
+the journal's cap reached or the filesystem short of the operation's worst
+case, nothing admitted: apart from `Busy`, since room comes back only as
+retention lets results go, and apart from `Unavailable`, since the worker
+still serves everything else. Each new variant goes last, so the ones before
 it keep their wire indices.

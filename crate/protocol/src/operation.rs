@@ -1,6 +1,6 @@
 //! An operation's ticket, admission, status, and outcome, and the worker's model.
 use crate::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// How long an issued ticket waits for its submission.
 pub const TICKET_EXPIRY: std::time::Duration = std::time::Duration::from_secs(60);
@@ -259,8 +259,17 @@ struct Issued {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Record {
     hash: [u8; 32],
+    nonce: datum::Nonce,
     state: OperationState,
     retired: bool,
+}
+
+/// What a submission comes to before anything of it is committed.
+enum Verdict {
+    /// Answered without an admission: an existing operation, or a refusal.
+    Answer(Admission),
+    /// Admissible: a fresh operation under a good ticket.
+    Admit,
 }
 
 /// A worker's operations: tickets awaiting submission, and each one admitted.
@@ -269,6 +278,8 @@ pub struct OperationTable {
     generation: WorkerGeneration,
     issued: HashMap<OperationId, Issued>,
     records: HashMap<OperationId, Record>,
+    /// Every nonce an issued ticket or a record holds.
+    nonces: HashSet<datum::Nonce>,
 }
 
 /// A ticket refused, and why.
@@ -279,30 +290,47 @@ fn invalid(reason: &str) -> TransportError {
 impl OperationTable {
     /// A worker's table at its start, nothing issued or admitted.
     pub fn new(generation: WorkerGeneration) -> Self {
-        Self { generation, issued: HashMap::new(), records: HashMap::new() }
+        Self { generation, issued: HashMap::new(), records: HashMap::new(), nonces: HashSet::new() }
     }
 
     /// A worker's table from its journal's records, each unfinished one unknown.
-    pub fn recover(generation: WorkerGeneration, records: impl IntoIterator<Item = (OperationId, [u8; 32], OperationState)>) -> Self {
+    pub fn recover(
+        generation: WorkerGeneration,
+        records: impl IntoIterator<Item = (OperationId, [u8; 32], datum::Nonce, OperationState)>,
+    ) -> Self {
+        let mut nonces = HashSet::new();
         let records = records
             .into_iter()
-            .map(|(operation, hash, state)| {
+            .map(|(operation, hash, nonce, state)| {
                 let state = transition(state, OperationEvent::Restart).unwrap_or(state);
-                (operation, Record { hash, state, retired: false })
+                nonces.insert(nonce);
+                (operation, Record { hash, nonce, state, retired: false })
             })
             .collect();
-        Self { generation, issued: HashMap::new(), records }
+        Self { generation, issued: HashMap::new(), records, nonces }
     }
 
-    /// Tickets past their deadline at `now_ms` forgotten.
+    /// Tickets past their deadline at `now_ms` forgotten, their nonces let go.
     fn expire(&mut self, now_ms: u64) {
-        self.issued.retain(|_, issued| now_ms < issued.deadline_ms);
+        let nonces = &mut self.nonces;
+        self.issued.retain(|_, issued| {
+            let waiting = now_ms < issued.deadline_ms;
+            if !waiting {
+                nonces.remove(&issued.ticket.nonce);
+            }
+            waiting
+        });
+    }
+
+    /// Whether an issued ticket or a record holds `operation` or `nonce`.
+    pub fn holds(&self, operation: OperationId, nonce: datum::Nonce) -> bool {
+        self.issued.contains_key(&operation) || self.records.contains_key(&operation) || self.nonces.contains(&nonce)
     }
 
     /// A ticket for `operation` under the lease's `epoch`, its nonce minted.
     pub fn issue(&mut self, now_ms: u64, operation: OperationId, nonce: datum::Nonce, epoch: LeaseEpoch) -> Result<OperationTicket, TransportError> {
         self.expire(now_ms);
-        if self.issued.len() >= TICKETS_MAX || self.issued.contains_key(&operation) || self.records.contains_key(&operation) {
+        if self.issued.len() >= TICKETS_MAX || self.holds(operation, nonce) {
             return Err(TransportError::Busy);
         }
         let expires = u64::try_from(TICKET_EXPIRY.as_millis()).unwrap_or(u64::MAX);
@@ -314,13 +342,35 @@ impl OperationTable {
             expires_ms: u32::try_from(expires).unwrap_or(u32::MAX),
         };
         self.issued.insert(operation, Issued { ticket: ticket.clone(), deadline_ms: now_ms.saturating_add(expires) });
+        self.nonces.insert(nonce);
         Ok(ticket)
+    }
+
+    /// `submission`'s answer where it wouldn't be admitted, none where it would.
+    pub fn check(&mut self, now_ms: u64, submission: &Submission, epoch: LeaseEpoch) -> Option<Admission> {
+        match self.verdict(now_ms, submission, epoch) {
+            Verdict::Answer(admission) => Some(admission),
+            Verdict::Admit => None,
+        }
     }
 
     /// `submission` under the lease's `epoch`: its admission, and any execution.
     pub fn submit(&mut self, now_ms: u64, submission: &Submission, epoch: LeaseEpoch) -> (Admission, Option<Execute>) {
+        if let Verdict::Answer(admission) = self.verdict(now_ms, submission, epoch) {
+            return (admission, None);
+        }
         let operation = submission.ticket.operation;
-        let answer = |outcome| Admission { correlation: submission.correlation, operation, outcome };
+        let ticket = self.issued.remove(&operation).expect("checked").ticket;
+        let record = Record { hash: submission.hash, nonce: ticket.nonce, state: OperationState::Admitted, retired: false };
+        self.records.insert(operation, record);
+        let admission = Admission { correlation: submission.correlation, operation, outcome: AdmissionOutcome::Admitted };
+        (admission, Some(Execute { operation, nonce: ticket.nonce }))
+    }
+
+    /// What `submission` comes to at `now_ms`, nothing of it committed.
+    fn verdict(&mut self, now_ms: u64, submission: &Submission, epoch: LeaseEpoch) -> Verdict {
+        let operation = submission.ticket.operation;
+        let answer = |outcome| Verdict::Answer(Admission { correlation: submission.correlation, operation, outcome });
         if let Some(record) = self.records.get(&operation) {
             let outcome = if payload_hash(&submission.request) != submission.hash {
                 AdmissionOutcome::Refused(TransportError::InvalidFrame {
@@ -331,7 +381,7 @@ impl OperationTable {
             } else {
                 AdmissionOutcome::Refused(TransportError::OperationConflict { operation })
             };
-            return (answer(outcome), None);
+            return answer(outcome);
         }
         self.expire(now_ms);
         let refusal = match self.issued.get(&operation) {
@@ -347,12 +397,10 @@ impl OperationTable {
             }),
             Some(_) => None,
         };
-        if let Some(refusal) = refusal {
-            return (answer(AdmissionOutcome::Refused(refusal)), None);
+        match refusal {
+            Some(refusal) => answer(AdmissionOutcome::Refused(refusal)),
+            None => Verdict::Admit,
         }
-        let ticket = self.issued.remove(&operation).expect("checked").ticket;
-        self.records.insert(operation, Record { hash: submission.hash, state: OperationState::Admitted, retired: false });
-        (answer(AdmissionOutcome::Admitted), Some(Execute { operation, nonce: ticket.nonce }))
     }
 
     /// What is known of `operation`, which runs nothing.

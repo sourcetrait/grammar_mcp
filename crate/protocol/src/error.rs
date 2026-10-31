@@ -172,6 +172,8 @@ pub enum TransportError {
     OperationConflict { operation: OperationId },
     /// A submission's ticket is unknown, expired, used, or another's.
     TicketInvalid { reason: String },
+    /// No room to keep another operation's records; nothing was admitted.
+    StorageFull { reason: String },
 }
 
 impl TransportError {
@@ -185,6 +187,7 @@ impl TransportError {
             Self::UnsupportedFeature { .. } => "daemon::unsupported_feature",
             Self::OperationConflict { .. } => "daemon::operation_conflict",
             Self::TicketInvalid { .. } => "daemon::ticket_invalid",
+            Self::StorageFull { .. } => "daemon::storage_full",
             Self::Unauthorized { .. } => "daemon::unauthorized",
             Self::AuthenticationFailed { .. } => "daemon::authentication_failed",
             Self::LeaseInvalid { .. } => "daemon::lease_invalid",
@@ -220,6 +223,7 @@ impl TransportError {
                 operation.hex(),
             ),
             Self::TicketInvalid { reason } => format!("the ticket can't run anything: {reason}"),
+            Self::StorageFull { reason } => format!("the worker has no room to admit an operation; nothing ran: {reason}"),
             Self::Unauthorized { reason } => format!("the worker refused this peer: {reason}"),
             Self::AuthenticationFailed { reason } => {
                 format!("authentication failed before any request was sent: {reason}")

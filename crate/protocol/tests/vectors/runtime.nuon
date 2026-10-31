@@ -82,6 +82,7 @@
   [transport_error/operation_conflict,      TransportError,     "0e09110000"],
   [transport_error/result_too_large,        TransportError,     "0a0200008000"],
   [transport_error/schema_mismatch,         TransportError,     "0101610162"],
+  [transport_error/storage_full,            TransportError,     "1012746865206361702069732072656163686564"],
   [transport_error/ticket_invalid,          TransportError,     "0f0765787069726564"],
   [transport_error/unauthorized,            TransportError,     "040d70656572207569642031303031"],
   [transport_error/unavailable,             TransportError,     "0c086e6f20726f757465"],
