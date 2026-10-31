@@ -8,6 +8,11 @@ use sourcetrait_grammar_protocol::*;
 #[path = "support/golden.rs"]
 mod golden;
 
+/// A payload as `T` within the default decode budget, the path every frame takes.
+fn decode<T: bitcode::DecodeOwned>(payload: &[u8]) -> Result<T, FrameError> {
+    decode_payload(payload, DECODE_BUDGET_DEFAULT)
+}
+
 /// The golden vectors' file, every vector's bitcode bytes in hex.
 const GOLDEN: &str = "tests/vectors/value.nuon";
 
@@ -187,14 +192,14 @@ fn every_vector_encodes_to_its_golden_bytes() {
 #[test]
 fn every_value_and_error_round_trips() {
     for (name, value) in values() {
-        let back: NuVal = bitcode::decode(&bitcode::encode(&value)).expect(name);
+        let back: NuVal = decode(&bitcode::encode(&value)).expect(name);
         match (&value, &back) {
             (NuVal::Float(a), NuVal::Float(b)) => assert_eq!(a.to_bits(), b.to_bits(), "{name}"),
             _ => assert_eq!(back, value, "{name}"),
         }
     }
     for (name, error) in errors() {
-        let back: NuValError = bitcode::decode(&bitcode::encode(&error)).expect(name);
+        let back: NuValError = decode(&bitcode::encode(&error)).expect(name);
         assert_eq!(back, error, "{name}");
     }
 }
@@ -202,7 +207,7 @@ fn every_value_and_error_round_trips() {
 #[test]
 fn a_nan_keeps_its_bits() {
     let nan = f64::from_bits(0x7ff8_0000_0000_0001);
-    let back: NuVal = bitcode::decode(&bitcode::encode(&NuVal::Float(nan))).expect("decoded");
+    let back: NuVal = decode(&bitcode::encode(&NuVal::Float(nan))).expect("decoded");
     let NuVal::Float(back) = back else { panic!("a float") };
     assert_eq!(back.to_bits(), nan.to_bits());
 }
@@ -212,9 +217,9 @@ fn truncated_or_trailing_bytes_are_refused() {
     for (name, bytes) in encoded() {
         let decode = |b: &[u8]| -> bool {
             if name.starts_with("value/") {
-                bitcode::decode::<NuVal>(b).is_ok()
+                decode::<NuVal>(b).is_ok()
             } else {
-                bitcode::decode::<NuValError>(b).is_ok()
+                decode::<NuValError>(b).is_ok()
             }
         };
         for cut in 0..bytes.len() {
@@ -232,7 +237,7 @@ fn a_one_byte_value_is_nothing_or_refused() {
     assert_eq!(canonical.len(), 1);
     let mut accepted = Vec::new();
     for tag in 0..=u8::MAX {
-        if let Ok(value) = bitcode::decode::<NuVal>(&[tag]) {
+        if let Ok(value) = decode::<NuVal>(&[tag]) {
             assert_eq!(value, NuVal::Nothing, "byte {tag} decoded to a payload variant");
             accepted.push(tag);
         }

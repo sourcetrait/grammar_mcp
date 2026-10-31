@@ -12,6 +12,11 @@ use sourcetrait_grammar_protocol::*;
 #[path = "support/golden.rs"]
 mod golden;
 
+/// A payload as `T` within the default decode budget, the path every frame takes.
+fn decode<T: bitcode::DecodeOwned>(payload: &[u8]) -> Result<T, FrameError> {
+    decode_payload(payload, DECODE_BUDGET_DEFAULT)
+}
+
 /// The golden vectors' file, every vector's bitcode bytes in hex.
 const GOLDEN: &str = "tests/vectors/runtime.nuon";
 
@@ -452,7 +457,7 @@ fn round_trips<T>(name: &str, value: &T)
 where
     T: bitcode::Encode + for<'a> bitcode::Decode<'a> + PartialEq + std::fmt::Debug,
 {
-    let back: T = bitcode::decode(&bitcode::encode(value)).expect(name);
+    let back: T = decode(&bitcode::encode(value)).expect(name);
     assert_eq!(&back, value, "{name}");
 }
 

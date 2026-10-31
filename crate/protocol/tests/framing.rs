@@ -5,10 +5,15 @@ use std::path::Path;
 
 use futures_util::{SinkExt, StreamExt};
 use sourcetrait_grammar_protocol::{
-    CODEC_ID, EVENT_FRAME_MAX, EmergencyKind, FrameCodec, FrameError, FrameStage, HELLO_FRAME_MAX,
-    Lane, NuVal, OperationId, PREFACE, RPC_FRAME_DEFAULT, RPC_FRAME_HARD, SCHEMA_ID, StreamRole,
-    TransportError, check_codec, decode_payload, framed, payload,
+    CODEC_ID, DECODE_BUDGET_DEFAULT, EVENT_FRAME_MAX, EmergencyKind, FrameCodec, FrameError,
+    FrameStage, HELLO_FRAME_MAX, Lane, NuVal, OperationId, PREFACE, RPC_FRAME_DEFAULT,
+    RPC_FRAME_HARD, SCHEMA_ID, StreamRole, TransportError, check_codec, framed, payload,
 };
+
+/// A payload as `T` within the default decode budget.
+fn decode_payload<T: bitcode::DecodeOwned>(payload: &[u8]) -> Result<T, FrameError> {
+    sourcetrait_grammar_protocol::decode_payload(payload, DECODE_BUDGET_DEFAULT)
+}
 use tokio_util::bytes::{Bytes, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 

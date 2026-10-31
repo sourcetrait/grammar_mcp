@@ -41,8 +41,8 @@ pub use crate::{
         SYNC_QUEUE_CAP, SpamThresholdsData, reserved_prefix,
     },
     codec::{
-        BoundedDecode, CODEC_ID, FrameCodec, FrameError, FrameStage, PREFACE, SCHEMA_ID,
-        check_codec, decode_payload, framed, payload,
+        CODEC_ID, FrameCodec, FrameError, FrameStage, PREFACE, SCHEMA_ID, check_codec,
+        decode_payload, framed, payload,
     },
     command::{
         ArgShape, ArgSpec, COMMANDS, CommandKind, CommandSpec, HELP_WORDS, INTERFACE,
@@ -56,7 +56,10 @@ pub use crate::{
         ValueAnswer, builtin_equip, builtin_name, display_equip, span_to_line_col,
     },
     error::{LOCAL_HOST, RuntimeError, TransportError},
-    limits::{EVENT_FRAME_MAX, HELLO_FRAME_MAX, RPC_FRAME_DEFAULT, RPC_FRAME_HARD, StreamRole},
+    limits::{
+        DECODE_BUDGET_DEFAULT, DECODE_HEAP_HARD, DecodeBudget, EVENT_FRAME_MAX, HELLO_FRAME_MAX,
+        RPC_FRAME_DEFAULT, RPC_FRAME_HARD, StreamRole,
+    },
     operator::{
         BackgroundJobsWarningEmergency, ChannelSpamErrorEmergency, ChannelSpamWarningEmergency,
         CpuWarningEmergency, CriticalEmergency, DiskWarningEmergency, Emergency, EmergencyKind,

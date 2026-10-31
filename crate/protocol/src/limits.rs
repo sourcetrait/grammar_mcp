@@ -12,6 +12,19 @@ pub const RPC_FRAME_HARD: u32 = 64 * 1024 * 1024;
 /// The event frame's ceiling, its default and its hard limit alike.
 pub const EVENT_FRAME_MAX: u32 = 1024 * 1024;
 
+/// The bounds a frame's payload decodes within, before anything is allocated.
+pub type DecodeBudget = bitcode::Budget;
+
+/// A payload's decode budget before negotiation: 100,000 elements, 32 MiB of heap.
+pub const DECODE_BUDGET_DEFAULT: DecodeBudget = DecodeBudget {
+    elements: 100_000,
+    heap: 32 * 1024 * 1024,
+    depth: 128,
+};
+
+/// The decoded heap no negotiation passes.
+pub const DECODE_HEAP_HARD: u64 = 128 * 1024 * 1024;
+
 /// A stream's role, fixed by its hello for the stream's life.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StreamRole {

@@ -70,9 +70,12 @@ pub enum FrameError {
     TooLarge { len: usize, ceiling: u32 },
     /// The peer named a codec other than the pinned one.
     UnsupportedCodec { id: String },
-    /// A payload did not decode as its type: trailing bytes or an unknown
-    /// variant among the causes.
+    /// A payload did not decode as its type, trailing bytes or an unknown variant.
     Decode,
+    /// A payload declared more than its decode budget allows.
+    Budget { bound: bitcode::Exceeded, limit: u64 },
+    /// A payload's type holds a collection no decode budget bounds.
+    Unbudgeted,
     /// The transport failed.
     Io(io::Error),
 }
@@ -102,6 +105,12 @@ impl fmt::Display for FrameError {
             }
             Self::UnsupportedCodec { id } => write!(f, "codec {id} where {CODEC_ID} is required"),
             Self::Decode => write!(f, "a payload did not decode as its type"),
+            Self::Budget { bound, limit } => {
+                write!(f, "a payload passed its decode budget's {bound} bound of {limit}")
+            }
+            Self::Unbudgeted => {
+                write!(f, "a payload's type holds a collection no decode budget bounds")
+            }
             Self::Io(e) => write!(f, "the transport failed: {e}"),
         }
     }
@@ -125,8 +134,7 @@ impl FrameError {
     }
 }
 
-/// One stream's framing: it reads the peer's preface, then frames up to the
-/// ceiling, and writes its own preface before its first frame.
+/// One stream's framing: the peer's preface, then frames up to the ceiling.
 #[derive(Debug)]
 pub struct FrameCodec {
     ceiling: u32,
@@ -152,8 +160,7 @@ impl FrameCodec {
         }
     }
 
-    /// The ceiling every later frame is held to, both ways, once the handshake
-    /// has negotiated it for the stream's role.
+    /// The ceiling later frames are held to, both ways, once the role's is set.
     pub fn set_ceiling(&mut self, ceiling: u32) {
         self.ceiling = ceiling;
     }
@@ -194,7 +201,6 @@ impl tku::Decoder for FrameCodec {
                     return Err(FrameError::Oversize { len, ceiling: self.ceiling });
                 }
                 src.advance(HEADER_LEN);
-                // The length is checked, so the reservation is bounded by the ceiling.
                 let len = len as usize;
                 self.body_len = Some(len);
                 src.reserve(len.saturating_sub(src.len()));
@@ -260,8 +266,7 @@ impl tku::Encoder<tku::Bytes> for FrameCodec {
     }
 }
 
-/// The codec over a byte stream: a russh channel stream, a Unix socket, or a
-/// test duplex alike.
+/// The codec over a byte stream: a russh channel, a Unix socket, or a duplex.
 pub fn framed<S>(stream: S) -> tku::Framed<S, FrameCodec>
 where
     S: tk::AsyncRead + tk::AsyncWrite,
@@ -274,42 +279,21 @@ pub fn payload<T: bitcode::Encode + ?Sized>(value: &T) -> tku::Bytes {
     tku::Bytes::from(bitcode::encode(value))
 }
 
-/// A type a payload may become, decoded within bounds that hold before
-/// anything is allocated. DecodeBudget's transport types implement it, and so
-/// do the fixed-width types, whose decode allocates nothing by a declared
-/// length.
-pub trait BoundedDecode: Sized {
-    /// The payload decoded whole, trailing bytes and unknown variants refused.
-    fn decode_bounded(payload: &[u8]) -> Result<Self, FrameError>;
+/// A payload as `T`, decoded within `budget`, a value past any bound refused.
+pub fn decode_payload<T: bitcode::DecodeOwned>(
+    payload: &[u8],
+    budget: DecodeBudget,
+) -> Result<T, FrameError> {
+    bitcode::decode_budgeted(payload, budget).map_err(|e| match e {
+        bitcode::BudgetError::Decode(_) => FrameError::Decode,
+        bitcode::BudgetError::Exceeded(bound) => FrameError::Budget {
+            bound,
+            limit: match bound {
+                bitcode::Exceeded::Elements => budget.elements,
+                bitcode::Exceeded::Heap => budget.heap,
+                bitcode::Exceeded::Depth => u64::from(budget.depth),
+            },
+        },
+        bitcode::BudgetError::Unbudgeted => FrameError::Unbudgeted,
+    })
 }
-
-/// A payload as `T`, through its bounded decode alone.
-pub fn decode_payload<T: BoundedDecode>(payload: &[u8]) -> Result<T, FrameError> {
-    T::decode_bounded(payload)
-}
-
-/// bitcode's own decode, which refuses trailing bytes and unknown variants but
-/// allocates by declared lengths as it reads, so only a bounded type reaches it.
-pub(crate) fn decode_exact<T: bitcode::DecodeOwned>(payload: &[u8]) -> Result<T, FrameError> {
-    bitcode::decode(payload).map_err(|_| FrameError::Decode)
-}
-
-macro_rules! fixed_width {
-    ($($ty:ty),* $(,)?) => {
-        $(impl BoundedDecode for $ty {
-            fn decode_bounded(payload: &[u8]) -> Result<Self, FrameError> {
-                decode_exact(payload)
-            }
-        })*
-    };
-}
-
-fixed_width!(
-    ClientInstanceId,
-    WorkerGeneration,
-    LeaseId,
-    OperationId,
-    ChannelEpoch,
-    Lane,
-    EmergencyKind,
-);

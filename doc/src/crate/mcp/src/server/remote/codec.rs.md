@@ -32,10 +32,21 @@ events of a send) and compress well. Level 3, zstd's default, is the speed and r
 balance; a single level keeps the codec branch-free. A tiny handshake frame pays a few
 bytes of zstd overhead, accepted for the uniform rule.
 
+## const REMOTE_INFLATED_MAX
+The length-delimited frame's own ceiling, 8 MiB, which a delivery or a file
+chunk of 256 KiB fits well within: a frame inflating past it is refused.
+
 ## struct BitcodeCodec
 A tokio-util Decoder and Encoder wrapping LengthDelimitedCodec: the length prefix frames
 the stream, and each frame is zstd-compressed bitcode (encode: bitcode, then zstd, then
 the frame; decode reverses it). `PhantomData<T>` binds the codec to one message type, so
 a `FramedRead<_, BitcodeCodec<AcceptorToInitiator>>` can only yield that language.
-io::Error is what the Framed traits want. The round trip is unit-tested
+io::Error is what the Framed traits want. A peer's frame is inflated within
+`REMOTE_INFLATED_MAX`, so a few hundred bytes of zeros can't inflate without
+bound, and decoded within the protocol's default decode budget, as the
+daemon's frames are. The round trip and both refusals are unit-tested
 (`server/tests/remote.rs`), and the system tests' remote links run it end to end.
+
+## fn inflate
+zstd's stream decoder read through a `take` one byte past the cap, so the
+inflation stops there and the excess is seen.

@@ -5,6 +5,9 @@ use crate::*;
 /// The zstd level applied to every remote frame before it hits the wire.
 const REMOTE_ZSTD_LEVEL: i32 = 3;
 
+/// The most a remote frame inflates to: the length-delimited frame's ceiling.
+pub(crate) const REMOTE_INFLATED_MAX: u64 = 8 * 1024 * 1024;
+
 /// Which of a link's two connections a handshake announces.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, ser::Serialize, ser::Deserialize, bitcode::Encode, bitcode::Decode,
@@ -91,7 +94,7 @@ impl<T> BitcodeCodec<T> {
 
 impl<T> tku::Decoder for BitcodeCodec<T>
 where
-    T: for<'a> bitcode::Decode<'a>,
+    T: bitcode::DecodeOwned,
 {
     type Item = T;
     type Error = io::Error;
@@ -100,16 +103,29 @@ where
         let Some(frame) = self.frames.decode(src)? else {
             return Ok(None);
         };
-        let bytes = zstd::decode_all(frame.as_ref()).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("remote frame: zstd decode failed: {e}"),
-            )
-        })?;
-        bitcode::decode(&bytes).map(Some).map_err(|_| {
-            io::Error::new(io::ErrorKind::InvalidData, "remote frame: bitcode decode failed")
+        let bytes = inflate(frame.as_ref())?;
+        decode_payload(&bytes, DECODE_BUDGET_DEFAULT).map(Some).map_err(|e| {
+            io::Error::new(io::ErrorKind::InvalidData, format!("remote frame: {e}"))
         })
     }
+}
+
+/// A frame's zstd payload inflated whole, refused past `REMOTE_INFLATED_MAX`.
+fn inflate(frame: &[u8]) -> io::Result<Vec<u8>> {
+    let failed = |e: io::Error| {
+        io::Error::new(io::ErrorKind::InvalidData, format!("remote frame: zstd decode failed: {e}"))
+    };
+    let decoder = zstd::stream::read::Decoder::new(frame).map_err(failed)?;
+    let mut bytes = Vec::new();
+    let mut bounded = std::io::Read::take(decoder, REMOTE_INFLATED_MAX + 1);
+    std::io::Read::read_to_end(&mut bounded, &mut bytes).map_err(failed)?;
+    if bytes.len() as u64 > REMOTE_INFLATED_MAX {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("remote frame: it inflates past {REMOTE_INFLATED_MAX} bytes"),
+        ));
+    }
+    Ok(bytes)
 }
 
 impl<T> tku::Encoder<T> for BitcodeCodec<T>

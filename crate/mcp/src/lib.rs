@@ -131,7 +131,7 @@ pub(crate) use crate::{
         remote::{
             codec::{
                 AcceptorToInitiator, BitcodeCodec, FileFrame, InitiatorToAcceptor, MsgFrame,
-                RemoteStream,
+                REMOTE_INFLATED_MAX, RemoteStream,
             },
             link::{
                 LinkKeys, RemoteLinkEntry, bound_listeners, close_listener, connect_remote,
@@ -201,11 +201,11 @@ pub(crate) use sourcetrait_grammar_engine::{
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
-    ChannelPhase, EVENT_BYTES_KEY, EVENT_SPILL_DEST, EVENT_SPILL_KEY, LOCAL_HOST,
-    MAX_FRAME_BYTES, MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT,
+    ChannelPhase, DECODE_BUDGET_DEFAULT, EVENT_BYTES_KEY, EVENT_SPILL_DEST, EVENT_SPILL_KEY,
+    LOCAL_HOST, MAX_FRAME_BYTES, MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT,
     NOTIFICATION_CAP, PurviewRow, PurviewView, RuntimeError, TransportError,
     REMOTE_RESERVED_PREFIX, RemoteChannelRow, RemoteLinkState, RemoteListenResult,
-    SYNC_QUEUE_CAP, reserved_prefix,
+    SYNC_QUEUE_CAP, decode_payload, reserved_prefix,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{

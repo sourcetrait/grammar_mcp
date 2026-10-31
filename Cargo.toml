@@ -100,6 +100,11 @@ sourcetrait_process = { path = "../common_mono/unix/crates/sourcetrait_process",
 
 srcert_lib = { path = "../srcert/crates/srcert_lib" }
 
+# sourcetrait's fork of bitcode, for its decode budget and its sound short copy,
+# its wire format upstream's 0.6.9 byte for byte.
+[patch.crates-io]
+bitcode = { path = "../bitcode" }
+
 [profile.release]
 # EmbedEngine principle 1 (grammar): eval runs in-process on host threads and a
 # panicking body is caught by catch_unwind so it fails one eval, not the host. That

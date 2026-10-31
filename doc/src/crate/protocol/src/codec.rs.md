@@ -41,7 +41,8 @@ just another id, so it is refused like any other.
 Each failure closes its own stream and nothing else. A received frame past the
 ceiling and a frame too large to send are apart: the first is the peer's
 invalid frame, the second this end's result too large, and the transport
-errors they map to differ.
+errors they map to differ. A payload past its decode budget names the bound and
+its limit; like a payload that doesn't decode, it is the peer's invalid frame.
 
 ### fn transport
 The stable `daemon::` kind a frontend reports, so a framing failure reaches the
@@ -77,19 +78,12 @@ transport's authentication stays the transport's.
 Encoding is the pinned bitcode's, which is deterministic, so a frame's bytes
 are the same on every platform and golden vectors hold everywhere.
 
-## trait BoundedDecode
-bitcode's decode refuses trailing bytes and unknown variants, but it allocates
-by the lengths a payload declares as it reads, so a small frame can declare a
-huge collection. A payload therefore becomes a value only through this trait:
-DecodeBudget implements it for the transport's types with budgets checked
-before allocation, and the fixed-width types implement it here, since their
-decode allocates nothing by a declared length.
-
-## fn decode_exact
-Crate-private, so no unbounded decode is public: only a `BoundedDecode`
-implementation reaches it.
-
-## macro fixed_width
-The identities, the epoch, the lane, and the emergency kind: fixed widths
-alone, the bounded decode's trivial case and the framing tests' way to reach
-the trailing-byte and unknown-variant refusals.
+## fn decode_payload
+The one way a payload becomes a value. bitcode's decode refuses trailing bytes
+and unknown variants, and it bit-packs no column below a bit an element, but a
+decoded element can be far larger than its bits: an empty diagnostic is three
+bits on the wire and some 96 bytes decoded, and cereal's lazy decoder recurses
+a level for each level a value nests, with no bound of its own. So the decode
+runs within a budget, sourcetrait's fork of bitcode charging each collection's
+elements, heap, and nesting when its lengths are read, before its elements are
+read or allocated. A refusal leaves nothing decoded and nothing dispatched.

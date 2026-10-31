@@ -90,6 +90,44 @@ fn bitcode_codec_round_trips_the_send_frames() {
     roundtrip_acc(AcceptorToInitiator::File(chunk));
 }
 
+/// A frame whose zstd payload inflates past the cap is refused, however small it
+/// is on the wire.
+#[test]
+fn bitcode_codec_refuses_a_frame_inflating_past_its_cap() {
+    use crate::tku::{Bytes, BytesMut, Decoder, Encoder, LengthDelimitedCodec};
+    use crate::{BitcodeCodec, InitiatorToAcceptor, REMOTE_INFLATED_MAX};
+
+    let zeros = vec![0u8; REMOTE_INFLATED_MAX as usize + 1];
+    let compressed = zstd::encode_all(zeros.as_slice(), 19).expect("compressed");
+    assert!(compressed.len() < 4096, "a bomb of {} bytes", compressed.len());
+    let mut dst = BytesMut::new();
+    LengthDelimitedCodec::new().encode(Bytes::from(compressed), &mut dst).expect("framed");
+    let mut codec: BitcodeCodec<InitiatorToAcceptor> = BitcodeCodec::new();
+    let err = codec.decode(&mut dst).expect_err("refused");
+    assert!(err.to_string().contains("inflates past"), "{err}");
+}
+
+/// A delivery declaring more than the decode budget allows is refused before its
+/// files' names are allocated.
+#[test]
+fn bitcode_codec_refuses_a_frame_past_its_decode_budget() {
+    use crate::tku::{BytesMut, Decoder, Encoder};
+    use crate::{BitcodeCodec, DECODE_BUDGET_DEFAULT, InitiatorToAcceptor, MsgFrame};
+
+    let names = DECODE_BUDGET_DEFAULT.elements as usize + 1;
+    let deliver = MsgFrame::Deliver {
+        id: "id1".to_string(),
+        model: "proj/thing/Changed".to_string(),
+        event_nuon: "{}".to_string(),
+        files: vec![String::new(); names],
+    };
+    let mut dst = BytesMut::new();
+    let mut codec: BitcodeCodec<InitiatorToAcceptor> = BitcodeCodec::new();
+    codec.encode(InitiatorToAcceptor::Msg(deliver), &mut dst).expect("encode");
+    let err = codec.decode(&mut dst).expect_err("refused");
+    assert!(err.to_string().contains("elements bound"), "{err}");
+}
+
 /// safe_dest accepts a relative path, rejects an empty one, an absolute one, and
 /// any `..` escape from the per-packet inbox.
 #[test]

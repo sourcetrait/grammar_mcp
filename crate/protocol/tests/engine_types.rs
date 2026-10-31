@@ -13,6 +13,11 @@ use sourcetrait_grammar_protocol::*;
 #[path = "support/golden.rs"]
 mod golden;
 
+/// A payload as `T` within the default decode budget, the path every frame takes.
+fn decode<T: bitcode::DecodeOwned>(payload: &[u8]) -> Result<T, FrameError> {
+    decode_payload(payload, DECODE_BUDGET_DEFAULT)
+}
+
 /// The golden vectors' file, every vector's bitcode bytes in hex.
 const GOLDEN: &str = "tests/vectors/engine.nuon";
 
@@ -238,11 +243,11 @@ fn every_vector_encodes_to_its_golden_bytes() {
 #[test]
 fn every_request_and_answer_round_trips() {
     for (name, request) in requests() {
-        let back: ToEngineSys = bitcode::decode(&bitcode::encode(&request)).expect(&name);
+        let back: ToEngineSys = decode(&bitcode::encode(&request)).expect(&name);
         assert_eq!(back, request, "{name}");
     }
     for (name, answer) in answers() {
-        let back: FromEngineSys = bitcode::decode(&bitcode::encode(&answer)).expect(&name);
+        let back: FromEngineSys = decode(&bitcode::encode(&answer)).expect(&name);
         assert_eq!(back, answer, "{name}");
     }
 }
@@ -252,9 +257,9 @@ fn truncated_or_trailing_bytes_are_refused() {
     for (name, bytes) in encoded() {
         let decode = |b: &[u8]| -> bool {
             if name.starts_with("request/") {
-                bitcode::decode::<ToEngineSys>(b).is_ok()
+                decode::<ToEngineSys>(b).is_ok()
             } else {
-                bitcode::decode::<FromEngineSys>(b).is_ok()
+                decode::<FromEngineSys>(b).is_ok()
             }
         };
         for cut in 0..bytes.len() {
@@ -429,7 +434,7 @@ fn an_error_names_a_builtin_by_its_bare_name() {
 fn a_diagnostic_keeps_its_severity_in_bitcode_and_not_in_its_envelope() {
     let error = Diagnostic::error("lint::summary_length", None, "a summary past its length");
     assert_ne!(bitcode::encode(&warning()), bitcode::encode(&error));
-    let back: Diagnostic = bitcode::decode(&bitcode::encode(&warning())).expect("decoded");
+    let back: Diagnostic = decode(&bitcode::encode(&warning())).expect("decoded");
     assert_eq!(back.severity, Severity::Warning);
     let NuVal::Record(envelope) = nuval::to_nuval(&warning()).expect("its serde value") else {
         panic!("a diagnostic serializes as a record");
