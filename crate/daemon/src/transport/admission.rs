@@ -29,8 +29,10 @@ impl Admission {
         &self,
         hello: &ClientHello,
     ) -> Option<HelloReply> {
-        let lease = LeaseId(random_bytes().ok()?);
-        let token = LeaseToken(random_bytes().ok()?);
+        let drawn: [u8; 48] = random_bytes().ok()?;
+        let (lease, token) = drawn.split_at(16);
+        let lease = LeaseId(lease.try_into().ok()?);
+        let token = LeaseToken(token.try_into().ok()?);
         let now_ms = u64::try_from(self.epoch.elapsed().as_millis()).unwrap_or(u64::MAX);
         let mut leases = self.leases.lock().unwrap_or_else(|e| e.into_inner());
         let mut state = HelloState::default();
@@ -39,7 +41,7 @@ impl Admission {
     }
 }
 
-/// Streams accepted on `listener` until `stop` changes, each on a task of its own.
+/// Streams accepted on `listener` until `stop` changes, each admitted on a task.
 pub(crate) async fn accept(
     listener: tk::net::UnixListener,
     admission: Arc<Admission>,
@@ -49,7 +51,9 @@ pub(crate) async fn accept(
         tk::select! {
             accepted = listener.accept() => match accepted {
                 Ok((stream, _)) => {
-                    tk::spawn(admit(stream, admission.clone()));
+                    if let Some(held) = admission.hold(&stream) {
+                        tk::spawn(admit(stream, admission.clone(), held));
+                    }
                 }
                 Err(e) => {
                     eprintln!("grammard: an accept failed: {e}");
@@ -61,25 +65,33 @@ pub(crate) async fn accept(
     }
 }
 
-/// One stream: its peer held to the UID, its hello answered within the deadline.
+impl Admission {
+    /// A place in the budget for `stream`, from the worker's own UID; none closes it.
+    fn hold(
+        &self,
+        stream: &tk::net::UnixStream,
+    ) -> Option<tk::sync::OwnedSemaphorePermit> {
+        let held = self.streams.clone().try_acquire_owned().ok()?;
+        match stream.peer_cred() {
+            Ok(cred) if cred.uid() == self.profile.uid => Some(held),
+            Ok(cred) => {
+                eprintln!("grammard: a stream from UID {} is closed unread", cred.uid());
+                None
+            }
+            Err(e) => {
+                eprintln!("grammard: a stream's peer can't be read, so it is closed unread: {e}");
+                None
+            }
+        }
+    }
+}
+
+/// One admitted stream: its hello answered within the deadline, its place held.
 async fn admit(
     stream: tk::net::UnixStream,
     admission: Arc<Admission>,
+    _held: tk::sync::OwnedSemaphorePermit,
 ) {
-    let Ok(_held) = admission.streams.clone().try_acquire_owned() else {
-        return;
-    };
-    match stream.peer_cred() {
-        Ok(cred) if cred.uid() == admission.profile.uid => {}
-        Ok(cred) => {
-            eprintln!("grammard: a stream from UID {} is closed unread", cred.uid());
-            return;
-        }
-        Err(e) => {
-            eprintln!("grammard: a stream's peer can't be read, so it is closed unread: {e}");
-            return;
-        }
-    }
     let mut framed = framed(stream);
     let Ok(Some(Ok(frame))) = tk::time::timeout(HELLO_DEADLINE, framed.next()).await else {
         return;

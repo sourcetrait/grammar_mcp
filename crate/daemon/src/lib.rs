@@ -61,7 +61,7 @@ pub(crate) use sourcetrait_common::datum;
 pub(crate) use sourcetrait_grammar_engine as engine;
 pub(crate) use sourcetrait_grammar_protocol::{
     ARTIFACT_LIMITS_DEFAULT, Capabilities, ClientHello, Fresh, HELLO_BUDGET, HELLO_DEADLINE, HelloReply,
-    HelloState, Instance, LIMITS_DEFAULT, LeaseId, LeaseTable, LeaseToken, Limits, WorkerGeneration,
+    HelloState, Instance, LIMITS_DEFAULT, LIMITS_HARD, LeaseId, LeaseTable, LeaseToken, Limits, WorkerGeneration,
     WorkerProfile, decode_payload, framed, payload,
 };
 pub(crate) use sourcetrait_grammar_scratch::{HostProbe, OwnedDir, Owner, current_uid, sweep};

@@ -14,6 +14,11 @@ on macOS.
 ## struct SupervisorLines
 The MCP's four `supervisor.*` lines, by the same names.
 
+## struct LimitLines
+### fn limits
+The lines as the protocol's `Limits`, field for field, so the load's checks and
+the hello's negotiation hold the same values.
+
 ## struct InstanceFile
 The file as written. Its id, namespace, and key say which instance it is for,
 and a load holds all three to the instance it was asked for, so one file can
@@ -35,8 +40,12 @@ than truncated, since a truncated path would bind another file.
 ### fn load
 Everything a start needs before any thread, listener, plugin, or engine: the
 names checked, the key computed, the homes resolved, the paths derived, the file
-read and held to its identity, and the workdir found an absolute directory. A
-loaded config is a value: a later edit of the file changes nothing it holds.
+read and held to its identity, and the workdir found an absolute directory. The
+file's limits are refused at zero or past the protocol's hard ceilings: the
+stream budget is allocated from them before any hello negotiates, so a value
+past the ceiling would admit more than the protocol allows, and a zero would
+start a worker that admits nothing. A loaded config is a value: a later edit of
+the file changes nothing it holds.
 
 ## fn read_instance_file
 The file is opened without following a symlink and without blocking, then

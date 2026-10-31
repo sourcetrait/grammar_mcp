@@ -42,13 +42,22 @@ async fn hello(
 }
 
 /// Whether the worker closes `stream` within `within`, writing nothing back.
+///
+/// macOS refuses a read timeout on a socket its peer has already closed, so a
+/// refused timeout is answered by a read that doesn't wait; a reset is a close.
 fn closed_within(
     stream: &mut UnixStream,
     within: Duration,
 ) -> bool {
-    stream.set_read_timeout(Some(within)).unwrap();
     let mut buf = [0u8; 64];
-    matches!(stream.read(&mut buf), Ok(0))
+    if stream.set_read_timeout(Some(within)).is_err() {
+        stream.set_nonblocking(true).unwrap();
+    }
+    match stream.read(&mut buf) {
+        Ok(0) => true,
+        Ok(_) => false,
+        Err(e) => e.kind() == std::io::ErrorKind::ConnectionReset,
+    }
 }
 
 fn default_instance() -> Instance {
@@ -114,6 +123,49 @@ async fn a_stream_past_the_budget_closes_before_its_hello() {
     tokio::time::sleep(Duration::from_millis(300)).await;
     hello(&worker.socket, default_instance()).await.expect("a stream within the budget again");
     assert!(worker.stop().success());
+}
+
+#[test]
+fn a_burst_past_the_budget_closes_at_once() {
+    let instance = TestInstance::with_streams("two", "default", 2);
+    let worker = start(&instance, "default").expect("the worker");
+    let held = [UnixStream::connect(&worker.socket).unwrap(), UnixStream::connect(&worker.socket).unwrap()];
+    std::thread::sleep(Duration::from_millis(300));
+    let mut burst: Vec<UnixStream> = (0..32).map(|_| UnixStream::connect(&worker.socket).unwrap()).collect();
+    for stream in &mut burst {
+        assert!(closed_within(stream, Duration::from_secs(2)), "each stream past the budget");
+    }
+    drop(held);
+    assert!(worker.stop().success());
+}
+
+#[test]
+fn a_live_listener_at_the_socket_is_refused() {
+    let instance = TestInstance::new("two", "default");
+    let socket = instance.load("default").paths.socket.unwrap();
+    std::fs::create_dir_all(socket.parent().unwrap()).unwrap();
+    std::fs::set_permissions(socket.parent().unwrap(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    let live = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    let refused = start(&instance, "default").err().expect("a live listener answers there");
+    assert_eq!(refused.status.code(), Some(73), "{refused:?}");
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("a live listener"), "{refused:?}");
+    assert!(socket.exists(), "and its socket is left");
+    drop(live);
+}
+
+#[tokio::test]
+async fn two_data_homes_cannot_share_one_socket() {
+    let instance = TestInstance::new("two", "default");
+    let first = start(&instance, "default").expect("the first worker");
+    let mut env = instance.env.clone();
+    let other = instance.home("other-data");
+    std::fs::create_dir_all(&other).unwrap();
+    env.insert("UENV_USR_DATA".to_string(), other.to_string_lossy().into_owned());
+    let refused = start_with(&instance, "default", &env).err().expect("the socket's lock is held");
+    assert_eq!(refused.status.code(), Some(73), "{refused:?}");
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("another worker holds its lock"), "{refused:?}");
+    hello(&first.socket, default_instance()).await.expect("the first worker still answers");
+    assert!(first.stop().success());
 }
 
 #[test]

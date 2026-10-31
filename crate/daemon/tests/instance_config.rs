@@ -184,6 +184,30 @@ fn an_unsafe_missing_or_foreign_instance_file_is_refused() {
 }
 
 #[test]
+fn limits_at_zero_or_past_the_hard_ceiling_are_refused() {
+    let homes = Homes::new();
+    let workdir = homes.path("work");
+    std::fs::create_dir_all(&workdir).unwrap();
+    let key = key_of("two", "default");
+    let d = sourcetrait_grammar_protocol::LIMITS_DEFAULT;
+    let limited = |streams: u32| {
+        let limits = format!(
+            "limits: {{rpc_frame: {}, decode_heap: {}, concurrent_rpcs: {}, control_slots: {}, event_records: {}, event_bytes: {}, streams: {streams}}}",
+            d.rpc_frame, d.decode_heap, d.concurrent_rpcs, d.control_slots, d.event_records, d.event_bytes,
+        );
+        instance_text("two", "default", key.as_str(), &workdir).replace("limits: null", &limits)
+    };
+    for (streams, refused) in [(0, true), (65, true), (64, false)] {
+        write_instance(&homes, "two", "default", &limited(streams), 0o600);
+        let loaded = InstanceConfig::load(uid(), "two", "default", &homes.env);
+        assert_eq!(loaded.is_err(), refused, "streams {streams}: {loaded:?}");
+        if let Err(e) = loaded {
+            assert_eq!(e.kind().name(), "instance::config_invalid", "streams {streams}");
+        }
+    }
+}
+
+#[test]
 fn a_socket_path_past_the_sockaddr_is_refused() {
     let homes = Homes::new();
     let mut env = homes.env.clone();

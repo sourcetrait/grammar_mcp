@@ -14,6 +14,7 @@ struct FakeProbe {
     answer: ProcessAnswer,
     boot: Option<String>,
     pidns: Option<String>,
+    keeps: bool,
 }
 
 impl Probe for FakeProbe {
@@ -28,11 +29,15 @@ impl Probe for FakeProbe {
     fn pid_namespace(&self) -> Option<String> {
         self.pidns.clone()
     }
+
+    fn keeps_pid_namespaces(&self) -> bool {
+        self.keeps
+    }
 }
 
-/// A probe of the fakes' boot and namespace answering `answer`.
+/// A namespacing probe of the fakes' boot and namespace answering `answer`.
 fn probe(answer: ProcessAnswer) -> FakeProbe {
-    FakeProbe { answer, boot: Some(BOOT.to_string()), pidns: Some(PIDNS.to_string()) }
+    FakeProbe { answer, boot: Some(BOOT.to_string()), pidns: Some(PIDNS.to_string()), keeps: true }
 }
 
 fn started(start: u64, zombie: bool) -> ProcessAnswer {
@@ -87,11 +92,15 @@ fn an_owner_is_dead_only_on_proof() {
     let legacy = Owner { boot: None, pidns: None, nonce: None, ..owner(4242) };
     assert!(unknown(&legacy, &probe(ProcessAnswer::Absent)), "a predecessor's marker names no boot");
     let unnamespaced = Owner { pidns: None, ..owner(4242) };
-    let platform_without = FakeProbe { pidns: None, ..probe(ProcessAnswer::Absent) };
+    let platform_without = FakeProbe { pidns: None, keeps: false, ..probe(ProcessAnswer::Absent) };
     assert!(
         matches!(liveness(&unnamespaced, &platform_without), Liveness::Dead(_)),
         "where the platform keeps no PID namespace, its pid is judged",
     );
+    assert!(unknown(&marked, &platform_without), "a namespace named where the platform keeps none");
+    let unread = FakeProbe { pidns: None, ..probe(ProcessAnswer::Absent) };
+    assert!(unknown(&unnamespaced, &unread), "both namespaces unread on a platform that keeps them");
+    assert!(unknown(&marked, &unread), "this one unread");
 }
 
 #[test]

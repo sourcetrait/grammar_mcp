@@ -2,8 +2,13 @@
 
 ## trait Probe
 The process table as data, so a test answers what a host can't be made to: a
-pid held by another user's process, a record that can't be read, a zombie, or
-another boot.
+pid held by another user's process, a record that can't be read, a zombie,
+another boot, or another namespace.
+
+### fn keeps_pid_namespaces
+Apart from `pid_namespace`, so a namespace that can't be read on Linux is never
+taken for macOS's having none: on a platform that keeps them, both sides must
+name the same one.
 
 ## struct HostProbe
 ### fn process

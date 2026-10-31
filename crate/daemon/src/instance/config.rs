@@ -35,6 +35,21 @@ pub struct LimitLines {
     pub streams: u32,
 }
 
+impl LimitLines {
+    /// The lines as the protocol's bounds.
+    pub fn limits(&self) -> Limits {
+        Limits {
+            rpc_frame: self.rpc_frame,
+            decode_heap: self.decode_heap,
+            concurrent_rpcs: self.concurrent_rpcs,
+            control_slots: self.control_slots,
+            event_records: self.event_records,
+            event_bytes: self.event_bytes,
+            streams: self.streams,
+        }
+    }
+}
+
 /// The instance file as written: whose worker it is and how that worker runs.
 #[derive(Debug, Clone, PartialEq, ser::Deserialize)]
 pub struct InstanceFile {
@@ -136,6 +151,14 @@ impl InstanceConfig {
         let workdir = PathBuf::from(&file.workdir);
         if !workdir.is_absolute() || !workdir.is_dir() {
             return Err(invalid(format!("its workdir {} is no absolute directory", workdir.display())));
+        }
+        if let Some(limits) = file.limits.map(|lines| lines.limits()) {
+            if let Some(name) = limits.zero() {
+                return Err(invalid(format!("its limits set {name} to zero")));
+            }
+            if let Some((name, value, hard)) = limits.past(&LIMITS_HARD) {
+                return Err(invalid(format!("its limits set {name} to {value}, past the hard ceiling {hard}")));
+            }
         }
         let identity = RuntimeIdentity {
             uid,

@@ -8,6 +8,9 @@ const SOCKET_MODE: u32 = 0o600;
 /// The socket directory's mode.
 const DIR_MODE: u32 = 0o700;
 
+/// The extension of the socket's own lock beside it.
+const SOCKET_LOCK_EXTENSION: &str = "lock";
+
 /// The engine socket bound at its path, removed at its drop while still its own.
 #[derive(Debug)]
 pub(crate) struct EngineListener {
@@ -15,6 +18,8 @@ pub(crate) struct EngineListener {
     path: PathBuf,
     /// The bound socket's device and inode, so the drop removes this socket alone.
     bound: (u64, u64),
+    /// The socket path's own lock, held while the socket is bound.
+    _held: NamespaceLock,
 }
 
 impl EngineListener {
@@ -41,9 +46,19 @@ impl EngineListener {
         if meta.mode() & 0o077 != 0 {
             return Err(unavailable(format!("its directory's mode {:o} opens it past 0700", meta.mode() & 0o777)));
         }
+        let held = NamespaceLock::acquire(&path.with_extension(SOCKET_LOCK_EXTENSION)).map_err(|e| match e {
+            DaemonError::NamespaceHeld { .. } => unavailable("another worker holds its lock".to_string()),
+            other => unavailable(other.to_string()),
+        })?;
         match fs::symlink_metadata(path) {
             Ok(meta) if meta.file_type().is_socket() && meta.uid() == uid => {
-                fs::remove_file(path).map_err(|e| unavailable(format!("a dead worker's socket stays: {e}")))?;
+                match std::os::unix::net::UnixStream::connect(path) {
+                    Ok(_) => return Err(unavailable("a live listener answers on it".to_string())),
+                    Err(e) if e.kind() == io::ErrorKind::ConnectionRefused => {
+                        fs::remove_file(path).map_err(|e| unavailable(format!("a dead worker's socket stays: {e}")))?;
+                    }
+                    Err(e) => return Err(unavailable(format!("the socket there can't be probed: {e}"))),
+                }
             }
             Ok(_) => return Err(unavailable("something other than this UID's socket holds its path".to_string())),
             Err(e) if e.kind() == io::ErrorKind::NotFound => {}
@@ -61,6 +76,7 @@ impl EngineListener {
             listener: Some(listener),
             path: path.to_path_buf(),
             bound: (meta.dev(), meta.ino()),
+            _held: held,
         })
     }
 

@@ -140,7 +140,7 @@ fn serve(
         uid: config.identity.uid,
         instance,
         generation,
-        limits: limits_of(config.file.limits),
+        limits: config.file.limits.map(|lines| lines.limits()).unwrap_or(LIMITS_DEFAULT),
         artifacts: ARTIFACT_LIMITS_DEFAULT,
         capabilities: Capabilities::NONE,
     };
@@ -160,21 +160,6 @@ fn serve(
     Ok(Serving { listener, tasks, stop })
 }
 
-/// The bounds the worker offers each hello: the instance file's, else the defaults.
-fn limits_of(lines: Option<LimitLines>) -> Limits {
-    match lines {
-        Some(lines) => Limits {
-            rpc_frame: lines.rpc_frame,
-            decode_heap: lines.decode_heap,
-            concurrent_rpcs: lines.concurrent_rpcs,
-            control_slots: lines.control_slots,
-            event_records: lines.event_records,
-            event_bytes: lines.event_bytes,
-            streams: lines.streams,
-        },
-        None => LIMITS_DEFAULT,
-    }
-}
 
 /// The lock taken, this start's generation recorded in it, and the scratch made.
 fn claim(config: &InstanceConfig) -> DaemonResult<(NamespaceLock, WorkerGeneration, WorkerScratch)> {
