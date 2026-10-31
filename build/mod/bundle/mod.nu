@@ -3,6 +3,9 @@
 # The MCP's package: its binary is the release's, its version the release's.
 const MCP_CRATE = 'sourcetrait_grammar_mcp'
 
+# The remote worker's package, whose `grammard` the tree carries beside the MCP.
+const DAEMON_CRATE = 'sourcetrait_grammar_daemon'
+
 # The file-name prefix of a plugin binary, the one the MCP registers by.
 const PLUGIN_PREFIX = 'nu_plugin_'
 
@@ -41,26 +44,33 @@ export def licenses [root: path]: nothing -> nothing {
         | save --force ($root | path join 'LICENSES-EXTERNAL.txt'))
 }
 
-# Build the MCP and its plugins in cargo's `release` or `debug` profile.
+# Build the MCP, the worker, and the plugins in cargo's `release` or `debug` profile.
 export def compile [root: path, profile: string]: nothing -> nothing {
     let flags: list<string> = (profile_flags $profile '--release')
-    let crates: list<string> = ([$MCP_CRATE] | append (plugin_targets $root | get package | uniq))
+    let crates: list<string> = ([$MCP_CRATE $DAEMON_CRATE] | append (plugin_targets $root | get package | uniq))
     let packages: list<string> = ($crates | each {|crate| ['-p' $crate] } | flatten)
-    ^cargo build --manifest-path ($root | path join 'Cargo.toml') ...$flags ...$packages
+    ^cargo build --locked --manifest-path ($root | path join 'Cargo.toml') ...$flags ...$packages
 }
 
 # Install nushell and its core plugins at the engine's version from crates.io.
 #
-# Returns the install's root, `target/nu/<profile>`, its binaries in `bin/`.
-# Cargo skips a crate already installed there at that version.
+# Returns the install's root, `nu/<profile>` in cargo's target directory, its
+# binaries in `bin/`. Cargo skips a crate already installed there at that
+# version.
 export def nushell [root: path, profile: string]: nothing -> path {
     let version: string = (engine_version $root)
-    let nu_root: path = ($root | path join 'target' 'nu' $profile)
+    let target: path = (target_dir $root)
+    let nu_root: path = ($target | path join 'nu' $profile)
     let flags: list<string> = (if $profile == 'debug' { ['--debug'] } else { [] })
     let crates: list<string> = (['nu'] | append $CORE_PLUGINS | each {|crate| $"($crate)@($version)" })
     (^cargo install --locked --root $nu_root
-        --target-dir ($root | path join 'target' 'nu' 'build') ...$flags ...$crates)
+        --target-dir ($target | path join 'nu' 'build') ...$flags ...$crates)
     $nu_root
+}
+
+# Cargo's target directory for the workspace, `CARGO_TARGET_DIR` where it is set.
+export def target_dir [root: path]: nothing -> path {
+    cargo_metadata $root | get target_directory
 }
 
 # The engine's nushell version: `nu-protocol`'s in the workspace lock.
@@ -77,20 +87,22 @@ export def package_semver [root: path, profile: string]: nothing -> string {
     if $profile == 'debug' { $"($version)+dbg" } else { $version }
 }
 
-# Assemble the package's tree in `target/pkg/<profile>`; returns it.
+# Assemble the package's tree in `pkg/<profile>` in cargo's target directory; returns it.
 #
-# `plugin/core/` holds nushell's core plugins from `nu_root`, the install
-# nushell made, `plugin/grammar/` the workspace's own, and `equip/` the
-# builtins' sources.
+# `bin/` holds nushell, the MCP, and the worker, `plugin/core/` nushell's core
+# plugins from `nu_root`, the install nushell made, `plugin/grammar/` the
+# workspace's own, and `equip/` the builtins' sources.
 export def layout [root: path, profile: string, nu_root: path]: nothing -> path {
-    let built: path = (cargo_metadata $root | get target_directory | path join $profile)
-    let tree: path = ($root | path join 'target' 'pkg' $profile)
+    let target: path = (target_dir $root)
+    let built: path = ($target | path join $profile)
+    let tree: path = ($target | path join 'pkg' $profile)
     if ($tree | path exists) {
         rm --recursive $tree
     }
     mkdir ($tree | path join 'bin')
     cp ($nu_root | path join 'bin' 'nu') ($tree | path join 'bin' 'nu')
     cp ($built | path join 'grammar-mcp') ($tree | path join 'bin' 'grammar-mcp')
+    cp ($built | path join 'grammard') ($tree | path join 'bin' 'grammard')
     let core: path = ($tree | path join 'plugin' 'core')
     mkdir $core
     for plugin in $CORE_PLUGINS {

@@ -15,9 +15,25 @@ link and directly.
 The same real path, three levels up, so the script builds the repository it
 lives in from any working directory.
 
+## const BUILD_RECORD
+What `--pack` needs of the build, its name, semver, os, and arch, written
+beside the tree, so the packing machine needs neither the build's cargo
+metadata nor its rustc.
+
 ## def main
-The signer resolves first, before any build, because a repository without a
-usable key cannot produce a package and should say so in a second rather than
-after the release builds. gram's equip is checked beside it for the same
-reason. The licenses are tallied before the compile, from the same manifest it
-builds.
+A whole build resolves the signer first, before any build, because a
+repository without a usable key cannot produce a package and should say so in
+a second rather than after the release builds. gram's equip is checked beside
+it for the same reason. The licenses are tallied before the compile, from the
+same manifest it builds.
+
+`--tree` and `--pack` split the release at the key. The machine the tree is
+for builds it, against its own libraries, with no key and no cargo-license,
+which a whole build on the key's machine keeps current; the key's machine packs
+and signs it, building nothing. A server's tree is built that way on the
+server, in a one-time container (`build/container/run.bash`).
+
+## def pack_tree
+The tree is packed as a whole build packs its own, so a split release's
+package is the same OptZip; it lands beside the tree, in the directory the
+build left.
