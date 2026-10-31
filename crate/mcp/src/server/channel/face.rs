@@ -38,7 +38,7 @@ impl ChannelFace {
         };
         let paths = PeerSysPaths::new(data_base_dir(), cache_base_dir());
         let peer = Arc::new(PeerHandle::start(paths, params, pump).await?);
-        set_host_channel(&channel, &peer, &hub);
+        set_host_channel(&channel, &hub);
         Ok(Self {
             channel,
             peer,

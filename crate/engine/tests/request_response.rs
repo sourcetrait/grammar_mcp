@@ -11,10 +11,9 @@ use nuval::NuVal;
 use sourcetrait_common::testing::prelude::*;
 use sourcetrait_common::{datum, subsys};
 use sourcetrait_grammar_engine::{
-    CallRequest, ChannelSend, ControlAnswer, ControlRequest, EVAL_STACK_SIZE, EngineCommand,
-    EngineError, EngineHandle, EngineHost, EngineParams, EngineSystem, ExecuteRequest,
-    FromEngineSys, Host, ProcessRow, RemoteSend, RerunRequest, ValueAnswer, ensure_equip_store,
-    init,
+    CallRequest, ControlAnswer, ControlRequest, EVAL_STACK_SIZE, EngineCommand, EngineError,
+    EngineHandle, EngineParams, EngineSystem, ExecuteRequest, FromEngine, Host, HostAnswer,
+    HostAsk, ProcessRow, RerunRequest, ToEngine, ValueAnswer, ensure_equip_store, init,
 };
 
 static TESTING: testing::ModuleWith<TestEngine> = testing::module_with!(Integration, {
@@ -25,35 +24,32 @@ static TESTING: testing::ModuleWith<TestEngine> = testing::module_with!(Integrat
 /// The model of each Channel send the host was handed.
 static SENT: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
-/// A host that keeps each Channel send's model and answers it an id.
+/// The engine's controller: each Channel send's model kept and answered an id.
 struct TestHost;
 
-impl EngineHost for TestHost {
-    fn channel_send(&self, send: ChannelSend<'_>) -> Result<String, String> {
-        let id = format!("sent-{}", send.model.replace('/', "-"));
-        SENT.lock().unwrap_or_else(|e| e.into_inner()).push(send.model);
-        Ok(id)
-    }
-
-    fn remote_send(&self, _send: RemoteSend) -> Result<String, String> {
-        Err("the test host links no peers".to_string())
-    }
-
-    fn config_record(&self) -> nu_protocol::Value {
-        nu_protocol::Value::record(nu_protocol::Record::new(), nu_protocol::Span::unknown())
-    }
-
-    fn pin_config(&self, _key: &str, _pid: u32, _value: f64) -> Result<(), String> {
-        Err("the test host pins nothing".to_string())
-    }
-}
-
-/// The engine's own packets, which it never sends unasked, handed back.
-struct Unwatched;
-
-impl subsys::Handler<EngineSystem> for Unwatched {
-    fn on_packet(&mut self, pkt: subsys::Packet<FromEngineSys>) -> impl Future<Output = Option<subsys::Packet<FromEngineSys>>> + 'static + Send {
+impl subsys::Handler<EngineSystem> for TestHost {
+    fn on_packet(&mut self, pkt: subsys::Packet<FromEngine>) -> impl Future<Output = Option<subsys::Packet<FromEngine>>> + 'static + Send {
         std::future::ready(Some(pkt))
+    }
+
+    fn on_request(&mut self, pkt: subsys::Packet<FromEngine>) -> impl Future<Output = Option<ToEngine>> + 'static + Send {
+        let answer = match pkt.take_msg() {
+            FromEngine::Host(HostAsk::ChannelSend(send)) => {
+                let id = format!("sent-{}", send.model.replace('/', "-"));
+                SENT.lock().unwrap_or_else(|e| e.into_inner()).push(send.model);
+                Some(HostAnswer::Sent(id))
+            }
+            FromEngine::Host(HostAsk::Stopped(_)) => Some(HostAnswer::Noted),
+            FromEngine::Host(HostAsk::RemoteSend(_)) => {
+                Some(HostAnswer::Refused("the test host links no peers".to_string()))
+            }
+            FromEngine::Host(HostAsk::Config) => Some(HostAnswer::Config(NuVal::Record(Vec::new()))),
+            FromEngine::Host(HostAsk::Pin(_)) => {
+                Some(HostAnswer::Refused("the test host pins nothing".to_string()))
+            }
+            FromEngine::Wire(_) => None,
+        };
+        std::future::ready(answer.map(ToEngine::Host))
     }
 }
 
@@ -86,14 +82,14 @@ impl TestEngine {
         ] {
             std::fs::create_dir_all(dir).expect("a home for the engine");
         }
-        init(params, Box::new(TestHost)).expect("the engine's init");
+        init(params).expect("the engine's init");
         ensure_equip_store().expect("the equip store");
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .thread_stack_size(EVAL_STACK_SIZE)
             .build()
             .expect("a runtime");
-        let engine = rt.block_on(EngineHandle::start(Unwatched)).expect("the engine's system");
+        let engine = rt.block_on(EngineHandle::start(TestHost)).expect("the engine's system");
         Self {
             rt,
             engine: Arc::new(engine),
@@ -352,7 +348,7 @@ fn health_reports_the_eval_permits() {
 #[test]
 fn a_second_system_starts_and_stops() {
     let e = TESTING.harness();
-    let second = e.rt.block_on(EngineHandle::start(Unwatched)).expect("a second system");
+    let second = e.rt.block_on(EngineHandle::start(TestHost)).expect("a second system");
     let answer = e.rt.block_on(second.control(EngineCommand::Processes));
     assert!(matches!(answer, Ok(ControlAnswer::Processes(_))), "got {answer:?}");
     e.rt.block_on(second.stop()).expect("the system stops");

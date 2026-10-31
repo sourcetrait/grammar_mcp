@@ -78,15 +78,16 @@ impl subsys::System for EngineSystem {
     type Paths = EngineSysPaths;
     type Params = EngineSysParams;
     type Config = EngineSysConfig;
-    type ToSys = ToEngineSys;
-    type FromSys = FromEngineSys;
+    type ToSys = ToEngine;
+    type FromSys = FromEngine;
     type Flow = subsys::StdFlow;
 
     fn inner(&self) -> &subsys::InnerSystem<Self> { &self.inner }
     fn inner_mut(&mut self) -> &mut subsys::InnerSystem<Self> { &mut self.inner }
 
     async fn init(inner: subsys::InnerSystem<Self>, _params: Self::Params) -> subsys::SubsysResult<Self> {
-        let core = EngineCore::start().await?;
+        let host = HostLink(inner.requester());
+        let core = EngineCore::start(host).await?;
         Ok(Self {
             inner,
             core: Arc::new(core),
@@ -108,12 +109,16 @@ impl subsys::System for EngineSystem {
         self.done(result).await
     }
 
-    async fn on_channel_recv(&mut self, pkt: subsys::Packet<ToEngineSys>) -> subsys::FlowResult<Self::Flow> {
+    async fn on_channel_recv(&mut self, pkt: subsys::Packet<ToEngine>) -> subsys::FlowResult<Self::Flow> {
         let (id, _nature, msg) = pkt.into_tuple();
+        let ToEngine::Wire(msg) = msg else {
+            return Ok(subsys::Flow::Continue);
+        };
         let core = self.core.clone();
         let tx = self.inner.channel.tx.clone();
         tk::spawn(async move {
-            let response = subsys::Packet::response(id, answer(core, msg).await);
+            let answer = FromEngine::Wire(answer(core, msg).await);
+            let response = subsys::Packet::response(id, answer);
             let _ = tx.send(subsys::MsgFromSys::Packet(response)).await;
         });
         Ok(subsys::Flow::Continue)
@@ -167,13 +172,29 @@ async fn contained<T: Send + 'static>(
     }
 }
 
-/// The engine's running system, and the handle its host requests through.
+/// The engine's asks of its controller, made from an eval's thread.
+#[derive(Clone)]
+pub(crate) struct HostLink(subsys::Requester<EngineSystem>);
+
+impl HostLink {
+    /// `ask` answered by the engine's controller, or why it went unanswered.
+    pub(crate) fn ask(
+        &self,
+        ask: HostAsk,
+    ) -> Result<HostAnswer, String> {
+        self.0
+            .request_blocking(ask)
+            .map_err(|e| format!("the engine's host: {e}"))
+    }
+}
+
+/// The engine's running system, and the handle its controller requests through.
 pub struct EngineHandle {
     control: subsys::SystemControl<EngineSystem>,
 }
 
 impl EngineHandle {
-    /// Starts the engine's system on `init`'s namespace, `handler` hearing its end.
+    /// Starts the engine's system on `init`'s namespace, `handler` its controller's.
     pub async fn start(handler: impl subsys::Handler<EngineSystem>) -> EngineResult<Self> {
         let control = subsys::SystemControl::start(
             EngineSysPaths::of(started()),
@@ -192,7 +213,7 @@ impl EngineHandle {
     pub async fn request<T>(&self, req: T) -> EngineResult<T::ResponseType>
     where
         T: subsys::Request<EngineSystem>,
-        T::ResponseType: TryFrom<FromEngineSys, Error = subsys::SubsysError>,
+        T::ResponseType: TryFrom<FromEngine, Error = subsys::SubsysError>,
     {
         self.control.request(req).await.map_err(|e| EngineError::Internal {
             phase: "engine::request".to_string(),

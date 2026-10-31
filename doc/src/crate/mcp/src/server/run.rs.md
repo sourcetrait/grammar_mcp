@@ -8,10 +8,10 @@ The test driver's server, reached by `grammar-mcp test-driver` under
 `install_child_subreaper` comes first so an eval's orphaned grandchildren stay on
 our /proc ppid chain for the tree-kill. Everything after it can spawn externals.
 
-The face starts the Channel's system before mcp's system does
-(`server/channel/face.rs`), so the emergency lane mcp's system builds finds the
-face's hub slot to install into, and the bridge holds the Channel the engine's
-host sends on.
+The face starts the Channel's and the peer links' systems before mcp's system
+does (`server/channel/face.rs`), so the emergency lane mcp's system builds finds
+the face's hub slot to install into, and mcp's system's controller is handed
+both, the route the engine's host asks take (`server/host.rs`'s `HostRoute`).
 
 Mcp's system starts after the substrate: its engine hydrates the equips' locks
 from the store the substrate makes, builtins included, so an engine started first

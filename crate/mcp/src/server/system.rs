@@ -24,14 +24,30 @@ pub(crate) fn notice_status(
     }
 }
 
-/// The engine's status and its end, heard for mcp's loop.
+/// The engine's status and its end heard for mcp's loop, its host asks sent up.
 struct EngineWatch {
     notices: tk::UnboundedSender<Notice>,
+    /// mcp's system's way to its controller, which answers the engine's asks.
+    host: subsys::Requester<McpSystem>,
 }
 
 impl subsys::Handler<EngineSystem> for EngineWatch {
-    fn on_packet(&mut self, pkt: subsys::Packet<FromEngineSys>) -> impl Future<Output = Option<subsys::Packet<FromEngineSys>>> + 'static + Send {
+    fn on_packet(&mut self, pkt: subsys::Packet<FromEngine>) -> impl Future<Output = Option<subsys::Packet<FromEngine>>> + 'static + Send {
         std::future::ready(Some(pkt))
+    }
+
+    fn on_request(&mut self, pkt: subsys::Packet<FromEngine>) -> impl Future<Output = Option<ToEngine>> + 'static + Send {
+        let host = self.host.clone();
+        async move {
+            let FromEngine::Host(ask) = pkt.take_msg() else {
+                return None;
+            };
+            let answer = host
+                .request(ask)
+                .await
+                .unwrap_or_else(|e| HostAnswer::Refused(format!("mcp's controller: {e}")));
+            Some(ToEngine::Host(answer))
+        }
     }
 
     fn on_sub(&mut self, sub: subsys::FromSub) -> impl Future<Output = ()> + Send {
@@ -128,12 +144,37 @@ impl agnostic::HasAppPaths for McpSysPaths {
 pub(crate) enum ToMcpSys {
     Engine(ToEngineSys),
     Shutdown(ShutdownRequest),
+    /// The controller's answer to an engine's host ask.
+    Host(HostAnswer),
 }
 
 #[cereal::derived(Data)]
 pub(crate) enum FromMcpSys {
     Engine(FromEngineSys),
     ShutDown(ShutdownAnswer),
+    /// An engine's host ask, sent up for the controller.
+    Host(HostAsk),
+}
+
+impl subsys::Ask<McpSystem> for HostAsk {
+    type Answer = HostAnswer;
+}
+
+impl From<HostAsk> for FromMcpSys {
+    fn from(v: HostAsk) -> Self {
+        Self::Host(v)
+    }
+}
+
+impl TryFrom<ToMcpSys> for HostAnswer {
+    type Error = subsys::SubsysError;
+
+    fn try_from(v: ToMcpSys) -> subsys::SubsysResult<Self> {
+        match v {
+            ToMcpSys::Host(answer) => Ok(answer),
+            _ => Err(subsys::SubsysError::ResponseType),
+        }
+    }
 }
 
 /// The components stopped in order: the engine's calls, the operator, the engine.
@@ -354,6 +395,7 @@ impl subsys::System for McpSystem {
         let (notice_tx, notices) = tk::unbounded_channel();
         let engine = EngineHandle::start(EngineWatch {
             notices: notice_tx.clone(),
+            host: inner.requester(),
         })
         .await
         .map_err(|e| {
@@ -440,6 +482,7 @@ impl subsys::System for McpSystem {
                 let response = subsys::Packet::response(id, FromMcpSys::ShutDown(ShutdownAnswer));
                 let _ = self.inner.channel.tx.send(subsys::MsgFromSys::Packet(response)).await;
             }
+            ToMcpSys::Host(_) => {}
         }
         Ok(subsys::Flow::Continue)
     }
@@ -489,10 +532,11 @@ impl McpHandle {
     }
 }
 
-/// Start mcp's system on the namespace's homes, with the operator if `supervise`.
+/// Start mcp's system, with the operator if `supervise`, `route` its controller.
 pub(crate) async fn start_system(
     mcp_nom: &datum::NomPair,
     supervise: bool,
+    route: HostRoute,
 ) -> Result<McpHandle, String> {
     let cfg = config();
     let paths = McpSysPaths {
@@ -505,17 +549,8 @@ pub(crate) async fn start_system(
         test: cfg.test,
         supervisor: cfg.supervisor,
     };
-    let control = subsys::SystemControl::start(paths, McpSysConfig, params, Unclaimed)
+    let control = subsys::SystemControl::start(paths, McpSysConfig, params, route)
         .await
         .map_err(|e| format!("grammar: mcp's system: {e}"))?;
     Ok(McpHandle { control })
-}
-
-/// mcp's system answers requests alone, so a packet no request waits on is none.
-struct Unclaimed;
-
-impl subsys::Handler<McpSystem> for Unclaimed {
-    fn on_packet(&mut self, pkt: subsys::Packet<FromMcpSys>) -> impl Future<Output = Option<subsys::Packet<FromMcpSys>>> + 'static + Send {
-        std::future::ready(Some(pkt))
-    }
 }

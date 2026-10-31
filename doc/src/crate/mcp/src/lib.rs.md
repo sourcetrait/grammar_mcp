@@ -34,8 +34,8 @@ The engine's public face named bare, as mcp's own items are, and the crate
 itself as `engine`, the path its `init` is called by, under `embedded-cli`.
 
 ## use futures_util
-`SinkExt` and `StreamExt`, and `PemObject` beside them, ride at CRATE ROOT
-rather than inside a shim. They are TRAITS, so method dispatch needs them in
+`SinkExt` and `StreamExt`, and `PemObject` beside them, ride at the crate root
+rather than inside a shim. They are traits, so method dispatch needs them in
 scope, and a shim would park them at `shim::Trait` where the calls in the
 channel hub could not see them. That is the manifest's trait exception rather
 than an oversight.

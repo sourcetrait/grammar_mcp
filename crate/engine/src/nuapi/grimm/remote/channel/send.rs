@@ -2,14 +2,15 @@ use crate::*;
 
 /// `grimm remote channel send <mcp_nom> <model> <event>` - a message, no files.
 #[derive(Clone)]
-pub(crate) struct GrimmRemoteChannelSend;
+pub(crate) struct GrimmRemoteChannelSend {
+    pub(crate) host: Option<HostLink>,
+}
 
-/// `grimm remote_channel_send_with <mcp_nom> <model> <event> <attached>`.
-///
-/// A message plus files: `attached` is the files table, each local `src` beside
-/// the `dest` the receiver lands it under.
+/// `grimm remote_channel_send_with`: a message to a linked peer, with its files.
 #[derive(Clone)]
-pub(crate) struct GrimmRemoteChannelSendWith;
+pub(crate) struct GrimmRemoteChannelSendWith {
+    pub(crate) host: Option<HostLink>,
+}
 
 impl GrimmRemoteChannelSend {
     pub(crate) const DEF_MCP_NOM: nuin::ParameterDef = nuin::ParameterDef {
@@ -51,14 +52,10 @@ impl nu::Command for GrimmRemoteChannelSend {
         let model: String = call.req(engine_state, stack, 1)?;
         let event: nu::Value = call.req(engine_state, stack, 2)?;
         require_record_or_table(&event, call.head)?;
-        let id = host()
-            .remote_send(RemoteSend {
-                mcp_nom,
-                model,
-                event,
-                attached: None,
-            })
-            .map_err(|message| shell_error(nu::Command::name(self), &message, call.head))?;
+        let name = nu::Command::name(self);
+        let host = asked_host(&self.host, name, call.head)?;
+        let id = remote_send(host, mcp_nom, model, event, None)
+            .map_err(|message| shell_error(name, &message, call.head))?;
         Ok(nu::PipelineData::Value(event_id_record(id, call.head), None))
     }
 }
@@ -98,15 +95,38 @@ impl nu::Command for GrimmRemoteChannelSendWith {
         let event: nu::Value = call.req(engine_state, stack, 2)?;
         require_record_or_table(&event, call.head)?;
         let attached: nu::Value = call.req(engine_state, stack, 3)?;
-        let id = host()
-            .remote_send(RemoteSend {
-                mcp_nom,
-                model,
-                event,
-                attached: Some(attached),
-            })
-            .map_err(|message| shell_error(nu::Command::name(self), &message, call.head))?;
+        let name = nu::Command::name(self);
+        let host = asked_host(&self.host, name, call.head)?;
+        let id = remote_send(host, mcp_nom, model, event, Some(attached))
+            .map_err(|message| shell_error(name, &message, call.head))?;
         Ok(nu::PipelineData::Value(event_id_record(id, call.head), None))
+    }
+}
+
+/// A body's send to a linked peer, asked of the host; its id, or why not.
+fn remote_send(
+    host: &HostLink,
+    mcp_nom: String,
+    model: String,
+    event: nu::Value,
+    attached: Option<nu::Value>,
+) -> Result<String, String> {
+    if let Some(prefix) = reserved_prefix(&model) {
+        return Err(format!(
+            "`{prefix}` is reserved for host-originated models; \
+             choose a model path outside it",
+        ));
+    }
+    let data = RemoteSendData {
+        mcp_nom,
+        model,
+        event: sendable(event)?,
+        attached: attached.map(sendable).transpose()?,
+    };
+    match host.ask(HostAsk::RemoteSend(data))? {
+        HostAnswer::Sent(id) => Ok(id),
+        HostAnswer::Refused(reason) => Err(reason),
+        other => Err(unexpected(&other)),
     }
 }
 

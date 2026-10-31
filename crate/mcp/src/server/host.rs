@@ -1,7 +1,7 @@
-//! The engine's start and its host: what an eval asks of mcp, on its thread.
+//! The engine's start, and the engine's host asks routed by mcp's controller.
 use crate::*;
 
-/// Start the engine on the config's id, namespace, and homes, mcp its host.
+/// Start the engine on the config's id, namespace, and homes.
 pub(crate) fn init_engine() -> Result<(), String> {
     let cfg = config();
     let scratch = make_scratch_dirs()?;
@@ -16,7 +16,7 @@ pub(crate) fn init_engine() -> Result<(), String> {
         data_home: data_base_dir(),
         cache_home: cache_base_dir(),
     };
-    engine::init(params, Box::new(McpHost)).map_err(|e| e.to_string())
+    engine::init(params).map_err(|e| e.to_string())
 }
 
 /// The substrate: the equip store, the default purview, the registry, builtins.
@@ -32,68 +32,78 @@ pub(crate) async fn ensure_substrate() -> io::Result<()> {
     Ok(())
 }
 
-/// The engine's host: the Channel, the remote links, the config, and the pins.
-pub(crate) struct McpHost;
+/// mcp's controller: the engine's host asks, routed to the face's systems.
+#[derive(Clone)]
+pub(crate) struct HostRoute {
+    pub(crate) channel: Arc<ChannelHandle>,
+    pub(crate) peer: Arc<PeerHandle>,
+}
 
-impl EngineHost for McpHost {
-    fn channel_send(
-        &self,
-        send: ChannelSend<'_>,
-    ) -> Result<String, String> {
-        let ChannelSend {
-            from,
-            model,
-            event,
-            attached,
-            stop,
-        } = send;
-        let Some(host) = host_channel() else {
-            return Err(ChannelSendError::NotOpen.message().to_string());
-        };
-        let data = ChannelSendData {
-            from: from.clone(),
-            model,
-            event: sendable(event)?,
-            attached: attached.map(sendable).transpose()?,
-        };
-        match host.channel.request_blocking(SendRequest(data))? {
-            SendVerdict::Sent(id) => Ok(id),
-            SendVerdict::Refused(reason) => Err(reason),
-            SendVerdict::Stop(spam) => {
-                let action = stop();
-                if spam.notify {
-                    let stopped = ChannelSpamErrorEmergency {
-                        origin: from,
-                        hits: spam.hits,
-                        window_secs: spam.window_secs,
-                        rate: spam.rate,
-                        action,
-                    };
-                    let _ = host.channel.notify_blocking(StoppedNotice(stopped));
-                }
-                Err(spam.reason)
-            }
+impl HostRoute {
+    /// The route to a face's systems.
+    pub(crate) fn of(face: &ChannelFace) -> Self {
+        Self {
+            channel: face.channel.clone(),
+            peer: face.peer.clone(),
         }
     }
 
-    fn remote_send(
+    /// An eval's ask, answered by the system it is for.
+    pub(crate) async fn answer(
         &self,
-        send: RemoteSend,
-    ) -> Result<String, String> {
-        let RemoteSend {
+        ask: HostAsk,
+    ) -> HostAnswer {
+        match ask {
+            HostAsk::ChannelSend(data) => self.channel_send(data).await,
+            HostAsk::Stopped(stopped) => {
+                let _ = self.channel.notify(StoppedNotice(stopped)).await;
+                HostAnswer::Noted
+            }
+            HostAsk::RemoteSend(data) => self.remote_send(data).await,
+            HostAsk::Config => match config_record(&self.channel).await {
+                Ok(record) => HostAnswer::Config(record),
+                Err(reason) => HostAnswer::Refused(reason),
+            },
+            HostAsk::Pin(PinAsk { key, pid, value }) => match pin(&key, pid, value) {
+                Ok(()) => HostAnswer::Pinned,
+                Err(reason) => HostAnswer::Refused(reason),
+            },
+        }
+    }
+
+    /// A body's Channel send through the Channel's system, its verdict answered.
+    async fn channel_send(
+        &self,
+        data: ChannelSendData,
+    ) -> HostAnswer {
+        match self.channel.request(SendRequest(data)).await {
+            Ok(SendVerdict::Sent(id)) => HostAnswer::Sent(id),
+            Ok(SendVerdict::Refused(reason)) | Err(reason) => HostAnswer::Refused(reason),
+            Ok(SendVerdict::Stop(spam)) => HostAnswer::Stopped(HostStop {
+                hits: spam.hits,
+                window_secs: spam.window_secs,
+                rate: spam.rate,
+                notify: spam.notify,
+                reason: spam.reason,
+            }),
+        }
+    }
+
+    /// A body's remote send, its files read and its event rendered, to the peer links.
+    async fn remote_send(
+        &self,
+        data: RemoteSendData,
+    ) -> HostAnswer {
+        let RemoteSendData {
             mcp_nom,
             model,
             event,
             attached,
-        } = send;
-        reject_reserved_model(&model)?;
-        let payloads = match &attached {
-            Some(value) => read_attachments(value)?,
-            None => Vec::new(),
-        };
-        let event_nuon = render_nuon(&event)?;
-        let Some(host) = host_channel() else {
-            return Err(format!("no open remote link to mcp_nom `{mcp_nom}`"));
+        } = data;
+        let (event_nuon, payloads) = match tk::spawn_blocking(move || prepared(event, attached)).await {
+            Ok(Ok(prepared)) => prepared,
+            Ok(Err(reason)) => return HostAnswer::Refused(reason),
+            Err(e) => return HostAnswer::Refused(format!("the send's files: {e}")),
         };
         let send = RemoteSendRequest {
             mcp_nom,
@@ -101,40 +111,41 @@ impl EngineHost for McpHost {
             event_nuon,
             payloads,
         };
-        host.peer.request_blocking(send)?
-    }
-
-    fn config_record(&self) -> nu::Value {
-        config_record()
-    }
-
-    fn pin_config(
-        &self,
-        key: &str,
-        pid: u32,
-        value: f64,
-    ) -> Result<(), String> {
-        pin(key, pid, value)
+        match self.peer.request(send).await {
+            Ok(Ok(id)) => HostAnswer::Sent(id),
+            Ok(Err(reason)) | Err(reason) => HostAnswer::Refused(reason),
+        }
     }
 }
 
-/// Refuse a model under the host's `mcp/` or `remote/` reservation.
-fn reject_reserved_model(model: &str) -> Result<(), String> {
-    if let Some(prefix) = reserved_prefix(model) {
-        return Err(format!(
-            "`{prefix}` is reserved for host-originated models; \
-             choose a model path outside it",
-        ));
+impl subsys::Handler<McpSystem> for HostRoute {
+    fn on_packet(&mut self, pkt: subsys::Packet<FromMcpSys>) -> impl Future<Output = Option<subsys::Packet<FromMcpSys>>> + 'static + Send {
+        std::future::ready(Some(pkt))
     }
-    Ok(())
+
+    fn on_request(&mut self, pkt: subsys::Packet<FromMcpSys>) -> impl Future<Output = Option<ToMcpSys>> + 'static + Send {
+        let route = self.clone();
+        async move {
+            match pkt.take_msg() {
+                FromMcpSys::Host(ask) => Some(ToMcpSys::Host(route.answer(ask).await)),
+                _ => None,
+            }
+        }
+    }
 }
 
-/// A value as the data a send carries; one nuval can't carry fails as its render.
-fn sendable(value: nu::Value) -> Result<NuVal, String> {
-    NuVal::try_from_nu(value.clone()).map_err(|e| match render_nuon(&value) {
-        Err(render) => render,
-        Ok(_) => e.to_string(),
-    })
+/// A remote send's files read and its event rendered, the sender's own failures.
+fn prepared(
+    event: NuVal,
+    attached: Option<NuVal>,
+) -> Result<(String, Vec<Payload>), String> {
+    let span = nu::Span::unknown();
+    let payloads = match attached {
+        Some(table) => read_attachments(&table.try_into_nu(span).map_err(|e| e.to_string())?)?,
+        None => Vec::new(),
+    };
+    let event = event.try_into_nu(span).map_err(|e| e.to_string())?;
+    Ok((render_nuon(&event)?, payloads))
 }
 
 /// Read each `{src, dest}` row into its payload, its dest checked first.
@@ -169,11 +180,11 @@ fn read_attachments(value: &nu::Value) -> Result<Vec<Payload>, String> {
     Ok(out)
 }
 
-/// The whole config as a nu record, mirroring the TOML's tables.
-fn config_record() -> nu::Value {
+/// The whole config as a record mirroring the TOML's tables, with what is in force.
+async fn config_record(handle: &ChannelHandle) -> Result<NuVal, String> {
     let span = nu::Span::unknown();
     let cfg = config();
-    let spam = live_thresholds();
+    let spam = live_thresholds(handle).await;
     let supervisor = effective_supervisor(cfg.supervisor);
 
     let mut channel = nu::Record::new();
@@ -231,13 +242,13 @@ fn config_record() -> nu::Value {
     root.insert("channel", nu::Value::record(channel, span));
     root.insert("supervisor", nu::Value::record(sup, span));
     root.insert("identity", identity);
-    nu::Value::record(root, span)
+    NuVal::try_from_nu(nu::Value::record(root, span)).map_err(|e| e.to_string())
 }
 
 /// The spam thresholds in force: the running Channel's, else the config's start.
-fn live_thresholds() -> SpamThresholdsData {
-    host_channel()
-        .and_then(|host| host.channel.request_blocking(ThresholdsRequest::default()).ok())
-        .and_then(Result::ok)
-        .unwrap_or_else(|| config().channel.spam.data())
+async fn live_thresholds(handle: &ChannelHandle) -> SpamThresholdsData {
+    match handle.request(ThresholdsRequest::default()).await {
+        Ok(Ok(thresholds)) => thresholds,
+        _ => config().channel.spam.data(),
+    }
 }

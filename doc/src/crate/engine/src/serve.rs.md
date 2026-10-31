@@ -13,6 +13,10 @@ builtins it holds, are the host's to make before the engine starts: an equip ins
 into the store behind the engine's back has no lock, and a call to it answers
 `equip::not_registered`.
 
+### field host
+The system's link to its controller, held for every eval the core dispatches, each
+lane handing it to its eval's decls.
+
 ## fn local
 A request names its host, so one request type serves a linked host's engine as well as
 this one. Until this engine serves a linked host's requests, a request naming one is

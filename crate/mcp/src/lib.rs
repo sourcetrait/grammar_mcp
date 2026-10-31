@@ -150,7 +150,7 @@ pub(crate) use crate::{
 
 #[cfg(feature = "embedded-cli")]
 pub(crate) use crate::server::{
-    host::{ensure_substrate, init_engine},
+    host::{HostRoute, ensure_substrate, init_engine},
     oneshot::run_oneshot,
     operator::{OperatorWatch, spawn_observer},
     purview::{
@@ -161,15 +161,15 @@ pub(crate) use crate::server::{
         purviews_path, resolve_patterns, save_purviews, seed_builtin, seed_builtin_purviews,
     },
     run::run_server,
-    system::{McpHandle, Notice, notice_status, start_system},
+    system::{FromMcpSys, McpHandle, McpSystem, Notice, ToMcpSys, notice_status, start_system},
     tool::common::{NuSh, answer_value, unexpected},
 };
 
 #[cfg(feature = "embedded-cli")]
 pub(crate) use sourcetrait_grammar_engine::{
-    self as engine, ChannelSend, EVAL_STACK_SIZE, EngineHandle, EngineHost, EngineParams,
-    EngineSystem, GRIMM, LintEngine, NU_VERSION, NamepathPattern,
-    NamepathStr, ParseEngine, PluginInfo, RemoteSend, analyze_definition, build_call_source,
+    self as engine, EVAL_STACK_SIZE, EngineHandle, EngineParams, EngineSystem, FromEngine,
+    GRIMM, HostAnswer, HostAsk, HostStop, LintEngine, NU_VERSION, NamepathPattern,
+    NamepathStr, ParseEngine, PinAsk, PluginInfo, ToEngine, analyze_definition, build_call_source,
     build_execute_source, definition_file, ensure_equip_store, ensure_plugin_registry,
     equip_repo_lock, equip_root, file_start, grimm_signatures, index_from_nuon,
     install_builtins, lib_dir, lint_block, list_registered_plugins,
@@ -193,8 +193,8 @@ pub(crate) use sourcetrait_grammar_peer::{
 
 pub(crate) use sourcetrait_grammar_protocol::{
     ArtifactError, ChannelEpoch, ChannelPhase, ChannelSendData, LOCAL_HOST, MAX_FRAME_BYTES,
-    PurviewRow, PurviewView, RemoteResult, RuntimeError, SpamThresholdsData, TransportError,
-    reserved_prefix,
+    PurviewRow, PurviewView, RemoteResult, RemoteSendData, RuntimeError, SpamThresholdsData,
+    TransportError,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
@@ -205,9 +205,7 @@ pub(crate) use sourcetrait_grammar_protocol::{
     builtin_equip, builtin_name, command_by_words, command_spec, span_to_line_col,
 };
 
-pub(crate) use sourcetrait_grammar_protocol::{
-    ChannelSpamErrorEmergency, Emergency, EmergencyKind, Observation,
-};
+pub(crate) use sourcetrait_grammar_protocol::{Emergency, EmergencyKind, Observation};
 
 #[cfg(feature = "embedded-cli")]
 pub(crate) use sourcetrait_grammar_operator::{
@@ -293,7 +291,7 @@ pub(crate) mod tk {
     pub(crate) use tokio::{
         select, spawn,
         net::{TcpListener, TcpStream},
-        task::JoinHandle,
+        task::{JoinHandle, spawn_blocking},
         sync::{
             Mutex as AsyncMutex, oneshot,
             mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},

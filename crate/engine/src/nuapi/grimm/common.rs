@@ -150,29 +150,62 @@ pub(crate) fn event_id_type() -> nu::Type {
 pub const GRIMM: &str = "grimm";
 
 /// The `grimm *` decls, in the order the signature block lists them.
-fn grimm_decls() -> Vec<Box<dyn nu::Command>> {
+fn grimm_decls(host: Option<&HostLink>) -> Vec<Box<dyn nu::Command>> {
+    let link = || host.cloned();
     vec![
         Box::new(GrimmDbg),
-        Box::new(GrimmChannelSend),
-        Box::new(GrimmGetConfigAll),
-        Box::new(GrimmGetConfig),
-        Box::new(GrimmPinConfig),
-        Box::new(GrimmRemoteChannelSend),
-        Box::new(GrimmRemoteChannelSendWith),
+        Box::new(GrimmChannelSend { host: link() }),
+        Box::new(GrimmGetConfigAll { host: link() }),
+        Box::new(GrimmGetConfig { host: link() }),
+        Box::new(GrimmPinConfig { host: link() }),
+        Box::new(GrimmRemoteChannelSend { host: link() }),
+        Box::new(GrimmRemoteChannelSendWith { host: link() }),
     ]
 }
 
 /// Register the `grimm *` decls into the working set an eval will parse with.
-pub(crate) fn register_nuapi(working_set: &mut nu::StateWorkingSet) {
-    for decl in grimm_decls() {
+pub(crate) fn register_nuapi(
+    working_set: &mut nu::StateWorkingSet,
+    host: Option<&HostLink>,
+) {
+    for decl in grimm_decls(host) {
         working_set.add_decl(decl);
     }
+}
+
+/// The host a decl asks, or the refusal of a decl that has none.
+pub(crate) fn asked_host<'a>(
+    host: &'a Option<HostLink>,
+    command: &str,
+    span: nu::Span,
+) -> Result<&'a HostLink, nu::ShellError> {
+    host.as_ref().ok_or_else(|| {
+        nu::GenericError::new(
+            format!("{command} failed"),
+            "the engine has no host here".to_string(),
+            span,
+        )
+        .into()
+    })
+}
+
+/// The refusal of an answer its ask never takes.
+pub(crate) fn unexpected(answer: &HostAnswer) -> String {
+    format!("the engine's host answered out of kind: {answer:?}")
+}
+
+/// A value as an ask's data; one nuval can't carry fails as its render.
+pub(crate) fn sendable(value: nu::Value) -> Result<NuVal, String> {
+    NuVal::try_from_nu(value.clone()).map_err(|e| match render_nuon(&value) {
+        Err(render) => render,
+        Ok(_) => e.to_string(),
+    })
 }
 
 /// The `grimm` commands' signatures: a summary, then a signature line, each.
 pub fn grimm_signatures() -> String {
     let mut out = String::from("## grimm Signatures\n");
-    for decl in grimm_decls() {
+    for decl in grimm_decls(None) {
         out.push_str(&format!(
             "{}\n`{}`\n",
             decl.description(),

@@ -18,6 +18,8 @@ before it builds any, so a missing value is a startup-order bug, as an early rea
 of the host's own config is.
 
 ## fn init
-Once a process: the parameters, then the host, then nushell's config dirs, which
-need the registry's path in the data home. A second start is refused. A failed
-resolution leaves the parameters and the host set, since the host exits on it.
+Once a process: the parameters, then nushell's config dirs, which need the
+registry's path in the data home. A second start is refused. A failed
+resolution leaves the parameters set, since the host exits on it. The host is
+no parameter: each engine system's controller answers its evals' asks
+(`system.rs`), so one process may run several, each on its own controller.

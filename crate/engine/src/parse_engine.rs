@@ -39,7 +39,7 @@ impl ParseEngine {
     pub fn new_full() -> Self {
         let mut engine_state = startup(Mode::Stateless);
         let mut working_set = nu::StateWorkingSet::new(&engine_state);
-        register_nuapi(&mut working_set);
+        register_nuapi(&mut working_set, None);
         let delta = working_set.render();
         let _ = engine_state.merge_delta(delta);
         Self {

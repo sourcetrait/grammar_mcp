@@ -13,7 +13,6 @@ pub(crate) mod equip {
 }
 pub(crate) mod execute;
 pub(crate) mod executor;
-pub(crate) mod host;
 pub(crate) mod lint;
 pub(crate) mod mode;
 pub(crate) mod msg;
@@ -64,7 +63,7 @@ pub(crate) use crate::{
         READY_POOL_TARGET, dispatch_pooled, dispatch_stateful, hung_snapshot, now_millis,
         register_hung, teardown_all_in_flight,
     },
-    embed::{eval_in_process, merge_env_no_chdir},
+    embed::{StatefulEngine, eval_in_process, eval_stateless, merge_env_no_chdir},
     engine::startup,
     equip::{
         store::{
@@ -75,15 +74,14 @@ pub(crate) use crate::{
         validate::{HELP_WORDS, NAME_DENYLIST, is_reserved_term, validate_equip_source},
     },
     execute::{EXECUTE, contract_signature},
-    host::{host, set_host},
     mode::Mode,
     nuapi::{
         grimm::{
             category::*,
             channel::send::GrimmChannelSend,
             common::{
-                NuapiCall, STDERR_FILE, STDOUT_FILE, data_shape, event_id_record, event_id_type,
-                register_nuapi, require_record_or_table,
+                NuapiCall, STDERR_FILE, STDOUT_FILE, asked_host, data_shape, event_id_record,
+                event_id_type, register_nuapi, require_record_or_table, sendable, unexpected,
             },
             config::{GrimmGetConfig, GrimmGetConfigAll, GrimmPinConfig},
             dbg::GrimmDbg,
@@ -97,8 +95,13 @@ pub(crate) use crate::{
     plugins::{load_plugin_decls, registry_mtime, registry_path},
     schema::{data_typedef, result_typedef, signature_group},
     serve::{EngineCore, serve_call, serve_control, serve_execute, serve_rerun},
+    system::HostLink,
     teardown::{kill_plugin_subprocesses, make_tracker, tree_kill},
     template::render_nuon,
+};
+
+pub(crate) use sourcetrait_grammar_protocol::{
+    ChannelSendData, ChannelSpamErrorEmergency, RemoteSendData, reserved_prefix,
 };
 
 pub(crate) use std::{
@@ -153,7 +156,7 @@ pub(crate) use nu::{CallExt, IntoValue};
 
 pub(crate) use nutype::{NuField, NuType, NuTypeError};
 
-pub(crate) use nuval::{NuVal, NuonStyle, TryFromNu, wide};
+pub(crate) use nuval::{NuVal, NuonStyle, TryFromNu, TryIntoNu, wide};
 
 pub(crate) use sourcetrait_common::{agnostic, cereal, datum, subsys};
 
@@ -176,7 +179,7 @@ pub(crate) mod tk {
 pub use crate::{
     cache::{CacheKind, DEFINITION_FILE, cache_dir, definition_file},
     cycle::detect_import_cycle,
-    embed::{EVAL_STACK_SIZE, StatefulEngine, eval_stateless},
+    embed::EVAL_STACK_SIZE,
     engine::NU_VERSION,
     equip::{
         lifecycle::{
@@ -194,8 +197,8 @@ pub use crate::{
     },
     execute::{ExecuteDef, analyze_definition},
     executor::{Executor, eval_concurrency_cap},
-    host::{ChannelSend, EngineHost, RemoteSend},
     lint::lint_block,
+    msg::{FromEngine, HostAnswer, HostAsk, HostStop, PinAsk, ToEngine},
     namepath::{
         Namepath, NamepathPattern, NamepathRef, NamepathStr, PATTERN_ALL, PATTERN_CURRENT,
         resolve_builtin,

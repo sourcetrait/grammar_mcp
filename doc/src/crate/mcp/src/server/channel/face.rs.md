@@ -14,13 +14,15 @@ carries. Both servers serve every Channel command and every remote channel
 command through it (`server/client.rs`, `server/tool/interface.rs`).
 
 ### field channel
-The system this face started. An eval reaches the same one through the bridge
-(`bridge.rs`), which the face's start fills, so what a body emits on is what
-the face serves.
+The system this face started. An eval's send reaches the same one through mcp's
+system's controller (`server/host.rs`'s `HostRoute`), so what a body emits on is
+what the face serves; the bridge (`bridge.rs`), which the face's start fills,
+holds it for the readers not yet handed it.
 
 ### field peer
 The peer links' system this face started. A body's remote send reaches it
-through the bridge as a Channel send reaches the Channel.
+through mcp's system's controller (`server/host.rs`'s `HostRoute`), which holds
+it beside the Channel's.
 
 ### field channel_open_lock
 Async because it is held across the open's requests and its hub's bind.
@@ -28,8 +30,8 @@ Async because it is held across the open's requests and its hub's bind.
 ## fn ChannelFace::start
 The Channel's system starts first, on the config's thresholds, its handler the
 face's hub pump; the peer links' after it, their handler holding the Channel,
-so a link's first relay has a Channel to reach. The bridge takes both at once,
-so the code not yet handed the face reaches the systems the agent uses.
+so a link's first relay has a Channel to reach. The bridge takes the Channel at
+once, so the code not yet handed the face reaches the one the agent opens.
 
 ## fn peer_params
 The links take the config's values as plain strings, every path expanded: the

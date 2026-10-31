@@ -15,7 +15,7 @@ pub(crate) async fn run_oneshot(tool: CliTool) -> process::ExitCode {
                 return 1;
             }
         };
-        let system = match start_system(&mcp_nom, false).await {
+        let system = match start_system(&mcp_nom, false, HostRoute::of(&face)).await {
             Ok(system) => Arc::new(system),
             Err(e) => {
                 eprintln!("{e}");

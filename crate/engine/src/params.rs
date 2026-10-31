@@ -44,14 +44,10 @@ pub(crate) fn cache_home() -> PathBuf {
     started().cache_home.clone()
 }
 
-/// Starts the engine on its parameters and its host, once.
-pub fn init(
-    params: EngineParams,
-    host: Box<dyn EngineHost>,
-) -> EngineResult<()> {
+/// Starts the engine on its parameters, once.
+pub fn init(params: EngineParams) -> EngineResult<()> {
     PARAMS.set(params).map_err(|_| EngineError::Init {
         reason: "grammar: the engine is already started".to_string(),
     })?;
-    set_host(host);
     init_config_dirs().map_err(|reason| EngineError::Init { reason })
 }

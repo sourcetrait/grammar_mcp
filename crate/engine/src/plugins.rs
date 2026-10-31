@@ -121,7 +121,7 @@ fn register_plugins(
         .spawn(move || {
             let mut engine = startup(Mode::Stateful);
             let cancel = Arc::new(AtomicBool::new(false));
-            eval_in_process(&mut engine, &log_dir, &source, cancel, false, None)
+            eval_in_process(&mut engine, &log_dir, &source, cancel, false, None, None)
                 .map(|_| ())
                 .map_err(|e| e.to_string())
         })

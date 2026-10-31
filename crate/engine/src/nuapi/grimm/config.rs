@@ -5,10 +5,27 @@ use crate::*;
 /// The dotted key separator.
 const KEY_SEP: char = '.';
 
+/// The configuration in force, as the host answers it.
+fn config_record(
+    host: &HostLink,
+    command: &str,
+    span: nu::Span,
+) -> Result<nu::Value, nu::ShellError> {
+    let failed = |reason: String| -> nu::ShellError {
+        nu::GenericError::new(format!("{command} failed"), reason, span).into()
+    };
+    match host.ask(HostAsk::Config).map_err(failed)? {
+        HostAnswer::Config(record) => record
+            .try_into_nu(span)
+            .map_err(|e| failed(format!("the config record: {e}"))),
+        HostAnswer::Refused(reason) => Err(failed(reason)),
+        other => Err(failed(unexpected(&other))),
+    }
+}
+
 /// Every dotted key the record holds, in order.
-fn config_keys() -> Vec<String> {
+fn config_keys(root: &nu::Value) -> Vec<String> {
     let mut keys = Vec::new();
-    let root = host().config_record();
     let Ok(tables) = root.as_record() else {
         return keys;
     };
@@ -26,8 +43,11 @@ fn config_keys() -> Vec<String> {
 }
 
 /// Walk the record by a dotted key.
-fn lookup(key: &str) -> Option<nu::Value> {
-    let mut current = host().config_record();
+fn lookup(
+    root: &nu::Value,
+    key: &str,
+) -> Option<nu::Value> {
+    let mut current = root.clone();
     for segment in key.split(KEY_SEP) {
         let next = current.as_record().ok()?.get(segment)?.clone();
         current = next;
@@ -37,10 +57,11 @@ fn lookup(key: &str) -> Option<nu::Value> {
 
 /// The unknown-key error, its label listing the valid keys.
 fn unknown_key(
+    root: &nu::Value,
     key: &str,
     span: nu::Span,
 ) -> nu::ShellError {
-    let keys = config_keys().join(", ");
+    let keys = config_keys(root).join(", ");
     nu::GenericError::new(
         format!("grimm get_config: `{key}` is not a config key"),
         format!("valid keys: {keys}"),
@@ -61,7 +82,9 @@ fn value_type() -> nu::Type {
 
 /// `grimm get_config_all` - every setting in force, as one record.
 #[derive(Clone)]
-pub(crate) struct GrimmGetConfigAll;
+pub(crate) struct GrimmGetConfigAll {
+    pub(crate) host: Option<HostLink>,
+}
 
 impl nu::Command for GrimmGetConfigAll {
     fn name(&self) -> &str {
@@ -82,16 +105,21 @@ impl nu::Command for GrimmGetConfigAll {
         &self,
         _engine_state: &nu::EngineState,
         _stack: &mut nu::Stack,
-        _call: &nu::Call<'_>,
+        call: &nu::Call<'_>,
         _input: nu::PipelineData,
     ) -> Result<nu::PipelineData, nu::ShellError> {
-        Ok(nu::PipelineData::Value(host().config_record(), None))
+        let name = nu::Command::name(self);
+        let host = asked_host(&self.host, name, call.head)?;
+        let record = config_record(host, name, call.head)?;
+        Ok(nu::PipelineData::Value(record, None))
     }
 }
 
 /// `grimm get_config <cfg_key>` - one setting, by its dotted key.
 #[derive(Clone)]
-pub(crate) struct GrimmGetConfig;
+pub(crate) struct GrimmGetConfig {
+    pub(crate) host: Option<HostLink>,
+}
 
 impl nu::Command for GrimmGetConfig {
     fn name(&self) -> &str {
@@ -121,14 +149,19 @@ impl nu::Command for GrimmGetConfig {
         _input: nu::PipelineData,
     ) -> Result<nu::PipelineData, nu::ShellError> {
         let key: String = call.req(engine_state, stack, 0)?;
-        let value = lookup(&key).ok_or_else(|| unknown_key(&key, call.head))?;
+        let name = nu::Command::name(self);
+        let host = asked_host(&self.host, name, call.head)?;
+        let root = config_record(host, name, call.head)?;
+        let value = lookup(&root, &key).ok_or_else(|| unknown_key(&root, &key, call.head))?;
         Ok(nu::PipelineData::Value(value, None))
     }
 }
 
 /// `grimm pin_config` - hold a setting for as long as a process lives.
 #[derive(Clone)]
-pub(crate) struct GrimmPinConfig;
+pub(crate) struct GrimmPinConfig {
+    pub(crate) host: Option<HostLink>,
+}
 
 impl nu::Command for GrimmPinConfig {
     fn name(&self) -> &str {
@@ -185,9 +218,14 @@ impl nu::Command for GrimmPinConfig {
                 call.head,
             )
         })?;
-        host().pin_config(&key, pid, value).map_err(|reason| {
-            nu::GenericError::new("grimm pin_config failed", reason, call.head)
-        })?;
-        Ok(nu::PipelineData::Empty)
+        let host = asked_host(&self.host, nu::Command::name(self), call.head)?;
+        let failed = |reason: String| -> nu::ShellError {
+            nu::GenericError::new("grimm pin_config failed", reason, call.head).into()
+        };
+        match host.ask(HostAsk::Pin(PinAsk { key, pid, value })).map_err(failed)? {
+            HostAnswer::Pinned => Ok(nu::PipelineData::Empty),
+            HostAnswer::Refused(reason) => Err(failed(reason)),
+            other => Err(failed(unexpected(&other))),
+        }
     }
 }

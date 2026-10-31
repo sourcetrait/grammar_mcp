@@ -12,11 +12,13 @@ pub(crate) struct EngineCore {
     pub(crate) rig_locks: RigLocks,
     /// The contract's, the lint's, and the validator's engine.
     pub(crate) lint_engine: LintEngine,
+    /// The way an eval's `grimm` asks reach the engine's controller.
+    pub(crate) host: HostLink,
 }
 
 impl EngineCore {
-    /// The core started: the TLS provider, the stateless base, the locks.
-    pub(crate) async fn start() -> io::Result<Self> {
+    /// The core started: the TLS provider, the stateless base, the locks, the host.
+    pub(crate) async fn start(host: HostLink) -> io::Result<Self> {
         nu::CRYPTO_PROVIDER.default();
         let env_jobs = Arc::new(std::sync::Mutex::new(nu::Jobs::default()));
         let rig_locks = RigLocks::new();
@@ -29,6 +31,7 @@ impl EngineCore {
             hung: Arc::new(std::sync::Mutex::new(HashMap::new())),
             rig_locks,
             lint_engine: LintEngine::new(),
+            host,
         })
     }
 }

@@ -2,7 +2,9 @@ use crate::*;
 
 /// `grimm channel send <model> <event> [attached]` - the state-update lane.
 #[derive(Clone)]
-pub(crate) struct GrimmChannelSend;
+pub(crate) struct GrimmChannelSend {
+    pub(crate) host: Option<HostLink>,
+}
 
 impl nu::Command for GrimmChannelSend {
     fn name(&self) -> &str { Self::DEF.name }
@@ -34,18 +36,47 @@ impl nu::Command for GrimmChannelSend {
         if let Some(value) = &attached {
             require_record_or_table(value, call.head)?;
         }
+        let name = nu::Command::name(self);
+        let host = asked_host(&self.host, name, call.head)?;
         let from = NuapiCall::current(engine_state, stack, call.head)?.origin();
-        let id = host()
-            .channel_send(ChannelSend {
-                from,
-                model,
-                event,
-                attached,
-                stop: &|| stop_offender(engine_state),
-            })
-            .map_err(|message| shell_error(nu::Command::name(self), &message, call.head))?;
+        let refused = |message: String| shell_error(name, &message, call.head);
+        let data = ChannelSendData {
+            from: from.clone(),
+            model,
+            event: sendable(event).map_err(refused)?,
+            attached: attached.map(sendable).transpose().map_err(refused)?,
+        };
+        let id = match host.ask(HostAsk::ChannelSend(data)).map_err(refused)? {
+            HostAnswer::Sent(id) => id,
+            HostAnswer::Refused(reason) => return Err(refused(reason)),
+            HostAnswer::Stopped(stop) => {
+                return Err(refused(stopped(host, engine_state, from, stop)));
+            }
+            other => return Err(refused(unexpected(&other))),
+        };
         Ok(nu::PipelineData::Value(event_id_record(id, call.head), None))
     }
+}
+
+/// A stop verdict acted on: the offender stopped, the stop reported, its refusal.
+fn stopped(
+    host: &HostLink,
+    engine_state: &nu::EngineState,
+    origin: String,
+    stop: HostStop,
+) -> String {
+    let action = stop_offender(engine_state);
+    if stop.notify {
+        let report = ChannelSpamErrorEmergency {
+            origin,
+            hits: stop.hits,
+            window_secs: stop.window_secs,
+            rate: stop.rate,
+            action,
+        };
+        let _ = host.ask(HostAsk::Stopped(report));
+    }
+    stop.reason
 }
 
 /// A refused send: the command titles it, and the host's reason labels it.

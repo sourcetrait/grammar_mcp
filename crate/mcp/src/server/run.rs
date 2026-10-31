@@ -10,7 +10,7 @@ pub(crate) async fn run_server() -> Result<(), String> {
     let (nonce_gen, mcp_nom) = process_identity();
     let face = ChannelFace::start(nonce_gen.clone(), mcp_nom.clone()).await?;
     let closer = face.closer();
-    let system = Arc::new(start_system(&mcp_nom, true).await?);
+    let system = Arc::new(start_system(&mcp_nom, true, HostRoute::of(&face)).await?);
     let server = NuSh::new(face, nonce_gen, mcp_nom, system.clone(), &config().deny);
     let swept = system.clone();
     spawn_signal_sweep(closer.clone(), move || async move { swept.shutdown().await });

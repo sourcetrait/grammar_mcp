@@ -174,6 +174,7 @@ pub(crate) async fn dispatch_pooled(
         nonce.as_str().to_string(),
         permit,
         finished.clone(),
+        core.host.clone(),
     );
     let remaining = budget.saturating_sub(dispatched_at.elapsed());
     match tk::timeout(remaining, eval_fut).await {
@@ -223,7 +224,7 @@ pub(crate) async fn dispatch_stateful(
     let engine = {
         let mut guard = core.stateful.lock().await;
         if guard.is_none() {
-            *guard = Some(StatefulEngine::spawn(core.env_jobs.clone()));
+            *guard = Some(StatefulEngine::spawn(core.env_jobs.clone(), core.host.clone()));
         }
         guard
             .as_ref()

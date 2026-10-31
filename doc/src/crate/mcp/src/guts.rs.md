@@ -1,18 +1,18 @@
 # guts.rs
 
 The test-only-`pub` convention's landing site. `TestServer` wraps a `NuSh` plus a
-tokio runtime and drives the REAL tool handlers in-process, returning each tool's
+tokio runtime and drives the real tool handlers in-process, returning each tool's
 envelope read from the NUON text the wire carries as a NuVal, so the integration
 tests exercise the handlers without spawning the binary and assert on the values
 nushell's own kinds keep: a duration stays a duration and an int never a float.
 
-THE PROCESS-GLOBAL CONSTRAINT is the thing to hold before writing a test here.
+The process-global constraint is the thing to hold before writing a test here.
 `CONFIG` is a `OnceLock` and the homes `LazyLock`s that read the environment at first
-access, so every `TestServer` in ONE test binary shares ONE namespace: one id and
+access, so every `TestServer` in one test binary shares one namespace: one id and
 namespace, one data home, one equip git repo, and one host nom, the process's
 (`process_identity`, `server/identity.rs`), which its engine exports. The module
-is `embedded-cli`'s alone, as every test reaching it is. Per-FILE isolation is therefore free
-(each `tests/*.rs` is its own process) while WITHIN a file tests must use unique
+is `embedded-cli`'s alone, as every test reaching it is. Per-file isolation is therefore free
+(each `tests/*.rs` is its own process) while within a file tests must use unique
 equip names and must not rely on a pristine namespace. A test that genuinely needs
 an empty namespace belongs in its own binary or in the system crate.
 
@@ -22,13 +22,13 @@ their commits, and a file whose tests read or write one shared state runs them a
 named steps of a single `Stepper` test rather than asking for `--test-threads=1`.
 
 ## fn sweep_dead_test_namespaces
-Each test BINARY gets its own `grammar_inproc_<pid>` root holding a full equip git
+Each test binary gets its own `grammar_inproc_<pid>` root holding a full equip git
 repo and a keypair, and a test harness returns from `main` with no hook to hang
 teardown on: statics never run `Drop`, and there is no atexit here. Left alone
-these accumulate one per run FOREVER - a real sweep found 128 of them, roughly
+these accumulate one per run forever - a real sweep found 128 of them, roughly
 20 MB.
 
-So each run sweeps the DEAD ones on the way IN, which bounds the litter to at most
+So each run sweeps the dead ones on the way in, which bounds the litter to at most
 one namespace per currently-running test binary instead of one per run ever. A
 leftover whose pid is gone from the process table (`sourcetrait_process`) cannot be
 in use by anyone, and that is the whole liveness test. On macOS the table holds the
@@ -36,12 +36,12 @@ user's own processes alone, and the temporary directory is the user's own, so ev
 namespace there belongs to a process the table can show.
 
 A table that cannot show this very process proves nothing dead, so the sweep is then
-a NO-OP rather than a guess: without a liveness check it could delete a live
+a no-op rather than a guess: without a liveness check it could delete a live
 concurrent binary's namespace. Best-effort throughout, since a failed sweep must never
 fail a test. Pid reuse only defers a removal by one round.
 
 ## fn ensure_test_config
-The `unsafe` block is sound because the `Once` serializes it AND it runs before
+The `unsafe` block is sound because the `Once` serializes it and it runs before
 the first read of the homes - they are only touched inside `ensure_substrate`
 and the cache paths, all of which are reached through a `TestServer` constructed
 after this. That ordering is the entire safety argument, so a future caller
@@ -55,7 +55,7 @@ The config is built from `Config::default()` rather than field-by-field so the
 harness picks up every embedded default, `[channel]` included, without restating
 them; only the id, namespace and work dir are test-specific.
 
-The engine is initialized here, once a process, since its parameters and its host are
+The engine is initialized here, once a process, since its parameters are
 process-wide: `init_engine` resolves nushell's config dirs as the host does at startup,
 which every engine reads, so the lint and template drivers below call this first,
 because they build an engine without a `TestServer`.
@@ -65,11 +65,11 @@ because they build an engine without a `TestServer`.
 ### fn new
 The runtime is sized like the host's own, and for the same reason: the body lint
 and the rig validator parse inline on a worker, and a pathological module graph
-overflows the 2 MB default and ABORTS - which in-process would take the TEST
-BINARY down rather than just a host.
+overflows the 2 MB default and aborts - which in-process would take the test
+binary down rather than just a host.
 
 A fresh `TestServer` per test builds a fresh `NuSh` on an mcp system of its own, its
-engine alone, which is roughly the spawned binary's startup cost MINUS the process
+engine alone, which is roughly the spawned binary's startup cost minus the process
 spawn. That is what makes the in-process tier fast and cleanly isolated - each test gets
 its own stateful engine on its own runtime, with no subprocess. It leaves the serve
 path's supervision out: an operator would take the namespace's host lock and sample the
@@ -86,7 +86,7 @@ An action no command has goes to the parse, so a test of an unknown action meets
 refusal an agent would.
 
 ### fn channel_verified
-There is deliberately NO channel-open helper on this harness. `interface channel open
+There is deliberately no channel-open helper on this harness. `interface channel open
 async` binds a real socket and presents a CA-issued leaf, so an in-process test would be
 asserting the machine's certificate installation rather than anything in this crate; it
 is exercised live on the test channel instead. A sync open binds nothing, so a test
@@ -108,7 +108,8 @@ envelope it compares.
 ## struct SupervisedSystem
 mcp's system as the serve path starts it, the operator with the engine, for the one
 test of its whole lifecycle; that test is a binary of its own, since the host lock it
-holds is the namespace's.
+holds is the namespace's. A face starts beside it, as on the serve path, since mcp's
+system's controller routes the engine's host asks to the face's systems.
 
 ### fn host_lock_held
 Tried, not read: a non-blocking lock on a fresh open of the file conflicts with the
@@ -118,11 +119,11 @@ description, and the attempt releases at once when it succeeds.
 ## fn clear_config_pins
 The pin registry is process-global, so a test that pins has to be able to put it
 back for the next test in the same binary. Unlike the namespace on disk, a pin is
-NOT isolated by using a unique name.
+not isolated by using a unique name.
 
 ## fn rig_block
 It lives here rather than in a test file because the in-process namespace is
-shared per test BINARY: a bare `contains` against the whole signature block can be
+shared per test binary: a bare `contains` against the whole signature block can be
 satisfied - or falsified - by a rig some other test in the same binary committed.
 `rig_call.rs` had exactly that trap waiting, asserting a helper named `util`
 absent while `sourcetrait/importable:util` existed.
@@ -132,15 +133,15 @@ Parses as `analyze_definition` does and walks the same block, its parse errors
 aside, so a rule test exercises the walker alone: a definition `use`-ing a file
 that does not exist still has its path judged. Builds a full-shell `ParseEngine`
 per call. The plugin-registry read plus the heavy engine build is precisely why
-the lint tests are INTEGRATION rather than unit, and the same is true of the
+the lint tests are integration rather than unit, and the same is true of the
 template drivers below.
 
 ## fn lint_engine_reuses_until_the_registry_moves
-IDENTITY is the only thing that catches this regression. A `LintEngine` that
+Identity is the only thing that catches this regression. A `LintEngine` that
 rebuilt on every `current()` would still behave correctly and would still pass
 every behavioural test, while quietly paying a full command-context build on each
 lint and each commit.
 
-The other direction - that a CHANGED registry does rebuild - is proven on the live
+The other direction - that a changed registry does rebuild - is proven on the live
 channel rather than here, because faking it means writing to the user-global
 `plugin.msgpackz` that every process on the box shares.

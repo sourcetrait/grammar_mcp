@@ -87,7 +87,7 @@ impl TestServer {
             .block_on(ChannelFace::start(nonce_gen.clone(), mcp_nom.clone()))
             .expect("the Channel's system starts");
         let system = rt
-            .block_on(start_system(&mcp_nom, false))
+            .block_on(start_system(&mcp_nom, false, HostRoute::of(&face)))
             .expect("mcp's system starts");
         let nush = NuSh::new(face, nonce_gen, mcp_nom, Arc::new(system), &config().deny);
         Self { rt, nush }
@@ -440,6 +440,7 @@ impl TestServer {
 pub struct SupervisedSystem {
     rt: tokio::runtime::Runtime,
     system: McpHandle,
+    _face: ChannelFace,
 }
 
 impl SupervisedSystem {
@@ -451,11 +452,18 @@ impl SupervisedSystem {
             .build()
             .expect("tokio runtime");
         rt.block_on(ensure_substrate()).expect("ensure_substrate");
-        let (_, mcp_nom) = process_identity();
+        let (nonce_gen, mcp_nom) = process_identity();
+        let face = rt
+            .block_on(ChannelFace::start(nonce_gen, mcp_nom.clone()))
+            .expect("the face's systems start");
         let system = rt
-            .block_on(start_system(&mcp_nom, true))
+            .block_on(start_system(&mcp_nom, true, HostRoute::of(&face)))
             .expect("mcp's system starts");
-        Self { rt, system }
+        Self {
+            rt,
+            system,
+            _face: face,
+        }
     }
 
     /// Whether the engine answers a process list through mcp's system.

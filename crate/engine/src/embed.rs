@@ -51,6 +51,7 @@ pub(crate) fn eval_in_process(
     cancel: Arc<AtomicBool>,
     persist: bool,
     nonce: Option<&str>,
+    host: Option<&HostLink>,
 ) -> EngineResult<nu::Value> {
     let stdout_file = open_log(&log_dir.join(STDOUT_FILE))?;
     let stderr_file = open_log(&log_dir.join(STDERR_FILE))?;
@@ -66,7 +67,7 @@ pub(crate) fn eval_in_process(
     }
     engine_state.set_signals(nu::Signals::new(cancel));
     let mut working_set = nu::StateWorkingSet::new(engine_state);
-    register_nuapi(&mut working_set);
+    register_nuapi(&mut working_set, host);
     let files_before = working_set.num_files();
     let block = nu::parse(&mut working_set, None, source.as_bytes(), false);
     if !working_set.parse_errors.is_empty() {
@@ -122,7 +123,8 @@ fn heal_jobs(jobs: &std::sync::Mutex<nu::Jobs>) {
 pub const EVAL_STACK_SIZE: usize = 64 * 1024 * 1024;
 
 /// Run one stateless eval on a dedicated, generously-stacked thread.
-pub async fn eval_stateless(
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn eval_stateless(
     mut engine: nu::EngineState,
     cancel: Arc<AtomicBool>,
     log_dir: std::path::PathBuf,
@@ -130,6 +132,7 @@ pub async fn eval_stateless(
     nonce: String,
     permit: tk::OwnedSemaphorePermit,
     finished: Arc<AtomicBool>,
+    host: HostLink,
 ) -> EngineResult<nu::Value> {
     let (tx, rx) = tk::oneshot::channel();
     let spawned = std::thread::Builder::new()
@@ -139,7 +142,7 @@ pub async fn eval_stateless(
             let _permit = permit;
             let _finish = FinishGuard(finished);
             let outcome = catch_unwind(AssertUnwindSafe(|| {
-                eval_in_process(&mut engine, &log_dir, &source, cancel, false, Some(&nonce))
+                eval_in_process(&mut engine, &log_dir, &source, cancel, false, Some(&nonce), Some(&host))
             }));
             let result = match outcome {
                 Ok(r) => r,
@@ -161,7 +164,7 @@ pub async fn eval_stateless(
 
 /// The persistent stateful engine: one long-lived serial thread.
 #[derive(Clone)]
-pub struct StatefulEngine {
+pub(crate) struct StatefulEngine {
     tx: tk::UnboundedSender<StatefulRequest>,
 }
 
@@ -177,7 +180,10 @@ struct StatefulRequest {
 
 impl StatefulEngine {
     /// Spawn the stateful engine thread with the host-owned jobs table.
-    pub fn spawn(env_jobs: Arc<std::sync::Mutex<nu::Jobs>>) -> Self {
+    pub(crate) fn spawn(
+        env_jobs: Arc<std::sync::Mutex<nu::Jobs>>,
+        host: HostLink,
+    ) -> Self {
         let (tx, mut rx) = tk::unbounded_channel::<StatefulRequest>();
         let _ = std::thread::Builder::new()
             .stack_size(EVAL_STACK_SIZE)
@@ -196,6 +202,7 @@ impl StatefulEngine {
                             req.cancel.clone(),
                             true,
                             Some(&req.nonce),
+                            Some(&host),
                         )
                     }));
                     let result = match outcome {
@@ -216,7 +223,7 @@ impl StatefulEngine {
     }
 
     /// Submit one stateful eval to the engine thread and await its result.
-    pub async fn eval(
+    pub(crate) async fn eval(
         &self,
         log_dir: std::path::PathBuf,
         source: String,
