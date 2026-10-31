@@ -30,6 +30,11 @@ name = "socket_admission"
 path = "tests/socket_admission.rs"
 required-features = ["service"]
 
+[[test]]
+name = "controller_lease"
+path = "tests/controller_lease.rs"
+required-features = ["service"]
+
 [features]
 default = ["service"]
 # grammard's adapters over the runtime library: its command line, the user
@@ -40,6 +45,7 @@ service = ["dep:clap"]
 test-hooks = ["sourcetrait_grammar_engine/test-hooks"]
 
 [dependencies]
+bitcode.workspace = true
 clap = { workspace = true, optional = true }
 futures-util.workspace = true
 nix.workspace = true
@@ -48,6 +54,7 @@ nuval.workspace = true
 serde.workspace = true
 sha2.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 
 sourcetrait_common.workspace = true
 sourcetrait_grammar_engine.workspace = true

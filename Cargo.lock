@@ -6679,6 +6679,7 @@ dependencies = [
 name = "sourcetrait_grammar_daemon"
 version = "0.0.0-9"
 dependencies = [
+ "bitcode",
  "clap",
  "directories",
  "futures-util",
@@ -6694,6 +6695,7 @@ dependencies = [
  "sourcetrait_grammar_scratch",
  "tempfile",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

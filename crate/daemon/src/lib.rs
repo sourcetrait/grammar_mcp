@@ -24,7 +24,14 @@ pub(crate) mod runtime {
     pub(crate) mod scratch;
     pub(crate) mod start;
 }
-pub(crate) mod session {}
+pub(crate) mod session {
+    pub(crate) mod serve;
+    pub(crate) mod sessions;
+}
+#[cfg(test)]
+mod tests {
+    mod sessions;
+}
 pub(crate) mod transport {
     pub(crate) mod admission;
     pub(crate) mod listener;
@@ -56,13 +63,17 @@ pub(crate) use nutype::NuTypeFile;
 pub(crate) use nuval::{NuVal, NuonStyle};
 pub(crate) use sha2::{Digest, Sha256};
 pub(crate) use tokio as tk;
+pub(crate) use tokio_util as tk_util;
 
 pub(crate) use sourcetrait_common::datum;
 pub(crate) use sourcetrait_grammar_engine as engine;
 pub(crate) use sourcetrait_grammar_protocol::{
-    ARTIFACT_LIMITS_DEFAULT, Capabilities, ClientHello, Fresh, HELLO_BUDGET, HELLO_DEADLINE, HelloReply,
-    HelloState, Instance, LIMITS_DEFAULT, LIMITS_HARD, LeaseId, LeaseTable, LeaseToken, Limits, WorkerGeneration,
-    WorkerProfile, decode_payload, framed, payload,
+    ARTIFACT_LIMITS_DEFAULT, Capabilities, ClientHello, DecodeBudget, EventsAnswer, EventsFrame, FrameCodec,
+    Fresh, HELLO_BUDGET, HELLO_DEADLINE, HelloReply, HelloState, Instance, LIMITS_DEFAULT, LIMITS_HARD,
+    LeaseAction, LeaseBinding, LeaseEpoch, LeaseId, LeaseNotice, LeaseReply, LeaseRequest, LeaseTable,
+    LeaseToken, Limits, LossReason, RpcAnswer, RpcFrame, ServerHello, StatusAnswer, StatusFrame,
+    StreamClose, StreamRole, TransportError, WorkerGeneration, WorkerProfile, decode_payload, framed,
+    payload,
 };
 pub(crate) use sourcetrait_grammar_scratch::{HostProbe, OwnedDir, Owner, current_uid, sweep};
 
@@ -70,6 +81,10 @@ pub(crate) use crate::{
     runtime::{
         lock::{LOCK_FILE, LockRecord, NamespaceLock},
         start::random_bytes,
+    },
+    session::{
+        serve::serve,
+        sessions::{Clock, Sessions, StopRing, StreamId, ticker},
     },
     transport::{
         admission::{Admission, accept},

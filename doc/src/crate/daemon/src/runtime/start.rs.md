@@ -44,7 +44,8 @@ async runtime of its own to start a worker.
 The socket is bound after the engine has started, so a stream is never admitted
 by a worker that can't serve it. The worker's profile offers the instance
 file's limits, or the protocol's defaults, each held to the protocol's hard
-ceiling as a hello negotiates it.
+ceiling as a hello negotiates it. The sessions are timed by the worker's own
+monotonic clock from the socket's start, and ticked beside the accept task.
 
 ## fn start_engine
 The MCP's substrate, made as its host makes it: the equip store, the default

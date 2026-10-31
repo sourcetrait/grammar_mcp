@@ -4,40 +4,58 @@ use crate::*;
 /// The pause after a failed accept, so a full descriptor table doesn't spin.
 const ACCEPT_BACKOFF: std::time::Duration = std::time::Duration::from_millis(100);
 
-/// What every stream is admitted by: the worker's UID, profile, lease, and budget.
+/// What every stream is admitted by: the worker's profile, sessions, and budget.
 #[derive(Debug)]
 pub(crate) struct Admission {
     profile: WorkerProfile,
-    leases: std::sync::Mutex<LeaseTable>,
+    sessions: Arc<Sessions>,
     streams: Arc<tk::sync::Semaphore>,
-    epoch: std::time::Instant,
 }
 
 impl Admission {
-    /// Admission for `profile`'s worker, its streams at once held to its limits.
-    pub(crate) fn new(profile: WorkerProfile) -> Self {
+    /// Admission for `profile`'s worker over `sessions`, its streams within limits.
+    pub(crate) fn new(
+        profile: WorkerProfile,
+        sessions: Arc<Sessions>,
+    ) -> Self {
         Self {
-            leases: std::sync::Mutex::new(LeaseTable::new(profile.generation)),
             streams: Arc::new(tk::sync::Semaphore::new(profile.limits.streams as usize)),
-            epoch: std::time::Instant::now(),
             profile,
+            sessions,
         }
     }
 
-    /// The reply to `hello`, its lease bound in the table; none without fresh ids.
+    /// The reply to `hello`, its stream registered if bound; none without fresh ids.
     fn answer(
         &self,
         hello: &ClientHello,
-    ) -> Option<HelloReply> {
+    ) -> Option<(HelloReply, Option<(StreamId, StopRing)>)> {
         let drawn: [u8; 48] = random_bytes().ok()?;
         let (lease, token) = drawn.split_at(16);
-        let lease = LeaseId(lease.try_into().ok()?);
-        let token = LeaseToken(token.try_into().ok()?);
-        let now_ms = u64::try_from(self.epoch.elapsed().as_millis()).unwrap_or(u64::MAX);
-        let mut leases = self.leases.lock().unwrap_or_else(|e| e.into_inner());
-        let mut state = HelloState::default();
-        let (reply, _actions) = state.on_hello(hello, &self.profile, &mut leases, now_ms, Fresh { lease, token });
-        Some(reply)
+        let fresh = Fresh {
+            lease: LeaseId(lease.try_into().ok()?),
+            token: LeaseToken(token.try_into().ok()?),
+        };
+        Some(self.sessions.admit(hello, &self.profile, fresh))
+    }
+
+    /// A place in the budget for `stream`, from the worker's own UID; none closes it.
+    fn hold(
+        &self,
+        stream: &tk::net::UnixStream,
+    ) -> Option<tk::sync::OwnedSemaphorePermit> {
+        let held = self.streams.clone().try_acquire_owned().ok()?;
+        match stream.peer_cred() {
+            Ok(cred) if cred.uid() == self.profile.uid => Some(held),
+            Ok(cred) => {
+                eprintln!("grammard: a stream from UID {} is closed unread", cred.uid());
+                None
+            }
+            Err(e) => {
+                eprintln!("grammard: a stream's peer can't be read, so it is closed unread: {e}");
+                None
+            }
+        }
     }
 }
 
@@ -65,28 +83,7 @@ pub(crate) async fn accept(
     }
 }
 
-impl Admission {
-    /// A place in the budget for `stream`, from the worker's own UID; none closes it.
-    fn hold(
-        &self,
-        stream: &tk::net::UnixStream,
-    ) -> Option<tk::sync::OwnedSemaphorePermit> {
-        let held = self.streams.clone().try_acquire_owned().ok()?;
-        match stream.peer_cred() {
-            Ok(cred) if cred.uid() == self.profile.uid => Some(held),
-            Ok(cred) => {
-                eprintln!("grammard: a stream from UID {} is closed unread", cred.uid());
-                None
-            }
-            Err(e) => {
-                eprintln!("grammard: a stream's peer can't be read, so it is closed unread: {e}");
-                None
-            }
-        }
-    }
-}
-
-/// One admitted stream: its hello answered within the deadline, its place held.
+/// One admitted stream: its hello answered within the deadline, then served.
 async fn admit(
     stream: tk::net::UnixStream,
     admission: Arc<Admission>,
@@ -96,12 +93,23 @@ async fn admit(
     let Ok(Some(Ok(frame))) = tk::time::timeout(HELLO_DEADLINE, framed.next()).await else {
         return;
     };
-    let reply = match decode_payload::<ClientHello>(&frame, HELLO_BUDGET) {
+    let (reply, registered) = match decode_payload::<ClientHello>(&frame, HELLO_BUDGET) {
         Ok(hello) => match admission.answer(&hello) {
-            Some(reply) => reply,
+            Some(answered) => answered,
             None => return,
         },
-        Err(e) => HelloReply::Refused(e.transport()),
+        Err(e) => (HelloReply::Refused(e.transport()), None),
     };
-    let _ = tk::time::timeout(HELLO_DEADLINE, framed.send(payload(&reply))).await;
+    let accepted = match &reply {
+        HelloReply::Accepted(accepted) => Some(accepted.as_ref().clone()),
+        HelloReply::Refused(_) => None,
+    };
+    let sent = tk::time::timeout(HELLO_DEADLINE, framed.send(payload(&reply))).await;
+    match (registered, accepted) {
+        (Some((id, ring)), Some(accepted)) if matches!(sent, Ok(Ok(()))) => {
+            serve(framed, admission.sessions.clone(), accepted, id, ring).await;
+        }
+        (Some((id, _)), _) => admission.sessions.deregister(id),
+        _ => {}
+    }
 }
