@@ -3,18 +3,18 @@
 mod support;
 
 use sourcetrait_grammar_daemon::{DaemonError, Runtime};
-use sourcetrait_grammar_protocol::Capabilities;
 
 #[test]
 fn a_process_starts_one_runtime() {
-    let instance = support::TestInstance::new("embedder", "test");
+    let instance = support::TestInstance::new("embedder");
     let config = instance.load("test");
     let runtime = Runtime::start(config.clone()).expect("the first start");
     assert_eq!(runtime.identity(), &config.identity);
-    assert_eq!(runtime.capabilities(), Capabilities::NONE);
     let tmp = runtime.scratch().tmp().to_path_buf();
     assert!(tmp.is_dir(), "the worker's scratch is made");
     assert!(config.paths.lock.is_file(), "and its lock taken");
+    let info = runtime.info();
+    assert_eq!((info.id.as_str(), info.namespace.as_str(), info.nom.as_str()), ("embedder", "test", runtime.nom()));
 
     assert_eq!(Runtime::start(config.clone()).err(), Some(DaemonError::AlreadyStarted));
 

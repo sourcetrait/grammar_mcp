@@ -11,11 +11,9 @@ fn the_engine_homes_are_the_mcps_own() {
     let home = root.path().join("home");
     std::fs::create_dir_all(&home).unwrap();
     let mut env = BTreeMap::new();
-    for (var, dir) in [("UENV_USR_CONFIG", "config"), ("UENV_USR_STATE", "state"), ("UENV_USR_TMP", "tmp")] {
-        let path = root.path().join(dir);
-        std::fs::create_dir_all(&path).unwrap();
-        env.insert(var.to_string(), path.to_string_lossy().into_owned());
-    }
+    let tmp = root.path().join("tmp");
+    std::fs::create_dir_all(&tmp).unwrap();
+    env.insert("UENV_USR_TMP".to_string(), tmp.to_string_lossy().into_owned());
     env.insert("HOME".to_string(), home.to_string_lossy().into_owned());
     let xdg = [("XDG_DATA_HOME", root.path().join("xdg-data")), ("XDG_CACHE_HOME", root.path().join("xdg-cache"))];
     for with_xdg in [false, true] {

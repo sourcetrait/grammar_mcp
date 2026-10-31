@@ -1,15 +1,16 @@
 # hello.rs
 
-A stream's opening exchange, the one place both ends decide whether a stream
-may carry anything. The client's validation and the worker's are the same
-functions, so a fixture run through both ends reaches one outcome: a stream
-the worker readies is one the client accepts, and a mismatch one side refuses
-the other refuses for the same reason.
+A session's opening exchange, the one place both ends decide whether a session
+may carry anything. The worker's check and the MCP's are written beside each
+other over the same types, so a fixture run through both ends reaches one
+outcome: a hello the worker accepts is a reply the MCP accepts, and a mismatch
+one side refuses the other refuses for the same reason.
 
-Nothing in a hello is authority. The UID the worker checks on its socket and
-the SSH session the client authenticates are the boundary; the hello's
-instance, client id, and features are metadata a refusal names, so a forged
-hello reaches no further than a wrong one.
+Nothing in a hello is authority. The SSH session the MCP authenticates, its
+pinned host key and its key file, is the boundary, and the worker runs as the
+account the session logged in as; the hello's instance and the worker's
+identity are metadata a refusal names, so a forged hello reaches no further
+than a wrong one.
 
 ## struct ProtocolVersion
 ## const PROTOCOL_VERSION
@@ -18,81 +19,67 @@ differ only beneath one layout: a minor that changed a layout would change the
 schema and be refused as a schema mismatch.
 
 ## const HELLO_DEADLINE
+## const REPLY_DEADLINE
 ## const AUTH_DEADLINE
-The contract's finite phases, 5 s for a stream's hello and 30 s for the SSH
-session's authentication. The state machine owns no timer: the transports
-apply these.
+The session's finite phases: 5 s for the MCP's hello once a worker's start is
+done, 60 s for the worker's reply, a start among it, since a worker reads the
+hello only once its lock, scratch, and engine stand, and 30 s for the SSH
+session's connection and authentication. The types own no timer: each end
+applies these.
 
 ## const HELLO_BUDGET
 A hello decodes within 64 elements and its frame's 64 KiB of heap, far tighter
-than a request's budget, since it arrives before anything is negotiated.
+than a frame's budget, since it arrives before anything is negotiated.
 
 ## struct Instance
 An id and a namespace, each an ASCII letter or digit and up to 63 more of
 those, `.`, `_`, or `-`, which leaves `.` and `..` out. A name outside that is
-refused, never sanitized, so two names can never be folded into one identity.
-
-### fn key
-The contract's InstanceKey: the SHA-256 of each name's big-endian length and
-bytes in turn. The lengths keep `ab` + `c` apart from `a` + `bc`.
+refused, never sanitized, so two names can never be folded into one namespace.
 
 ## struct Limits
-The bounds a hello negotiates, the contract's initial-limits table less what is
-fixed: the hello's and the event frame's ceilings and the decoded elements and
-depth. `least` takes each bound's minimum, `past` names the first bound above
-another's, and `zero` the first at zero. `streams` is the listener's bound on
-the transport streams it holds at once, every role's: 16 by default and 64 at
-most, carried in the hello so a client reads the cap it meets.
-
-### fn frame_ceiling
-RPC and Status take the negotiated RPC ceiling, the contract naming none of
-Status's own; Events keep their fixed 1 MiB.
+The bounds a hello negotiates: the frame ceiling, the heap a frame's payload
+decodes within, and the requests in flight at once, the calls apart from the
+rest, so a session full of evals still answers a kill or a process list.
+`least` takes each bound's minimum, `past` names the first bound above
+another's, and `zero` the first at zero.
 
 ## const LIMITS_DEFAULT
 ## const LIMITS_HARD
-The contract's defaults and hard ceilings. A worker configured past the hard
-ones still grants none past them.
+The defaults and the hard ceilings. A worker configured past the hard ones
+still grants none past them.
 
 ## struct ClientHello
-## struct ServerHello
-## enum HelloReply
-The client's first frame, and the worker's: acceptance or a transport error,
-after which the worker closes the stream. A required feature is a capability's
-name as a string, so a later minor can add a feature without a layout change,
-and a name the worker doesn't know is refused like one it has off. The hello
-carries the stream's lease intent and the reply its binding (lease.rs).
-`Accepted` boxes its hello, some 280 bytes beside a refusal's 56. The reply
-advertises the artifact store's bounds, the worker's own to set within the
-contract and never negotiated (artifact.rs).
+The MCP's first frame: what it speaks, the namespace it means to reach, and the
+bounds it asks for. No role, lease, or feature: a session is one stream with
+one purpose, and a build that speaks the version and the schema speaks all of
+it.
 
-## fn check_hello
-The worker's side, before any lease is bound: the version, schema, and codec;
-the expected instance valid and the worker's own; the lease intent one the
-role allows; every required feature on; no requested bound at zero. It
-returns each effective bound, the least of the request, the worker's, and the
-hard ceilings. A hello it refuses binds no lease.
+## struct WorkerHello
+## enum HelloReply
+The worker's acceptance names its namespace, its UID, its pid, and its nom, the
+last drawn at each start, so a log or a refusal names the very process; or a
+transport error, after which the worker ends. `Accepted` boxes its hello, some
+150 bytes beside a refusal's 56.
+
+## fn agree
+The version's major, the schema, and the codec, both ends' first check.
+
+## struct WorkerProfile
+What a worker answers a hello from. It holds nothing past what the reply
+names.
+
+### fn check
+The worker's side: the version, schema, and codec; the expected namespace
+valid and the worker's own; no requested bound at zero. It returns each
+effective bound, the least of the request, the worker's, and the hard
+ceilings.
+
+### fn reply
+The reply a checked hello takes, a refusal carrying the check's reason.
 
 ## fn check_reply
-The client's side of the same checks, and what only the client can check: the
-worker's UID and instance its endpoint expects, the key derived from that
-instance, the role echoed, no bound raised past the request, the store's
-advertised bounds within the contract, the binding the one its intent asked
-for, and the generation against the last one seen. A new generation is
-reported in `Session::new_generation`, so a caller drops what it held of the
-old worker, a lease to resume or a verified Channel, rather than carrying it
-over.
-
-## fn bound_as_asked
-A grant answers a claim or a takeover; a resume needs its own lease, token,
-and epoch granted back; an attachment its lease and epoch; and a Status
-stream no binding at all.
-
-## enum HelloState
-One stream's handshake on the worker. `on_hello` checks the hello, then binds
-its lease in the worker's table and returns the table's actions with the
-reply. `admit` refuses every request until a hello readies the stream, so
-nothing dispatches before it; a second hello, the
-only way a role could change, is refused and closes the stream; a refusal
-closes it too. A reconnect is a new stream with a new state, so no handshake
-outlives its stream. `Ready` boxes the accepted hello, some 200 bytes beside
-two empty variants.
+The MCP's side of the same checks, and what only the MCP can check: the
+namespace the one it asked for, the nom base62, and no bound raised past the
+request or the hard ceilings or set to zero. A refusal passes through as the
+worker's own error, so a held namespace reaches the agent as the worker said
+it.

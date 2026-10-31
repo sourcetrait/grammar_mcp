@@ -9,7 +9,7 @@ pub const CODEC_ID: &str = "bitcode-0.6.9";
 
 /// The SHA-256 of `schema/v1.nuon`'s canonical form, named by both hellos.
 pub const SCHEMA_ID: [u8; 32] =
-    schema_id("891f606112fa8a462dde3985c85c3cff2bf0707ddf9e42494108dc34b3b2a804");
+    schema_id("cff0b200934c5aea97807eb2cb57a914cb2b50bf671cddcac5ad684fde7b8097");
 
 /// An ID's 32 bytes from its 64 lowercase hex digits, checked as it builds.
 const fn schema_id(hex: &str) -> [u8; 32] {
@@ -150,7 +150,7 @@ impl Default for FrameCodec {
 }
 
 impl FrameCodec {
-    /// A codec for a new stream, held to the hello's ceiling until its role's is set.
+    /// A new stream's codec, held to the hello's ceiling until the session's is set.
     pub fn new() -> Self {
         Self {
             ceiling: HELLO_FRAME_MAX,
@@ -160,7 +160,7 @@ impl FrameCodec {
         }
     }
 
-    /// The ceiling later frames are held to, both ways, once the role's is set.
+    /// The ceiling later frames are held to, once the hellos negotiate it.
     pub fn set_ceiling(&mut self, ceiling: u32) {
         self.ceiling = ceiling;
     }
@@ -266,7 +266,7 @@ impl tku::Encoder<tku::Bytes> for FrameCodec {
     }
 }
 
-/// The codec over a byte stream: a russh channel, a Unix socket, or a duplex.
+/// The codec over a byte stream both ways: an SSH channel, or a duplex.
 pub fn framed<S>(stream: S) -> tku::Framed<S, FrameCodec>
 where
     S: tk::AsyncRead + tk::AsyncWrite,

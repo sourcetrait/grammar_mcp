@@ -1,30 +1,20 @@
-//! grammard's commands: those this build lacks refuse at once, opening nothing.
+//! grammard's command line: `serve` alone, its namespace and workdir required.
 
 use std::process::Command;
-use std::time::{Duration, Instant};
 
 #[test]
-fn every_unbuilt_command_refuses_as_unimplemented() {
-    for command in ["instance", "bridge", "cli"] {
-        let started = Instant::now();
-        let out = Command::new(env!("CARGO_BIN_EXE_grammard"))
-            .arg(command)
-            .output()
-            .expect("grammard runs");
-        assert_eq!(out.status.code(), Some(69), "{command}: {out:?}");
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        assert!(
-            stderr.contains(&format!("grammard: {command} is not implemented in this build")),
-            "{command}: {stderr}",
-        );
-        assert!(out.stdout.is_empty(), "{command} writes nothing to stdout");
-        assert!(started.elapsed() < Duration::from_secs(10), "{command} returns at once");
+fn serve_takes_its_namespace_and_workdir_by_name() {
+    for args in [&["serve"][..], &["serve", "--id", "fixture", "--namespace", "default"][..]] {
+        let out = Command::new(env!("CARGO_BIN_EXE_grammard")).args(args).output().expect("grammard runs");
+        assert_eq!(out.status.code(), Some(2), "a usage error: {out:?}");
+        assert!(out.stdout.is_empty(), "nothing on stdout, the wire's");
     }
 }
 
 #[test]
-fn serve_takes_its_instance_by_name() {
-    let out = Command::new(env!("CARGO_BIN_EXE_grammard")).arg("serve").output().expect("grammard runs");
-    assert_eq!(out.status.code(), Some(2), "a usage error: {out:?}");
-    assert!(String::from_utf8_lossy(&out.stderr).contains("--id"), "{out:?}");
+fn an_unknown_command_is_a_usage_error() {
+    for command in ["instance", "bridge", "cli"] {
+        let out = Command::new(env!("CARGO_BIN_EXE_grammard")).arg(command).output().expect("grammard runs");
+        assert_eq!(out.status.code(), Some(2), "{command}: {out:?}");
+    }
 }

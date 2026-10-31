@@ -16,60 +16,6 @@ pub enum FromEngine {
     Host(HostAsk),
 }
 
-/// The engine's own requests of its namespace's purviews.
-#[cereal::derived(Data)]
-pub enum PurviewRequest {
-    List(PurviewListRequest),
-    Configure(PurviewConfigureRequest),
-    Resolve(PurviewResolveRequest),
-    Rig(PurviewRigRequest),
-}
-
-/// Each purview request's answer.
-#[cereal::derived(Data)]
-pub enum PurviewAnswer {
-    Listed(Result<Vec<PurviewView>, RuntimeError>),
-    Rows(Result<Vec<PurviewRow>, RuntimeError>),
-    Resolved(Result<PurviewResolution, RuntimeError>),
-}
-
-/// Each configured purview, its patterns as stored.
-#[cereal::derived(Data, Copy, Eq)]
-pub struct PurviewListRequest;
-
-/// An id's patterns set, an empty list deleting it; the rows after.
-#[cereal::derived(Data, Eq)]
-pub struct PurviewConfigureRequest {
-    pub id: String,
-    pub patterns: Vec<String>,
-}
-
-/// Ids resolved to what they put in view, each reference expanded.
-#[cereal::derived(Data, Eq)]
-pub struct PurviewResolveRequest {
-    pub ids: Vec<String>,
-}
-
-/// A rig installed or uninstalled, the rows adjusted for it; the rows after.
-#[cereal::derived(Data, Eq)]
-pub struct PurviewRigRequest {
-    pub rig: String,
-    pub installed: bool,
-    /// The session's view, which a rig installed joins.
-    pub current: Vec<String>,
-}
-
-/// What a set of ids puts in view.
-#[cereal::derived(Data)]
-pub struct PurviewResolution {
-    /// The patterns, in order and deduplicated, each reference expanded.
-    pub patterns: Vec<String>,
-    /// Each id beside the patterns it names itself.
-    pub views: Vec<PurviewView>,
-    /// The ids no purview answers to.
-    pub unknown: Vec<String>,
-}
-
 /// What an eval asks of the process hosting it.
 #[cereal::derived(Data)]
 pub enum HostAsk {
@@ -91,35 +37,6 @@ pub struct PinAsk {
     pub key: String,
     pub pid: u32,
     pub value: f64,
-}
-
-/// The host's answer to an ask.
-#[cereal::derived(Data)]
-pub enum HostAnswer {
-    /// Sent, under the message's id.
-    Sent(String),
-    /// Refused, and why.
-    Refused(String),
-    /// Over the hard threshold: refused, the sender's eval to be stopped.
-    Stopped(HostStop),
-    /// The configuration in force, mirroring the TOML.
-    Config(NuVal),
-    /// The pin is held.
-    Pinned,
-    /// The stop is reported.
-    Noted,
-}
-
-/// A spam verdict's stop, as its sender acts on it and reports it.
-#[cereal::derived(Data)]
-pub struct HostStop {
-    pub hits: u32,
-    pub window_secs: u64,
-    pub rate: u32,
-    /// Whether the stop begins an episode, the one its emergency reports.
-    pub notify: bool,
-    /// The refusal the sender answers with.
-    pub reason: String,
 }
 
 impl subsys::Ask<EngineSystem> for HostAsk {

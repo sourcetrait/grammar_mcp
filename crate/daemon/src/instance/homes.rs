@@ -22,8 +22,6 @@ enum Default {
     Unset,
 }
 
-const CONFIG: HomeSpec = HomeSpec { name: "config", uenv: "UENV_USR_CONFIG", standard: Some("XDG_CONFIG_HOME"), default: Default::UnderHome(".config") };
-const STATE: HomeSpec = HomeSpec { name: "state", uenv: "UENV_USR_STATE", standard: Some("XDG_STATE_HOME"), default: Default::UnderHome(".local/state") };
 const TMP: HomeSpec = HomeSpec { name: "tmp", uenv: "UENV_USR_TMP", standard: Some("TMPDIR"), default: Default::Absolute(TMP_DEFAULT) };
 const RUNTIME: HomeSpec = HomeSpec { name: "runtime", uenv: "UENV_USR_TRANSIENT", standard: Some("XDG_RUNTIME_DIR"), default: Default::Unset };
 
@@ -46,10 +44,8 @@ const CACHE: HomeSpec = HomeSpec { name: "cache", uenv: "UENV_USR_CACHE", standa
 /// A worker's homes, each an existing absolute directory, the runtime's optional.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstanceHomes {
-    pub config: PathBuf,
     pub data: PathBuf,
     pub cache: PathBuf,
-    pub state: PathBuf,
     pub tmp: PathBuf,
     /// The runtime home, none where no variable names one.
     pub runtime: Option<PathBuf>,
@@ -67,17 +63,13 @@ impl InstanceHomes {
                 reason: "no variable names it and it has no default".to_string(),
             })
         };
-        let config = required(&CONFIG)?;
         let data = required(&DATA)?;
         let cache = required(&CACHE)?;
-        let state = required(&STATE)?;
         let tmp = required(&TMP)?;
         let runtime = resolve_home(&RUNTIME, env, &mut diagnostics)?;
         Ok(Self {
-            config,
             data,
             cache,
-            state,
             tmp,
             runtime,
             diagnostics,

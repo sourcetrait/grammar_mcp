@@ -235,7 +235,7 @@ fn a_frame_the_check_passes_crosses_the_codec_whole() {
 /// A relative dest passes; an empty, an absolute, or an escaping one fails.
 #[test]
 fn safe_dest_rejects_escapes() {
-    use crate::link::safe_dest;
+    use crate::safe_dest;
     assert!(safe_dest("out.txt"));
     assert!(safe_dest("sub/dir/out.txt"));
     assert!(!safe_dest(""));

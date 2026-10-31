@@ -10,9 +10,8 @@ The host's lifecycle and delivery models, under the `remote/` reservation, which
 no definition or peer may claim.
 
 ## const REMOTE_COMMANDS
-The catalog's seven `interface remote channel` kinds. The commands cross the
-engine boundary as the raw `Interface` text the runtime parses, as every
-interface command does; their results cross typed (`RemoteResult`).
+The catalog's seven `interface remote channel` kinds, which the MCP serves
+whatever the tool's host, the links being its own.
 
 ## fn valid_peer_id
 A nom or a delivery id is base62, so one is ASCII letters and digits alone, at
@@ -20,6 +19,12 @@ most 64 bytes: never a `/`, a `.`, or an absolute path. The mcp crate's link
 holds a peer's nom to it at the handshake and a delivery's id at each frame,
 since both are joined into the inbox path a delivery's files land under, and
 the delivery id is a peer's own text.
+
+## fn safe_dest
+A send's dest is a relative path of plain components, never an absolute path,
+a `.`, or a `..`, since the receiving link joins it beneath its inbox. A send
+is held to it where its files are read, the MCP's or a worker's, and the link
+holds every received dest to it again.
 
 ## struct RemoteChannelRow
 One row an alias, the file's entry beside its live state, so the agent reads
@@ -46,11 +51,9 @@ The record the packet has always carried, a key left out where it has no
 value, never null, as the mcp crate's link builds each one by hand.
 
 ## struct RemotePacket
-A peer's message as its worker relays it: the delivery id, the sending peer's
-nom, the model, and the payload, data alone, with its files the event record's
-artifacts, so the message and its files stay one record. The frontend names
-the packet `remote/channel/<nom>` and points a spilled event's pointer at its
-own copy of the spill file.
+A peer's message as a link relays it: the delivery id, the sending peer's nom,
+the model, and the payload, data alone. The MCP names the packet
+`remote/channel/<nom>`.
 ### fn check
 A relay keeps base62 ids and a model outside both reservations, so a peer can
 pose neither as this host's nor as a remote link's report.

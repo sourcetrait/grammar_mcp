@@ -52,8 +52,6 @@ pub enum RuntimeError {
         phase: String,
         reason: String,
     },
-    /// An artifact request refused, nothing changed by it.
-    Artifact(ArtifactError),
 }
 
 impl RuntimeError {
@@ -75,7 +73,6 @@ impl RuntimeError {
             Self::RemoteChannelUnverified => "remote::channel::unverified",
             Self::RemotesFile { .. } => "remote::file",
             Self::Internal { .. } => "internal",
-            Self::Artifact(error) => error.kind(),
             Self::InterfaceViolations { .. } => {
                 unreachable!("a violations error renders through its rows, not a kind")
             }
@@ -131,7 +128,6 @@ impl RuntimeError {
                 .to_string(),
             Self::RemotesFile { reason } => format!("the remotes file: {reason}"),
             Self::Internal { phase, reason } => format!("internal error [{phase}]: {reason}"),
-            Self::Artifact(error) => error.message(),
             Self::InterfaceViolations { .. } => {
                 unreachable!("a violations error renders through its rows, not a message")
             }
@@ -147,33 +143,27 @@ impl RuntimeError {
     }
 }
 
-/// Why the transport to a worker failed, apart from what the worker answered.
+/// Why a session to a worker failed, apart from what the worker's engine answered.
 #[cereal::derived(Data)]
 pub enum TransportError {
     VersionMismatch { expected: String, found: String },
     SchemaMismatch { expected: String, found: String },
     CodecMismatch { expected: String, found: String },
     WrongWorker { expected: String, found: String },
-    /// The worker refused the peer's Unix identity before reading its preface.
-    Unauthorized { reason: String },
+    /// The host refused the connection, or never answered it.
+    ConnectFailed { reason: String },
+    /// The host presented a key none of its pinned keys match.
+    HostKeyRejected { reason: String },
     /// The SSH session never authenticated, so nothing was sent.
     AuthenticationFailed { reason: String },
-    LeaseInvalid { reason: String },
-    LeaseExpired,
+    /// The worker couldn't start or serve, its own reason given.
+    Unavailable { reason: String },
+    /// The session's requests of a kind are at their bound; the request didn't run.
     Busy,
     InvalidFrame { reason: String },
     ResultTooLarge { limit: u64 },
-    /// The request may have run: its operation's outcome is unknown.
-    UnknownOutcome { operation: OperationId, reason: String },
-    Unavailable { reason: String },
-    /// A hello required a feature the other end doesn't have on.
-    UnsupportedFeature { feature: String },
-    /// The operation was admitted before with another payload.
-    OperationConflict { operation: OperationId },
-    /// A submission's ticket is unknown, expired, used, or another's.
-    TicketInvalid { reason: String },
-    /// No room to keep another operation's records; nothing was admitted.
-    StorageFull { reason: String },
+    /// The session ended with the request in flight: its outcome is unknown.
+    SessionLost { reason: String },
 }
 
 impl TransportError {
@@ -184,19 +174,14 @@ impl TransportError {
             Self::SchemaMismatch { .. } => "daemon::schema_mismatch",
             Self::CodecMismatch { .. } => "daemon::codec_mismatch",
             Self::WrongWorker { .. } => "daemon::wrong_worker",
-            Self::UnsupportedFeature { .. } => "daemon::unsupported_feature",
-            Self::OperationConflict { .. } => "daemon::operation_conflict",
-            Self::TicketInvalid { .. } => "daemon::ticket_invalid",
-            Self::StorageFull { .. } => "daemon::storage_full",
-            Self::Unauthorized { .. } => "daemon::unauthorized",
+            Self::ConnectFailed { .. } => "daemon::connect_failed",
+            Self::HostKeyRejected { .. } => "daemon::host_key_rejected",
             Self::AuthenticationFailed { .. } => "daemon::authentication_failed",
-            Self::LeaseInvalid { .. } => "daemon::lease_invalid",
-            Self::LeaseExpired => "daemon::lease_expired",
+            Self::Unavailable { .. } => "daemon::unavailable",
             Self::Busy => "daemon::busy",
             Self::InvalidFrame { .. } => "daemon::invalid_frame",
             Self::ResultTooLarge { .. } => "daemon::result_too_large",
-            Self::UnknownOutcome { .. } => "daemon::unknown_outcome",
-            Self::Unavailable { .. } => "daemon::unavailable",
+            Self::SessionLost { .. } => "daemon::session_lost",
         }
     }
 
@@ -215,31 +200,22 @@ impl TransportError {
             Self::WrongWorker { expected, found } => {
                 format!("the worker is {found}, not the expected {expected}")
             }
-            Self::UnsupportedFeature { feature } => {
-                format!("the required feature `{feature}` is not on")
+            Self::ConnectFailed { reason } => format!("the host couldn't be reached: {reason}"),
+            Self::HostKeyRejected { reason } => {
+                format!("the host's key matches none pinned for it; nothing was sent: {reason}")
             }
-            Self::OperationConflict { operation } => format!(
-                "operation {} was admitted with another payload; nothing ran",
-                operation.hex(),
-            ),
-            Self::TicketInvalid { reason } => format!("the ticket can't run anything: {reason}"),
-            Self::StorageFull { reason } => format!("the worker has no room to admit an operation; nothing ran: {reason}"),
-            Self::Unauthorized { reason } => format!("the worker refused this peer: {reason}"),
             Self::AuthenticationFailed { reason } => {
                 format!("authentication failed before any request was sent: {reason}")
             }
-            Self::LeaseInvalid { reason } => format!("the controller lease is invalid: {reason}"),
-            Self::LeaseExpired => "the controller lease expired".to_string(),
-            Self::Busy => "the worker is busy; no operation was admitted".to_string(),
+            Self::Unavailable { reason } => format!("the worker is unavailable: {reason}"),
+            Self::Busy => "the session's requests are at their bound; nothing ran".to_string(),
             Self::InvalidFrame { reason } => format!("an invalid frame: {reason}"),
             Self::ResultTooLarge { limit } => {
                 format!("the result exceeds the {limit}-byte limit")
             }
-            Self::UnknownOutcome { operation, reason } => format!(
-                "operation {} may have run, its outcome unknown: {reason}",
-                operation.hex(),
-            ),
-            Self::Unavailable { reason } => format!("the worker is unavailable: {reason}"),
+            Self::SessionLost { reason } => {
+                format!("the session ended with the request in flight, its outcome unknown: {reason}")
+            }
         }
     }
 

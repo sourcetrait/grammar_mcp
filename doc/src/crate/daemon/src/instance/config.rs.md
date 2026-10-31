@@ -1,56 +1,36 @@
 # config.rs
 
-## const INSTANCE_MODEL
-The instance file's schema, `include/config/grammard/Instance.nutype`, compiled
-in, so a file is held to the shape this build reads and not to one installed
-beside it.
+## const CONFIG_FILE
+The agent's config file under the workdir, the one the MCP reads from its
+start directory, so a host's supervisor lines sit where its agent's do.
 
-## const SUN_PATH_MAX
-`sockaddr_un`'s path capacity, its terminator among its bytes: 108 on Linux,
-104 on macOS and the BSDs. With the key's 64 characters between `grammard/` and
-`.sock`, a socket leaves the runtime home 28 bytes of its path on Linux and 24
-on macOS.
+## const BASE_CONFIG
+The MCP's embedded base, compiled in, whose `[supervisor]` lines are a worker's
+defaults, so a worker warns at the levels an MCP does.
 
 ## struct SupervisorLines
-The MCP's four `supervisor.*` lines, by the same names.
+The four `supervisor.*` lines, each optional, refusing an unknown one as the
+MCP's file layer does.
 
-## struct LimitLines
-### fn limits
-The lines as the protocol's `Limits`, field for field, so the load's checks and
-the hello's negotiation hold the same values.
-
-## struct InstanceFile
-The file as written. Its id, namespace, and key say which instance it is for,
-and a load holds all three to the instance it was asked for, so one file can
-never serve another. Its workdir is required; the peer links' config, the
-supervisor's lines, and the limits are optional, null leaving the built-in
-default.
+## struct ConfigFile
+The file as a worker reads it: its `[supervisor]` table alone, the MCP's
+tables ignored, since a workdir's file may be the MCP's own.
 
 ## struct InstancePaths
 ### fn of
-Every path is a function of the identity and the homes alone: the instance file
-under the config home, durable state under the state home by key, the engine's
+Every path is a function of the identity and the homes alone: the engine's
 data and cache homes under the MCP's own `grammar/mcp/<id>/<namespace>` layout,
-so a worker and an embedded engine share one namespace's files, the namespace
-lock among them, and the socket under the runtime home. A socket's path is
-measured with its terminator against `sockaddr_un` and refused past it rather
-than truncated, since a truncated path would bind another file.
+so a worker and the MCP share one namespace's files where both run on one
+machine, and the namespace lock in the data home, the MCP's own.
 
 ## struct InstanceConfig
 ### fn load
-Everything a start needs before any thread, listener, plugin, or engine: the
-names checked, the key computed, the homes resolved, the paths derived, the file
-read and held to its identity, and the workdir found an absolute directory. The
-file's limits are refused at zero or past the protocol's hard ceilings: the
-stream budget is allocated from them before any hello negotiates, so a value
-past the ceiling would admit more than the protocol allows, and a zero would
-start a worker that admits nothing. A loaded config is a value: a later edit of
-the file changes nothing it holds.
+Everything a start needs before any thread, plugin, or engine: the names
+checked, the workdir found an absolute directory, the homes resolved, the paths
+derived, and the supervisor lines read. A loaded config is a value: a later
+edit of the file changes nothing it holds.
 
-## fn read_instance_file
-The file is opened without following a symlink and without blocking, then
-checked through that handle: nothing can be swapped in between the check and
-the read, and a FIFO is refused rather than waited on for a writer. A file
-another UID owns, one open to its group or to others, and anything not a
-regular file are refused before a byte is read; the text must be NUON, hold the
-schema's shape, and deserialize, each failure the file's own error.
+## fn read_supervisor
+Each line the file's where it sets one, else the base's, each fraction held to
+the operator's range. A missing file is the base alone; an unreadable or
+malformed one is refused, never ignored.

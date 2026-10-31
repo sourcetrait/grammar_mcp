@@ -6,9 +6,8 @@ use nutype::NuTypeFile;
 use nuval::NuVal;
 
 /// The repository's `.nutype` files, from the workspace's root.
-const FILES: [&str; 8] = [
+const FILES: [&str; 7] = [
     "include/config/Config.nutype",
-    "include/config/grammard/Instance.nutype",
     "include/scratch/Lock.nutype",
     "include/scratch/Owner.nutype",
     "crate/protocol/schema/Schema.nutype",
@@ -18,12 +17,14 @@ const FILES: [&str; 8] = [
 ];
 
 /// The repository's NUON files, each with its model, from the workspace's root.
-const MODELED: [(&str, &str); 6] = [
+const MODELED: [(&str, &str); 8] = [
     ("crate/protocol/schema/v1.nuon", "crate/protocol/schema/Schema.nutype"),
     ("crate/protocol/tests/vectors/budget.nuon", "crate/protocol/tests/vectors/Budget.nutype"),
     ("crate/protocol/tests/vectors/engine.nuon", "crate/protocol/tests/vectors/Vectors.nutype"),
+    ("crate/protocol/tests/vectors/hello.nuon", "crate/protocol/tests/vectors/Vectors.nutype"),
     ("crate/protocol/tests/vectors/manifest.nuon", "crate/protocol/tests/vectors/Manifest.nutype"),
-    ("crate/protocol/tests/vectors/runtime.nuon", "crate/protocol/tests/vectors/Vectors.nutype"),
+    ("crate/protocol/tests/vectors/peer.nuon", "crate/protocol/tests/vectors/Vectors.nutype"),
+    ("crate/protocol/tests/vectors/session.nuon", "crate/protocol/tests/vectors/Vectors.nutype"),
     ("crate/protocol/tests/vectors/value.nuon", "crate/protocol/tests/vectors/Vectors.nutype"),
 ];
 

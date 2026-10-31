@@ -1,27 +1,26 @@
 # run.rs
 
 ## fn run_main
-The error's text goes to stderr behind `grammard: ` and the process exits by
-the error's code, so a stub command reads as unimplemented to a person and to
-a script alike, and stdout stays empty for the commands that will speak a
-protocol on it.
+The session's end is logged on stderr and the process exits 0; a failure is
+logged behind `grammard: ` and exits by its code, so a script tells a held
+namespace from a bad workdir without reading text. stdout carries nothing but
+the wire.
 
-## fn run
-`serve` runs a worker in the foreground; every other command refuses with
-`Unimplemented`, since a command that exits 0 before it exists would read as
-one that works. Each replaces its refusal as its own code lands; the local
-CLI's already runs through its declared stub (`cli/oneshot.rs`).
+## fn wire
+The wire is stdout's own descriptor, duplicated, and fd 1 then points at
+stderr, so nothing else in the process, a stray print or an external that
+inherits fd 1, can write into the stream: what would corrupt a frame lands in
+the MCP's log instead.
 
 ## fn serve
-The stop signals are blocked before anything starts, so every thread the start
-spawns inherits the block and the main thread alone takes a signal, by
-`sigwait`, then shuts the runtime down. The environment is read once as data,
-an entry that isn't UTF-8 left out. An instance with no runtime home has no
-socket to serve, and is refused before anything starts. The ready line on
-stdout, naming the instance, the generation, the pid, and the socket, comes
-once the socket is bound: a foreground start's readiness, a service's coming
-with its activation.
+The environment is read once as data, an entry that isn't UTF-8 left out. The
+start comes before the hello, so a worker answers the hello with its namespace
+held, its engine up, and its scratch made, or with why it couldn't. The
+shutdown runs whatever the session's outcome, so a session that never opened
+still releases its lock and removes its scratch.
 
-## fn stop_signals
-SIGTERM, a service manager's stop; SIGINT, a terminal's; SIGHUP, a closed
-session's.
+## fn refuse_with
+A worker that couldn't start still reads the MCP's hello and refuses it with
+its failure's kind and text, so the MCP reports a held namespace as
+`daemon::unavailable` naming `runtime::namespace_held`, not as a lost session.
+A runtime of its own is made for that, the worker's having never started.

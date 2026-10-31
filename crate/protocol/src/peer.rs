@@ -32,6 +32,12 @@ pub fn valid_peer_id(text: &str) -> bool {
     !text.is_empty() && text.len() <= PEER_ID_MAX && text.bytes().all(|b| b.is_ascii_alphanumeric())
 }
 
+/// Whether a send's dest is a relative path of plain components, never an escape.
+pub fn safe_dest(dest: &str) -> bool {
+    let path = std::path::Path::new(dest);
+    !dest.is_empty() && path.is_relative() && path.components().all(|c| matches!(c, std::path::Component::Normal(_)))
+}
+
 /// A remote alias's state: closed, listening for its peer, or open.
 #[cereal::derived(Data, Copy, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -156,7 +162,7 @@ impl RemoteChannelEvent {
     }
 }
 
-/// A peer's message as its worker relays it, its files the record's artifacts.
+/// A peer's message as a link relays it.
 #[cereal::derived(Data)]
 pub struct RemotePacket {
     /// The delivery's id, as its sender minted it.

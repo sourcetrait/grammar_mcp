@@ -5,9 +5,8 @@ use std::path::Path;
 
 use futures_util::{SinkExt, StreamExt};
 use sourcetrait_grammar_protocol::{
-    CODEC_ID, DECODE_BUDGET_DEFAULT, EVENT_FRAME_MAX, EmergencyKind, FrameCodec, FrameError,
-    FrameStage, HELLO_FRAME_MAX, Lane, NuVal, OperationId, PREFACE, RPC_FRAME_DEFAULT,
-    RPC_FRAME_HARD, SCHEMA_ID, StreamRole, TransportError, check_codec, framed, payload,
+    CODEC_ID, DECODE_BUDGET_DEFAULT, EmergencyKind, FRAME_DEFAULT, FrameCodec, FrameError, FrameStage,
+    HELLO_FRAME_MAX, Lane, NuVal, PREFACE, SCHEMA_ID, TransportError, check_codec, framed, payload,
 };
 
 /// A payload as `T` within the default decode budget.
@@ -61,7 +60,7 @@ fn decode_to_end(codec: &mut FrameCodec, bytes: &[u8]) -> Result<Vec<Bytes>, Fra
 fn a_frame_is_the_preface_a_big_endian_length_and_its_bitcode() {
     let mut codec = FrameCodec::new();
     let mut out = BytesMut::new();
-    let value = OperationId([7; 16]);
+    let value = [7u8; 16];
     codec.encode(payload(&value), &mut out).expect("encoded");
     codec.encode(payload(&value), &mut out).expect("encoded again");
     // The preface goes out once, before the first frame alone.
@@ -74,7 +73,7 @@ fn a_frame_is_the_preface_a_big_endian_length_and_its_bitcode() {
     assert_eq!(hex, golden);
     let back = decode_to_end(&mut FrameCodec::new(), &out).expect("decoded");
     assert_eq!(back.len(), 2);
-    assert_eq!(decode_payload::<OperationId>(&back[0]).expect("an id"), value);
+    assert_eq!(decode_payload::<[u8; 16]>(&back[0]).expect("the bytes"), value);
 }
 
 #[test]
@@ -156,28 +155,21 @@ fn zero_and_oversize_lengths_are_refused_before_any_reservation() {
 
 #[test]
 fn each_ceiling_holds_exactly_and_refuses_one_past_it() {
-    for (role_ceiling, set) in [
-        (HELLO_FRAME_MAX, None),
-        (EVENT_FRAME_MAX, Some(StreamRole::Events.default_ceiling())),
-        (RPC_FRAME_DEFAULT, Some(StreamRole::Rpc.default_ceiling())),
-    ] {
+    for (ceiling, set) in [(HELLO_FRAME_MAX, None), (FRAME_DEFAULT, Some(FRAME_DEFAULT))] {
         let mut codec = FrameCodec::new();
-        // The hello comes first on every stream, under its own ceiling.
+        // The hello comes first on a session, under its own ceiling.
         let mut buf = BytesMut::from(wire(&[b"hello"]).as_slice());
         assert!(codec.decode(&mut buf).expect("hello").is_some());
         if let Some(ceiling) = set {
             codec.set_ceiling(ceiling);
         }
-        let mut buf = BytesMut::from(&(role_ceiling).to_be_bytes()[..]);
-        buf.extend_from_slice(&vec![1u8; role_ceiling as usize]);
+        let mut buf = BytesMut::from(&ceiling.to_be_bytes()[..]);
+        buf.extend_from_slice(&vec![1u8; ceiling as usize]);
         let frame = codec.decode(&mut buf).expect("at the ceiling").expect("whole");
-        assert_eq!(frame.len(), role_ceiling as usize);
-        let err = codec.decode(&mut BytesMut::from(&(role_ceiling + 1).to_be_bytes()[..])).expect_err("past it");
+        assert_eq!(frame.len(), ceiling as usize);
+        let err = codec.decode(&mut BytesMut::from(&(ceiling + 1).to_be_bytes()[..])).expect_err("past it");
         assert!(matches!(err, FrameError::Oversize { .. }), "{err}");
     }
-    assert_eq!(StreamRole::Status.default_ceiling(), RPC_FRAME_DEFAULT);
-    assert_eq!(StreamRole::Rpc.hard_ceiling(), RPC_FRAME_HARD);
-    assert_eq!(StreamRole::Events.hard_ceiling(), EVENT_FRAME_MAX);
 }
 
 #[test]
@@ -229,11 +221,11 @@ enum TenKinds {
 
 #[test]
 fn a_bounded_decode_refuses_trailing_bytes_and_unknown_variants() {
-    let id = OperationId([3; 16]);
+    let id = [3u8; 16];
     let mut bytes = bitcode::encode(&id);
-    assert_eq!(decode_payload::<OperationId>(&bytes).expect("whole"), id);
+    assert_eq!(decode_payload::<[u8; 16]>(&bytes).expect("whole"), id);
     bytes.push(0);
-    assert!(matches!(decode_payload::<OperationId>(&bytes), Err(FrameError::Decode)));
+    assert!(matches!(decode_payload::<[u8; 16]>(&bytes), Err(FrameError::Decode)));
     assert_eq!(decode_payload::<Lane>(&bitcode::encode(&Lane::Stateful)).expect("a lane"), Lane::Stateful);
     // A Lane's two variants fill every index its encoding can hold. An
     // EmergencyKind's nine pack into four bits as ten do, so a ten-variant
@@ -250,7 +242,7 @@ async fn the_adapter_carries_frames_over_a_byte_stream_a_byte_at_a_time() {
     let (near, far) = tokio::io::duplex(1);
     let mut sender = framed(near);
     let mut receiver = framed(far);
-    let sent = vec![payload(&OperationId([1; 16])), payload(&OperationId([2; 16]))];
+    let sent = vec![payload(&[1u8; 16]), payload(&[2u8; 16])];
     let send = tokio::spawn(async move {
         for frame in sent {
             sender.send(frame).await.expect("sent");
@@ -259,10 +251,10 @@ async fn the_adapter_carries_frames_over_a_byte_stream_a_byte_at_a_time() {
     let mut got = Vec::new();
     while got.len() < 2 {
         let frame = receiver.next().await.expect("a frame").expect("framed");
-        got.push(decode_payload::<OperationId>(&frame).expect("an id"));
+        got.push(decode_payload::<[u8; 16]>(&frame).expect("the bytes"));
     }
     send.await.expect("sender");
-    assert_eq!(got, vec![OperationId([1; 16]), OperationId([2; 16])]);
+    assert_eq!(got, vec![[1u8; 16], [2u8; 16]]);
 }
 
 /// A small deterministic generator, so a property case reruns from its seed.
@@ -408,10 +400,10 @@ fn the_budget_vectors_are_retained_small_and_never_decoded_here() {
     );
     let retained = golden::read(BUDGET_VECTORS, "tests/vectors/Budget.nutype", &pinned);
     assert_eq!(retained, pinned, "a vector moved; a deliberate change re-blesses {BUDGET_VECTORS}");
-    // Every one fits a single RPC frame, so the frame's byte ceiling alone
-    // stops none of them.
+    // Every one fits a single frame, so the frame's byte ceiling alone stops
+    // none of them.
     for (name, bytes) in &vectors {
-        assert!(bytes.len() <= RPC_FRAME_DEFAULT as usize, "{name}: {} bytes", bytes.len());
+        assert!(bytes.len() <= FRAME_DEFAULT as usize, "{name}: {} bytes", bytes.len());
     }
 }
 

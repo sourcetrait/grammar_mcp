@@ -1,93 +1,57 @@
-//! A test instance on disk, its homes and its files, and a worker started on it.
+//! A test instance on disk, its homes and its workdir, and a worker child over pipes.
 #![allow(dead_code, unused_imports)]
 
 use std::collections::BTreeMap;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use sourcetrait_grammar_daemon::*;
-use sourcetrait_grammar_protocol::LIMITS_DEFAULT;
 
-/// One id's instances under scratch homes, each namespace's file written.
+/// One id's homes and workdir under a scratch root, and the environment naming them.
 pub struct TestInstance {
     pub root: tempfile::TempDir,
-    /// The runtime home, short enough for a socket under macOS's 104-byte sockaddr.
-    pub run: tempfile::TempDir,
     pub id: String,
     pub env: BTreeMap<String, String>,
 }
 
 impl TestInstance {
-    /// `id`'s homes made, `namespace`'s instance file written into them.
-    pub fn new(id: &str, namespace: &str) -> Self {
-        let instance = Self::homes(id);
-        instance.add(namespace);
-        instance
-    }
-
-    /// `id`'s homes made, `namespace`'s file offering `streams` streams at once.
-    pub fn with_streams(id: &str, namespace: &str, streams: u32) -> Self {
-        let instance = Self::homes(id);
-        let d = LIMITS_DEFAULT;
-        let limits = format!(
-            "{{rpc_frame: {}, decode_heap: {}, concurrent_rpcs: {}, control_slots: {}, event_records: {}, event_bytes: {}, streams: {streams}}}",
-            d.rpc_frame, d.decode_heap, d.concurrent_rpcs, d.control_slots, d.event_records, d.event_bytes,
-        );
-        instance.write(namespace, &limits);
-        instance
-    }
-
-    /// `id`'s homes alone, each made, and the environment naming them.
-    fn homes(id: &str) -> Self {
+    /// `id`'s homes and workdir made, and the environment naming them.
+    pub fn new(id: &str) -> Self {
         let root = tempfile::tempdir().expect("a scratch root");
-        let run = tempfile::Builder::new().prefix("g").tempdir_in("/tmp").expect("a runtime home");
         let mut env = BTreeMap::new();
         for (var, dir) in [
-            ("UENV_USR_CONFIG", "config"),
             ("UENV_USR_DATA", "data"),
             ("UENV_USR_CACHE", "cache"),
-            ("UENV_USR_STATE", "state"),
             ("UENV_USR_TMP", "tmp"),
+            ("UENV_USR_TRANSIENT", "run"),
         ] {
             let path = root.path().join(dir);
             std::fs::create_dir_all(&path).expect("a home");
             env.insert(var.to_string(), path.to_string_lossy().into_owned());
         }
         std::fs::create_dir_all(root.path().join("work")).expect("the workdir");
-        env.insert("UENV_USR_TRANSIENT".to_string(), run.path().to_string_lossy().into_owned());
         env.insert("HOME".to_string(), root.path().to_string_lossy().into_owned());
         if let Ok(path) = std::env::var("PATH") {
             env.insert("PATH".to_string(), path);
         }
-        Self { root, run, id: id.to_string(), env }
+        Self { root, id: id.to_string(), env }
     }
 
-    /// `namespace`'s instance file written beside the others, private to its owner.
-    pub fn add(&self, namespace: &str) {
-        self.write(namespace, "null");
+    /// The workdir, the worker's and its config file's.
+    pub fn workdir(&self) -> PathBuf {
+        self.root.path().join("work")
     }
 
-    /// `namespace`'s instance file with `limits` as its limits' NUON.
-    fn write(&self, namespace: &str, limits: &str) {
-        let name = |field, text| InstanceName::parse(field, text).expect("a name");
-        let key = InstanceKey::of(&name("id", &self.id), &name("namespace", namespace));
-        let dir = self.root.path().join("config/grammar/grammard/instances");
-        std::fs::create_dir_all(&dir).expect("the instances directory");
-        let file = dir.join(format!("{key}.nuon"));
-        let text = format!(
-            "{{id: {:?}, namespace: {namespace:?}, key: {:?}, workdir: {:?}, peer_config: null, supervisor: null, limits: {limits}}}",
-            self.id,
-            key.as_str(),
-            self.root.path().join("work").to_string_lossy(),
-        );
-        std::fs::write(&file, text).expect("the instance file");
-        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).expect("its mode");
+    /// `text` as the workdir's config file.
+    pub fn write_config(&self, text: &str) {
+        let file = self.workdir().join(CONFIG_FILE);
+        std::fs::create_dir_all(file.parent().expect("its directory")).expect("the config's directory");
+        std::fs::write(file, text).expect("the config file");
     }
 
     /// `namespace`'s instance loaded as this process's user.
     pub fn load(&self, namespace: &str) -> InstanceConfig {
         let uid = nix::unistd::geteuid().as_raw();
-        InstanceConfig::load(uid, &self.id, namespace, &self.env).expect("the instance loads")
+        InstanceConfig::load(uid, &self.id, namespace, &self.workdir(), &self.env).expect("the instance loads")
     }
 
     /// A home under the scratch root.
@@ -111,126 +75,112 @@ impl TestInstance {
 #[cfg(feature = "service")]
 pub use worker::*;
 
-/// A grammard worker run as a child, never outliving its test.
+/// A grammard worker run as a child over pipes, never outliving its test.
 #[cfg(feature = "service")]
 mod worker {
-    use std::collections::BTreeMap;
-    use std::io::{BufRead, BufReader};
-    use std::path::PathBuf;
-    use std::process::{Child, Command, ExitStatus, Output, Stdio};
-    use std::sync::mpsc;
-    use std::time::{Duration, Instant};
+    use std::process::{ExitStatus, Stdio};
+    use std::time::Duration;
+
+    use futures_util::{SinkExt, StreamExt};
+    use sourcetrait_grammar_client::{Session, SessionEvent};
+    use sourcetrait_grammar_protocol::{
+        ClientHello, FrameCodec, HELLO_BUDGET, HelloReply, Instance, Limits, McpFrame, TransportError, WorkerFrame,
+        WorkerHello, decode_payload, payload,
+    };
+    use tokio::process::{Child, ChildStdin, ChildStdout};
+    use tokio::sync::mpsc::UnboundedReceiver;
+    use tokio_util::codec::{FramedRead, FramedWrite};
 
     use super::TestInstance;
 
-    /// How long a start may take to its ready line or its exit.
-    const READY_DEADLINE: Duration = Duration::from_secs(60);
-
-    /// How long a stopped worker may take to exit before it is killed.
-    const STOP_DEADLINE: Duration = Duration::from_secs(20);
-
-    /// A worker serving, killed at its drop unless already stopped.
-    pub struct Worker {
-        child: Option<Child>,
-        pub generation: String,
-        pub socket: PathBuf,
+    /// A runtime for a test's async half.
+    pub fn runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("a test runtime")
     }
 
-    impl Worker {
-        pub fn pid(&self) -> u32 {
-            self.child.as_ref().map(Child::id).unwrap_or_default()
-        }
-
-        /// Stopped as a service manager stops it, killed past the deadline, its exit given.
-        pub fn stop(mut self) -> ExitStatus {
-            let mut child = self.child.take().expect("a running worker");
-            let pid = nix::unistd::Pid::from_raw(child.id() as i32);
-            nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGTERM).expect("the stop");
-            wait_within(&mut child, STOP_DEADLINE)
-        }
-
-        /// Killed outright, which runs no cleanup.
-        pub fn kill(mut self) {
-            if let Some(mut child) = self.child.take() {
-                let _ = child.kill();
-                let _ = child.wait();
-            }
-        }
-    }
-
-    impl Drop for Worker {
-        fn drop(&mut self) {
-            if let Some(mut child) = self.child.take() {
-                let _ = child.kill();
-                let _ = child.wait();
-            }
-        }
-    }
-
-    /// `child`'s exit within `deadline`, else its exit once killed.
-    fn wait_within(child: &mut Child, deadline: Duration) -> ExitStatus {
-        let started = Instant::now();
-        loop {
-            if let Ok(Some(status)) = child.try_wait() {
-                return status;
-            }
-            if started.elapsed() > deadline {
-                let _ = child.kill();
-                return child.wait().expect("the killed worker's exit");
-            }
-            std::thread::sleep(Duration::from_millis(20));
-        }
-    }
-
-    /// `namespace`'s worker on `instance`'s environment, ready, or its failed output.
-    pub fn start(instance: &TestInstance, namespace: &str) -> Result<Worker, Output> {
-        start_with(instance, namespace, &instance.env)
-    }
-
-    /// `namespace`'s worker on `env`, ready within the deadline, or its failed output.
-    pub fn start_with(instance: &TestInstance, namespace: &str, env: &BTreeMap<String, String>) -> Result<Worker, Output> {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_grammard"))
-            .args(["serve", "--id", &instance.id, "--namespace", namespace])
+    /// `namespace`'s worker child on `instance`'s environment, its stdio piped.
+    pub fn spawn_worker(instance: &TestInstance, namespace: &str) -> Child {
+        tokio::process::Command::new(env!("CARGO_BIN_EXE_grammard"))
+            .args(["serve", "--id", &instance.id, "--namespace", namespace, "--workdir"])
+            .arg(instance.workdir())
             .env_clear()
-            .envs(env)
-            .stdin(Stdio::null())
+            .envs(&instance.env)
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
+            .kill_on_drop(true)
             .spawn()
-            .expect("grammard runs");
-        let mut stderr = child.stderr.take().unwrap();
-        let errors = std::thread::spawn(move || {
-            let mut text = String::new();
-            let _ = std::io::Read::read_to_string(&mut stderr, &mut text);
-            text
-        });
-        let stdout = child.stdout.take().unwrap();
-        let (ready, readied) = mpsc::channel();
-        std::thread::spawn(move || {
-            let mut lines = BufReader::new(stdout).lines();
-            let mut sent = false;
-            while let Some(Ok(line)) = lines.next() {
-                if !sent && line.contains("at generation ") {
-                    let _ = ready.send(line);
-                    sent = true;
-                }
+            .expect("grammard runs")
+    }
+
+    /// The hello for `instance`'s `namespace`, asking `requested`.
+    pub fn hello(instance: &TestInstance, namespace: &str, requested: Limits) -> ClientHello {
+        ClientHello::new(Instance::new(&instance.id, namespace).expect("an instance"), requested)
+    }
+
+    /// A worker child and the session opened on it, or the session's refusal.
+    pub async fn open(
+        instance: &TestInstance,
+        namespace: &str,
+        requested: Limits,
+    ) -> (Child, Result<(Session, UnboundedReceiver<SessionEvent>), TransportError>) {
+        let mut child = spawn_worker(instance, namespace);
+        let stdout = child.stdout.take().expect("its stdout");
+        let stdin = child.stdin.take().expect("its stdin");
+        let opened = Session::open(stdout, stdin, hello(instance, namespace, requested)).await;
+        (child, opened)
+    }
+
+    /// `child`'s exit within `deadline`, killed past it.
+    pub async fn exit_within(child: &mut Child, deadline: Duration) -> ExitStatus {
+        match tokio::time::timeout(deadline, child.wait()).await {
+            Ok(status) => status.expect("the worker's exit"),
+            Err(_) => {
+                let _ = child.kill().await;
+                panic!("the worker didn't exit in {} s", deadline.as_secs());
             }
-        });
-        match readied.recv_timeout(READY_DEADLINE) {
-            Ok(line) => {
-                let rest = line.split_once("at generation ").map(|(_, rest)| rest).unwrap_or_default();
-                let generation = rest.split(',').next().unwrap_or_default().to_string();
-                let socket = PathBuf::from(line.split_once(", socket ").map(|(_, path)| path).unwrap_or_default());
-                Ok(Worker { child: Some(child), generation, socket })
+        }
+    }
+
+    /// `child`'s stderr, read to its end.
+    pub async fn stderr_of(child: &mut Child) -> String {
+        let mut text = String::new();
+        if let Some(mut stderr) = child.stderr.take() {
+            let _ = tokio::io::AsyncReadExt::read_to_string(&mut stderr, &mut text).await;
+        }
+        text
+    }
+
+    /// A session spoken frame by frame, for a test of the stream itself.
+    pub struct RawSession {
+        pub frames: FramedRead<ChildStdout, FrameCodec>,
+        pub sink: FramedWrite<ChildStdin, FrameCodec>,
+    }
+
+    impl RawSession {
+        /// The hello sent on `child`'s pipes and the worker's reply read.
+        pub async fn open(child: &mut Child, hello: ClientHello) -> (Self, HelloReply) {
+            let mut frames = FramedRead::new(child.stdout.take().expect("its stdout"), FrameCodec::new());
+            let mut sink = FramedWrite::new(child.stdin.take().expect("its stdin"), FrameCodec::new());
+            sink.send(payload(&hello)).await.expect("the hello sent");
+            let bytes = frames.next().await.expect("a reply").expect("its frame");
+            let reply = decode_payload::<HelloReply>(&bytes, HELLO_BUDGET).expect("a reply decoded");
+            if let HelloReply::Accepted(worker) = &reply {
+                frames.decoder_mut().set_ceiling(worker.effective.frame);
+                sink.encoder_mut().set_ceiling(worker.effective.frame);
             }
-            Err(timed_out) => {
-                if timed_out == mpsc::RecvTimeoutError::Timeout {
-                    let _ = child.kill();
-                }
-                let status = wait_within(&mut child, STOP_DEADLINE);
-                let stderr = errors.join().unwrap_or_default().into_bytes();
-                Err(Output { status, stdout: Vec::new(), stderr })
-            }
+            (Self { frames, sink }, reply)
+        }
+
+        /// One frame sent.
+        pub async fn send(&mut self, frame: &McpFrame) {
+            self.sink.send(payload(frame)).await.expect("a frame sent");
+        }
+
+        /// The worker's next frame, none at the stream's end.
+        pub async fn next(&mut self) -> Option<WorkerFrame> {
+            let bytes = self.frames.next().await?.ok()?;
+            Some(decode_payload::<WorkerFrame>(&bytes, sourcetrait_grammar_protocol::LIMITS_DEFAULT.decode_budget()).expect("a frame decoded"))
         }
     }
 }

@@ -19,10 +19,8 @@ fn homes_at(root: &Path, runtime: bool) -> InstanceHomes {
         path
     };
     InstanceHomes {
-        config: home("config"),
         data: home("data"),
         cache: home("cache"),
-        state: home("state"),
         tmp: home("tmp"),
         runtime: runtime.then(|| home("run")),
         diagnostics: Vec::new(),

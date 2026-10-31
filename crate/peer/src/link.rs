@@ -116,16 +116,6 @@ impl LinkContext {
     }
 }
 
-/// Whether a dest is a relative path of plain components, never an escape.
-pub fn safe_dest(dest: &str) -> bool {
-    let path = std::path::Path::new(dest);
-    !dest.is_empty()
-        && path.is_relative()
-        && path
-            .components()
-            .all(|c| matches!(c, std::path::Component::Normal(_)))
-}
-
 /// A delivery's file beneath `inbox`, none where a peer-named part isn't plain.
 pub(crate) fn delivery_path(
     inbox: &std::path::Path,

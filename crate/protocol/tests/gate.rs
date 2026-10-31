@@ -1,8 +1,8 @@
 //! The v1 gate: every golden vector decoded by the fixture driver to its own
 //! bytes, its truncations and a trailing byte refused, random and mutated bytes
-//! decoded within the budget without a panic and canonical once decoded, no
-//! malformed submission reaching an execution, every field of a fixed width,
-//! and the manifest pinning every vector file, the schema, and the codec.
+//! decoded within the budget without a panic and canonical once decoded, every
+//! field of a fixed width, and the manifest pinning every vector file, the
+//! schema, and the codec.
 
 use std::path::Path;
 
@@ -20,18 +20,7 @@ const MANIFEST: &str = "tests/vectors/manifest.nuon";
 const MANIFEST_MODEL: &str = "tests/vectors/Manifest.nutype";
 
 /// The vector files, the budget's payloads apart: they are refused by design.
-const FILES: [&str; 10] = [
-    "artifact.nuon",
-    "engine.nuon",
-    "event.nuon",
-    "hello.nuon",
-    "lease.nuon",
-    "operation.nuon",
-    "peer.nuon",
-    "runtime.nuon",
-    "stream.nuon",
-    "value.nuon",
-];
+const FILES: [&str; 5] = ["engine.nuon", "hello.nuon", "peer.nuon", "session.nuon", "value.nuon"];
 
 fn root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -101,31 +90,6 @@ fn random_and_mutated_bytes_decode_within_the_budget_and_canonicalize() {
                 let again = fixture::canonical(ty, &canonical, DECODE_BUDGET_DEFAULT);
                 assert!(matches!(&again, Some(Ok(bytes)) if *bytes == canonical), "{ty}: {input:02x?} isn't canonical once decoded");
             }
-        }
-    }
-}
-
-#[test]
-fn no_malformed_submission_reaches_an_execution() {
-    let mut rng = XorShift(0x2545_f491_4f6c_dd1d);
-    let submissions: Vec<FixtureVector> = vectors().into_iter().map(|(_, v)| v).filter(|v| v.ty == "Submission").collect();
-    assert!(!submissions.is_empty());
-    let generation = WorkerGeneration([0x44; 16]);
-    for seed in &submissions {
-        let mut forms = (0..seed.bytes.len()).map(|cut| seed.bytes[..cut].to_vec()).collect::<Vec<_>>();
-        for _ in 0..400 {
-            let mut bytes = seed.bytes.clone();
-            let at = (rng.next() as usize) % bytes.len();
-            bytes[at] ^= 1 << (rng.next() % 8);
-            forms.push(bytes);
-        }
-        forms.push(seed.bytes.clone());
-        for bytes in forms {
-            let Ok(submission) = decode_payload::<Submission>(&bytes, DECODE_BUDGET_DEFAULT) else { continue };
-            // A worker issued no ticket, so nothing it decodes runs.
-            let (admission, execute) = OperationTable::new(generation).submit(0, &submission, submission.ticket.epoch);
-            assert_eq!(execute, None, "{bytes:02x?}");
-            assert!(matches!(admission.outcome, AdmissionOutcome::Refused(_)), "{bytes:02x?}");
         }
     }
 }

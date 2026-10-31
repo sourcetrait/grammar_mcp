@@ -89,13 +89,12 @@ impl HostRoute {
         &self,
         data: RemoteSendData,
     ) -> HostAnswer {
-        let RemoteSendData {
+        let PreparedSend {
             mcp_nom,
             model,
-            event,
-            attached,
-        } = data;
-        let (event_nuon, payloads) = match tk::spawn_blocking(move || prepared(event, attached)).await {
+            event_nuon,
+            files,
+        } = match tk::spawn_blocking(move || prepare_send(data)).await {
             Ok(Ok(prepared)) => prepared,
             Ok(Err(reason)) => return HostAnswer::Refused(reason),
             Err(e) => return HostAnswer::Refused(format!("the send's files: {e}")),
@@ -104,7 +103,7 @@ impl HostRoute {
             mcp_nom,
             model,
             event_nuon,
-            payloads,
+            payloads: files.into_iter().map(|file| Payload { dest: file.dest, bytes: file.bytes }).collect(),
         };
         match self.peer.request(send).await {
             Ok(Ok(id)) => HostAnswer::Sent(id),
@@ -137,52 +136,6 @@ impl subsys::Handler<EngineSystem> for HostRoute {
         log_closed("engine", &self.stopping);
         std::future::ready(())
     }
-}
-
-/// A remote send's files read and its event rendered, the sender's own failures.
-fn prepared(
-    event: NuVal,
-    attached: Option<NuVal>,
-) -> Result<(String, Vec<Payload>), String> {
-    let span = nu::Span::unknown();
-    let payloads = match attached {
-        Some(table) => read_attachments(&table.try_into_nu(span).map_err(|e| e.to_string())?)?,
-        None => Vec::new(),
-    };
-    let event = event.try_into_nu(span).map_err(|e| e.to_string())?;
-    Ok((render_nuon(&event)?, payloads))
-}
-
-/// Read each `{src, dest}` row into its payload, its dest checked first.
-fn read_attachments(value: &nu::Value) -> Result<Vec<Payload>, String> {
-    let rows = match value {
-        nu::Value::List { vals, .. } => vals,
-        _ => return Err("attached must be a table<src: path, dest: path>".to_string()),
-    };
-    let mut out = Vec::with_capacity(rows.len());
-    for row in rows {
-        let rec = match row {
-            nu::Value::Record { val, .. } => val,
-            _ => return Err("each attached row must be a record with `src` and `dest`".to_string()),
-        };
-        let src = rec
-            .get("src")
-            .and_then(|v| v.as_str().ok())
-            .ok_or_else(|| "each attached row needs a `src` path".to_string())?;
-        let dest = rec
-            .get("dest")
-            .and_then(|v| v.as_str().ok())
-            .ok_or_else(|| "each attached row needs a `dest` name".to_string())?;
-        if !safe_dest(dest) {
-            return Err(format!("dest `{dest}` must be a relative path with no `..`"));
-        }
-        let bytes = fs::read(src).map_err(|e| format!("read src `{src}`: {e}"))?;
-        out.push(Payload {
-            dest: dest.to_string(),
-            bytes,
-        });
-    }
-    Ok(out)
 }
 
 /// The whole config as a record mirroring the TOML's tables, with what is in force.

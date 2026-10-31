@@ -18,11 +18,10 @@ under one environment.
 ### fn resolve
 The environment is data, so a test resolves homes without touching the real
 ones, and the caller decides whose environment it is. Each home is its UENV
-variable, then the standard one behind it, then its default: `HOME`'s `.config`
-and `.local/state` for the config and state homes, `/tmp` for the temporary
-home, and the data and cache homes as above. The runtime home has no default,
-since a guessed one could sit where another user writes; without one the paths
-hold no socket.
+variable, then the standard one behind it, then its default: `/tmp` for the
+temporary home, and the data and cache homes as above. The runtime home has no
+default, since a guessed one could sit where another user writes; without one
+the transient scratch falls back beside the bulk one (`runtime/scratch.rs`).
 
 ### field diagnostics
 Each variable ignored for being empty or relative, kept for the caller to

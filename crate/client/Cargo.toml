@@ -11,8 +11,10 @@ categories.workspace = true
 keywords.workspace   = true
 
 [dependencies]
+futures-util.workspace = true
 russh.workspace = true
-russh-sftp.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
 
 sourcetrait_grammar_protocol.workspace = true
 

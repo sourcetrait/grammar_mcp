@@ -41,6 +41,7 @@ pub(crate) mod params;
 pub(crate) mod parse_engine;
 pub(crate) mod plugins;
 pub(crate) mod schema;
+pub(crate) mod send;
 pub(crate) mod serve;
 pub(crate) mod system;
 pub(crate) mod teardown;
@@ -107,8 +108,8 @@ pub(crate) use crate::{
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
-    ChannelSendData, ChannelSpamErrorEmergency, PurviewRow, PurviewView, RemoteSendData,
-    RuntimeError, reserved_prefix,
+    ChannelSendData, ChannelSpamErrorEmergency, PreparedSend, PurviewRow, PurviewView,
+    RemoteSendData, RuntimeError, SendFile, reserved_prefix, safe_dest,
 };
 
 pub(crate) use std::{
@@ -185,7 +186,7 @@ pub(crate) mod tk {
 }
 
 pub use crate::{
-    cache::{CacheKind, DEFINITION_FILE, cache_dir, definition_file},
+    cache::{CacheKind, DEFINITION_FILE, cache_dir, definition_file, remove_call_cache},
     cycle::detect_import_cycle,
     embed::EVAL_STACK_SIZE,
     engine::NU_VERSION,
@@ -210,11 +211,7 @@ pub use crate::{
     execute::{ExecuteDef, analyze_definition},
     executor::{Executor, eval_concurrency_cap},
     lint::lint_block,
-    msg::{
-        FromEngine, HostAnswer, HostAsk, HostStop, PinAsk, PurviewAnswer, PurviewConfigureRequest,
-        PurviewListRequest, PurviewRequest, PurviewResolution, PurviewResolveRequest,
-        PurviewRigRequest, ToEngine,
-    },
+    msg::{FromEngine, HostAsk, PinAsk, ToEngine},
     namepath::{
         Namepath, NamepathPattern, NamepathRef, NamepathStr, PATTERN_ALL, PATTERN_CURRENT,
         resolve_builtin,
@@ -224,6 +221,7 @@ pub use crate::{
     parse_engine::{LintEngine, ParseEngine, file_start, span_text, wrap_as_module},
     plugins::{ensure_plugin_registry, list_registered_plugins},
     schema::{check_value, typedef_text},
+    send::prepare_send,
     system::{EngineHandle, EngineSysConfig, EngineSysParams, EngineSysPaths, EngineSystem},
     template::{build_call_source, build_execute_source},
 };
@@ -231,8 +229,9 @@ pub use crate::{
 pub use sourcetrait_grammar_protocol::{
     BUILTINS, CallDoc, CallRequest, CheckSummary, CommitResult, ControlAnswer, ControlRequest,
     Diagnostic, EngineCommand, EngineError, EngineHealth, EngineResult, ExecuteRequest,
-    FromEngineSys, Host, HungEval, InspectDoc, LINT_VIOLATION_CAP, Lane, ModuleDoc, PluginInfo,
-    ProcessRow, RerunRequest, RigDoc,
-    Severity, SignaturesDoc, Source, ToEngineSys, ValueAnswer, builtin_equip, builtin_name,
-    display_equip, span_to_line_col,
+    FromEngineSys, Host, HostAnswer, HostStop, HungEval, InspectDoc, LINT_VIOLATION_CAP, Lane,
+    ModuleDoc, PluginInfo, ProcessRow, PurviewAnswer, PurviewConfigureRequest, PurviewListRequest,
+    PurviewRequest, PurviewResolution, PurviewResolveRequest, PurviewRigRequest, RerunRequest,
+    RigDoc, Severity, SignaturesDoc, Source, ToEngineSys, ValueAnswer, builtin_equip,
+    builtin_name, display_equip, span_to_line_col,
 };

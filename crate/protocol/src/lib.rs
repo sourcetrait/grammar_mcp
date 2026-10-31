@@ -1,20 +1,15 @@
-pub(crate) mod artifact;
-pub(crate) mod capability;
 pub(crate) mod channel;
 pub(crate) mod codec;
 pub(crate) mod command;
 pub(crate) mod engine;
 pub(crate) mod error;
-pub(crate) mod event;
 pub mod fixture;
 pub(crate) mod hello;
-pub(crate) mod lease;
 pub(crate) mod limits;
-pub(crate) mod operation;
 pub(crate) mod operator;
 pub(crate) mod peer;
-pub(crate) mod runtime;
-pub(crate) mod stream;
+pub(crate) mod purview;
+pub(crate) mod session;
 pub(crate) mod value;
 
 pub(crate) use std::{fmt, io};
@@ -33,23 +28,10 @@ pub(crate) mod tku {
 }
 
 pub use crate::{
-    artifact::{
-        ACTIVE_RESERVATIONS, ARTIFACT_LIMITS_DEFAULT, ARTIFACT_MAX_BYTES, AbortUpload,
-        ArtifactAction, ArtifactDescription, ArtifactError, ArtifactHold, ArtifactId,
-        ArtifactLimits, ArtifactPurpose, ArtifactRecord, ArtifactRef, ArtifactReply,
-        ArtifactRequest, ArtifactState, ArtifactStatus, ArtifactStore, COMPONENT_MAX,
-        DISPLAY_NAME_MAX, DescribeArtifact, EMPTY_SHA256, Found, InspectArtifact, LOG_READ_MAX,
-        LogChunk, LogExtent, LogStream, PATH_MAX, PublishOutcome, PublishPlan, PublishStart,
-        PublishUpload, QuotaBound, RESERVATION_EXPIRY_SECS, RESULT_RETENTION_SECS, ReadLog,
-        RemotePath, ReserveUpload, SFTP_CHUNK_MAX, SFTP_PACKET_MAX, STORE_QUOTA_BYTES,
-        UploadReservation, check_dest, check_display_name,
-    },
-    capability::Capabilities,
     channel::{
-        ChannelEpoch, ChannelMode, ChannelNotice, ChannelPhase, ChannelSendData, ChannelState,
-        EVENT_BYTES_KEY, EVENT_SPILL_DEST, EVENT_SPILL_KEY, HostEvent, MAX_FRAME_BYTES,
-        MCP_RESERVED_PREFIX, NOTIFICATION_CAP, REMOTE_RESERVED_PREFIX, RemoteSendData,
-        SYNC_QUEUE_CAP, SpamThresholdsData, reserved_prefix,
+        ChannelEpoch, ChannelMode, ChannelPhase, ChannelSendData, ChannelState, EVENT_BYTES_KEY,
+        EVENT_SPILL_DEST, EVENT_SPILL_KEY, MAX_FRAME_BYTES, MCP_RESERVED_PREFIX, NOTIFICATION_CAP,
+        REMOTE_RESERVED_PREFIX, RemoteSendData, SYNC_QUEUE_CAP, SpamThresholdsData, reserved_prefix,
     },
     codec::{
         CODEC_ID, FrameCodec, FrameError, FrameStage, PREFACE, SCHEMA_ID, check_codec,
@@ -67,25 +49,12 @@ pub use crate::{
         ValueAnswer, builtin_equip, builtin_name, display_equip, span_to_line_col,
     },
     error::{LOCAL_HOST, RuntimeError, TransportError},
-    event::{
-        ChannelGate, Delivery, EventAck, EventArtifact, EventBacklog, EventCursor, EventFrame,
-        EventPayload, EventRecord, EventResume,
-    },
     hello::{
-        AUTH_DEADLINE, ClientHello, Expectation, HELLO_BUDGET, HELLO_DEADLINE, HelloReply,
-        HelloState, Instance, InstanceKey, LIMITS_DEFAULT, LIMITS_HARD, Limits, PROTOCOL_VERSION,
-        ProtocolVersion, REQUIRED_FEATURES_MAX, ServerHello, Session, WorkerIdentity,
-        WorkerProfile, check_hello, check_reply,
+        AUTH_DEADLINE, ClientHello, HELLO_BUDGET, HELLO_DEADLINE, HelloReply, Instance,
+        LIMITS_DEFAULT, LIMITS_HARD, Limits, PROTOCOL_VERSION, ProtocolVersion, REPLY_DEADLINE,
+        WorkerHello, WorkerProfile, check_reply,
     },
-    lease::{
-        Change, Fresh, LEASE_EXPIRY, LEASE_HEARTBEAT, LeaseAction, LeaseBinding, LeaseEpoch,
-        LeaseGrant, LeaseIntent, LeaseNotice, LeaseReply, LeaseRequest, LeaseTable, LeaseToken,
-        LossReason,
-    },
-    limits::{
-        DECODE_BUDGET_DEFAULT, DECODE_HEAP_HARD, DecodeBudget, EVENT_FRAME_MAX, HELLO_FRAME_MAX,
-        RPC_FRAME_DEFAULT, RPC_FRAME_HARD, StreamRole,
-    },
+    limits::{DECODE_BUDGET_DEFAULT, DECODE_HEAP_HARD, DecodeBudget, FRAME_DEFAULT, FRAME_HARD, HELLO_FRAME_MAX},
     operator::{
         BackgroundJobsWarningEmergency, ChannelSpamErrorEmergency, ChannelSpamWarningEmergency,
         CpuWarningEmergency, CriticalEmergency, DiskWarningEmergency, Emergency, EmergencyKind,
@@ -94,20 +63,16 @@ pub use crate::{
     peer::{
         MODEL_CONNECTED, MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT, PEER_ID_MAX, REMOTE_COMMANDS,
         RemoteChannelEvent, RemoteChannelRow, RemoteFailure, RemoteLinkState, RemoteListenResult,
-        RemotePacket, RemoteResult, valid_peer_id,
+        RemotePacket, RemoteResult, safe_dest, valid_peer_id,
     },
-    operation::{
-        Admission, AdmissionOutcome, Execute, OperationEvent, OperationState, OperationStatus,
-        OperationTable, OperationTicket, RequestClass, Response, StatusQuery, StatusReply,
-        Submission, TICKET_EXPIRY, TICKETS_MAX, TicketReply, TicketRequest, payload_hash,
-        request_class, transition,
+    purview::{
+        PurviewAnswer, PurviewConfigureRequest, PurviewListRequest, PurviewRequest,
+        PurviewResolution, PurviewResolveRequest, PurviewRigRequest, PurviewRow, PurviewView,
     },
-    runtime::{
-        ClientInstanceId, ControllerPolicy, InfoReply, LeaseId, OperationId, PluginInfo, PurviewRow,
-        PurviewView, RuntimeReply, RuntimeRequest, WorkerGeneration,
-    },
-    stream::{
-        EventsAnswer, EventsFrame, Ping, RpcAnswer, RpcFrame, StatusAnswer, StatusFrame, StreamClose,
+    session::{
+        ASK_DEADLINE, DRAIN_DEADLINE, EngineRequest, EngineResponse, HostAnswer, HostStop, McpFrame,
+        PING_INTERVAL, Ping, PluginInfo, PreparedSend, SESSION_IDLE, SendFile, SessionAsk,
+        SessionClose, WorkerFrame, WorkerInfo,
     },
     value::{ValueLimitError, ValueLimitErrorKind, ValueLimits, check_error, check_value},
 };

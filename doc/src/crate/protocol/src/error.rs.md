@@ -11,10 +11,8 @@ so this host's alias can never be configured away.
 
 ## enum RuntimeError
 What the runtime refuses outside the engine: an interface call's violations, an
-unknown host, a schema, a purview, the Channel, the retained remote Channel, and
-an artifact request. `Artifact` carries an `ArtifactError` whole, its kinds and
-messages the artifact module's own (artifact.rs), and it goes last, so the
-variants before it keep their wire indices.
+unknown host, a schema, a purview, the Channel, and the remote Channel. A
+purview's answer carries it across a session whole.
 
 ### fn kind
 The violations variant `unreachable!()`s here deliberately: it renders through
@@ -50,17 +48,16 @@ naming `local`. The engine's own `host::unserved` stays apart: that is a request
 naming a host its engine doesn't serve, which no tool sends.
 
 ## enum TransportError
-The path to a worker failing, never the worker's answer, each under a stable
-`daemon::` kind. `AuthenticationFailed` means nothing was sent, while
-`UnknownOutcome` means the request may have run, so it names the operation whose
-status the caller can look up; an agent can tell a retry that is safe from one
-that may repeat an effect. `Busy` admits no operation at all.
-`UnsupportedFeature` is a hello's required feature the other end doesn't have
-on. `OperationConflict` is an operation admitted before with another payload,
-and `TicketInvalid` a ticket unknown, expired, used, or another worker's or
-epoch's; neither ran anything. `StorageFull` is an admission refused for room,
-the journal's cap reached or the filesystem short of the operation's worst
-case, nothing admitted: apart from `Busy`, since room comes back only as
-retention lets results go, and apart from `Unavailable`, since the worker
-still serves everything else. Each new variant goes last, so the ones before
-it keep their wire indices.
+The path to a worker failing, never its engine's answer, each under a stable
+`daemon::` kind. The kinds split on whether anything ran. `ConnectFailed`,
+`HostKeyRejected`, and `AuthenticationFailed` fail before any request is sent,
+`Busy` refuses one before the engine takes it, and a hello's mismatches before
+the session serves anything, so each is safe to retry. `SessionLost` is the
+one that may have run: the session ended with the request in flight, and a
+result is never kept past its session, so its outcome is unknown and nothing
+resubmits it; an agent tells a retry that is safe from one that may repeat an
+effect. `Unavailable` is a worker that couldn't start, its own failure's kind
+and text in the reason, a held namespace among them. `ResultTooLarge` is an
+answer past the session's frame or its decode budget, refused alone while the
+session goes on. Each new variant goes last, so the ones before it keep their
+wire indices.

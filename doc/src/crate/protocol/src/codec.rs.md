@@ -2,8 +2,8 @@
 
 The wire contract fixes the stream's shape: `GRAMD001`, then frames of a
 four-byte big-endian length and exactly that many bitcode bytes, with no
-compression. This file is that shape and nothing about a transport, so a russh
-channel, a Unix socket, and a test duplex all carry it alike.
+compression. This file is that shape and nothing about a transport, so an SSH
+channel, a child's pipes, and a test duplex all carry it alike.
 
 ## const PREFACE
 Each direction writes it before its first frame, so either end that reads
@@ -49,10 +49,10 @@ The stable `daemon::` kind a frontend reports, so a framing failure reaches the
 envelope as the other transport failures do.
 
 ## struct FrameCodec
-One codec a stream, holding the parse across partial reads: how much of the
-preface has arrived, and a body's length once its header has. Every stream
-starts at the hello's ceiling, since its first frame is the hello whatever its
-role; the caller sets the role's negotiated ceiling once the handshake ends.
+One codec a direction, holding the parse across partial reads: how much of the
+preface has arrived, and a body's length once its header has. Every session
+starts at the hello's ceiling, since its first frame each way is a hello; each
+end sets the negotiated ceiling once the hellos end.
 
 ### fn decode
 The preface is checked a byte at a time as it arrives, so a wrong stream is

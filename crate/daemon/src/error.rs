@@ -9,31 +9,22 @@ pub type DaemonResult<T> = Result<T, DaemonError>;
 pub enum DaemonError {
     /// This process already started its one runtime.
     AlreadyStarted,
-    /// A command this build doesn't implement.
-    Unimplemented {
-        /// The command, by the name its user typed.
-        command: &'static str,
-    },
     /// An id or a namespace that isn't a name.
     NameInvalid {
         /// Which of the two it was given as.
         field: &'static str,
         name: String,
     },
+    /// A workdir that isn't an absolute directory.
+    WorkdirInvalid { path: PathBuf, reason: String },
+    /// The workdir's config file, unreadable or not the worker's settings.
+    ConfigInvalid { path: PathBuf, reason: String },
     /// A home the worker needs and cannot resolve to a directory.
     HomeUnavailable {
         /// The home, by its role.
         home: &'static str,
         reason: String,
     },
-    /// A path past what its use allows, a socket's sockaddr among them.
-    PathTooLong { path: PathBuf, limit: usize },
-    /// No instance file where the instance's key puts it.
-    ConfigMissing { path: PathBuf },
-    /// An instance file that does not hold this instance's settings.
-    ConfigInvalid { path: PathBuf, reason: String },
-    /// An instance file not to trust: another's, open to others, or not plain.
-    ConfigUnsafe { path: PathBuf, reason: String },
     /// A scratch directory the worker cannot make or remove.
     ScratchUnavailable { path: PathBuf, reason: String },
     /// The namespace lock another process holds, and that holder's own record.
@@ -42,32 +33,26 @@ pub enum DaemonError {
     LockUnavailable { path: PathBuf, reason: String },
     /// The engine's start, its parameters or its substrate, failing.
     EngineInit { reason: String },
-    /// The engine socket that cannot be bound where the instance puts it.
-    SocketUnavailable { path: PathBuf, reason: String },
-    /// A service start whose environment names no runtime home for its socket.
-    NoRuntimeHome,
     /// The worker's task runtime, its threads, that can't be made.
     TasksUnavailable { reason: String },
+    /// A session that couldn't open: its hello refused, or its stream broken.
+    Session { reason: String },
 }
 
 /// Payload-less mirror of `DaemonError`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DaemonErrorKind {
     AlreadyStarted,
-    Unimplemented,
     NameInvalid,
-    HomeUnavailable,
-    PathTooLong,
-    ConfigMissing,
+    WorkdirInvalid,
     ConfigInvalid,
-    ConfigUnsafe,
+    HomeUnavailable,
     ScratchUnavailable,
     NamespaceHeld,
     LockUnavailable,
     EngineInit,
-    SocketUnavailable,
-    NoRuntimeHome,
     TasksUnavailable,
+    Session,
 }
 
 impl DaemonErrorKind {
@@ -75,20 +60,16 @@ impl DaemonErrorKind {
     pub fn name(&self) -> &'static str {
         match self {
             Self::AlreadyStarted => "daemon::already_started",
-            Self::Unimplemented => "daemon::unimplemented",
             Self::NameInvalid => "instance::name_invalid",
-            Self::HomeUnavailable => "instance::home_unavailable",
-            Self::PathTooLong => "instance::path_too_long",
-            Self::ConfigMissing => "instance::config_missing",
+            Self::WorkdirInvalid => "instance::workdir_invalid",
             Self::ConfigInvalid => "instance::config_invalid",
-            Self::ConfigUnsafe => "instance::config_unsafe",
+            Self::HomeUnavailable => "instance::home_unavailable",
             Self::ScratchUnavailable => "scratch::unavailable",
             Self::NamespaceHeld => "runtime::namespace_held",
             Self::LockUnavailable => "runtime::lock_unavailable",
             Self::EngineInit => "runtime::engine_init",
-            Self::SocketUnavailable => "runtime::socket_unavailable",
-            Self::NoRuntimeHome => "runtime::no_runtime_home",
             Self::TasksUnavailable => "runtime::tasks_unavailable",
+            Self::Session => "session::failed",
         }
     }
 }
@@ -98,41 +79,29 @@ impl DaemonError {
     pub fn kind(&self) -> DaemonErrorKind {
         match self {
             Self::AlreadyStarted => DaemonErrorKind::AlreadyStarted,
-            Self::Unimplemented { .. } => DaemonErrorKind::Unimplemented,
             Self::NameInvalid { .. } => DaemonErrorKind::NameInvalid,
-            Self::HomeUnavailable { .. } => DaemonErrorKind::HomeUnavailable,
-            Self::PathTooLong { .. } => DaemonErrorKind::PathTooLong,
-            Self::ConfigMissing { .. } => DaemonErrorKind::ConfigMissing,
+            Self::WorkdirInvalid { .. } => DaemonErrorKind::WorkdirInvalid,
             Self::ConfigInvalid { .. } => DaemonErrorKind::ConfigInvalid,
-            Self::ConfigUnsafe { .. } => DaemonErrorKind::ConfigUnsafe,
+            Self::HomeUnavailable { .. } => DaemonErrorKind::HomeUnavailable,
             Self::ScratchUnavailable { .. } => DaemonErrorKind::ScratchUnavailable,
             Self::NamespaceHeld { .. } => DaemonErrorKind::NamespaceHeld,
             Self::LockUnavailable { .. } => DaemonErrorKind::LockUnavailable,
             Self::EngineInit { .. } => DaemonErrorKind::EngineInit,
-            Self::SocketUnavailable { .. } => DaemonErrorKind::SocketUnavailable,
-            Self::NoRuntimeHome => DaemonErrorKind::NoRuntimeHome,
             Self::TasksUnavailable { .. } => DaemonErrorKind::TasksUnavailable,
+            Self::Session { .. } => DaemonErrorKind::Session,
         }
     }
 
     /// The exit code grammard reports the failure by, sysexits' meanings.
     pub fn exit_code(&self) -> u8 {
         match self.kind() {
-            DaemonErrorKind::AlreadyStarted => 70,
-            DaemonErrorKind::Unimplemented => 69,
+            DaemonErrorKind::AlreadyStarted | DaemonErrorKind::EngineInit => 70,
             DaemonErrorKind::NameInvalid => 64,
-            DaemonErrorKind::HomeUnavailable
-            | DaemonErrorKind::PathTooLong
-            | DaemonErrorKind::ConfigMissing
-            | DaemonErrorKind::ConfigInvalid
-            | DaemonErrorKind::ConfigUnsafe => 78,
-            DaemonErrorKind::ScratchUnavailable
-            | DaemonErrorKind::LockUnavailable
-            | DaemonErrorKind::SocketUnavailable => 73,
-            DaemonErrorKind::NoRuntimeHome => 78,
+            DaemonErrorKind::WorkdirInvalid | DaemonErrorKind::ConfigInvalid | DaemonErrorKind::HomeUnavailable => 78,
+            DaemonErrorKind::ScratchUnavailable | DaemonErrorKind::LockUnavailable => 73,
             DaemonErrorKind::NamespaceHeld => 75,
-            DaemonErrorKind::EngineInit => 70,
             DaemonErrorKind::TasksUnavailable => 71,
+            DaemonErrorKind::Session => 76,
         }
     }
 }
@@ -141,25 +110,14 @@ impl fmt::Display for DaemonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::AlreadyStarted => write!(f, "this process already started its runtime"),
-            Self::Unimplemented { command } => {
-                write!(f, "{command} is not implemented in this build")
-            }
             Self::NameInvalid { field, name } => write!(
                 f,
                 "the {field} `{name}` is not a name: one to 64 of letters, digits, `.`, `_`, \
                  and `-`, a letter or a digit first",
             ),
+            Self::WorkdirInvalid { path, reason } => write!(f, "the workdir {}: {reason}", path.display()),
+            Self::ConfigInvalid { path, reason } => write!(f, "the config file {}: {reason}", path.display()),
             Self::HomeUnavailable { home, reason } => write!(f, "the {home} home: {reason}"),
-            Self::PathTooLong { path, limit } => {
-                write!(f, "{} passes the {limit} bytes its use allows", path.display())
-            }
-            Self::ConfigMissing { path } => write!(f, "no instance file at {}", path.display()),
-            Self::ConfigInvalid { path, reason } => {
-                write!(f, "the instance file {}: {reason}", path.display())
-            }
-            Self::ConfigUnsafe { path, reason } => {
-                write!(f, "the instance file {} is refused: {reason}", path.display())
-            }
             Self::ScratchUnavailable { path, reason } => {
                 write!(f, "scratch under {}: {reason}", path.display())
             }
@@ -170,14 +128,8 @@ impl fmt::Display for DaemonError {
                 write!(f, "the namespace lock {}: {reason}", path.display())
             }
             Self::EngineInit { reason } => write!(f, "the engine's start: {reason}"),
-            Self::SocketUnavailable { path, reason } => {
-                write!(f, "the engine socket {}: {reason}", path.display())
-            }
-            Self::NoRuntimeHome => write!(
-                f,
-                "no runtime home names a directory for the engine socket: set UENV_USR_TRANSIENT or XDG_RUNTIME_DIR",
-            ),
             Self::TasksUnavailable { reason } => write!(f, "the worker's task runtime: {reason}"),
+            Self::Session { reason } => write!(f, "the session: {reason}"),
         }
     }
 }

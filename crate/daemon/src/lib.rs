@@ -1,110 +1,103 @@
-pub(crate) mod artifact {}
-pub(crate) mod bridge {}
 #[cfg(feature = "service")]
-pub(crate) mod cli {
-    pub(crate) mod command;
-    pub(crate) mod oneshot;
-}
+pub(crate) mod cli;
+pub(crate) mod controller;
 pub(crate) mod error;
-pub(crate) mod event {}
-pub(crate) mod host {}
 pub(crate) mod instance {
     pub(crate) mod config;
     pub(crate) mod homes;
-    pub(crate) mod key;
     pub(crate) mod name;
 }
-pub(crate) mod peer {}
-pub(crate) mod rpc {}
 #[cfg(feature = "service")]
 pub(crate) mod run;
 pub(crate) mod runtime {
     pub(crate) mod scratch;
     pub(crate) mod start;
 }
-pub(crate) mod session {
-    pub(crate) mod serve;
-    pub(crate) mod sessions;
-}
-#[cfg(test)]
-mod tests {
-    mod sessions;
-}
-pub(crate) mod transport {
-    pub(crate) mod admission;
-    pub(crate) mod listener;
-}
+pub(crate) mod session;
 
 #[cfg(feature = "service")]
-pub(crate) use crate::cli::{
-    command::{GrammardCli, GrammardCmd},
-    oneshot::run_oneshot,
-};
+pub(crate) use crate::cli::{GrammardCli, GrammardCmd};
 
 pub(crate) use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap, HashSet},
     fmt, fs, io,
     path::{Path, PathBuf},
+    process,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
-#[cfg(feature = "service")]
-pub(crate) use std::process;
 
 #[cfg(feature = "service")]
 pub(crate) use clap::Parser;
 
 pub(crate) use futures_util::{SinkExt, StreamExt};
-pub(crate) use nutype::NuTypeFile;
-pub(crate) use nuval::NuVal;
-pub(crate) use sha2::{Digest, Sha256};
-pub(crate) use tokio as tk;
-pub(crate) use tokio_util as tk_util;
 
-pub(crate) use sourcetrait_common::datum;
-pub(crate) use sourcetrait_grammar_engine as engine;
+pub(crate) use sourcetrait_common::{datum, subsys};
+pub(crate) use sourcetrait_grammar_engine::{
+    self as engine, ControlAnswer, EngineCommand, EngineError, EngineHandle, EngineHealth,
+    EngineResult, EngineSystem, FromEngine, HostAsk, PinAsk, ToEngine, prepare_send,
+};
+pub(crate) use sourcetrait_grammar_operator::{
+    FromOperatorSys, OperatorHandle, OperatorSysParams, OperatorSysPaths, OperatorSystem,
+    SAMPLE_INTERVAL, SupervisorConfig, check_fraction, effective_supervisor, pin,
+};
 pub(crate) use sourcetrait_grammar_protocol::{
-    ARTIFACT_LIMITS_DEFAULT, Capabilities, ClientHello, DecodeBudget, EventsAnswer, EventsFrame, FrameCodec,
-    Fresh, HELLO_BUDGET, HELLO_DEADLINE, HelloReply, HelloState, Instance, LIMITS_DEFAULT, LIMITS_HARD,
-    LeaseAction, LeaseBinding, LeaseEpoch, LeaseId, LeaseNotice, LeaseReply, LeaseRequest, LeaseTable,
-    LeaseToken, Limits, LossReason, RpcAnswer, RpcFrame, ServerHello, StatusAnswer, StatusFrame,
-    StreamClose, StreamRole, TransportError, WorkerGeneration, WorkerProfile, decode_payload, framed,
-    payload,
+    ASK_DEADLINE, ClientHello, DRAIN_DEADLINE, DecodeBudget, Emergency, EngineRequest, EngineResponse,
+    FrameCodec, FromEngineSys, HELLO_BUDGET, HELLO_DEADLINE, HelloReply, Host, HostAnswer,
+    Instance, LIMITS_DEFAULT, Limits, McpFrame, NuVal, Observation, PurviewAnswer,
+    PurviewRequest, RuntimeError, SESSION_IDLE, SessionAsk, SessionClose, ToEngineSys,
+    TransportError, ValueAnswer, WorkerFrame, WorkerInfo, WorkerProfile, decode_payload, payload,
 };
 pub(crate) use sourcetrait_grammar_scratch::{
     HostProbe, LOCK_FILE, LockError, LockRecord, NamespaceLock, OwnedDir, Owner, current_uid, sweep,
 };
 
 pub(crate) use crate::{
-    runtime::start::random_bytes,
-    session::{
-        serve::serve,
-        sessions::{Clock, Sessions, StopRing, StreamId, ticker},
-    },
-    transport::{
-        admission::{Admission, accept},
-        listener::EngineListener,
-    },
+    controller::GrammardController,
+    session::{Outbox, refuse, serve},
 };
 
 pub(crate) mod ser {
     pub(crate) use ::serde::Deserialize;
 }
 
+pub(crate) mod tk {
+    pub(crate) use tokio::{
+        fs::File,
+        io::{AsyncRead, AsyncWrite, Stdin, stdin},
+        runtime,
+        select,
+        signal::unix::{Signal, SignalKind, signal},
+        spawn,
+        sync::{
+            Semaphore,
+            mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
+            oneshot,
+        },
+        task::{JoinHandle, JoinSet, spawn_blocking},
+        time::{sleep, timeout},
+    };
+}
+
+pub(crate) mod tku {
+    pub(crate) use tokio_util::bytes::Bytes;
+    pub(crate) use tokio_util::codec::{FramedRead, FramedWrite};
+}
+
 pub use crate::{
     error::{DaemonError, DaemonErrorKind, DaemonResult},
     instance::{
-        config::{InstanceConfig, InstanceFile, InstancePaths, LimitLines, SupervisorLines},
+        config::{CONFIG_FILE, InstanceConfig, InstancePaths},
         homes::InstanceHomes,
-        key::InstanceKey,
         name::InstanceName,
     },
     runtime::{
         scratch::WorkerScratch,
         start::{Runtime, RuntimeIdentity},
     },
+    session::SessionEnd,
 };
 
 #[cfg(feature = "service")]

@@ -1,165 +1,89 @@
-//! The instance file, and the paths a worker's identity resolves to.
+//! A worker's instance: its identity, homes, paths, workdir, and supervisor lines.
 use crate::*;
-use std::io::Read;
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 
-/// The instance file's schema, which every instance file is held to.
-const INSTANCE_MODEL: &str = include_str!("../../../../include/config/grammard/Instance.nutype");
+/// The agent's config file under a workdir, whose `[supervisor]` a worker reads.
+pub const CONFIG_FILE: &str = ".grammar/config.toml";
 
-/// The most bytes a Unix socket's path holds, its terminator among them.
-#[cfg(target_os = "linux")]
-const SUN_PATH_MAX: usize = 108;
+/// The MCP's embedded base, whose `[supervisor]` lines are a worker's defaults.
+const BASE_CONFIG: &str = include_str!("../../../../include/config/grammar_mcp.toml");
 
-/// The most bytes a Unix socket's path holds, its terminator among them.
-#[cfg(not(target_os = "linux"))]
-const SUN_PATH_MAX: usize = 104;
-
-/// The supervisor's four lines, as the instance file sets them.
-#[derive(Debug, Clone, Copy, PartialEq, ser::Deserialize)]
-pub struct SupervisorLines {
-    pub cpu_warn_fraction: f64,
-    pub ram_warn_fraction: f64,
-    pub vram_warn_headroom_mib: u64,
-    pub disk_warn_fraction: f64,
+/// The supervisor's lines as a config file sets them, each optional.
+#[derive(Debug, Clone, Copy, Default, PartialEq, ser::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SupervisorLines {
+    cpu_warn_fraction: Option<f64>,
+    ram_warn_fraction: Option<f64>,
+    vram_warn_headroom_mib: Option<u64>,
+    disk_warn_fraction: Option<f64>,
 }
 
-/// The bounds the worker offers each hello, as the instance file sets them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ser::Deserialize)]
-pub struct LimitLines {
-    pub rpc_frame: u32,
-    pub decode_heap: u64,
-    pub concurrent_rpcs: u32,
-    pub control_slots: u32,
-    pub event_records: u32,
-    pub event_bytes: u64,
-    pub streams: u32,
-}
-
-impl LimitLines {
-    /// The lines as the protocol's bounds.
-    pub fn limits(&self) -> Limits {
-        Limits {
-            rpc_frame: self.rpc_frame,
-            decode_heap: self.decode_heap,
-            concurrent_rpcs: self.concurrent_rpcs,
-            control_slots: self.control_slots,
-            event_records: self.event_records,
-            event_bytes: self.event_bytes,
-            streams: self.streams,
-        }
-    }
-}
-
-/// The instance file as written: whose worker it is and how that worker runs.
-#[derive(Debug, Clone, PartialEq, ser::Deserialize)]
-pub struct InstanceFile {
-    pub id: String,
-    pub namespace: String,
-    pub key: String,
-    pub workdir: String,
-    pub peer_config: Option<String>,
-    pub supervisor: Option<SupervisorLines>,
-    pub limits: Option<LimitLines>,
+/// A config file as a worker reads it: its `[supervisor]` table alone.
+#[derive(Debug, Default, ser::Deserialize)]
+struct ConfigFile {
+    supervisor: Option<SupervisorLines>,
 }
 
 /// Where a worker's files are, each from its identity and its homes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstancePaths {
-    /// The instance file.
-    pub file: PathBuf,
-    /// The worker's durable state.
-    pub state: PathBuf,
     /// The engine's data home, the MCP's own layout.
     pub data: PathBuf,
     /// The engine's cache home, the MCP's own layout.
     pub cache: PathBuf,
-    /// The engine socket, none without a runtime home.
-    pub socket: Option<PathBuf>,
-    /// The namespace lock, the MCP host's own in the engine's data home.
+    /// The namespace lock, the MCP's own in the engine's data home.
     pub lock: PathBuf,
 }
 
 impl InstancePaths {
-    /// The paths of `key`'s instance of `id` and `namespace` under `homes`.
+    /// The paths of `id` and `namespace`'s instance under `homes`.
     pub fn of(
         homes: &InstanceHomes,
         id: &InstanceName,
         namespace: &InstanceName,
-        key: &InstanceKey,
-    ) -> DaemonResult<Self> {
-        let grammard = |home: &Path| home.join("grammar").join("grammard");
+    ) -> Self {
         let mcp = |home: &Path| home.join("grammar").join("mcp").join(id.as_str()).join(namespace.as_str());
-        let socket = match &homes.runtime {
-            Some(runtime) => {
-                let socket = runtime.join("grammard").join(format!("{key}.sock"));
-                if socket.as_os_str().len() + 1 > SUN_PATH_MAX {
-                    return Err(DaemonError::PathTooLong {
-                        path: socket,
-                        limit: SUN_PATH_MAX,
-                    });
-                }
-                Some(socket)
-            }
-            None => None,
-        };
-        Ok(Self {
-            file: grammard(&homes.config).join("instances").join(format!("{key}.nuon")),
-            state: grammard(&homes.state).join(key.as_str()),
+        Self {
             data: mcp(&homes.data),
             cache: mcp(&homes.cache),
-            socket,
             lock: mcp(&homes.data).join(LOCK_FILE),
-        })
+        }
     }
 }
 
-/// A worker's resolved instance: its identity, key, homes, paths, and file.
+/// A worker's instance: its identity, homes, paths, workdir, and supervisor lines.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InstanceConfig {
     pub identity: RuntimeIdentity,
-    pub key: InstanceKey,
     pub homes: InstanceHomes,
     pub paths: InstancePaths,
     pub workdir: PathBuf,
-    pub file: InstanceFile,
+    pub supervisor: SupervisorConfig,
 }
 
 impl InstanceConfig {
-    /// `id` and `namespace`'s instance for `uid`, its homes from `env`, its file read.
+    /// `id` and `namespace`'s instance for `uid` in `workdir`, its homes from `env`.
     pub fn load(
         uid: u32,
         id: &str,
         namespace: &str,
+        workdir: &Path,
         env: &BTreeMap<String, String>,
     ) -> DaemonResult<Self> {
         let id = InstanceName::parse("id", id)?;
         let namespace = InstanceName::parse("namespace", namespace)?;
-        let key = InstanceKey::of(&id, &namespace);
-        let homes = InstanceHomes::resolve(env)?;
-        let paths = InstancePaths::of(&homes, &id, &namespace, &key)?;
-        let file = read_instance_file(&paths.file, uid)?;
-        let invalid = |reason: String| DaemonError::ConfigInvalid {
-            path: paths.file.clone(),
-            reason,
+        let invalid = |reason: &str| DaemonError::WorkdirInvalid {
+            path: workdir.to_path_buf(),
+            reason: reason.to_string(),
         };
-        if file.id != id.as_str() || file.namespace != namespace.as_str() || file.key != key.as_str() {
-            return Err(invalid(format!(
-                "it names {}/{} under key {}, another instance",
-                file.id, file.namespace, file.key,
-            )));
+        if !workdir.is_absolute() {
+            return Err(invalid("it is not an absolute path"));
         }
-        let workdir = PathBuf::from(&file.workdir);
-        if !workdir.is_absolute() || !workdir.is_dir() {
-            return Err(invalid(format!("its workdir {} is no absolute directory", workdir.display())));
+        if !workdir.is_dir() {
+            return Err(invalid("it is not a directory"));
         }
-        if let Some(limits) = file.limits.map(|lines| lines.limits()) {
-            if let Some(name) = limits.zero() {
-                return Err(invalid(format!("its limits set {name} to zero")));
-            }
-            if let Some((name, value, hard)) = limits.past(&LIMITS_HARD) {
-                return Err(invalid(format!("its limits set {name} to {value}, past the hard ceiling {hard}")));
-            }
-        }
+        let homes = InstanceHomes::resolve(env)?;
+        let paths = InstancePaths::of(&homes, &id, &namespace);
+        let supervisor = read_supervisor(&workdir.join(CONFIG_FILE))?;
         let identity = RuntimeIdentity {
             uid,
             id: id.as_str().to_string(),
@@ -167,54 +91,40 @@ impl InstanceConfig {
         };
         Ok(Self {
             identity,
-            key,
             homes,
             paths,
-            workdir,
-            file,
+            workdir: workdir.to_path_buf(),
+            supervisor,
         })
     }
 }
 
-/// The instance file at `path`, refused unless `uid` owns it, private and regular.
-fn read_instance_file(
-    path: &Path,
-    uid: u32,
-) -> DaemonResult<InstanceFile> {
-    let unsafe_file = |reason: String| DaemonError::ConfigUnsafe {
-        path: path.to_path_buf(),
-        reason,
-    };
+/// The supervisor lines in force: `file`'s, where it sets them, over the base's.
+fn read_supervisor(file: &Path) -> DaemonResult<SupervisorConfig> {
     let invalid = |reason: String| DaemonError::ConfigInvalid {
-        path: path.to_path_buf(),
+        path: file.to_path_buf(),
         reason,
     };
-    let opened = fs::OpenOptions::new()
-        .read(true)
-        .custom_flags((nix::fcntl::OFlag::O_NOFOLLOW | nix::fcntl::OFlag::O_NONBLOCK).bits())
-        .open(path);
-    let mut handle = match opened {
-        Ok(handle) => handle,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Err(DaemonError::ConfigMissing { path: path.to_path_buf() });
-        }
-        Err(e) => return Err(unsafe_file(format!("it does not open as a plain file: {e}"))),
+    let base = toml::from_str::<ConfigFile>(BASE_CONFIG)
+        .map_err(|e| invalid(format!("the embedded base: {e}")))?
+        .supervisor
+        .unwrap_or_default();
+    let user = match fs::read_to_string(file) {
+        Ok(text) => toml::from_str::<ConfigFile>(&text).map_err(|e| invalid(e.to_string()))?.supervisor.unwrap_or_default(),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => SupervisorLines::default(),
+        Err(e) => return Err(invalid(e.to_string())),
     };
-    let meta = handle.metadata().map_err(|e| unsafe_file(e.to_string()))?;
-    if !meta.file_type().is_file() {
-        return Err(unsafe_file("it is not a regular file".to_string()));
-    }
-    if meta.uid() != uid {
-        return Err(unsafe_file(format!("UID {} owns it, not {uid}", meta.uid())));
-    }
-    let mode = meta.mode() & 0o777;
-    if mode & 0o077 != 0 {
-        return Err(unsafe_file(format!("its mode {mode:o} opens it past 0600")));
-    }
-    let mut text = String::new();
-    handle.read_to_string(&mut text).map_err(|e| invalid(e.to_string()))?;
-    let value = NuVal::from_nuon(&text).map_err(|e| invalid(e.to_string()))?;
-    let model = NuTypeFile::from_text(INSTANCE_MODEL).map_err(|e| invalid(format!("the instance model: {e}")))?;
-    model.ty.check(&value).map_err(|e| invalid(e.to_string()))?;
-    nuval::from_nuval(value).map_err(|e| invalid(e.to_string()))
+    let fraction = |name: &str, user: Option<f64>, base: Option<f64>| {
+        let value = user.or(base).ok_or_else(|| invalid(format!("the embedded base carries no supervisor.{name}")))?;
+        check_fraction(name, value).map_err(invalid)
+    };
+    Ok(SupervisorConfig {
+        cpu_warn_fraction: fraction("cpu_warn_fraction", user.cpu_warn_fraction, base.cpu_warn_fraction)?,
+        ram_warn_fraction: fraction("ram_warn_fraction", user.ram_warn_fraction, base.ram_warn_fraction)?,
+        vram_warn_headroom_mib: user
+            .vram_warn_headroom_mib
+            .or(base.vram_warn_headroom_mib)
+            .ok_or_else(|| invalid("the embedded base carries no supervisor.vram_warn_headroom_mib".to_string()))?,
+        disk_warn_fraction: fraction("disk_warn_fraction", user.disk_warn_fraction, base.disk_warn_fraction)?,
+    })
 }

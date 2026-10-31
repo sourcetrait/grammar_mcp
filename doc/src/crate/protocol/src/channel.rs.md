@@ -1,10 +1,8 @@
 # channel.rs
 
 The Channel's portable data: the reservations and caps every side enforces alike,
-its modes and phases, and what crosses between a frontend and the worker that
-owns the logical Channel. The frontend keeps the agent-facing WSS listener and
-its inbox; the worker keeps the Channel's state, its spam controls, and its sync
-queue, and tells of each packet as a typed `HostEvent`. Closures and borrowed
+its modes, phases, and state, and a send as data. The Channel is the MCP's, and
+a remote worker's send reaches it as an ask (session.rs). Closures and borrowed
 nushell values never cross: a send crosses as data and its eval's stop stays on
 the eval's side.
 
@@ -52,16 +50,6 @@ channel sync`. The phases, the handshake, the gate, and the refusals are the
 same in both; only where a packet waits differs.
 
 ## struct ChannelEpoch
-A new lease closes and resets the logical Channel; the epoch tells its packets and
-notices apart from an earlier generation's, so a reconnect never inherits a
+Each open begins an epoch and its close ends it, so a packet or a claim of an
+earlier open's never reaches a later one, and a reopen never inherits a
 verified or claimed state.
-
-## enum ChannelNotice
-The frontend owns the agent-facing connection and tells the worker of its open,
-claim, ready, and close, each under the epoch it concerns; a notice for an older
-epoch is stale.
-
-## struct HostEvent
-A packet's shape as the agent reads it, `{id, from, model, event, attached?}`,
-its event typed data rather than rendered text, so a frontend renders it as it
-renders every value.

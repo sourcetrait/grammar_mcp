@@ -104,17 +104,13 @@ packet, so a consumer keys on it and branches on field presence: mcp_nom
 present iff the link established, error present iff it failed - absent when
 not, never null.
 
-## fn safe_dest
-The one guard for a dest (relative, no `..`, all Normal components), applied
-sender-side, where it is a clean error, and receiver-side, as defence against a
-buggy peer.
-
 ## fn delivery_path
 A delivery's file lands at `<inbox>/<peer_nom>/<id>/<dest>`, and all three
 parts come from the peer: its nom from its Hello, the id and the dest from
 its frames. `Path::join` takes a `..` as written and an absolute part in place
 of everything before it, so each part is held before the join: the nom and
-the id to base62 (`valid_peer_id`) and the dest to `safe_dest`. A part that
+the id to base62 (`valid_peer_id`) and the dest to the protocol's `safe_dest`,
+the guard a sender applies too. A part that
 fails answers no path. Unchecked, a peer naming an absolute id could write any
 file this host's user can.
 The handshake refuses a nom that isn't base62, and each Deliver and chunk

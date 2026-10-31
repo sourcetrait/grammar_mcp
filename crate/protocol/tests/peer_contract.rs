@@ -1,7 +1,6 @@
-//! The remote Channel across the engine boundary: the seven commands' typed
-//! results held to the catalog, the lifecycle and delivery events in their
-//! 0.0.0-9 shapes, a relayed packet kept as data with its files' association,
-//! no peer field reaching an operation, a worker, an alias, or a root, and
+//! The remote Channel's portable data: the seven commands' typed results held to
+//! the catalog, the lifecycle and delivery events in their 0.0.0-9 shapes, a
+//! relayed packet held to a relay's rules, a send's dests held plain, and
 //! golden vectors.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -14,7 +13,6 @@ mod golden;
 /// The golden vectors' file, every vector's bitcode bytes in hex.
 const GOLDEN: &str = "tests/vectors/peer.nuon";
 
-const GENERATION: WorkerGeneration = WorkerGeneration([0x44; 16]);
 const NOM: &str = "peernom0001";
 
 fn text(s: &str) -> NuVal {
@@ -68,6 +66,16 @@ fn events() -> Vec<(&'static str, RemoteChannelEvent)> {
     ]
 }
 
+/// A remote send as a worker prepares it, its event's NUON and one file.
+fn prepared() -> PreparedSend {
+    PreparedSend {
+        mcp_nom: NOM.to_string(),
+        model: "peer/Report".to_string(),
+        event_nuon: "{n: 1}".to_string(),
+        files: vec![SendFile { dest: "out/report.nuon".to_string(), bytes: b"{ok: true}".to_vec() }],
+    }
+}
+
 #[test]
 fn each_remote_command_has_one_result_shape_its_catalog_entry_declares() {
     let catalog: Vec<_> = COMMANDS.iter().filter(|spec| spec.words().starts_with("remote channel")).collect();
@@ -84,12 +92,6 @@ fn each_remote_command_has_one_result_shape_its_catalog_entry_declares() {
     }
     for spec in COMMANDS.iter().filter(|spec| !REMOTE_COMMANDS.contains(&spec.kind)) {
         assert!(results().iter().all(|(_, result)| !result.answers(spec.kind)), "{}", spec.words());
-    }
-    // A list or a get reads; the other five change the worker's links or its file.
-    for spec in &catalog {
-        let class = request_class(&RuntimeRequest::Interface { command: spec.name.to_string() });
-        let reads = matches!(spec.kind, CommandKind::RemoteList | CommandKind::RemoteGet);
-        assert_eq!(class, if reads { RequestClass::Query } else { RequestClass::Mutating }, "{}", spec.words());
     }
 }
 
@@ -144,6 +146,16 @@ fn a_peer_id_is_base62_alone() {
 }
 
 #[test]
+fn a_send_s_dest_is_a_plain_relative_path() {
+    for good in ["out.txt", "sub/dir/out.txt", EVENT_SPILL_DEST] {
+        assert!(safe_dest(good), "{good}");
+    }
+    for bad in ["", "/abs/path", "../escape", "sub/../../escape", "./here"] {
+        assert!(!safe_dest(bad), "{bad:?}");
+    }
+}
+
+#[test]
 fn a_relayed_packet_is_held_to_a_relays_rules() {
     let ok = packet("peer/Checkpoint", record(&[("n", NuVal::Int(1))]));
     ok.check().expect("an ordinary relay");
@@ -160,83 +172,17 @@ fn a_relayed_packet_is_held_to_a_relays_rules() {
     }
 }
 
-#[test]
-fn a_relay_keeps_its_files_association_and_its_scope() {
-    let mut backlog = EventBacklog::new(GENERATION, &LIMITS_DEFAULT);
-    let report = EventArtifact { artifact: ArtifactRef { id: ArtifactId([0x22; 16]), size: 4096, sha256: [0x33; 32] }, dest: "out/report.nuon".to_string() };
-    let spill = EventArtifact { artifact: ArtifactRef { id: ArtifactId([0x23; 16]), size: 2048, sha256: [0x34; 32] }, dest: EVENT_SPILL_DEST.to_string() };
-    let event = record(&[(EVENT_SPILL_KEY, text(EVENT_SPILL_DEST)), (EVENT_BYTES_KEY, NuVal::Int(2048))]);
-    let relayed = EventPayload::Relayed(packet("peer/Report", event.clone()));
-    let sequence = backlog.push(Some(ChannelEpoch(3)), relayed, vec![report.clone(), spill.clone()]).expect("numbered");
-    let frames = backlog.read(None, 10).expect("read");
-    let [EventFrame::Record(record)] = frames.as_slice() else { panic!("one record") };
-    assert_eq!((record.sequence, record.generation, record.channel), (sequence, GENERATION, Some(ChannelEpoch(3))));
-    let EventPayload::Relayed(back) = &record.payload else { panic!("a relay") };
-    assert_eq!((back.origin.as_str(), back.delivery.as_str(), back.model.as_str()), (NOM, "eventid0001", "peer/Report"));
-    assert_eq!(back.event, event, "the spill pointer names a dest among the record's own files");
-    assert_eq!(record.artifacts, vec![report, spill]);
-}
-
-#[test]
-fn no_peer_event_poses_as_the_hosts_or_reaches_an_operation() {
-    let mut backlog = EventBacklog::new(GENERATION, &LIMITS_DEFAULT);
-    let host = |from: &str, model: &str| {
-        EventPayload::Host(HostEvent { id: "eventid0002".to_string(), from: from.to_string(), model: model.to_string(), event: NuVal::Nothing, attached: None })
-    };
-    let posing = [
-        ("a relay as a host event", host(&format!("remote/channel/{NOM}"), "peer/Note")),
-        ("a host report as a host event", host("mcp", MODEL_SENT)),
-        ("a relay of a host model", EventPayload::Relayed(packet("mcp/channel/Open", NuVal::Nothing))),
-    ];
-    for (name, payload) in posing {
-        assert_eq!(backlog.push(None, payload, Vec::new()).expect_err(name).kind(), "daemon::invalid_frame", "{name}");
-    }
-    assert_eq!(backlog.newest(), None, "nothing numbered");
-    // A payload shaped like an engine call is data: held and read back as sent.
-    let shaped = record(&[
-        ("nonce", text("aaaaaaaaaaa")),
-        ("definition", text("def execute [data: nothing]: nothing -> nothing { }")),
-        ("host", text("lab")),
-        ("lease", text("0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a")),
-    ]);
-    backlog.push(None, EventPayload::Relayed(packet("peer/Execute", shaped.clone())), Vec::new()).expect("numbered as data");
-    let frames = backlog.read(None, 10).expect("read");
-    let [EventFrame::Record(record)] = frames.as_slice() else { panic!("one record") };
-    let EventPayload::Relayed(back) = &record.payload else { panic!("a relay") };
-    assert_eq!(back.event, shaped);
-    // What runs is a submission under a ticket the lease's own stream was issued:
-    // the call the event describes, submitted without one, admits nothing.
-    let nonce = sourcetrait_common::datum::Nonce::new_unchecked(7);
-    let request = RuntimeRequest::Engine(ToEngineSys::Call(CallRequest {
-        host: Host::Local,
-        nonce,
-        namepath: "gram:get:log".to_string(),
-        data: "{refs: []}".to_string(),
-        timeout: None,
-    }));
-    let forged = OperationTicket { operation: OperationId([0x11; 16]), nonce, generation: GENERATION, epoch: LeaseEpoch(1), expires_ms: 60_000 };
-    let submission = Submission { correlation: 1, ticket: forged, hash: payload_hash(&request), request };
-    let (admission, execute) = OperationTable::new(GENERATION).submit(0, &submission, LeaseEpoch(1));
-    assert!(matches!(admission.outcome, AdmissionOutcome::Refused(TransportError::TicketInvalid { .. })));
-    assert_eq!(execute, None);
-}
-
 /// Every peer message's bitcode.
 fn vectors() -> BTreeMap<String, golden::Vector> {
     let mut out = BTreeMap::new();
     for (name, result) in results() {
-        out.insert(format!("result/{name}"), golden::vector(&RuntimeReply::Remote(result)));
+        out.insert(format!("result/{name}"), golden::vector(&result));
     }
     for (name, event) in events() {
         out.insert(format!("event/{name}"), golden::vector(&event));
     }
-    let relayed = packet("peer/Checkpoint", record(&[("event_bytes", NuVal::Int(641))]));
-    out.insert("packet".to_string(), golden::vector(&relayed));
-    let frame = |payload| {
-        EventFrame::Record(Box::new(EventRecord { generation: GENERATION, sequence: 9, channel: Some(ChannelEpoch(2)), payload, artifacts: Vec::new() }))
-    };
-    out.insert("frame/remote".to_string(), golden::vector(&frame(EventPayload::Remote(events()[0].1.clone()))));
-    out.insert("frame/relayed".to_string(), golden::vector(&frame(EventPayload::Relayed(relayed))));
+    out.insert("packet".to_string(), golden::vector(&packet("peer/Checkpoint", record(&[("event_bytes", NuVal::Int(641))]))));
+    out.insert("send/prepared".to_string(), golden::vector(&prepared()));
     out
 }
 
@@ -256,15 +202,16 @@ fn each_message_has_its_golden_vector_and_round_trips() {
         .collect();
     assert_eq!(covered.len(), 4);
     for (name, result) in results() {
-        let reply = RuntimeReply::Remote(result);
-        let back: RuntimeReply = decode_payload(&bitcode::encode(&reply), DECODE_BUDGET_DEFAULT).expect(name);
-        assert_eq!(back, reply, "{name}");
+        let back: RemoteResult = decode_payload(&bitcode::encode(&result), DECODE_BUDGET_DEFAULT).expect(name);
+        assert_eq!(back, result, "{name}");
     }
     for (name, event) in events() {
         let back: RemoteChannelEvent = decode_payload(&bitcode::encode(&event), DECODE_BUDGET_DEFAULT).expect(name);
         assert_eq!(back, event, "{name}");
     }
+    let back: PreparedSend = decode_payload(&bitcode::encode(&prepared()), DECODE_BUDGET_DEFAULT).expect("a send");
+    assert_eq!((back.files.len(), back.files[0].bytes.as_slice()), (1, &b"{ok: true}"[..]));
     for (name, vector) in vectors() {
-        assert!(vector.bytes.len() <= EVENT_FRAME_MAX as usize, "{name} fits an event frame");
+        assert!(vector.bytes.len() <= FRAME_DEFAULT as usize, "{name} fits a frame");
     }
 }

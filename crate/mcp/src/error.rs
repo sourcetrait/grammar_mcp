@@ -54,8 +54,6 @@ pub enum GrammarMcpError {
         phase: String,
         reason: String,
     },
-    /// An artifact request a worker refused, under its `artifact::` kinds.
-    Artifact(ArtifactError),
 }
 
 impl GrammarMcpError {
@@ -83,7 +81,6 @@ impl GrammarMcpError {
             Self::RemoteChannelUnverified => RuntimeError::RemoteChannelUnverified,
             Self::RemotesFile { reason } => RuntimeError::RemotesFile { reason },
             Self::Internal { phase, reason } => RuntimeError::Internal { phase, reason },
-            Self::Artifact(error) => RuntimeError::Artifact(error),
         })
     }
 }
@@ -111,7 +108,6 @@ impl From<RuntimeError> for GrammarMcpError {
             RuntimeError::RemoteChannelUnverified => Self::RemoteChannelUnverified,
             RuntimeError::RemotesFile { reason } => Self::RemotesFile { reason },
             RuntimeError::Internal { phase, reason } => Self::Internal { phase, reason },
-            RuntimeError::Artifact(error) => Self::Artifact(error),
         }
     }
 }

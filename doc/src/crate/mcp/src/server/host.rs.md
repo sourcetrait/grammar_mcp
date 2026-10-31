@@ -64,22 +64,12 @@ goes back to the sender, which stops its own eval and reports the action
 error's emergency.
 
 ### fn remote_send
-The sender's files are read and its event rendered off the runtime's workers, a
-blocking read of the caller's own files; then the peer links' system mints the
-id, spills an oversized event, and queues the frames on the link to `mcp_nom`
-(`crate/peer`'s `system.rs`). The reservation was refused on the eval's side
-first, as it always came before the files.
-
-## fn prepared
-The files are read before the event renders, the order the send's refusals
-have always had.
-
-## fn read_attachments
-Reads each {src, dest} row into its payload, before the id is answered: a local
-src read failure is the agent's own problem and must surface at the call, not as
-a later async Unsent. safe_dest guards every dest (relative, no `..`) here too,
-so a bad dest fails the send outright rather than being caught only on the
-receiver.
+The send is prepared by the engine's `prepare_send`, its files read and its
+event rendered off the runtime's workers, as a worker prepares a remote eval's;
+then the peer links' system mints the id, spills an oversized event, and queues
+the frames on the link to `mcp_nom` (`crate/peer`'s `system.rs`). The
+reservation was refused on the eval's side first, as it always came before the
+files.
 
 ## fn config_record
 The record `grimm get_config_all` returns mirrors the config file - the same

@@ -1,13 +1,14 @@
-//! grammard's entry: its command line parsed and the command run.
+//! grammard's entry: its command line parsed and its one session served.
 use crate::*;
-use nix::sys::signal::{SigSet, Signal};
-use std::io::Write;
 
-/// Parses grammard's command line, runs the command, and exits by its result.
+/// Parses grammard's command line, serves its session, and exits by its result.
 pub fn run_main() -> process::ExitCode {
-    let cli = GrammardCli::parse();
-    match run(cli.command) {
-        Ok(()) => process::ExitCode::SUCCESS,
+    let GrammardCmd::Serve { id, namespace, workdir } = GrammardCli::parse().command;
+    match serve(&id, &namespace, &workdir) {
+        Ok(end) => {
+            eprintln!("grammard: {end}, stopping");
+            process::ExitCode::SUCCESS
+        }
         Err(e) => {
             eprintln!("grammard: {e}");
             process::ExitCode::from(e.exit_code())
@@ -15,63 +16,66 @@ pub fn run_main() -> process::ExitCode {
     }
 }
 
-/// Runs one command: `serve` in the foreground, each other refused.
-fn run(command: GrammardCmd) -> DaemonResult<()> {
-    match command {
-        GrammardCmd::Serve { id, namespace } => serve(&id, &namespace),
-        GrammardCmd::Cli => run_oneshot(),
-        command => Err(DaemonError::Unimplemented { command: command.name() }),
-    }
+/// The wire's two ends: stdin, and stdout's own descriptor, fd 1 then given stderr.
+fn wire() -> io::Result<(tk::Stdin, tk::File)> {
+    let out = nix::unistd::dup(io::stdout())?;
+    nix::unistd::dup2_stdout(io::stderr())?;
+    Ok((tk::stdin(), tk::File::from_std(fs::File::from(out))))
 }
 
-/// `id` and `namespace`'s instance served in the foreground until a signal ends it.
+/// `id` and `namespace`'s session in `workdir`, served until it ends.
 fn serve(
     id: &str,
     namespace: &str,
-) -> DaemonResult<()> {
-    let signals = stop_signals();
+    workdir: &Path,
+) -> DaemonResult<SessionEnd> {
+    let (reader, writer) = wire().map_err(|e| DaemonError::Session {
+        reason: format!("the wire's descriptors: {e}"),
+    })?;
     let env: BTreeMap<String, String> = std::env::vars_os()
         .filter_map(|(key, value)| Some((key.into_string().ok()?, value.into_string().ok()?)))
         .collect();
-    let config = InstanceConfig::load(current_uid(), id, namespace, &env)?;
-    for line in &config.homes.diagnostics {
-        eprintln!("grammard: {line}");
-    }
-    if config.paths.socket.is_none() {
-        return Err(DaemonError::NoRuntimeHome);
-    }
-    let runtime = Runtime::start(config)?;
+    let started = InstanceConfig::load(current_uid(), id, namespace, workdir, &env).and_then(|config| {
+        for line in &config.homes.diagnostics {
+            eprintln!("grammard: {line}");
+        }
+        Runtime::start(config)
+    });
+    let runtime = match started {
+        Ok(runtime) => runtime,
+        Err(e) => {
+            refuse_with(reader, writer, &e);
+            return Err(e);
+        }
+    };
     for line in runtime.diagnostics() {
         eprintln!("grammard: {line}");
     }
-    let identity = runtime.identity();
-    let socket = runtime.socket().map(|path| path.display().to_string()).unwrap_or_default();
-    let mut out = std::io::stdout().lock();
-    let _ = writeln!(
-        out,
-        "grammard: ready, {}/{} at generation {}, pid {}, socket {socket}",
-        identity.id,
-        identity.namespace,
-        runtime.generation().hex(),
+    eprintln!(
+        "grammard: serving {}/{} as {}, pid {}",
+        runtime.identity().id,
+        runtime.identity().namespace,
+        runtime.nom(),
         process::id(),
     );
-    let _ = out.flush();
-    drop(out);
-    match signals.wait() {
-        Ok(signal) => eprintln!("grammard: {signal}, stopping"),
-        Err(e) => eprintln!("grammard: the stop signals can't be waited on: {e}, stopping"),
-    }
-    runtime.shutdown()
+    let end = runtime.serve(reader, writer);
+    let shut = runtime.shutdown();
+    let end = end?;
+    shut?;
+    Ok(end)
 }
 
-/// The signals that stop a foreground worker, blocked before any thread starts.
-fn stop_signals() -> SigSet {
-    let mut set = SigSet::empty();
-    for signal in [Signal::SIGTERM, Signal::SIGINT, Signal::SIGHUP] {
-        set.add(signal);
+/// A start's failure told the MCP: its hello read and refused with the reason.
+fn refuse_with(
+    reader: tk::Stdin,
+    writer: tk::File,
+    e: &DaemonError,
+) {
+    let refusal = TransportError::Unavailable {
+        reason: format!("{}: {e}", e.kind().name()),
+    };
+    match tk::runtime::Builder::new_current_thread().enable_all().build() {
+        Ok(tasks) => tasks.block_on(refuse(reader, writer, refusal)),
+        Err(io) => eprintln!("grammard: the refusal's runtime: {io}"),
     }
-    if let Err(e) = set.thread_block() {
-        eprintln!("grammard: the stop signals can't be blocked: {e}");
-    }
-    set
 }

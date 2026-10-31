@@ -1,6 +1,6 @@
 [package]
 name = "sourcetrait_grammar_daemon"
-description = "Grammar's persistent worker runtime and its service"
+description = "Grammar's remote worker, an SSH session's command"
 version.workspace    = true
 authors.workspace    = true
 license.workspace    = true
@@ -26,35 +26,27 @@ path = "tests/exclusive_start.rs"
 required-features = ["service"]
 
 [[test]]
-name = "socket_admission"
-path = "tests/socket_admission.rs"
-required-features = ["service"]
-
-[[test]]
-name = "controller_lease"
-path = "tests/controller_lease.rs"
+name = "session"
+path = "tests/session.rs"
 required-features = ["service"]
 
 [features]
 default = ["service"]
-# grammard's adapters over the runtime library: its command line, the user
-# service, and the controller bridge. An embedding host builds without them.
+# grammard's command line over the runtime library. An embedding host builds
+# without it.
 service = ["dep:clap"]
 # Test-only engine decls (__test_hang / __test_panic) for the lifecycle system
 # tests; never enabled in a shipped build.
 test-hooks = ["sourcetrait_grammar_engine/test-hooks"]
 
 [dependencies]
-bitcode.workspace = true
 clap = { workspace = true, optional = true }
 futures-util.workspace = true
 nix.workspace = true
-nutype.workspace = true
-nuval.workspace = true
 serde.workspace = true
-sha2.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
+toml.workspace = true
 
 sourcetrait_common.workspace = true
 sourcetrait_grammar_engine.workspace = true
@@ -65,6 +57,8 @@ sourcetrait_grammar_scratch.workspace = true
 [dev-dependencies]
 directories.workspace = true
 tempfile.workspace = true
+
+sourcetrait_grammar_client.workspace = true
 
 [package.metadata]
 rein = "ai"

@@ -75,7 +75,7 @@ impl ChannelMode {
 #[cereal::derived(Data, Copy, Eq)]
 pub struct ChannelEpoch(pub u64);
 
-/// The logical Channel as its worker holds it.
+/// The logical Channel as its system holds it.
 #[cereal::derived(Data)]
 pub struct ChannelState {
     pub phase: ChannelPhase,
@@ -84,26 +84,6 @@ pub struct ChannelState {
     pub claimed: bool,
     /// Packets the sync queue dropped past its cap since the last sync.
     pub sync_dropped: u64,
-}
-
-/// What a frontend tells its worker of the agent-facing Channel it serves.
-#[cereal::derived(Data)]
-pub enum ChannelNotice {
-    Opened { epoch: ChannelEpoch, mode: ChannelMode },
-    Claimed { epoch: ChannelEpoch },
-    Ready { epoch: ChannelEpoch },
-    Closed { epoch: ChannelEpoch, code: u16, reason: String },
-}
-
-/// One packet the host emits on its Channel, its event typed data.
-#[cereal::derived(Data)]
-pub struct HostEvent {
-    pub id: String,
-    pub from: String,
-    pub model: String,
-    pub event: NuVal,
-    /// The inbox-relative directory its files were delivered to, if any.
-    pub attached: Option<String>,
 }
 
 /// A body's Channel send as data, the eval's stop held back on its own side.

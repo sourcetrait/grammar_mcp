@@ -124,7 +124,7 @@ pub(crate) use sourcetrait_grammar_engine::{
     PurviewRigRequest, ToEngine, analyze_definition, build_call_source,
     build_execute_source, definition_file, ensure_default_purview, ensure_equip_store,
     ensure_plugin_registry, equip_root, file_start, grimm_signatures, index_from_nuon,
-    install_builtins, lib_dir, lint_block, list_registered_plugins, purview_ref,
+    install_builtins, lib_dir, lint_block, list_registered_plugins, prepare_send, purview_ref,
     purviews_path, rig_dir, rig_meta_path, seed_builtin_purviews, typedef_text,
 };
 
@@ -148,11 +148,11 @@ pub(crate) use sourcetrait_grammar_peer::{
     ExpandDefault, FromPeerSys, IdentityKeys, InboxRequest, Payload, PeerHandle, PeerSysParams,
     PeerSysPaths, PeerSystem, REMOTES_FILE, Relay, RemoteCloseRequest, RemoteConnectRequest,
     RemoteGetRequest, RemoteListRequest, RemoteListenRequest, RemoteSendRequest,
-    RemoteSetRequest, RemoteUnsetRequest, safe_dest,
+    RemoteSetRequest, RemoteUnsetRequest,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
-    ArtifactError, ChannelEpoch, ChannelPhase, ChannelSendData, LOCAL_HOST, MAX_FRAME_BYTES,
+    ChannelEpoch, ChannelPhase, ChannelSendData, LOCAL_HOST, MAX_FRAME_BYTES, PreparedSend,
     PurviewRow, PurviewView, RemoteResult, RemoteSendData, RuntimeError, SpamThresholdsData,
     TransportError,
 };
