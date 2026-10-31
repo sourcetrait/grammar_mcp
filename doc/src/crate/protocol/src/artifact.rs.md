@@ -175,7 +175,16 @@ if not, with no lease left to retry it.
 ### fn collect
 A published artifact is kept through the retention window and for as long as
 anything holds it: a retained result, a pending event's manifest, or an open
-reader. Collection leaves a tombstone, so a lookup answers `Evicted`.
+reader. Collection leaves a tombstone, so a lookup answers `Evicted`. A
+recovered store evicts nothing until its holds are restored
+(`holds_restored`).
+
+### fn holds_restored
+A start's holds are not the journal's: a recovered store comes back with none,
+and a retained result or a pending event can outlive the retention window. So
+recovery opens a phase in which collection evicts nothing, and the runtime ends
+it once it has taken every durable reference's hold again; an artifact nothing
+durable holds is collected after that as any other.
 ### fn publish_local
 The worker's own objects, written into `objects/` and measured before they are
 published. A refusal leaves the runtime to remove the file it wrote.

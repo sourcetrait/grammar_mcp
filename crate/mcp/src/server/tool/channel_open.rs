@@ -27,6 +27,9 @@ const UNVERIFIED_REASON: &str = "verification window expired";
 const CLOSE_UNSTARTED: u16 = 1011;
 const UNSTARTED_REASON: &str = "the channel hub did not start";
 
+/// An open whose Channel was closed while its hub started, the hub dropped unused.
+const CLOSED_DURING_START: &str = "the channel was closed while its hub started";
+
 /// The host's `channel/Open` packet, rendered.
 fn greeting(
     nonce_gen: &datum::NonceGenerator,
@@ -148,7 +151,12 @@ impl ChannelFace {
         match hub.await {
             Ok(hub) => {
                 let url = hub.url.clone();
-                self.hub.install(hub);
+                if self.hub.install(hub).is_err() {
+                    self.tell_inbox(None).await;
+                    return Err(GrammarMcpError::ChannelStart {
+                        reason: CLOSED_DURING_START.to_string(),
+                    });
+                }
                 Ok(Some(url))
             }
             Err(error) => {

@@ -469,6 +469,32 @@ fn a_reference_survives_a_new_lease_and_names_no_client_path() {
 }
 
 #[test]
+fn a_recovered_store_evicts_nothing_until_its_holds_are_taken_again() {
+    let mut first = store();
+    published(&mut first, 1, 16);
+    first.hold(id(1), ArtifactHold::Result(OPERATION)).expect("held by a retained result");
+    let past = NOW + 2 * WEEK;
+    assert!(first.collect(past).is_empty(), "the hold keeps it past its retention");
+    let records: Vec<_> = first.records().cloned().collect();
+    let found = Found { staging: Vec::new(), objects: vec![id(1).hex()] };
+    let recover = || ArtifactStore::recover(remote(ROOT), ARTIFACT_LIMITS_DEFAULT, past, records.clone(), &found, |_| None).0;
+    let mut recovered = recover();
+    assert!(recovered.collect(past).is_empty(), "nothing is evicted before the holds are restored");
+    recovered.hold(id(1), ArtifactHold::Result(OPERATION)).expect("the retained result holds it again");
+    recovered.holds_restored();
+    assert!(recovered.collect(past).is_empty(), "the restored hold keeps it");
+    assert!(recovered.unhold(id(1), ArtifactHold::Result(OPERATION)));
+    assert_eq!(
+        recovered.collect(past),
+        [ArtifactAction::RemoveObject { path: remote(&place("objects", 1)) }],
+        "unheld past its retention, it is collected",
+    );
+    let mut unclaimed = recover();
+    unclaimed.holds_restored();
+    assert_eq!(unclaimed.collect(past).len(), 1, "a hold no durable reference restored leaves it");
+}
+
+#[test]
 fn recovery_adopts_a_verified_copy_and_quarantines_the_rest() {
     let record = |n: u8, state: ArtifactState| ArtifactRecord {
         artifact: ArtifactRef { id: id(n), size: 16, sha256: [n; 32] },

@@ -61,7 +61,19 @@ whose drop ends the accept loop.
 
 ## struct HubSlot
 The face's side of the open, shared with its pump and its timer: the hub, the
-armed verify timer, the emergency policy, and the epochs the face mints.
+armed verify timer, the emergency policy, the epochs the face mints, and the
+highest epoch closed.
+
+### field closed_through
+Set by every close, under the hub's lock, before it looks for the hub to
+signal: a close can come while its open's hub is still starting, and the hub
+installed after it would serve an open already closed. A shutdown's close marks
+every epoch minted so far.
+
+### fn install
+Refuses a hub whose epoch has closed, under the same lock the close takes, so
+the check and the close never interleave; the caller drops the refused hub,
+which ends its accept loop (`server/tool/channel_open.rs`).
 
 ### fn next_epoch
 From 1, so the Channel's closed epoch, 0, is never an open's.
@@ -123,6 +135,10 @@ system's close finds no hub left to signal again; the ack is awaited last. The
 frame is written by the hub task, so the wait is an ack rather than a sleep: the
 hub fires the completion after its flush. A sleep long enough to usually work
 would be a race dressed as a guarantee.
+
+The Channel's close is awaited for the same grace. Its system takes one message
+at a time, a send's file writes among them, so a stalled write would otherwise
+hold the shutdown, and the engine's cleanup behind it, past any bound.
 
 ## fn spawn_signal_sweep
 Exiting is part of the contract: handling a termination signal without

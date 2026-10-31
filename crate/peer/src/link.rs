@@ -15,6 +15,8 @@ const CHUNK_BYTES: usize = 256 * 1024;
 pub(crate) struct RemoteLinkEntry {
     pub handle: RemoteLinkHandle,
     pub addr: std::net::SocketAddr,
+    /// This connection's own number, which its drivers' end names.
+    pub generation: u64,
 }
 
 /// A listener bound and awaiting its peer: its address and its accept's cancel.
@@ -61,8 +63,12 @@ pub(crate) enum LinkEvent {
     },
     /// A closed listener let its port go, its close to answer.
     Released { reply: subsys::MsgID },
-    /// A link's drivers ended.
-    Ended { alias: String, peer_nom: String },
+    /// A link's drivers ended, the connection named by its generation.
+    Ended {
+        alias: String,
+        peer_nom: String,
+        generation: u64,
+    },
 }
 
 /// What every link's tasks share: the way up, and the Channel's inbox.
@@ -226,7 +232,11 @@ impl Listen {
                 }
                 Some(Ok((handle, msg_join, file_join))) => {
                     let peer_nom = handle.remote_mcp_nom.clone();
-                    let link = RemoteLinkEntry { handle, addr: bound };
+                    let link = RemoteLinkEntry {
+                        handle,
+                        addr: bound,
+                        generation: seq,
+                    };
                     let (promoted, answer) = tk::oneshot::channel();
                     let paired = LinkEvent::Paired {
                         alias: alias.clone(),
@@ -254,7 +264,11 @@ impl Listen {
                     drop(released);
                     let _ = msg_join.await;
                     let _ = file_join.await;
-                    let _ = events.send(LinkEvent::Ended { alias, peer_nom });
+                    let _ = events.send(LinkEvent::Ended {
+                        alias,
+                        peer_nom,
+                        generation: seq,
+                    });
                 }
                 Some(Err(e)) => {
                     drop(released);
@@ -269,17 +283,45 @@ impl Listen {
     }
 }
 
-/// Watch a dialed link's drivers end, then tell the system.
+/// What a connection's end means for the entry its alias holds now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EndedLink {
+    /// The alias holds this connection: it leaves the registry.
+    Current,
+    /// A newer connection holds the alias: the old one's end is not its.
+    Replaced,
+    /// No connection holds the alias: a close took it already.
+    Closed,
+}
+
+/// The ended connection `ended` against the generation its alias holds now.
+pub(crate) fn ended_link(
+    current: Option<u64>,
+    ended: u64,
+) -> EndedLink {
+    match current {
+        Some(current) if current == ended => EndedLink::Current,
+        Some(_) => EndedLink::Replaced,
+        None => EndedLink::Closed,
+    }
+}
+
+/// Watch a dialed link's drivers end, then tell the system which connection ended.
 pub(crate) fn watch_link(
     alias: String,
     peer_nom: String,
+    generation: u64,
     joins: (tk::JoinHandle<()>, tk::JoinHandle<()>),
     events: tk::UnboundedSender<LinkEvent>,
 ) {
     tk::spawn(async move {
         let _ = joins.0.await;
         let _ = joins.1.await;
-        let _ = events.send(LinkEvent::Ended { alias, peer_nom });
+        let _ = events.send(LinkEvent::Ended {
+            alias,
+            peer_nom,
+            generation,
+        });
     });
 }
 

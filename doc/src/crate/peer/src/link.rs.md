@@ -15,6 +15,20 @@ to them happens on the system's loop, one at a time.
 One open link and its peer's address, the system's registry's value: the
 listing reads the address, and a close cancels the handle.
 
+### field generation
+The connection's own number, from the system's one counter: a dialed link's
+drawn as it registers, a listener's its sequence number. Its drivers' end names
+it, since a redial under the same alias to the same running peer carries the
+same alias and the same nom.
+
+## enum EndedLink
+## fn ended_link
+A connection's end against what its alias holds now. The alias's own
+connection leaves the registry and reports Disconnected; one a close took
+first reports Disconnected, the close's own end; and one a newer connection
+replaced reports nothing and leaves the newer one alone, since its
+Disconnected would read as the newer link's.
+
 ## struct BoundListener
 A listener bound and waiting for its peer: its address, a sequence number, its
 accept's cancel token, and the receiving half of a `released` signal. The

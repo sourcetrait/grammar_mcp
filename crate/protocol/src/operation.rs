@@ -322,7 +322,11 @@ impl OperationTable {
         let operation = submission.ticket.operation;
         let answer = |outcome| Admission { correlation: submission.correlation, operation, outcome };
         if let Some(record) = self.records.get(&operation) {
-            let outcome = if record.hash == submission.hash {
+            let outcome = if payload_hash(&submission.request) != submission.hash {
+                AdmissionOutcome::Refused(TransportError::InvalidFrame {
+                    reason: "the payload's hash is not its request's".to_string(),
+                })
+            } else if record.hash == submission.hash {
                 AdmissionOutcome::Existing(self.lookup(operation))
             } else {
                 AdmissionOutcome::Refused(TransportError::OperationConflict { operation })

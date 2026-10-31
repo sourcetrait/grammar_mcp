@@ -36,7 +36,8 @@ concurrent hosts on one namespace would otherwise clobber each other's log.
 
 ## fn append_line
 Open-append-close per line: low volume, and robust against an external truncation
-between writes. Nothing is buffered to lose.
+between writes. Nothing is buffered to lose. The record and its newline go in one
+write, so no other append can land between them.
 
 ## struct EmergencyPolicy
 mcp's controller makes it (`controller.rs`). The operator's handler answers the
@@ -52,6 +53,13 @@ The log's path is a parameter: the serve path's is the host's per-process log
 ### fn respond
 The log is written first and unconditionally, so the durable record never
 depends on a channel being open; the announcement follows it.
+
+### fn append
+The operator's handler and the Channel's per-emergency tasks append at once,
+through clones of one policy, so the clones share one lock and take their
+appends one at a time; the announcement stays outside it. A record's one write
+alone keeps its own bytes together, and the lock keeps a partial write, should
+the file take one, from letting another record in.
 
 ### fn announce
 Through the Channel's gated emit (`EmitRequest`), so it is verification-gated

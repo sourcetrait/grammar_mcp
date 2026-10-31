@@ -17,13 +17,14 @@ fn installed(
     let (packets, packet_rx) = tk::unbounded_channel::<String>();
     let (close, close_rx) = tk::oneshot::channel::<ChannelCloseSignal>();
     let (shutdown, shutdown_rx) = tk::oneshot::channel::<()>();
-    slot.install(Hub {
+    let hub = Hub {
         epoch,
         url: "wss://127.0.0.1:1".to_string(),
         packets,
         close,
         _shutdown: shutdown,
-    });
+    };
+    assert!(slot.install(hub).is_ok(), "an open epoch's hub is installed");
     (packet_rx, close_rx, shutdown_rx)
 }
 
@@ -80,6 +81,34 @@ fn a_hub_close_signals_on_its_own_lane_and_ends_the_accept_loop() {
         "the hub's shutdown sender dropped with it, which ends the accept loop",
     );
     assert_eq!(slot.url(EPOCH), None, "the slot is empty after");
+}
+
+#[test]
+fn a_hub_starting_after_its_open_closed_is_refused() {
+    let slot = HubSlot::default();
+    let epoch = slot.next_epoch();
+    slot.close(epoch, 1000, "closed while its hub started".to_string());
+    let (packets, _packet_rx) = tk::unbounded_channel::<String>();
+    let (close, _close_rx) = tk::oneshot::channel::<ChannelCloseSignal>();
+    let (shutdown, mut shutdown_rx) = tk::oneshot::channel::<()>();
+    let late = Hub {
+        epoch,
+        url: "wss://127.0.0.1:1".to_string(),
+        packets,
+        close,
+        _shutdown: shutdown,
+    };
+    let refused = slot.install(late);
+    assert!(refused.is_err(), "the closed open's hub is handed back");
+    drop(refused);
+    assert!(
+        matches!(shutdown_rx.try_recv(), Err(tk::oneshot::error::TryRecvError::Closed)),
+        "dropping the refused hub ends its accept loop",
+    );
+    assert_eq!(slot.url(epoch), None, "no hub serves the closed open");
+    let next = slot.next_epoch();
+    let (_packets, _close, _shutdown) = installed(&slot, next);
+    assert!(slot.url(next).is_some(), "a later open's hub still installs");
 }
 
 #[test]
@@ -204,4 +233,63 @@ fn an_emergency_reaches_the_policy_once_one_is_installed() {
     let _ = fs::remove_dir_all(&home);
     assert_eq!(lines.lines().count(), 1, "the one raised before the install went nowhere: {lines}");
     assert!(lines.contains("channel_spam_warning"), "the line is the warning's: {lines}");
+}
+
+/// How many emergencies the concurrency test raises at once.
+const RAISED: u32 = 64;
+
+#[test]
+fn emergencies_raised_at_once_log_whole_records() {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .build()
+        .expect("a tokio runtime");
+    let home = std::env::temp_dir().join(format!("grammar_mcp_face_records_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&home);
+    let log = home.join("emergency.nuonl");
+    rt.block_on(async {
+        let spam = SpamThresholdsData {
+            warn_window_secs: 10,
+            warn_rate: 1_000,
+            error_window_secs: 10,
+            error_rate: 10_000,
+        };
+        let paths = ChannelSysPaths::new(home.clone(), home.clone());
+        let channel = ChannelHandle::start(paths, ChannelSysParams { spam }, Deaf)
+            .await
+            .expect("the Channel's system starts");
+        let policy = EmergencyPolicy::new(Arc::new(channel), "nomAAA", log.clone());
+        let raised: Vec<_> = (0..RAISED)
+            .map(|hits| {
+                let policy = policy.clone();
+                let warning = Emergency::ChannelSpamWarning(ChannelSpamWarningEmergency {
+                    origin: "thread/a".to_string(),
+                    hits,
+                    window_secs: 10,
+                    rate: 3,
+                });
+                tk::spawn(async move { policy.respond(warning).await })
+            })
+            .collect();
+        for task in raised {
+            task.await.expect("a policy task ends");
+        }
+    });
+    let text = fs::read_to_string(&log).unwrap_or_default();
+    let _ = fs::remove_dir_all(&home);
+    let mut hits: Vec<i64> = text
+        .lines()
+        .map(|line| {
+            let record = nu::from_nuon(line, None)
+                .unwrap_or_else(|e| panic!("each line is one whole record: {line:?}: {e}"));
+            record
+                .get_data_by_key("hits")
+                .and_then(|hits| hits.as_int().ok())
+                .unwrap_or_else(|| panic!("a record carries its hits: {line:?}"))
+        })
+        .collect();
+    hits.sort_unstable();
+    let expected: Vec<i64> = (0..i64::from(RAISED)).collect();
+    assert_eq!(hits, expected, "every emergency logged once, its record whole");
 }

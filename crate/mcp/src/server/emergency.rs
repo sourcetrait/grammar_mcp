@@ -111,10 +111,11 @@ pub(crate) fn append_line(
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
+    let mut record = String::with_capacity(line.len() + 1);
+    record.push_str(line);
+    record.push('\n');
     let mut f = fs::OpenOptions::new().create(true).append(true).open(path)?;
-    f.write_all(line.as_bytes())?;
-    f.write_all(b"\n")?;
-    Ok(())
+    f.write_all(record.as_bytes())
 }
 
 /// The controller's policy over its systems' emergencies: logged, then announced.
@@ -123,6 +124,8 @@ pub(crate) struct EmergencyPolicy {
     channel: Arc<ChannelHandle>,
     mcp_nom: String,
     log: PathBuf,
+    /// Held across each append, shared by every clone, so records never interleave.
+    appending: Arc<std::sync::Mutex<()>>,
 }
 
 impl EmergencyPolicy {
@@ -136,6 +139,7 @@ impl EmergencyPolicy {
             channel,
             mcp_nom: mcp_nom.to_string(),
             log,
+            appending: Arc::new(std::sync::Mutex::new(())),
         }
     }
 
@@ -145,17 +149,24 @@ impl EmergencyPolicy {
         emergency: Emergency,
     ) {
         match emergency_line(&emergency, now_millis(), &self.mcp_nom) {
-            Ok(line) => {
-                if let Err(e) = append_line(&self.log, &line) {
-                    eprintln!(
-                        "grammar: emergency log append failed at {}: {e}",
-                        self.log.display(),
-                    );
-                }
-            }
+            Ok(line) => self.append(&line),
             Err(e) => eprintln!("grammar: emergency serialize failed: {e}"),
         }
         self.announce(&emergency).await;
+    }
+
+    /// One record appended whole, the clones' appends taken one at a time.
+    fn append(
+        &self,
+        line: &str,
+    ) {
+        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
+        if let Err(e) = append_line(&self.log, line) {
+            eprintln!(
+                "grammar: emergency log append failed at {}: {e}",
+                self.log.display(),
+            );
+        }
     }
 
     /// Put one emergency on the Channel under its reserved `mcp/` model.

@@ -128,7 +128,7 @@ fn limits(fixture: &Fixture) -> Result<(), String> {
     for vector in fixture.vectors() {
         let (ceiling, hello) = match vector.ty.as_str() {
             "ClientHello" | "HelloReply" => (HELLO_FRAME_MAX, true),
-            "EventFrame" => (EVENT_FRAME_MAX, false),
+            "EventFrame" | "EventsAnswer" | "EventsFrame" => (EVENT_FRAME_MAX, false),
             _ => (RPC_FRAME_DEFAULT, false),
         };
         if vector.bytes.len() > ceiling as usize {

@@ -174,6 +174,29 @@ fn the_same_operation_with_another_payload_conflicts() {
 }
 
 #[test]
+fn a_duplicate_claiming_the_first_hash_over_another_body_is_refused() {
+    let (mut table, ticket) = issued(1);
+    admit(&mut table, &ticket, 0);
+    let first = submission(&ticket, an_execute(ticket.nonce, "null"));
+    let forged = Submission { request: an_execute(ticket.nonce, "{changed: true}"), ..first.clone() };
+    let refused = |table: &mut OperationTable, stage: &str| {
+        let (admission, execute) = table.submit(1, &forged, EPOCH);
+        assert_eq!(refused_kind(&admission), "daemon::invalid_frame", "{stage}");
+        assert_eq!(execute, None, "{stage}");
+        let (admission, execute) = table.submit(1, &first, EPOCH);
+        assert!(matches!(admission.outcome, AdmissionOutcome::Existing(_)), "{stage}: the true duplicate");
+        assert_eq!(execute, None, "{stage}");
+    };
+    refused(&mut table, "while live");
+    assert_eq!(table.advance(op(1), OperationEvent::Dispatch), Some(OperationState::Running));
+    let terminal = table.advance(op(1), OperationEvent::Succeed).expect("the operation completes");
+    assert!(table.retire(op(1)), "the terminal record retires");
+    refused(&mut table, "after its retirement");
+    let mut recovered = OperationTable::recover(GENERATION, [(op(1), first.hash, terminal)]);
+    refused(&mut recovered, "after a recovery");
+}
+
+#[test]
 fn a_foreign_forged_or_unknown_ticket_runs_nothing() {
     let (mut table, ticket) = issued(1);
     let other_worker = OperationTable::new(WorkerGeneration([0x99; 16]));
@@ -242,7 +265,7 @@ fn a_cancellation_racing_a_completion_ends_in_one_terminal() {
 
 #[test]
 fn a_restart_leaves_every_unfinished_operation_unknown_and_runs_none_again() {
-    let hash = [5; 32];
+    let hash = payload_hash(&an_execute(nonce(1), "null"));
     let records = STATES.iter().enumerate().map(|(n, state)| (op(n as u8), hash, *state));
     let table = OperationTable::recover(WorkerGeneration([0x45; 16]), records);
     for (n, state) in STATES.iter().enumerate() {

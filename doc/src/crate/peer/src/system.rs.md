@@ -61,7 +61,10 @@ as `<inbox>/<spilled_event_path>`, exactly as for a local channel send's spill.
 ## fn PeerSystem::on_event
 Each registry change a link's task asked for, made in the order asked, and
 reported as it is made: a listener's pairing reports Connected once its link is
-in the registry, and a link's end reports Disconnected once it is out.
+in the registry, and a link's end reports Disconnected once it is out. A dialed
+link takes its generation from the counter the listeners' sequence numbers come
+from, so no two connections share one, and an end acts on the connection it
+names alone (link.rs's `ended_link`).
 
 ## fn on_stop
 A halt cancels every link and every listener, so none outlives its system.

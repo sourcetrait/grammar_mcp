@@ -170,6 +170,8 @@ pub(crate) struct HubSlot {
     verify: std::sync::Mutex<Option<(ChannelEpoch, tk::oneshot::Sender<()>)>>,
     policy: std::sync::Mutex<Option<EmergencyPolicy>>,
     epochs: AtomicU64,
+    /// The highest epoch closed, under the hub's lock: a later hub of it is refused.
+    closed_through: AtomicU64,
 }
 
 /// A slot's lock, a poisoned one taken as it stands.
@@ -183,12 +185,17 @@ impl HubSlot {
         ChannelEpoch(self.epochs.fetch_add(1, Ordering::SeqCst) + 1)
     }
 
-    /// Install an open's hub.
+    /// Install an open's hub, or hand it back when its open has closed meanwhile.
     pub(crate) fn install(
         &self,
         hub: Hub,
-    ) {
-        *held(&self.hub) = Some(hub);
+    ) -> Result<(), Hub> {
+        let mut slot = held(&self.hub);
+        if hub.epoch.0 <= self.closed_through.load(Ordering::SeqCst) {
+            return Err(hub);
+        }
+        *slot = Some(hub);
+        Ok(())
     }
 
     /// The endpoint of the open of `epoch`'s hub.
@@ -235,6 +242,7 @@ impl HubSlot {
     ) {
         let taken = {
             let mut slot = held(&self.hub);
+            self.closed_through.fetch_max(epoch.0, Ordering::SeqCst);
             match slot.as_ref() {
                 Some(hub) if hub.epoch == epoch => slot.take(),
                 _ => None,
@@ -252,7 +260,12 @@ impl HubSlot {
         code: u16,
         reason: &str,
     ) -> Option<tk::oneshot::Receiver<()>> {
-        let hub = held(&self.hub).take()?;
+        let hub = {
+            let mut slot = held(&self.hub);
+            let minted = self.epochs.load(Ordering::SeqCst);
+            self.closed_through.fetch_max(minted, Ordering::SeqCst);
+            slot.take()
+        }?;
         let (done_tx, done_rx) = tk::oneshot::channel::<()>();
         let _ = hub.close.send((code, reason.to_string(), Some(done_tx)));
         Some(done_rx)
@@ -341,7 +354,7 @@ impl ChannelCloser {
             reason: SHUTDOWN_REASON.to_string(),
             prune: false,
         };
-        let _ = self.channel.request(close).await;
+        let _ = tk::timeout(CLOSE_FLUSH_GRACE, self.channel.request(close)).await;
         if let Some(done) = done {
             let _ = tk::timeout(CLOSE_FLUSH_GRACE, done).await;
         }

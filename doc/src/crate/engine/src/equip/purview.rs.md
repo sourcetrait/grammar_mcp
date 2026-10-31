@@ -37,6 +37,15 @@ A decode failure is a loud error, never a silent empty: an empty purview table r
 "sees nothing" while looking configured, so a corrupt file read as empty would be a silent
 misconfiguration rather than a fault the caller can see.
 
+## fn save_purviews
+The table is written to a staging file beside it and renamed over it, so a list or a
+resolve, which read without the equip store's lock, sees the old table or the new one
+whole, never a half-written file. The staging file's name takes the process and a count,
+so two writers, another host on the namespace among them, never share one.
+
+## static STAGED
+The count behind each staging file's name.
+
 ## fn is_valid_purview_id
 Path-like but never a path: a leading `/` or `./` is rejected outright, because a label
 that looks like a filesystem path invites being read as one. A purview id is arbitrary,

@@ -21,7 +21,8 @@ The group's enumerated assertions, in the order they run:
 - `wire.types`: every driver type names a vector, and every vector's type a
   driver.
 - `wire.limits`: every vector fits its stream's frame, and each hello its
-  budget.
+  budget; both Events stream directions, `EventsFrame` and `EventsAnswer`, take
+  the event frame's ceiling, as an `EventFrame` does.
 - `wire.handshake`: the frozen hello is accepted, and one of another major,
   schema, or codec is refused with its kind, binding no lease and admitting
   no request.

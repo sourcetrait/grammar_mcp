@@ -33,8 +33,12 @@ an agent having processed the event, and no operation's state moves with it.
 
 ## struct EventBacklog
 Held to the hello's `event_records` and `event_bytes`, the oldest dropped past
-either, apart from the frontend's 1000-packet sync queue. A record past the
-1 MiB event frame is refused when pushed, numbering nothing, and so is one
+either, apart from the frontend's 1000-packet sync queue. A record is sized as
+the Events stream sends it, its `EventsAnswer::Event` envelope and that
+variant's tag included, and decoded once within the subscriber's budget, its
+hello's `decode_budget`: one whose envelope passes the 1 MiB event frame, or
+one small on the wire whose elements its subscriber would refuse, is refused
+when pushed, numbering nothing. So is one
 whose attachment destination fails `check_dest` (artifact.rs): no event is
 numbered that a frontend on any OS couldn't materialize beneath its inbox. A
 relay is held to `RemotePacket::check`, and a host packet whose origin or model
@@ -43,7 +47,9 @@ lies under `remote/` is refused: a remote link's packets ride `Remote` or
 ### fn read
 A cursor of another generation reads a reset and then the new generation from
 its oldest; one whose next sequence was dropped reads a gap first; one past
-the newest is refused, never reset.
+the newest is refused, never reset. The held sequences are contiguous from the
+oldest, so a read starts at its cursor's offset rather than scanning the
+backlog from its front.
 ### fn deliver
 A subscriber more than its window behind is closed rather than held, so a
 slow reader never holds the engine's control capacity; within its window it

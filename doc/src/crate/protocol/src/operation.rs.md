@@ -63,7 +63,11 @@ ever names an operation twice.
 ### fn submit
 An operation admitted before answers what it is, its result or its
 tombstone, whatever its ticket's state, and a different payload under its id
-conflicts. A fresh submission needs its ticket known, unexpired, unused, this
+conflicts. Its duplicate's hash is checked against the request it carries
+first, as a fresh submission's is, so a submission claiming the first hash over
+another body is refused as an invalid frame rather than associated with the
+earlier operation, before its retirement, after it, and after a recovery
+alike. A fresh submission needs its ticket known, unexpired, unused, this
 generation's, this lease epoch's, the request's nonce the ticket's, and the
 supplied hash the request's own; a refusal leaves the ticket for its own
 submission. Only an admission returns an `Execute`.

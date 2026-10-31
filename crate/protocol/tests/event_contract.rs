@@ -120,13 +120,13 @@ fn the_backlog_holds_its_exact_record_and_byte_ceilings() {
     records.push(None, host(5), Vec::new()).expect("pushed");
     assert_eq!(records.oldest(), 2, "the fifth drops the first");
     // Bytes: a ceiling of three records' bytes holds three, and a fourth drops one.
-    let one = bitcode::encode(&EventFrame::Record(Box::new(EventRecord {
+    let one = bitcode::encode(&EventsAnswer::Event(EventFrame::Record(Box::new(EventRecord {
         generation: GENERATION,
         sequence: 1,
         channel: None,
         payload: host(1),
         artifacts: Vec::new(),
-    })))
+    }))))
     .len() as u64;
     let mut bytes = EventBacklog::new(GENERATION, &Limits { event_bytes: 3 * one, ..LIMITS_DEFAULT });
     for i in 1..=3 {
@@ -145,6 +145,61 @@ fn the_backlog_holds_its_exact_record_and_byte_ceilings() {
     });
     assert_eq!(bytes.push(None, huge, Vec::new()).expect_err("too large").kind(), "daemon::result_too_large");
     assert_eq!(bytes.newest(), Some(4));
+}
+
+/// A host event carrying a string of `len` bytes.
+fn sized(len: usize) -> EventPayload {
+    EventPayload::Host(HostEvent {
+        id: "sized".to_string(),
+        from: "thread/fixture".to_string(),
+        model: "fixture/thing/Changed".to_string(),
+        event: NuVal::String("x".repeat(len)),
+        attached: None,
+    })
+}
+
+/// The bytes the Events stream sends for a backlog's next record carrying `payload`.
+fn envelope(payload: EventPayload) -> usize {
+    bitcode::encode(&EventsAnswer::Event(EventFrame::Record(Box::new(EventRecord {
+        generation: GENERATION,
+        sequence: 1,
+        channel: None,
+        payload,
+        artifacts: Vec::new(),
+    }))))
+    .len()
+}
+
+#[test]
+fn the_ceiling_is_the_events_streams_own_envelope() {
+    let max = EVENT_FRAME_MAX as usize;
+    let mut len = max;
+    while envelope(sized(len)) > max {
+        len -= 1;
+    }
+    assert!(envelope(sized(len + 1)) > max, "the longest string that fits is {len} bytes");
+    let mut backlog = backlog(4);
+    backlog.push(None, sized(len), Vec::new()).expect("a record whose envelope fills the frame");
+    let past = backlog.push(None, sized(len + 1), Vec::new()).expect_err("an envelope one past it");
+    assert_eq!(past.kind(), "daemon::result_too_large");
+    assert_eq!(backlog.newest(), Some(1), "the refused record took no sequence");
+}
+
+#[test]
+fn a_record_its_subscriber_could_not_decode_is_refused() {
+    let elements = usize::try_from(DECODE_BUDGET_DEFAULT.elements).expect("a usize");
+    let wide = EventPayload::Host(HostEvent {
+        id: "wide".to_string(),
+        from: "thread/fixture".to_string(),
+        model: "fixture/thing/Changed".to_string(),
+        event: NuVal::List(vec![NuVal::Nothing; elements + 1]),
+        attached: None,
+    });
+    assert!(envelope(wide.clone()) <= EVENT_FRAME_MAX as usize, "small on the wire");
+    let mut backlog = backlog(4);
+    let refused = backlog.push(None, wide, Vec::new()).expect_err("past the element budget");
+    assert_ne!(refused.kind(), "daemon::result_too_large", "refused for its budget, not its size");
+    assert_eq!(backlog.newest(), None, "the refused record took no sequence");
 }
 
 #[test]

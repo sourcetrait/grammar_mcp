@@ -17,8 +17,8 @@ pub(crate) use crate::{
         check_outbound,
     },
     link::{
-        BoundListener, Dial, LinkContext, LinkEvent, LinkKeys, Listen, RemoteLinkEntry, Up,
-        bind_listener, watch_link,
+        BoundListener, Dial, EndedLink, LinkContext, LinkEvent, LinkKeys, Listen,
+        RemoteLinkEntry, Up, bind_listener, ended_link, watch_link,
     },
     remotes::{
         RemoteChange, RemoteEntry, bind_address, dial_address, edit_remotes, read_remotes,

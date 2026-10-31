@@ -30,6 +30,16 @@ The Channel opens before the hub binds, so the hub's claim can never reach the
 system ahead of the open it belongs to. A hub that fails to start closes the
 open again, the inbox taken back for the caller to remove.
 
+A close can land while the hub starts, the agent's own `interface channel
+close` or an early send's teardown, neither of which takes the open's lock.
+Its frame finds no hub to signal, so the face's hub slot remembers the epoch
+closed and refuses the late hub (`face.rs`'s `HubSlot::install`): the hub is
+dropped, which ends its accept loop, the peer links are told the inbox is gone,
+and the open answers that the Channel closed while its hub started.
+
+## const CLOSED_DURING_START
+The open's answer when a close won the race with its hub's start.
+
 ## fn tell_inbox
 The peer links land a peer's files in the Channel's inbox, which only the
 Channel's state holds, so the face tells them each time that state changes: an

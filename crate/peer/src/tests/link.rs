@@ -267,3 +267,16 @@ fn a_delivery_path_stays_beneath_the_inbox() {
         assert_eq!(delivery_path(inbox, nom, id, dest), None, "{nom} {id} {dest}");
     }
 }
+
+/// An old connection's end leaves its replacement, though alias and peer match.
+#[test]
+fn a_replaced_connections_end_leaves_its_replacement() {
+    use crate::link::{EndedLink, ended_link};
+    assert_eq!(ended_link(Some(1), 1), EndedLink::Current, "the alias's own connection ended");
+    assert_eq!(
+        ended_link(Some(2), 1),
+        EndedLink::Replaced,
+        "the first connection's late end, the alias redialed to the same peer",
+    );
+    assert_eq!(ended_link(None, 1), EndedLink::Closed, "a close took the entry first");
+}

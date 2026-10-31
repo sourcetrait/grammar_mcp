@@ -60,14 +60,23 @@ pub(crate) fn load_purviews() -> Result<Option<Vec<PurviewRow>>, RuntimeError> {
         .map_err(|reason| store_failed("purview::decode", reason))
 }
 
-/// Write the rows whole.
+/// Each staged write's number, so concurrent writers never share a staging file.
+static STAGED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Write the rows whole: staged beside the table, then renamed over it.
 pub(crate) fn save_purviews(rows: &[PurviewRow]) -> Result<(), RuntimeError> {
     let path = purviews_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| store_failed("io", e))?;
     }
     let nuon = purviews_to_nuon(rows).map_err(|reason| store_failed("purview::encode", reason))?;
-    fs::write(&path, nuon.as_bytes()).map_err(|e| store_failed("io", e))
+    let number = STAGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let staged = path.with_file_name(format!(".purviews.{}.{number}.tmp", std::process::id()));
+    fs::write(&staged, nuon.as_bytes()).map_err(|e| store_failed("io", e))?;
+    fs::rename(&staged, &path).map_err(|e| {
+        let _ = fs::remove_file(&staged);
+        store_failed("io", e)
+    })
 }
 
 /// Is `id` a legal purview label? Path-like, but never a path.

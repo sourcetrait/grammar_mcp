@@ -673,12 +673,19 @@ pub struct ArtifactStore {
     root: RemotePath,
     limits: ArtifactLimits,
     entries: HashMap<ArtifactId, Entry>,
+    /// A recovered store's holds not yet taken again, collection evicting nothing.
+    restoring: bool,
 }
 
 impl ArtifactStore {
     /// An empty store beneath `root`, the worker's durable state directory.
     pub fn new(root: RemotePath, limits: ArtifactLimits) -> Self {
-        Self { root, limits, entries: HashMap::new() }
+        Self { root, limits, entries: HashMap::new(), restoring: false }
+    }
+
+    /// A recovered store's durable holds taken again: collection may evict from now.
+    pub fn holds_restored(&mut self) {
+        self.restoring = false;
     }
 
     /// The bounds the store keeps.
@@ -953,7 +960,9 @@ impl ArtifactStore {
                     entry.record.owner = None;
                     actions.push(ArtifactAction::RemoveStaging { path: staging_in(&self.root, id) });
                 }
-                ArtifactState::Published if now_ms >= entry.record.deadline_ms && entry.holds.is_empty() => {
+                ArtifactState::Published
+                    if !self.restoring && now_ms >= entry.record.deadline_ms && entry.holds.is_empty() =>
+                {
                     entry.record.state = ArtifactState::Evicted;
                     actions.push(ArtifactAction::RemoveObject { path: object_in(&self.root, id) });
                 }
@@ -973,6 +982,7 @@ impl ArtifactStore {
         mut measure: impl FnMut(&RemotePath) -> Option<(u64, [u8; 32])>,
     ) -> (Self, Vec<ArtifactAction>) {
         let mut store = Self::new(root, limits);
+        store.restoring = true;
         for record in records {
             store.entries.insert(record.artifact.id, Entry { record, holds: HashSet::new() });
         }

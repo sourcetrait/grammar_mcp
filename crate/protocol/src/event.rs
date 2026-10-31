@@ -80,6 +80,8 @@ pub struct EventBacklog {
     bytes: u64,
     max_records: u64,
     max_bytes: u64,
+    /// The budget a subscriber decodes each frame within, its limits' own.
+    budget: DecodeBudget,
 }
 
 impl EventBacklog {
@@ -92,6 +94,7 @@ impl EventBacklog {
             bytes: 0,
             max_records: u64::from(limits.event_records),
             max_bytes: limits.event_bytes,
+            budget: limits.decode_budget(),
         }
     }
 
@@ -125,11 +128,17 @@ impl EventBacklog {
             check_dest(&artifact.dest).map_err(|e| TransportError::InvalidFrame { reason: e.message() })?;
         }
         let record = EventRecord { generation: self.generation, sequence: self.next, channel, payload, artifacts };
-        let size = bitcode::encode(&EventFrame::Record(Box::new(record.clone()))).len() as u64;
+        let answer = EventsAnswer::Event(EventFrame::Record(Box::new(record)));
+        let encoded = bitcode::encode(&answer);
+        let size = encoded.len() as u64;
         if size > u64::from(EVENT_FRAME_MAX) {
             return Err(TransportError::ResultTooLarge { limit: u64::from(EVENT_FRAME_MAX) });
         }
-        self.records.push_back((record, size));
+        decode_payload::<EventsAnswer>(&encoded, self.budget).map_err(|e| e.transport())?;
+        let EventsAnswer::Event(EventFrame::Record(record)) = answer else {
+            unreachable!("the answer was built around the record")
+        };
+        self.records.push_back((*record, size));
         self.bytes += size;
         while self.records.len() as u64 > self.max_records || self.bytes > self.max_bytes {
             let Some((_, dropped)) = self.records.pop_front() else { break };
@@ -160,10 +169,11 @@ impl EventBacklog {
             frames.push(EventFrame::Gap { from: wanted, to: oldest - 1 });
         }
         let from = wanted.max(oldest);
+        let skip = usize::try_from(from - oldest).unwrap_or(usize::MAX);
         frames.extend(
             self.records
                 .iter()
-                .filter(|(record, _)| record.sequence >= from)
+                .skip(skip)
                 .take(max)
                 .map(|(record, _)| EventFrame::Record(Box::new(record.clone()))),
         );

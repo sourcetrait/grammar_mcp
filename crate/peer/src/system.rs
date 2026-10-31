@@ -458,8 +458,16 @@ impl PeerSystem {
                 self.dialing.remove(&alias);
                 let (handle, msg_join, file_join) = drivers;
                 let peer_nom = handle.remote_mcp_nom.clone();
-                self.links.insert(alias.clone(), RemoteLinkEntry { handle, addr });
-                watch_link(alias, peer_nom, (msg_join, file_join), self.events_tx.clone());
+                self.seq += 1;
+                let generation = self.seq;
+                let link = RemoteLinkEntry {
+                    handle,
+                    addr,
+                    generation,
+                };
+                self.links.insert(alias.clone(), link);
+                let joins = (msg_join, file_join);
+                watch_link(alias, peer_nom, generation, joins, self.events_tx.clone());
                 self.reply(reply, Ok(RemoteResult::Done)).await;
             }
             LinkEvent::DialFailed {
@@ -504,13 +512,18 @@ impl PeerSystem {
                 });
             }
             LinkEvent::Released { reply } => self.reply(reply, Ok(RemoteResult::Done)).await,
-            LinkEvent::Ended { alias, peer_nom } => {
-                let ours = self
-                    .links
-                    .get(&alias)
-                    .is_some_and(|link| link.handle.remote_mcp_nom == peer_nom);
-                if ours {
-                    self.links.remove(&alias);
+            LinkEvent::Ended {
+                alias,
+                peer_nom,
+                generation,
+            } => {
+                let current = self.links.get(&alias).map(|link| link.generation);
+                match ended_link(current, generation) {
+                    EndedLink::Current => {
+                        self.links.remove(&alias);
+                    }
+                    EndedLink::Replaced => return,
+                    EndedLink::Closed => {}
                 }
                 self.ctx.report(RemoteChannelEvent::Disconnected {
                     remote: alias,
