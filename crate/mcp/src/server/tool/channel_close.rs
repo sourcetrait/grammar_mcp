@@ -20,6 +20,7 @@ impl ChannelFace {
             Err(reason) => return error_to_call_result(channel_failed(reason), nonce),
         };
         if let Some(inbox) = closed.inbox {
+            self.tell_inbox(None).await;
             remove_channel_dir(Path::new(&inbox));
         }
         success_void(nonce)

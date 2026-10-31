@@ -31,5 +31,5 @@ known-public-key (there is no CA to hint). Empty tells the client to send whatev
 leaf it has, which the match then checks.
 
 The provider is ring, matching the crate's other TLS; no second backend. The unit
-test (`server/tests/remote.rs`) covers the match decision over raw DER blobs; the
+test (`tests/link.rs`) covers the match decision over raw DER blobs; the
 full handshake is the system tests'.

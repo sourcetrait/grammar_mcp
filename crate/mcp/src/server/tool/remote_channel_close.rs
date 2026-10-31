@@ -14,18 +14,6 @@ impl ChannelFace {
         nonce: datum::Nonce,
         p: RemoteChannelCloseParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        let entry = self
-            .remote_links
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&p.alias);
-        match entry {
-            Some(entry) => {
-                entry.handle.cancel();
-                success_void(nonce)
-            }
-            None if close_listener(&p.alias).await => success_void(nonce),
-            None => error_to_call_result(GrammarMcpError::RemoteNotOpen { alias: p.alias }, nonce),
-        }
+        self.remote_answer(nonce, RemoteCloseRequest { alias: p.alias }).await
     }
 }

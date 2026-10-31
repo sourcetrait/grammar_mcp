@@ -35,9 +35,9 @@ they hold the builtins installed a moment before (`run.rs`).
 ## struct McpHost
 What an eval asks of mcp runs here, on the eval's thread, inside the `grimm`
 command that asked: the Channel, the remote links, the config, and the pins are
-mcp's, and the engine reaches them through this one value. The Channel it
-reaches through the bridge (`server/channel/bridge.rs`), blocking on the
-Channel's runtime from the eval's thread, until HostRoute routes the engine's
+mcp's, and the engine reaches them through this one value. The Channel and the
+peer links it reaches through the bridge (`server/channel/bridge.rs`), blocking
+on their runtime from the eval's thread, until HostRoute routes the engine's
 asks through its controller.
 
 ### fn channel_send
@@ -49,40 +49,23 @@ offender stopped through `stop`, its signals and its job, the action it reports
 sent back for the error's emergency. With no face running there is no Channel
 to send on, the same refusal a closed one gives.
 
+### fn remote_send
+The eval's side of a remote send: the reservation, the files read, and the
+event rendered, each a failure of the sender's own, surfaced at the call. The
+peer links' system takes the rest, the id, the spill, and the frames queued on
+the link to `mcp_nom` (`crate/peer`'s `system.rs`), and holds the reservation
+again on its side. With no face running there is no link to send on.
+
 ## fn sendable
 A value nuval can't carry is refused with its render's error, the words the
 send gave before the Channel took its event as data.
 
-### fn remote_send
-The reservations first, as for a Channel send; then the attachments read,
-the event rendered, the id minted, any spill made, and the send enqueued on the
-open link to `mcp_nom` (`find_link_send`, link.rs).
-
 ## fn read_attachments
-Reads each {src, dest} row into (dest, bytes) synchronously, before the id is
+Reads each {src, dest} row into its payload synchronously, before the id is
 returned: a local src read failure is the agent's own problem and must surface
 at the call, not as a later async Unsent. safe_dest guards every dest (relative,
 no `..`) here too, so a bad dest fails the send outright rather than being
 caught only on the receiver.
-
-## fn mint_remote_id
-On the process's generator, the one the Channel's greeting is minted on: a
-send's id needs only be unique, and the Channel's own counter is its system's.
-
-## fn spill_remote_event
-It returns the wire event's NUON, a pointer when it spilled, and the payloads,
-the spill among them.
-
-The sender's half of the event spill: an event that would overflow the
-receiver's notification cap (event_overflows, crate/channel) moves to a transferred
-file - the reserved EVENT_SPILL_DEST, pushed beside any caller files - and a
-compact pointer replaces it on the wire, for both decls. It is the sender's act,
-through the file connection, rather than the receiver's render choice, because
-an event over 1 MiB cannot ride the inline Deliver frame at all, so only the
-file transfer reaches the agent. The pointer's path is dest-relative; the
-receiver rewrites it under the delivery's inbox directory (link.rs's
-rewrite_spill_pointer), so the agent resolves it as
-<inbox>/<spilled_event_path>, exactly as for a local channel send's spill.
 
 ## fn config_record
 The record `grimm get_config_all` returns mirrors the config file - the same

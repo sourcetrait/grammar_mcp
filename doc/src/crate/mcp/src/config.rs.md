@@ -176,6 +176,13 @@ A UENV home stands in for itself with the standard variable behind it, then
 with that variable's default, the order the host reads every home in
 (`home.rs`).
 
+## fn expand_defaults
+The peer links expand a certificate's path in their own crate (`crate/peer`'s
+`remotes.rs`), so `var_default`'s answers cross to them as data, one for each
+home variable that has one, read when the face starts
+(`server/channel/face.rs`'s `peer_params`). A path there expands as it would
+here.
+
 ## fn spec_default
 The four homes the XDG base directory spec defines, each at its default under
 `$HOME`, and `TMPDIR` at `/tmp`, and nothing beyond them. Hardcoded in the mcp

@@ -24,11 +24,6 @@ pub(crate) mod server {
     pub(crate) mod operator;
     #[cfg(feature = "embedded-cli")]
     pub(crate) mod purview;
-    pub(crate) mod remote {
-        pub(crate) mod codec;
-        pub(crate) mod link;
-        pub(crate) mod verify;
-    }
     #[cfg(feature = "embedded-cli")]
     pub(crate) mod run;
     #[cfg(feature = "embedded-cli")]
@@ -69,10 +64,9 @@ pub(crate) mod server {
     #[cfg(test)]
     mod tests {
         mod client;
-        mod face;
         mod emergency;
+        mod face;
         mod interface;
-        mod remote;
         #[cfg(feature = "embedded-cli")]
         mod purview;
     }
@@ -80,13 +74,11 @@ pub(crate) mod server {
 #[cfg(test)]
 mod tests {
     mod config;
-    mod remotes;
 }
 pub(crate) mod cli;
 pub(crate) mod config;
 pub(crate) mod consts;
 pub(crate) mod home;
-pub(crate) mod remotes;
 pub(crate) mod scratch;
 #[cfg(feature = "embedded-cli")]
 pub mod guts;
@@ -94,15 +86,11 @@ pub mod guts;
 pub(crate) use crate::{
     config::{
         AGENT_CONFIG_FILE, CONFIG, Config, DEFAULT_NAMESPACE, DenySet, TEST_NAMESPACE, config,
-        default_id, default_work_dir, expand_path,
+        default_id, default_work_dir, expand_defaults, expand_path,
     },
     home::{
         TMP_DEFAULT, base_dirs, cache_base_dir, check_base_dirs, data_base_dir, env_dir,
-        home_var, uenv_partner, uenv_standard,
-    },
-    remotes::{
-        REMOTES_FILE, RemoteChange, RemoteEntry, bind_address, dial_address, edit_remotes,
-        read_remotes, set_entry, unset_entry,
+        home_var, home_vars, uenv_partner, uenv_standard,
     },
     scratch::{
         make_channel_dir, make_scratch_dirs, remove_channel_dir, remove_scratch_dirs, tmp_dir,
@@ -113,10 +101,10 @@ pub(crate) use crate::{
     server::{
         cert::ensure_cert_profile,
         channel::{
-            bridge::{Post, host_channel, set_host_channel},
+            bridge::{host_channel, set_host_channel},
             face::{
                 ChannelFace, CloseSignal as ChannelCloseSignal, Hub, HubSlot, channel_failed,
-                spawn_signal_sweep,
+                peer_failed, spawn_signal_sweep,
             },
             hub::{FROM_MCP, open_packet, start as start_channel_hub},
         },
@@ -126,17 +114,6 @@ pub(crate) use crate::{
         interface::{
             contract::{InterfaceCommand, parse_command},
             grammar::{interface_engine, render_command_list, render_signatures},
-        },
-        remote::{
-            codec::{
-                AcceptorToInitiator, BitcodeCodec, FileFrame, InitiatorToAcceptor, MsgFrame,
-                RemoteStream, check_outbound,
-            },
-            link::{
-                LinkKeys, RemoteLinkEntry, bound_listeners, close_listener, connect_remote,
-                find_link_send, listen_remote, remote_links, safe_dest,
-            },
-            verify::PublicKeyVerifier,
         },
         tool::{
             call::{CALL_DESCRIPTION, CallParams},
@@ -162,7 +139,7 @@ pub(crate) use crate::{
             remote_channel_connect::RemoteConnectParams,
             remote_channel_listen::RemoteListenParams,
             remote_channel_set::RemoteSetParams,
-            remote_channels::{RemoteAliasParams, RemoteRow, link_keys, remote_entries},
+            remote_channels::RemoteAliasParams,
             rerun::{RERUN_DESCRIPTION, RerunParams},
         },
     },
@@ -204,16 +181,20 @@ pub(crate) use sourcetrait_grammar_channel::{
     ChannelSysPaths, ChannelSystem, ChannelVerifyError, CloseHub, CloseRequest, EmitError,
     EmitRequest, ExpireRequest, FromChannelSys, HostRequest, HubNotice, Line, OpenRequest,
     ReadyRequest, SendRequest, SendVerdict, SpamThresholds, StatusRequest, StoppedNotice,
-    SyncRequest, ThresholdsRequest, escape_line, event_overflows, event_spill_pointer, mint_msg_id,
-    render_nuon, render_packet,
+    SyncRequest, ThresholdsRequest, escape_line, mint_msg_id, render_nuon, render_packet,
+};
+
+pub(crate) use sourcetrait_grammar_peer::{
+    ExpandDefault, FromPeerSys, IdentityKeys, InboxRequest, Payload, PeerHandle, PeerSysParams,
+    PeerSysPaths, PeerSystem, REMOTES_FILE, Relay, RemoteCloseRequest, RemoteConnectRequest,
+    RemoteGetRequest, RemoteListRequest, RemoteListenRequest, RemoteSendRequest,
+    RemoteSetRequest, RemoteUnsetRequest, safe_dest,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
-    ArtifactError, ChannelEpoch, ChannelPhase, ChannelSendData, DECODE_BUDGET_DEFAULT,
-    EVENT_SPILL_DEST, EVENT_SPILL_KEY, LOCAL_HOST, MAX_FRAME_BYTES, MODEL_CONNECTED,
-    MODEL_DISCONNECTED, MODEL_SENT, MODEL_UNSENT, PurviewRow, PurviewView, RuntimeError,
-    SpamThresholdsData, TransportError, REMOTE_RESERVED_PREFIX, RemoteChannelRow,
-    RemoteLinkState, RemoteListenResult, decode_payload, reserved_prefix, valid_peer_id,
+    ArtifactError, ChannelEpoch, ChannelPhase, ChannelSendData, LOCAL_HOST, MAX_FRAME_BYTES,
+    PurviewRow, PurviewView, RemoteResult, RuntimeError, SpamThresholdsData, TransportError,
+    reserved_prefix,
 };
 
 pub(crate) use sourcetrait_grammar_protocol::{
@@ -238,12 +219,9 @@ pub(crate) use sourcetrait_grammar_operator::{
 pub(crate) use nuval::{NuVal, NuonStyle, TryFromNu, TryIntoNu, wide};
 
 pub(crate) use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
+    collections::HashMap,
     fs,
     io::{self, Write},
-    marker::PhantomData,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{PathBuf,Path},
     process,
     sync::{
@@ -296,18 +274,9 @@ pub(crate) mod mcp {
 }
 
 pub(crate) mod tls {
-    pub(crate) use tokio_rustls::{TlsAcceptor, TlsConnector, client, server};
-    pub(crate) use tokio_rustls::rustls::{ClientConfig, ServerConfig};
+    pub(crate) use tokio_rustls::TlsAcceptor;
+    pub(crate) use tokio_rustls::rustls::ServerConfig;
     pub(crate) use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer};
-}
-
-pub(crate) mod rv {
-    pub(crate) use rustls::{CertificateError, DigitallySignedStruct, DistinguishedName, SignatureScheme};
-    pub(crate) use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-    pub(crate) use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
-    pub(crate) use rustls::crypto::{CryptoProvider, verify_tls12_signature, verify_tls13_signature};
-    pub(crate) use rustls::crypto::ring::default_provider;
-    pub(crate) use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 }
 
 pub(crate) mod ws {
@@ -323,7 +292,6 @@ pub(crate) use tokio_rustls::rustls::pki_types::pem::PemObject;
 pub(crate) mod tk {
     pub(crate) use tokio::{
         select, spawn,
-        io::{ReadHalf, WriteHalf, split},
         net::{TcpListener, TcpStream},
         task::JoinHandle,
         sync::{
@@ -334,12 +302,6 @@ pub(crate) mod tk {
     };
     #[cfg(unix)]
     pub(crate) use tokio::signal::unix::{SignalKind, signal};
-}
-
-pub(crate) mod tku {
-    pub(crate) use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite, LengthDelimitedCodec};
-    pub(crate) use tokio_util::bytes::{Bytes, BytesMut};
-    pub(crate) use tokio_util::sync::CancellationToken;
 }
 
 pub(crate) mod json {

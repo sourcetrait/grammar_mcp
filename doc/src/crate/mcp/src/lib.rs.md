@@ -15,10 +15,11 @@ The engine, the operator, nix, and every module that reaches them - the host,
 the system, the operator's watch, the purviews, the one-shot, the test driver's
 server, and `guts` - compile under `embedded-cli` alone, as does each tool's
 engine-side method; each tool's parameters stay in every build, since the
-interface parse carries them. The client, the Channel, the remote channels and
-their links, the cert profile, the interface parse, the config, and the scratch
-directories compile in every build: the Channel and the remote channels are the
-MCP's own, never the runtime's (User).
+interface parse carries them. The client, the face of the Channel and the remote
+channels, the cert profile, the interface parse, the config, and the scratch
+directories compile in every build, as do the Channel's and the peer links'
+systems (`crate/channel`, `crate/peer`): the Channel and the remote channels
+are the MCP's own, never the runtime's (User).
 
 ## mod schema
 The shim re-exporting `schemars::JsonSchema`, reached only through the

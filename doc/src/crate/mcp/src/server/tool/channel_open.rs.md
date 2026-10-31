@@ -30,6 +30,13 @@ The Channel opens before the hub binds, so the hub's claim can never reach the
 system ahead of the open it belongs to. A hub that fails to start closes the
 open again, the inbox taken back for the caller to remove.
 
+## fn tell_inbox
+The peer links land a peer's files in the Channel's inbox, which only the
+Channel's state holds, so the face tells them each time that state changes: an
+open's inbox the moment the open is in, and none when a close takes it, the
+hub's failed start as a deliberate close. It waits for the links' answer, so
+what follows runs on the inbox they hold.
+
 ## struct ChannelOpenResult
 `wss` is null for a sync channel rather than absent, so the result keeps one
 shape in both modes and `mode` says which it is.

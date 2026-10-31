@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! The remote-link wire: zstd-compressed bitcode in a length-delimited frame.
 use crate::*;
 
@@ -8,8 +7,7 @@ const REMOTE_ZSTD_LEVEL: i32 = 3;
 /// The most a remote frame inflates to.
 pub(crate) const REMOTE_INFLATED_MAX: u64 = 8 * 1024 * 1024;
 
-/// The most a remote frame takes on the wire: zstd's bound for a payload of
-/// `REMOTE_INFLATED_MAX`, so every frame within the inflated cap fits.
+/// The most a remote frame takes on the wire, zstd's bound at the inflated cap.
 fn remote_frame_max() -> usize {
     zstd::zstd_safe::compress_bound(REMOTE_INFLATED_MAX as usize)
 }
@@ -31,9 +29,6 @@ pub(crate) enum RemoteStream {
 )]
 pub(crate) enum MsgFrame {
     /// A message to deliver: its id, model, event, and the files it waits for.
-    ///
-    /// `files` names the dests the receiver awaits on the file connection before
-    /// it relays, empty for a message with none.
     Deliver {
         id: String,
         model: String,
@@ -56,7 +51,7 @@ pub(crate) enum FileFrame {
     },
 }
 
-/// Messages the link INITIATOR sends to the ACCEPTOR.
+/// Messages a link's initiator sends to its acceptor.
 #[derive(
     Debug, Clone, PartialEq, ser::Serialize, ser::Deserialize, bitcode::Encode, bitcode::Decode,
 )]
@@ -71,7 +66,7 @@ pub(crate) enum InitiatorToAcceptor {
     Close,
 }
 
-/// Messages the link ACCEPTOR sends to the INITIATOR.
+/// Messages a link's acceptor sends to its initiator.
 #[derive(
     Debug, Clone, PartialEq, ser::Serialize, ser::Deserialize, bitcode::Encode, bitcode::Decode,
 )]
@@ -100,8 +95,7 @@ impl<T> BitcodeCodec<T> {
     }
 }
 
-/// A frame its peer would refuse, inflating past `REMOTE_INFLATED_MAX` or
-/// decoding past the budget, refused before it is queued.
+/// A frame its peer would refuse, refused before it is queued.
 pub(crate) fn check_outbound<T>(frame: &T) -> Result<(), String>
 where
     T: bitcode::Encode + bitcode::DecodeOwned,

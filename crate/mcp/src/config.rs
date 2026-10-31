@@ -307,6 +307,18 @@ pub(crate) fn var_default(var: &str) -> Option<PathBuf> {
     }
 }
 
+/// Each home variable's stand-in, as data a system's expansion reads.
+pub(crate) fn expand_defaults() -> Vec<ExpandDefault> {
+    home_vars()
+        .filter_map(|var| {
+            var_default(var).map(|value| ExpandDefault {
+                var: var.to_string(),
+                value: value.to_string_lossy().into_owned(),
+            })
+        })
+        .collect()
+}
+
 /// The default for an unset standard home: the XDG spec's, and `TMPDIR`'s `/tmp`.
 pub(crate) fn spec_default(var: &str) -> Option<PathBuf> {
     let home_relative = match var {

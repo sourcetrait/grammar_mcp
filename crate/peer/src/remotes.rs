@@ -2,7 +2,7 @@
 use crate::*;
 
 /// The remotes file's name, beside the agent's config file.
-pub(crate) const REMOTES_FILE: &str = "remotes.toml";
+pub const REMOTES_FILE: &str = "remotes.toml";
 
 /// The address a listen binds when neither the call nor the entry names one.
 const DEFAULT_LISTEN: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
@@ -87,10 +87,42 @@ impl RemoteEntry {
             .unwrap_or(SocketAddr::new(DEFAULT_LISTEN, 0))
     }
 
-    /// The peer's certificate, its path expanded.
-    pub(crate) fn peer_cert(&self) -> Result<PathBuf, String> {
-        expand_path(Path::new(&self.cert))
+    /// The peer's certificate, its path expanded, an unset variable's stand-in used.
+    pub(crate) fn peer_cert(
+        &self,
+        defaults: &[ExpandDefault],
+    ) -> Result<PathBuf, String> {
+        expand_path(Path::new(&self.cert), defaults)
     }
+}
+
+/// `~` and each `$VAR` in a path expanded, an unset variable read from `defaults`.
+fn expand_path(
+    raw: &Path,
+    defaults: &[ExpandDefault],
+) -> Result<PathBuf, String> {
+    let lossy = raw.to_string_lossy();
+    if !lossy.contains(['$', '~']) {
+        return Ok(raw.to_path_buf());
+    }
+    shellexpand::full_with_context(lossy.as_ref(), home_dir, |var: &str| {
+        if let Ok(value) = std::env::var(var)
+            && !value.is_empty()
+        {
+            return Ok(Some(value));
+        }
+        match defaults.iter().find(|default| default.var == var) {
+            Some(default) => Ok(Some(default.value.clone())),
+            None => Err("environment variable unset or empty".to_string()),
+        }
+    })
+    .map(|expanded| PathBuf::from(expanded.as_ref()))
+    .map_err(|e| format!("expand {}: ${}: {}", raw.display(), e.var_name, e.cause))
+}
+
+/// `$HOME`, read per call: the tilde's source.
+fn home_dir() -> Option<String> {
+    std::env::var("HOME").ok()
 }
 
 /// An `ip:port` a connect dials.

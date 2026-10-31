@@ -137,10 +137,11 @@ impl ChannelFace {
         let open = OpenRequest {
             epoch,
             mode,
-            inbox,
+            inbox: inbox.clone(),
             greeting,
         };
         self.channel.request(open).await.map_err(channel_failed)?;
+        self.tell_inbox(Some(inbox)).await;
         if mode == ChannelMode::Sync {
             return Ok(None);
         }
@@ -159,9 +160,18 @@ impl ChannelFace {
                     prune: true,
                 };
                 let _ = self.channel.request(close).await;
+                self.tell_inbox(None).await;
                 Err(error)
             }
         }
+    }
+
+    /// The peer links told where the Channel's inbox now is, once they hold it.
+    pub(crate) async fn tell_inbox(
+        &self,
+        inbox: Option<String>,
+    ) {
+        let _ = self.peer.request(InboxRequest(inbox)).await;
     }
 
     /// Re-greet an existing channel's peer.

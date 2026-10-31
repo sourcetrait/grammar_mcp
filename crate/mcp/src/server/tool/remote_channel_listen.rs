@@ -16,35 +16,13 @@ impl ChannelFace {
         nonce: datum::Nonce,
         p: RemoteListenParams,
     ) -> Result<mcp::CallToolResult, mcp::ErrorData> {
-        match self.listen_for(p).await {
-            Ok(bound) => success(
-                nonce,
-                &RemoteListenResult {
-                    endpoint: bound.to_string(),
-                },
-            ),
-            Err(error) => error_to_call_result(error, nonce),
+        if let Err(error) = self.remote_gate().await {
+            return error_to_call_result(error, nonce);
         }
-    }
-
-    /// Bind for `p.alias`'s peer on the address the call or the entry names.
-    async fn listen_for(
-        &self,
-        p: RemoteListenParams,
-    ) -> Result<SocketAddr, GrammarMcpError> {
-        let entry = self.remote_to_open(&p.alias).await?;
-        let bind = match &p.on {
-            Some(on) => {
-                bind_address(on).map_err(|reason| GrammarMcpError::RemoteInvalidParams { reason })?
-            }
-            None => entry.bind(),
+        let listen = RemoteListenRequest {
+            alias: p.alias,
+            on: p.on,
         };
-        let keys = link_keys(&entry)?;
-        listen_remote(&self.mcp_nom, p.alias.clone(), keys, bind)
-            .await
-            .map_err(|reason| GrammarMcpError::RemoteOpenFailed {
-                alias: p.alias,
-                reason,
-            })
+        self.remote_answer(nonce, listen).await
     }
 }

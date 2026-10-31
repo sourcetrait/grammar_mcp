@@ -1,12 +1,10 @@
-//! Unit tests for the remote-link known-public-key verifier.
-
+//! The link's verifier, its codec's frames, its send's checks, and its paths.
 use crate::rv;
-use crate::server::remote::verify::PublicKeyVerifier;
+use crate::verify::PublicKeyVerifier;
 use rustls::client::danger::ServerCertVerifier;
 use rustls::server::danger::ClientCertVerifier;
 
-/// A leaf byte-identical to the known public key is accepted; any other leaf is
-/// rejected - both as a server cert (client-side) and a client cert (server-side).
+/// The known public key's leaf passes on either side, any other leaf fails.
 #[test]
 fn public_key_verifier_accepts_only_the_matching_leaf() {
     let key_bytes = vec![1u8, 2, 3, 4, 5];
@@ -19,19 +17,16 @@ fn public_key_verifier_accepts_only_the_matching_leaf() {
     let now = rustls::pki_types::UnixTime::now();
     let name = rustls::pki_types::ServerName::try_from("127.0.0.1").unwrap();
 
-    // Client-side: verifying the remote's SERVER cert.
     assert!(ServerCertVerifier::verify_server_cert(&verifier, &same, &[], &name, &[], now).is_ok());
     assert!(
         ServerCertVerifier::verify_server_cert(&verifier, &different, &[], &name, &[], now).is_err()
     );
 
-    // Server-side: verifying the remote's CLIENT cert.
     assert!(ClientCertVerifier::verify_client_cert(&verifier, &same, &[], now).is_ok());
     assert!(ClientCertVerifier::verify_client_cert(&verifier, &different, &[], now).is_err());
 }
 
-/// The codec round-trips a message through zstd + bitcode: what encode writes,
-/// decode reads back unchanged.
+/// What the codec encodes through zstd and bitcode, it decodes back unchanged.
 #[test]
 fn bitcode_codec_round_trips_a_message_through_zstd() {
     use crate::tku::{BytesMut, Decoder, Encoder};
@@ -48,8 +43,7 @@ fn bitcode_codec_round_trips_a_message_through_zstd() {
     assert_eq!(got, msg, "encode -> zstd -> frame -> decode must round-trip");
 }
 
-/// The send frames round-trip through both wire enums: a Deliver and a FileChunk
-/// carrying real bytes (a live zstd payload).
+/// A Deliver and a chunk of real bytes round-trip through both wire enums.
 #[test]
 fn bitcode_codec_round_trips_the_send_frames() {
     use crate::tku::{BytesMut, Decoder, Encoder};
@@ -90,11 +84,10 @@ fn bitcode_codec_round_trips_the_send_frames() {
     roundtrip_acc(AcceptorToInitiator::File(chunk));
 }
 
-/// A frame whose zstd payload inflates past the cap is refused, however small it
-/// is on the wire.
+/// A frame inflating past the cap is refused, however small it is on the wire.
 #[test]
 fn bitcode_codec_refuses_a_frame_inflating_past_its_cap() {
-    use crate::server::remote::codec::REMOTE_INFLATED_MAX;
+    use crate::codec::REMOTE_INFLATED_MAX;
     use crate::tku::{Bytes, BytesMut, Decoder, Encoder, LengthDelimitedCodec};
     use crate::{BitcodeCodec, InitiatorToAcceptor};
 
@@ -108,8 +101,7 @@ fn bitcode_codec_refuses_a_frame_inflating_past_its_cap() {
     assert!(err.to_string().contains("inflates past"), "{err}");
 }
 
-/// A delivery declaring more than the decode budget allows is refused before its
-/// files' names are allocated.
+/// A delivery past the decode budget is refused before its files' names allocate.
 #[test]
 fn bitcode_codec_refuses_a_frame_past_its_decode_budget() {
     use crate::tku::{BytesMut, Decoder, Encoder};
@@ -129,8 +121,7 @@ fn bitcode_codec_refuses_a_frame_past_its_decode_budget() {
     assert!(err.to_string().contains("elements bound"), "{err}");
 }
 
-/// Both wire enums encode a Msg or a File frame to the same bytes, so a frame
-/// checked as the initiator's is checked as the acceptor's.
+/// Both wire enums encode a shared frame alike, so one check serves both roles.
 #[test]
 fn both_wire_enums_encode_the_shared_frames_alike() {
     use crate::{AcceptorToInitiator, FileFrame, InitiatorToAcceptor, MsgFrame};
@@ -158,11 +149,10 @@ fn both_wire_enums_encode_the_shared_frames_alike() {
     );
 }
 
-/// A send holding a frame that would inflate past its peer's cap is refused
-/// before any of its frames is queued.
+/// A send with a frame past its peer's cap is refused before any frame queues.
 #[test]
 fn a_send_past_the_inflated_cap_is_refused_before_it_is_queued() {
-    use crate::server::remote::{codec::REMOTE_INFLATED_MAX, link::push_frames};
+    use crate::{codec::REMOTE_INFLATED_MAX, link::push_frames};
     use crate::tk;
 
     let (msg_tx, mut msg_rx) = tk::unbounded_channel();
@@ -184,11 +174,10 @@ fn a_send_past_the_inflated_cap_is_refused_before_it_is_queued() {
     assert!(file_rx.try_recv().is_err(), "no chunk queued");
 }
 
-/// A send naming more files than the decode budget's elements is refused
-/// before any of its frames is queued.
+/// A send past the decode budget's elements is refused before any frame queues.
 #[test]
 fn a_send_past_the_decode_budget_is_refused_before_it_is_queued() {
-    use crate::server::remote::link::push_frames;
+    use crate::link::push_frames;
     use crate::{DECODE_BUDGET_DEFAULT, tk};
 
     let (msg_tx, mut msg_rx) = tk::unbounded_channel();
@@ -211,11 +200,10 @@ fn a_send_past_the_decode_budget_is_refused_before_it_is_queued() {
     assert!(file_rx.try_recv().is_err(), "no chunk queued");
 }
 
-/// A frame the check passes crosses the codec whole, incompressible at the
-/// cap: the wire's ceiling is zstd's bound for the inflated cap.
+/// A frame the check passes crosses the codec whole, incompressible at the cap.
 #[test]
 fn a_frame_the_check_passes_crosses_the_codec_whole() {
-    use crate::server::remote::codec::REMOTE_INFLATED_MAX;
+    use crate::codec::REMOTE_INFLATED_MAX;
     use crate::tku::{BytesMut, Decoder, Encoder};
     use crate::{BitcodeCodec, FileFrame, InitiatorToAcceptor, check_outbound};
 
@@ -244,11 +232,10 @@ fn a_frame_the_check_passes_crosses_the_codec_whole() {
     assert_eq!(got, frame);
 }
 
-/// safe_dest accepts a relative path, rejects an empty one, an absolute one, and
-/// any `..` escape from the per-packet inbox.
+/// A relative dest passes; an empty, an absolute, or an escaping one fails.
 #[test]
 fn safe_dest_rejects_escapes() {
-    use crate::safe_dest;
+    use crate::link::safe_dest;
     assert!(safe_dest("out.txt"));
     assert!(safe_dest("sub/dir/out.txt"));
     assert!(!safe_dest(""));
@@ -260,7 +247,7 @@ fn safe_dest_rejects_escapes() {
 /// A delivery's file lands beneath its peer's inbox directory, or nowhere.
 #[test]
 fn a_delivery_path_stays_beneath_the_inbox() {
-    use crate::server::remote::link::delivery_path;
+    use crate::link::delivery_path;
     let inbox = std::path::Path::new("/srv/inbox");
     assert_eq!(
         delivery_path(inbox, "peernom0001", "eventid0001", "sub/out.txt"),

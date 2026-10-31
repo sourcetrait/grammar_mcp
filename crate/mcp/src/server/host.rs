@@ -92,10 +92,16 @@ impl EngineHost for McpHost {
             None => Vec::new(),
         };
         let event_nuon = render_nuon(&event)?;
-        let id = mint_remote_id(&model, &event_nuon);
-        let (wire_event_nuon, payloads) = spill_remote_event(event_nuon, payloads)?;
-        find_link_send(&mcp_nom, id.clone(), model, wire_event_nuon, payloads)?;
-        Ok(id)
+        let Some(host) = host_channel() else {
+            return Err(format!("no open remote link to mcp_nom `{mcp_nom}`"));
+        };
+        let send = RemoteSendRequest {
+            mcp_nom,
+            model,
+            event_nuon,
+            payloads,
+        };
+        host.peer.request_blocking(send)?
     }
 
     fn config_record(&self) -> nu::Value {
@@ -131,8 +137,8 @@ fn sendable(value: nu::Value) -> Result<NuVal, String> {
     })
 }
 
-/// Read each `{src, dest}` row into `(dest, bytes)`, its dest checked first.
-fn read_attachments(value: &nu::Value) -> Result<Vec<(String, Vec<u8>)>, String> {
+/// Read each `{src, dest}` row into its payload, its dest checked first.
+fn read_attachments(value: &nu::Value) -> Result<Vec<Payload>, String> {
     let rows = match value {
         nu::Value::List { vals, .. } => vals,
         _ => return Err("attached must be a table<src: path, dest: path>".to_string()),
@@ -155,31 +161,12 @@ fn read_attachments(value: &nu::Value) -> Result<Vec<(String, Vec<u8>)>, String>
             return Err(format!("dest `{dest}` must be a relative path with no `..`"));
         }
         let bytes = fs::read(src).map_err(|e| format!("read src `{src}`: {e}"))?;
-        out.push((dest.to_string(), bytes));
+        out.push(Payload {
+            dest: dest.to_string(),
+            bytes,
+        });
     }
     Ok(out)
-}
-
-/// Mint the send's message id off the process's nonce generator, a unique base62.
-fn mint_remote_id(
-    model: &str,
-    event_nuon: &str,
-) -> String {
-    let (nonce_gen, _) = process_identity();
-    mint_msg_id(&nonce_gen, "remote/send", model, event_nuon, None).to_string()
-}
-
-/// Spill an event the receiver's cap would truncate into a transferred file.
-fn spill_remote_event(
-    event_nuon: String,
-    mut payloads: Vec<(String, Vec<u8>)>,
-) -> Result<(String, Vec<(String, Vec<u8>)>), String> {
-    if !event_overflows(&event_nuon) {
-        return Ok((event_nuon, payloads));
-    }
-    let pointer_nuon = render_nuon(&event_spill_pointer(EVENT_SPILL_DEST, event_nuon.len()))?;
-    payloads.push((EVENT_SPILL_DEST.to_string(), event_nuon.into_bytes()));
-    Ok((pointer_nuon, payloads))
 }
 
 /// The whole config as a nu record, mirroring the TOML's tables.

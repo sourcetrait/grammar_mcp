@@ -4,10 +4,12 @@ use crate::*;
 /// What a planned close carries: the code, the reason, and an optional ack.
 pub(crate) type CloseSignal = (u16, String, Option<tk::oneshot::Sender<()>>);
 
-/// The Channel's face to a server: its system, hub, open lock, identity, and links.
+/// The Channel's face to a server: its systems, hub, open lock, and identity.
 pub(crate) struct ChannelFace {
     /// The Channel's system, which this face started and holds.
     pub(crate) channel: Arc<ChannelHandle>,
+    /// The peer links' system, which this face started and holds.
+    pub(crate) peer: Arc<PeerHandle>,
     /// The open's async hub and what the face's pump and timer share with it.
     pub(crate) hub: Arc<HubSlot>,
     /// Serializes `channel_open`'s decide-then-start across its await.
@@ -15,31 +17,35 @@ pub(crate) struct ChannelFace {
     pub(crate) nonce_gen: Arc<datum::NonceGenerator>,
     /// This host process's identity, minted once at startup.
     pub(crate) mcp_nom: datum::NomPair,
-    /// The process-wide registry of established remote links, keyed by alias.
-    pub(crate) remote_links: Arc<std::sync::Mutex<HashMap<String, RemoteLinkEntry>>>,
 }
 
 impl ChannelFace {
-    /// Starts the Channel's system for a server, the face its controller.
+    /// Starts the Channel's and the peer links' systems, the face their controller.
     pub(crate) async fn start(
         nonce_gen: Arc<datum::NonceGenerator>,
         mcp_nom: datum::NomPair,
     ) -> Result<Self, String> {
         let hub = Arc::new(HubSlot::default());
-        let paths = ChannelSysPaths::new(data_base_dir(), cache_base_dir());
         let params = ChannelSysParams {
             spam: config().channel.spam.data(),
         };
         let pump = HubPump { hub: hub.clone() };
+        let paths = ChannelSysPaths::new(data_base_dir(), cache_base_dir());
         let channel = Arc::new(ChannelHandle::start(paths, params, pump).await?);
-        set_host_channel(&channel, &hub);
+        let params = peer_params(&mcp_nom);
+        let pump = PeerPump {
+            channel: channel.clone(),
+        };
+        let paths = PeerSysPaths::new(data_base_dir(), cache_base_dir());
+        let peer = Arc::new(PeerHandle::start(paths, params, pump).await?);
+        set_host_channel(&channel, &peer, &hub);
         Ok(Self {
             channel,
+            peer,
             hub,
             channel_open_lock: Arc::new(tk::AsyncMutex::new(())),
             nonce_gen,
             mcp_nom,
-            remote_links: remote_links(),
         })
     }
 
@@ -63,6 +69,83 @@ pub(crate) fn channel_failed(reason: String) -> GrammarMcpError {
         phase: "channel".to_string(),
         reason,
     }
+}
+
+/// The internal error a peer links request's failed system is.
+pub(crate) fn peer_failed(reason: String) -> GrammarMcpError {
+    GrammarMcpError::Internal {
+        phase: "remote".to_string(),
+        reason,
+    }
+}
+
+/// The peer links' parameters: the host's nom, its key pair, and its remotes file.
+fn peer_params(mcp_nom: &datum::NomPair) -> PeerSysParams {
+    let cfg = config();
+    let path = |file: &Path| file.to_string_lossy().into_owned();
+    PeerSysParams {
+        mcp_nom: mcp_nom.as_str().to_string(),
+        identity: cfg.identity.as_ref().map(|identity| IdentityKeys {
+            cert: path(&identity.cert),
+            key: path(&identity.key),
+        }),
+        config_file: AGENT_CONFIG_FILE.to_string(),
+        remotes_file: path(&cfg.remotes_file),
+        expand: expand_defaults(),
+    }
+}
+
+/// The face's handler of its peer links: their relays and reports onto the Channel.
+struct PeerPump {
+    channel: Arc<ChannelHandle>,
+}
+
+impl subsys::Handler<PeerSystem> for PeerPump {
+    fn on_packet(&mut self, pkt: subsys::Packet<FromPeerSys>) -> impl Future<Output = Option<subsys::Packet<FromPeerSys>>> + 'static + Send {
+        let channel = self.channel.clone();
+        async move {
+            match pkt.take_msg() {
+                FromPeerSys::Relay(relay) => relay_onto(&channel, relay).await,
+                FromPeerSys::Report(report) => {
+                    let emit = EmitRequest {
+                        from: FROM_MCP.to_string(),
+                        model: report.model().to_string(),
+                        event: report.event(),
+                        attached: None,
+                    };
+                    let _ = channel.request(emit).await;
+                }
+                _ => {}
+            }
+            None
+        }
+    }
+}
+
+/// A peer's message onto the Channel through its gate, a failure logged by its id.
+async fn relay_onto(
+    channel: &ChannelHandle,
+    relay: Relay,
+) {
+    let attached = relay.attached();
+    let Relay { packet, .. } = relay;
+    let from = packet.packet_from();
+    let emit = EmitRequest {
+        from,
+        model: packet.model,
+        event: packet.event,
+        attached,
+    };
+    let (kind, message) = match channel.request(emit).await {
+        Ok(Ok(_)) => return,
+        Ok(Err(EmitError::Refused(e))) => ("channel", e.message().to_string()),
+        Ok(Err(EmitError::Render(e))) => ("render", e),
+        Err(e) => ("channel", e),
+    };
+    eprintln!(
+        "grammar: remote delivery `{}` not relayed onto the Channel: {kind}: {message}",
+        packet.delivery,
+    );
 }
 
 /// One open's async hub: its endpoint and the senders to its tasks.

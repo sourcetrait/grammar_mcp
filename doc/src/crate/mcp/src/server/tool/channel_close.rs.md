@@ -19,4 +19,6 @@ command cannot fail. The path is the host's own, made by `interface channel
 open` in the transient base and never caller-supplied, which is what makes a
 recursive remove bounded here rather than a hazard. `remove_channel_dir`
 forgets the path as it removes it, so the host's end never removes a directory
-that took the name afterwards.
+that took the name afterwards. The peer links hold the inbox gone before it is
+removed (`channel_open.rs`'s `tell_inbox`), so a file they land after fails
+rather than recreating it.

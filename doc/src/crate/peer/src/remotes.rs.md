@@ -21,6 +21,13 @@ The fields as the file writes them, so `list` and `get` show what the operator
 wrote, a `~` path among them; each is checked when read and parsed again where
 it is used.
 
+### fn peer_cert
+The certificate's path expands where a link needs it, `~` from `$HOME` and
+each `$VAR` from the environment, an unset one from the stand-ins its
+controller passed as data (`ExpandDefault`), the same the controller's own
+expansion takes (`crate/mcp`'s `config.rs`), so a path reads alike on either
+side.
+
 ## fn bind_address
 A bare `ip` binds port 0, the kernel's choice, so a `listen` without a port
 listens on a random one.

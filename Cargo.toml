@@ -5,6 +5,7 @@ members = [
   "crate/nutype",
   "crate/protocol",
   "crate/channel",
+  "crate/peer",
   "crate/engine",
   "crate/operator",
   "crate/client",
@@ -82,6 +83,7 @@ sourcetrait_grammar_channel = { path = "crate/channel" }
 sourcetrait_grammar_client = { path = "crate/client" }
 sourcetrait_grammar_engine = { path = "crate/engine" }
 sourcetrait_grammar_operator = { path = "crate/operator" }
+sourcetrait_grammar_peer = { path = "crate/peer" }
 sourcetrait_grammar_protocol = { path = "crate/protocol" }
 
 sourcetrait_common = {

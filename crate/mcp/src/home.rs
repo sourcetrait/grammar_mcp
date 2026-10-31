@@ -39,6 +39,11 @@ pub(crate) fn uenv_partner(standard: &str) -> Option<&'static str> {
     UENV_HOMES.iter().find(|(_, name)| *name == standard).map(|(uenv, _)| *uenv)
 }
 
+/// Every home variable: each UENV home, then the standard behind it.
+pub(crate) fn home_vars() -> impl Iterator<Item = &'static str> {
+    UENV_HOMES.iter().flat_map(|(uenv, standard)| [*uenv, *standard])
+}
+
 /// The absolute path a variable holds; an empty or a relative one is ignored.
 pub(crate) fn env_dir(name: &str) -> Option<PathBuf> {
     let value = std::env::var_os(name)?;

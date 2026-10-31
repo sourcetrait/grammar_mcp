@@ -6767,6 +6767,7 @@ dependencies = [
  "sourcetrait_grammar_client",
  "sourcetrait_grammar_engine",
  "sourcetrait_grammar_operator",
+ "sourcetrait_grammar_peer",
  "sourcetrait_grammar_protocol",
  "sourcetrait_process",
  "srcert_lib",
@@ -6774,10 +6775,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
- "tokio-util",
  "toml 1.1.8+spec-1.1.0",
- "toml_edit 0.25.17+spec-1.1.0",
- "zstd",
 ]
 
 [[package]]
@@ -6792,6 +6790,32 @@ dependencies = [
  "sourcetrait_grammar_protocol",
  "sourcetrait_process",
  "tokio",
+]
+
+[[package]]
+name = "sourcetrait_grammar_peer"
+version = "0.0.0-9"
+dependencies = [
+ "bitcode",
+ "futures-util",
+ "nu-engine",
+ "nu-protocol",
+ "nuon",
+ "nuval",
+ "rkyv",
+ "rustls",
+ "serde",
+ "shellexpand",
+ "sourcetrait_common",
+ "sourcetrait_grammar_channel",
+ "sourcetrait_grammar_protocol",
+ "tempfile",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "toml 1.1.8+spec-1.1.0",
+ "toml_edit 0.25.17+spec-1.1.0",
+ "zstd",
 ]
 
 [[package]]

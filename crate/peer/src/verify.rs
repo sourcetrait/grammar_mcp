@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! The known-public-key mTLS verifier: a peer's leaf must match a known key.
 use crate::*;
 

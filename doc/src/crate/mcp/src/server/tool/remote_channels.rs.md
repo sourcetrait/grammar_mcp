@@ -1,23 +1,13 @@
 # remote_channels.rs
 
-## type RemoteRow
-The protocol crate's `RemoteChannelRow` under the name the commands use.
+## fn remote_answer
+Each remote command is the peer links' system's (`crate/peer`), its answer the
+wire's result or refusal, rendered here as the tool always rendered it: the
+rows, a row, the endpoint, or nothing. The refusals keep their kinds,
+`remote::channel::*` and `remote::file`, through the runtime error the face
+converts.
 
-## fn remote_rows
-The file's entries and every live alias, an alias live but since unset among
-them, so a link that outlives its entry stays visible.
-
-## fn live_remotes
-Each registry is read under its own lock, released before the next is taken:
-`promote_listener` (`link.rs`) takes the listeners' lock and then the links',
-so holding both here in the other order could deadlock.
-
-## fn remote_to_open
-A listen or a connect on a live alias is refused `remote::channel::already_open`, a
-listener still waiting among them: a second listen would otherwise bind a
-second port and leave the first's accept running.
-
-## fn link_keys
-The identity is the config's, read once at the start; the peer's certificate is
-the entry's, expanded at each open, so an edited entry takes effect at the next
-listen or connect.
+## fn remote_gate
+A listen or a connect needs a verified Channel, since a link's reports and
+relays ride it. The face is the controller of both systems, so it reads the
+Channel's state before routing either; a close needs none.

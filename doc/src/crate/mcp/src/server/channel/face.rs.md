@@ -2,33 +2,51 @@
 
 The Channel's and the remote channels' commands and the Channel's shutdown,
 shared by the client and the test driver, so both entries serve them from one
-piece of code. The face is the Channel's controller: it starts the Channel's
-system (`crate/channel`) and holds it, binds each async open's hub, keeps the
-open's verify timer, and pumps the system's lines into the hub.
+piece of code. The face is the controller of two systems, the Channel's
+(`crate/channel`) and the peer links' (`crate/peer`): it starts and holds both,
+binds each async open's hub, keeps the open's verify timer, pumps the Channel's
+lines into the hub, and hands the links' relays and reports to the Channel.
 
 ## struct ChannelFace
-What a server needs of the Channel: its system, the open's hub, the lock that
-serializes an open, the identity its greeting carries, and the remote links.
-Both servers serve every Channel command and every remote channel command
-through it (`server/client.rs`, `server/tool/interface.rs`).
+What a server needs of the Channel and the remote channels: their two systems,
+the open's hub, the lock that serializes an open, and the identity its greeting
+carries. Both servers serve every Channel command and every remote channel
+command through it (`server/client.rs`, `server/tool/interface.rs`).
 
 ### field channel
 The system this face started. An eval reaches the same one through the bridge
 (`bridge.rs`), which the face's start fills, so what a body emits on is what
 the face serves.
 
+### field peer
+The peer links' system this face started. A body's remote send reaches it
+through the bridge as a Channel send reaches the Channel.
+
 ### field channel_open_lock
 Async because it is held across the open's requests and its hub's bind.
 
-### field remote_links
-A clone of link.rs's process-wide registry, so the commands and the grimm sends
-see one map. It is keyed by alias in both roles: a listener registers its link
-under the alias it opened, as a connector does.
-
 ## fn ChannelFace::start
-The system starts on the config's thresholds, its handler the face's pump, and
-the bridge takes it at once, so the code not yet handed the face reaches the
-Channel the agent opens.
+The Channel's system starts first, on the config's thresholds, its handler the
+face's hub pump; the peer links' after it, their handler holding the Channel,
+so a link's first relay has a Channel to reach. The bridge takes both at once,
+so the code not yet handed the face reaches the systems the agent uses.
+
+## fn peer_params
+The links take the config's values as plain strings, every path expanded: the
+key pair as the config resolved it, the remotes file the config's sibling, and
+the stand-ins a certificate path's unset variables expand to (`config.rs`'s
+`expand_defaults`), so the peer crate holds no copy of mcp's home model. The
+agent's config file is named for the refusal a host without `[identity]` gives.
+
+## struct PeerPump
+The face's handler of its peer links. A relay goes onto the Channel through its
+gate, as a body's send would, its files already in the inbox; a report is
+emitted from `mcp`, best effort. The links' control task awaits each before it
+takes the next, so the Channel takes them in the order the links sent them up.
+
+## fn relay_onto
+A relay the Channel refuses is logged by its delivery's id, the one record of
+a peer's message that reached no agent.
 
 ## struct Hub
 One async open's hub as the face holds it: its epoch, its endpoint, the queue

@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Remote links: two known-public-key mTLS connections to one peer.
 use crate::*;
 
@@ -18,70 +17,101 @@ pub(crate) struct RemoteLinkEntry {
     pub addr: std::net::SocketAddr,
 }
 
-/// Every open link, keyed by alias, behind a std Mutex an eval thread can take.
-static REMOTE_LINKS: LazyLock<Arc<std::sync::Mutex<HashMap<String, RemoteLinkEntry>>>> =
-    LazyLock::new(|| Arc::new(std::sync::Mutex::new(HashMap::new())));
-
-/// The shared registry; the Channel's face holds a clone, grimm sends reach it.
-pub(crate) fn remote_links() -> Arc<std::sync::Mutex<HashMap<String, RemoteLinkEntry>>> {
-    REMOTE_LINKS.clone()
-}
-
 /// A listener bound and awaiting its peer: its address and its accept's cancel.
 pub(crate) struct BoundListener {
     pub addr: std::net::SocketAddr,
-    seq: u64,
-    cancel: tku::CancellationToken,
-    released: Option<tk::oneshot::Receiver<()>>,
+    pub seq: u64,
+    pub cancel: tku::CancellationToken,
+    pub released: Option<tk::oneshot::Receiver<()>>,
 }
 
-/// Bound-but-unpaired listeners, keyed by alias.
-static BOUND_LISTENERS: LazyLock<Arc<std::sync::Mutex<HashMap<String, BoundListener>>>> =
-    LazyLock::new(|| Arc::new(std::sync::Mutex::new(HashMap::new())));
-
-/// Each bound listener's identity, so a task leaves only its own entry.
-static LISTENER_SEQ: AtomicU64 = AtomicU64::new(0);
-
-/// The shared bound-listener registry; remote_channels reads it for `listening`.
-pub(crate) fn bound_listeners() -> Arc<std::sync::Mutex<HashMap<String, BoundListener>>> {
-    BOUND_LISTENERS.clone()
+/// What the links send their system's controller, in the order they happen.
+pub(crate) enum Up {
+    Relay(Relay),
+    Report(RemoteChannelEvent),
 }
 
-/// Cancel a bound listener's accept; false when none is bound under `alias`.
-pub(crate) async fn close_listener(alias: &str) -> bool {
-    let entry = bound_listeners()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .remove(alias);
-    let Some(mut entry) = entry else {
-        return false;
-    };
-    entry.cancel.cancel();
-    if let Some(released) = entry.released.take() {
-        let _ = tk::timeout(CLOSE_FRAME_GRACE, released).await;
+/// What a link's own task tells its system, which holds the registries.
+pub(crate) enum LinkEvent {
+    /// A connector's two connections are up, its request to answer.
+    Dialed {
+        alias: String,
+        addr: SocketAddr,
+        drivers: LinkDrivers,
+        reply: subsys::MsgID,
+    },
+    /// A connector's dial failed.
+    DialFailed {
+        alias: String,
+        reason: String,
+        reply: subsys::MsgID,
+    },
+    /// A listener paired, its link registered if the listener is still bound.
+    Paired {
+        alias: String,
+        seq: u64,
+        link: RemoteLinkEntry,
+        promoted: tk::oneshot::Sender<Result<(), RemoteLinkEntry>>,
+    },
+    /// A listener's accept failed after its bind.
+    ListenFailed {
+        alias: String,
+        seq: u64,
+        reason: String,
+    },
+    /// A closed listener let its port go, its close to answer.
+    Released { reply: subsys::MsgID },
+    /// A link's drivers ended.
+    Ended { alias: String, peer_nom: String },
+}
+
+/// What every link's tasks share: the way up, and the Channel's inbox.
+#[derive(Clone)]
+pub(crate) struct LinkContext {
+    ups: tk::UnboundedSender<Up>,
+    inbox: Arc<RwLock<Option<PathBuf>>>,
+}
+
+impl LinkContext {
+    pub(crate) fn new(ups: tk::UnboundedSender<Up>) -> Self {
+        Self {
+            ups,
+            inbox: Arc::new(RwLock::new(None)),
+        }
     }
-    true
-}
 
-/// Find the open link to `mcp_nom` and enqueue a send on it.
-pub(crate) fn find_link_send(
-    mcp_nom: &str,
-    id: String,
-    model: String,
-    event_nuon: String,
-    payloads: Vec<(String, Vec<u8>)>,
-) -> Result<(), String> {
-    let links = remote_links();
-    let guard = links.lock().unwrap_or_else(|e| e.into_inner());
-    let entry = guard
-        .values()
-        .find(|e| e.handle.remote_mcp_nom == mcp_nom)
-        .ok_or_else(|| format!("no open remote link to mcp_nom `{mcp_nom}`"))?;
-    entry.handle.enqueue_send(id, model, event_nuon, payloads)
+    /// The Channel's inbox as its controller last told it.
+    pub(crate) fn inbox(&self) -> Option<PathBuf> {
+        self.inbox.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// Take the Channel's inbox, or its absence, as the controller tells it.
+    pub(crate) fn set_inbox(
+        &self,
+        inbox: Option<PathBuf>,
+    ) {
+        *self.inbox.write().unwrap_or_else(|e| e.into_inner()) = inbox;
+    }
+
+    /// A lifecycle or delivery report, behind the reports and relays before it.
+    pub(crate) fn report(
+        &self,
+        event: RemoteChannelEvent,
+    ) {
+        let _ = self.ups.send(Up::Report(event));
+    }
+
+    /// A peer's message for the Channel, behind the reports and relays before it.
+    fn relay(
+        &self,
+        relay: Relay,
+    ) {
+        let _ = self.ups.send(Up::Relay(relay));
+    }
 }
 
 /// Whether a dest is a relative path of plain components, never an escape.
-pub(crate) fn safe_dest(dest: &str) -> bool {
+pub fn safe_dest(dest: &str) -> bool {
     let path = std::path::Path::new(dest);
     !dest.is_empty()
         && path.is_relative()
@@ -104,184 +134,162 @@ pub(crate) fn delivery_path(
 /// How long a connector's dial may take before the open fails.
 const CONNECT_TIMEOUT: tk::TkDuration = tk::TkDuration::from_secs(20);
 
-/// Connect to `alias`'s peer at `addr`, then watch for its teardown behind.
-pub(crate) async fn connect_remote(
-    self_mcp_nom: &datum::NomPair,
-    alias: String,
-    keys: LinkKeys,
-    addr: SocketAddr,
-) -> Result<(), String> {
-    let (handle, msg_join, file_join) =
-        match tk::timeout(CONNECT_TIMEOUT, connect_link(self_mcp_nom, &keys, addr)).await {
-            Ok(Ok(drivers)) => drivers,
-            Ok(Err(e)) => return Err(format!("connect {addr}: {e}")),
-            Err(_) => {
-                return Err(format!(
-                    "connect {addr} timed out after {}s",
-                    CONNECT_TIMEOUT.as_secs(),
-                ));
-            }
-        };
-    let peer_nom = handle.remote_mcp_nom.clone();
-    remote_links()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(alias.clone(), RemoteLinkEntry { handle, addr });
-    tk::spawn(async move {
-        let _ = msg_join.await;
-        let _ = file_join.await;
-        deregister_if_ours(&alias, &peer_nom);
-        emit_lifecycle(MODEL_DISCONNECTED, &alias, &peer_nom);
-    });
-    Ok(())
+/// A connector's dial: its alias's peer at its address, under this host's nom.
+pub(crate) struct Dial {
+    pub self_mcp_nom: String,
+    pub alias: String,
+    pub keys: LinkKeys,
+    pub addr: SocketAddr,
+    pub reply: subsys::MsgID,
 }
 
-/// Listen for `alias`'s peer on `bind`, answering the address bound.
-pub(crate) async fn listen_remote(
-    self_mcp_nom: &datum::NomPair,
-    alias: String,
-    keys: LinkKeys,
-    bind: SocketAddr,
-) -> Result<SocketAddr, String> {
-    let (listener, acceptor) = bind_listener(&keys, bind)
-        .await
-        .map_err(|e| format!("bind {bind}: {e}"))?;
-    let bound = listener
-        .local_addr()
-        .map_err(|e| format!("bind {bind}: {e}"))?;
-    let seq = LISTENER_SEQ.fetch_add(1, Ordering::Relaxed);
-    let cancel = tku::CancellationToken::new();
-    let (released_tx, released_rx) = tk::oneshot::channel::<()>();
-    bound_listeners().lock().unwrap_or_else(|e| e.into_inner()).insert(
-        alias.clone(),
-        BoundListener {
-            addr: bound,
-            seq,
-            cancel: cancel.clone(),
-            released: Some(released_rx),
-        },
-    );
-    let self_mcp_nom = self_mcp_nom.clone();
-    tk::spawn(async move {
-        let accepted = tokio::select! {
-            biased;
-            _ = cancel.cancelled() => None,
-            accepted = accept_and_pair(&self_mcp_nom, listener, acceptor) => Some(accepted),
-        };
-        match accepted {
-            None => {
-                let _ = released_tx.send(());
-                emit_closed(&alias);
+impl Dial {
+    /// Dial on a task of its own and tell the system how it went.
+    pub(crate) fn spawn(
+        self,
+        ctx: LinkContext,
+        events: tk::UnboundedSender<LinkEvent>,
+    ) {
+        tk::spawn(async move {
+            let Self {
+                self_mcp_nom,
+                alias,
+                keys,
+                addr,
+                reply,
+            } = self;
+            let dialed = tk::timeout(CONNECT_TIMEOUT, connect_link(&self_mcp_nom, &keys, addr, &ctx));
+            let event = match dialed.await {
+                Ok(Ok(drivers)) => LinkEvent::Dialed {
+                    alias,
+                    addr,
+                    drivers,
+                    reply,
+                },
+                Ok(Err(e)) => LinkEvent::DialFailed {
+                    alias,
+                    reason: format!("connect {addr}: {e}"),
+                    reply,
+                },
+                Err(_) => LinkEvent::DialFailed {
+                    alias,
+                    reason: format!("connect {addr} timed out after {}s", CONNECT_TIMEOUT.as_secs()),
+                    reply,
+                },
+            };
+            if let Err(tk::SendError(LinkEvent::Dialed { drivers, .. })) = events.send(event) {
+                drivers.0.cancel();
             }
-            Some(Ok((handle, msg_join, file_join))) => {
-                let peer_nom = handle.remote_mcp_nom.clone();
-                let link = RemoteLinkEntry { handle, addr: bound };
-                if let Err(link) = promote_listener(&alias, seq, link) {
-                    link.handle.cancel();
-                    let _ = released_tx.send(());
+        });
+    }
+}
+
+/// A bound listener's accept: its alias's peer, paired, under this host's nom.
+pub(crate) struct Listen {
+    pub self_mcp_nom: String,
+    pub alias: String,
+    pub seq: u64,
+    pub bound: SocketAddr,
+    pub listener: tk::TcpListener,
+    pub acceptor: tls::TlsAcceptor,
+    pub cancel: tku::CancellationToken,
+    pub released: tk::oneshot::Sender<()>,
+}
+
+impl Listen {
+    /// Accept on a task of its own, its link offered to the system once paired.
+    pub(crate) fn spawn(
+        self,
+        ctx: LinkContext,
+        events: tk::UnboundedSender<LinkEvent>,
+    ) {
+        tk::spawn(async move {
+            let Self {
+                self_mcp_nom,
+                alias,
+                seq,
+                bound,
+                listener,
+                acceptor,
+                cancel,
+                released,
+            } = self;
+            let accepted = tokio::select! {
+                biased;
+                _ = cancel.cancelled() => None,
+                accepted = accept_and_pair(&self_mcp_nom, listener, acceptor, &ctx) => Some(accepted),
+            };
+            match accepted {
+                None => {
+                    let _ = released.send(());
+                    ctx.report(closed(&alias));
+                }
+                Some(Ok((handle, msg_join, file_join))) => {
+                    let peer_nom = handle.remote_mcp_nom.clone();
+                    let link = RemoteLinkEntry { handle, addr: bound };
+                    let (promoted, answer) = tk::oneshot::channel();
+                    let paired = LinkEvent::Paired {
+                        alias: alias.clone(),
+                        seq,
+                        link,
+                        promoted,
+                    };
+                    let refused = match events.send(paired) {
+                        Ok(()) => match answer.await {
+                            Ok(Ok(())) => None,
+                            Ok(Err(link)) => Some(link),
+                            Err(_) => None,
+                        },
+                        Err(tk::SendError(LinkEvent::Paired { link, .. })) => Some(link),
+                        Err(_) => None,
+                    };
+                    if let Some(link) = refused {
+                        link.handle.cancel();
+                        let _ = released.send(());
+                        let _ = msg_join.await;
+                        let _ = file_join.await;
+                        ctx.report(closed(&alias));
+                        return;
+                    }
+                    drop(released);
                     let _ = msg_join.await;
                     let _ = file_join.await;
-                    emit_closed(&alias);
-                    return;
+                    let _ = events.send(LinkEvent::Ended { alias, peer_nom });
                 }
-                drop(released_tx);
-                emit_lifecycle(MODEL_CONNECTED, &alias, &peer_nom);
-                let _ = msg_join.await;
-                let _ = file_join.await;
-                deregister_if_ours(&alias, &peer_nom);
-                emit_lifecycle(MODEL_DISCONNECTED, &alias, &peer_nom);
+                Some(Err(e)) => {
+                    drop(released);
+                    let _ = events.send(LinkEvent::ListenFailed {
+                        alias,
+                        seq,
+                        reason: e.to_string(),
+                    });
+                }
             }
-            Some(Err(e)) => {
-                unlisten(&alias, seq);
-                drop(released_tx);
-                emit_open_failed(&alias, "listen", &e.to_string());
-            }
-        }
+        });
+    }
+}
+
+/// Watch a dialed link's drivers end, then tell the system.
+pub(crate) fn watch_link(
+    alias: String,
+    peer_nom: String,
+    joins: (tk::JoinHandle<()>, tk::JoinHandle<()>),
+    events: tk::UnboundedSender<LinkEvent>,
+) {
+    tk::spawn(async move {
+        let _ = joins.0.await;
+        let _ = joins.1.await;
+        let _ = events.send(LinkEvent::Ended { alias, peer_nom });
     });
-    Ok(bound)
 }
 
-/// Move a paired listener's link into the registry, unless it was closed first.
-fn promote_listener(
-    alias: &str,
-    seq: u64,
-    link: RemoteLinkEntry,
-) -> Result<(), RemoteLinkEntry> {
-    let listeners = bound_listeners();
-    let mut bound = listeners.lock().unwrap_or_else(|e| e.into_inner());
-    if bound.get(alias).is_none_or(|entry| entry.seq != seq) {
-        return Err(link);
+/// remote/channel/Disconnected {remote}: a listener closed before it paired.
+pub(crate) fn closed(alias: &str) -> RemoteChannelEvent {
+    RemoteChannelEvent::Disconnected {
+        remote: alias.to_string(),
+        mcp_nom: None,
+        error: None,
     }
-    remote_links()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(alias.to_string(), link);
-    bound.remove(alias);
-    Ok(())
-}
-
-/// Drop the bound-listener entry for `alias` if it is still this task's.
-fn unlisten(
-    alias: &str,
-    seq: u64,
-) {
-    let listeners = bound_listeners();
-    let mut bound = listeners.lock().unwrap_or_else(|e| e.into_inner());
-    if bound.get(alias).is_some_and(|entry| entry.seq == seq) {
-        bound.remove(alias);
-    }
-}
-
-/// Drop `alias`'s link only while it is still the one this task established.
-fn deregister_if_ours(
-    alias: &str,
-    peer_nom: &str,
-) {
-    let links_arc = remote_links();
-    let mut links = links_arc.lock().unwrap_or_else(|e| e.into_inner());
-    if links
-        .get(alias)
-        .is_some_and(|e| e.handle.remote_mcp_nom == peer_nom)
-    {
-        links.remove(alias);
-    }
-}
-
-/// Emit a host-origin lifecycle packet {remote, mcp_nom} onto the local Channel.
-fn emit_lifecycle(
-    model: &str,
-    remote: &str,
-    peer_nom: &str,
-) {
-    let span = nu::Span::unknown();
-    let mut event = nu::Record::new();
-    event.insert("remote", nu::Value::string(remote.to_string(), span));
-    event.insert("mcp_nom", nu::Value::string(peer_nom.to_string(), span));
-    push_report(model, nu::Value::record(event, span));
-}
-
-/// Emit remote/channel/Disconnected {remote}: a listener closed before it paired.
-fn emit_closed(alias: &str) {
-    let span = nu::Span::unknown();
-    let mut event = nu::Record::new();
-    event.insert("remote", nu::Value::string(alias.to_string(), span));
-    push_report(MODEL_DISCONNECTED, nu::Value::record(event, span));
-}
-
-/// Emit remote/channel/Disconnected {remote, error} when a link never established.
-fn emit_open_failed(
-    alias: &str,
-    kind: &str,
-    message: &str,
-) {
-    let span = nu::Span::unknown();
-    let mut err = nu::Record::new();
-    err.insert("kind", nu::Value::string(kind.to_string(), span));
-    err.insert("message", nu::Value::string(message.to_string(), span));
-    let mut event = nu::Record::new();
-    event.insert("remote", nu::Value::string(alias.to_string(), span));
-    event.insert("error", nu::Value::record(err, span));
-    push_report(MODEL_DISCONNECTED, nu::Value::record(event, span));
 }
 
 /// The certificates a link presents and matches: this host's pair, the peer's.
@@ -406,13 +414,14 @@ fn checked(frame: InitiatorToAcceptor) -> Result<InitiatorToAcceptor, String> {
 }
 
 /// A spawned link: its handle and both drivers' join handles.
-type LinkDrivers = (RemoteLinkHandle, tk::JoinHandle<()>, tk::JoinHandle<()>);
+pub(crate) type LinkDrivers = (RemoteLinkHandle, tk::JoinHandle<()>, tk::JoinHandle<()>);
 
 /// Connect as the initiator: both mTLS connections, handshaked, then driven.
-async fn connect_link(
-    self_mcp_nom: &datum::NomPair,
+pub(crate) async fn connect_link(
+    self_mcp_nom: &str,
     keys: &LinkKeys,
     addr: SocketAddr,
+    ctx: &LinkContext,
 ) -> io::Result<LinkDrivers> {
     let connector = tls::TlsConnector::from(client_config(keys)?);
     let (remote_msg, msg_read, msg_write) =
@@ -424,11 +433,12 @@ async fn connect_link(
         remote_msg,
         (msg_read, msg_write),
         (file_read, file_write),
+        ctx,
     ))
 }
 
 /// Bind the listener and build its TLS acceptor, the listen's synchronous half.
-async fn bind_listener(
+pub(crate) async fn bind_listener(
     keys: &LinkKeys,
     bind: SocketAddr,
 ) -> io::Result<(tk::TcpListener, tls::TlsAcceptor)> {
@@ -440,9 +450,10 @@ async fn bind_listener(
 
 /// Accept one peer's two connections on a bound listener and drive them.
 async fn accept_and_pair(
-    self_mcp_nom: &datum::NomPair,
+    self_mcp_nom: &str,
     listener: tk::TcpListener,
     acceptor: tls::TlsAcceptor,
+    ctx: &LinkContext,
 ) -> io::Result<LinkDrivers> {
     let mut message: Option<(String, AcceptFramedRead, AcceptFramedWrite)> = None;
     let mut file: Option<(String, AcceptFramedRead, AcceptFramedWrite)> = None;
@@ -462,6 +473,7 @@ async fn accept_and_pair(
         remote_msg,
         (msg_read, msg_write),
         (file_read, file_write),
+        ctx,
     ))
 }
 
@@ -470,12 +482,13 @@ fn spawn_initiator_drivers(
     remote_mcp_nom: String,
     message: (InitFramedRead, InitFramedWrite),
     file: (InitFramedRead, InitFramedWrite),
+    ctx: &LinkContext,
 ) -> LinkDrivers {
     let cancel = tku::CancellationToken::new();
     let (msg_out_tx, msg_out_rx) = tk::unbounded_channel::<MsgFrame>();
     let (file_out_tx, file_out_rx) = tk::unbounded_channel::<FileFrame>();
-    let recv = RecvContext::new(&remote_mcp_nom);
-    let send = SendTracker::new(&remote_mcp_nom);
+    let recv = RecvContext::new(&remote_mcp_nom, ctx);
+    let send = SendTracker::new(&remote_mcp_nom, ctx);
     let message_join = tk::spawn(run_initiator_message(
         cancel.clone(),
         message.0,
@@ -510,12 +523,13 @@ fn spawn_acceptor_drivers(
     remote_mcp_nom: String,
     message: (AcceptFramedRead, AcceptFramedWrite),
     file: (AcceptFramedRead, AcceptFramedWrite),
+    ctx: &LinkContext,
 ) -> LinkDrivers {
     let cancel = tku::CancellationToken::new();
     let (msg_out_tx, msg_out_rx) = tk::unbounded_channel::<MsgFrame>();
     let (file_out_tx, file_out_rx) = tk::unbounded_channel::<FileFrame>();
-    let recv = RecvContext::new(&remote_mcp_nom);
-    let send = SendTracker::new(&remote_mcp_nom);
+    let recv = RecvContext::new(&remote_mcp_nom, ctx);
+    let send = SendTracker::new(&remote_mcp_nom, ctx);
     let message_join = tk::spawn(run_acceptor_message(
         cancel.clone(),
         message.0,
@@ -583,13 +597,18 @@ struct RecvContext {
     slots: Arc<std::sync::Mutex<HashMap<String, DeliverSlot>>>,
     /// The peer's McpNom - the `from = remote/channel/<nom>` a relayed packet gets.
     peer_nom: String,
+    ctx: LinkContext,
 }
 
 impl RecvContext {
-    fn new(peer_nom: &str) -> Self {
+    fn new(
+        peer_nom: &str,
+        ctx: &LinkContext,
+    ) -> Self {
         Self {
             slots: Arc::new(std::sync::Mutex::new(HashMap::new())),
             peer_nom: peer_nom.to_string(),
+            ctx: ctx.clone(),
         }
     }
 }
@@ -600,6 +619,7 @@ struct SendTracker {
     sends: Arc<std::sync::Mutex<HashMap<String, PendingSend>>>,
     /// The peer's McpNom, stamped into the Sent/Unsent report event.
     peer_nom: String,
+    ctx: LinkContext,
 }
 
 /// One send's unwritten file dests and whether its Deliver is still unwritten.
@@ -615,11 +635,43 @@ impl PendingSend {
 }
 
 impl SendTracker {
-    fn new(peer_nom: &str) -> Self {
+    fn new(
+        peer_nom: &str,
+        ctx: &LinkContext,
+    ) -> Self {
         Self {
             sends: Arc::new(std::sync::Mutex::new(HashMap::new())),
             peer_nom: peer_nom.to_string(),
+            ctx: ctx.clone(),
         }
+    }
+
+    /// A send written whole: its Sent report.
+    fn report_sent(
+        &self,
+        id: &str,
+    ) {
+        self.ctx.report(RemoteChannelEvent::Sent {
+            id: id.to_string(),
+            mcp_nom: self.peer_nom.clone(),
+        });
+    }
+
+    /// A send that failed: its Unsent report.
+    fn report_unsent(
+        &self,
+        id: &str,
+        kind: &str,
+        message: &str,
+    ) {
+        self.ctx.report(RemoteChannelEvent::Unsent {
+            id: id.to_string(),
+            mcp_nom: self.peer_nom.clone(),
+            error: RemoteFailure {
+                kind: kind.to_string(),
+                message: message.to_string(),
+            },
+        });
     }
 
     /// Register a send before its frames are queued.
@@ -667,7 +719,7 @@ impl SendTracker {
             complete
         };
         if done {
-            report_sent(&self.peer_nom, id);
+            self.report_sent(id);
         }
     }
 
@@ -691,7 +743,7 @@ impl SendTracker {
             complete
         };
         if done {
-            report_sent(&self.peer_nom, id);
+            self.report_sent(id);
         }
     }
 
@@ -709,7 +761,7 @@ impl SendTracker {
             .remove(id)
             .is_some();
         if present {
-            report_unsent(&self.peer_nom, id, kind, message);
+            self.report_unsent(id, kind, message);
         }
     }
 
@@ -724,7 +776,7 @@ impl SendTracker {
             map.drain().map(|(id, _)| id).collect()
         };
         for id in drained {
-            report_unsent(&self.peer_nom, &id, kind, message);
+            self.report_unsent(&id, kind, message);
         }
     }
 }
@@ -785,27 +837,20 @@ fn try_finalize(
     }
 }
 
-/// The running Channel's inbox, read at each chunk since each open makes its own.
-async fn channel_inbox() -> io::Result<PathBuf> {
-    let host = host_channel().ok_or_else(|| io::Error::other("the Channel has no inbox"))?;
-    let status = host.channel.request(StatusRequest).await.map_err(io::Error::other)?;
-    status
-        .inbox
-        .map(PathBuf::from)
-        .ok_or_else(|| io::Error::other("the Channel has no inbox"))
-}
-
 /// Append one chunk to `<inbox>/<peer_nom>/<id>/<dest>`; true iff `last`.
 fn land_file_chunk(
     ctx: &RecvContext,
-    inbox: &Path,
     id: &str,
     dest: &str,
     seq: u32,
     bytes: &[u8],
     last: bool,
 ) -> io::Result<bool> {
-    let path = delivery_path(inbox, &ctx.peer_nom, id, dest)
+    let inbox = ctx
+        .ctx
+        .inbox()
+        .ok_or_else(|| io::Error::other("the Channel has no inbox"))?;
+    let path = delivery_path(&inbox, &ctx.peer_nom, id, dest)
         .ok_or_else(|| io::Error::other("a delivery's path that isn't beneath the inbox"))?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -819,7 +864,7 @@ fn land_file_chunk(
     Ok(last)
 }
 
-/// Relay an inbound delivery onto the local Channel through its verified gate.
+/// Relay an inbound delivery up for the Channel, its event made data.
 fn relay_to_channel(
     ctx: &RecvContext,
     id: &str,
@@ -836,17 +881,14 @@ fn relay_to_channel(
         .map_err(|e| ("event_unparseable".to_string(), e.to_string()))?;
     let event = rewrite_spill_pointer(event, &ctx.peer_nom, id);
     let event = NuVal::try_from_nu(event).map_err(|e| ("render".to_string(), e.to_string()))?;
-    let host = host_channel().ok_or_else(|| {
-        ("channel".to_string(), ChannelSendError::NotOpen.message().to_string())
-    })?;
-    host.post(Post {
-        emit: EmitRequest {
-            from: format!("{REMOTE_RESERVED_PREFIX}channel/{}", ctx.peer_nom),
+    ctx.ctx.relay(Relay {
+        packet: RemotePacket {
+            delivery: id.to_string(),
+            origin: ctx.peer_nom.clone(),
             model: info.model.clone(),
             event,
-            attached: has_files.then(|| format!("{}/{}", ctx.peer_nom, id)),
         },
-        delivery: Some(id.to_string()),
+        files: has_files,
     });
     Ok(())
 }
@@ -873,55 +915,6 @@ fn rewrite_spill_pointer(
     nu::Value::record(new, span)
 }
 
-/// Push a Sent report {id, mcp_nom} onto the LOCAL (sender's own) Channel.
-fn report_sent(
-    peer_nom: &str,
-    id: &str,
-) {
-    let span = nu::Span::unknown();
-    let mut event = nu::Record::new();
-    event.insert("id", nu::Value::string(id.to_string(), span));
-    event.insert("mcp_nom", nu::Value::string(peer_nom.to_string(), span));
-    push_report(MODEL_SENT, nu::Value::record(event, span));
-}
-
-/// Push an Unsent report onto the sender's own Channel.
-fn report_unsent(
-    peer_nom: &str,
-    id: &str,
-    kind: &str,
-    message: &str,
-) {
-    let span = nu::Span::unknown();
-    let mut err = nu::Record::new();
-    err.insert("kind", nu::Value::string(kind.to_string(), span));
-    err.insert("message", nu::Value::string(message.to_string(), span));
-    let mut event = nu::Record::new();
-    event.insert("id", nu::Value::string(id.to_string(), span));
-    event.insert("mcp_nom", nu::Value::string(peer_nom.to_string(), span));
-    event.insert("error", nu::Value::record(err, span));
-    push_report(MODEL_UNSENT, nu::Value::record(event, span));
-}
-
-/// Emit a host-origin packet onto the local Channel, best effort.
-fn push_report(
-    model: &str,
-    event: nu::Value,
-) {
-    let (Some(host), Ok(event)) = (host_channel(), NuVal::try_from_nu(event)) else {
-        return;
-    };
-    host.post(Post {
-        emit: EmitRequest {
-            from: FROM_MCP.to_string(),
-            model: model.to_string(),
-            event,
-            attached: None,
-        },
-        delivery: None,
-    });
-}
-
 /// Handle one inbound message-connection frame (a Deliver to relay).
 fn handle_msg_frame(
     recv: &RecvContext,
@@ -945,7 +938,7 @@ fn handle_msg_frame(
 }
 
 /// Handle one inbound file-connection frame (receiver side).
-async fn handle_file_frame(
+fn handle_file_frame(
     recv: &RecvContext,
     frame: FileFrame,
 ) {
@@ -964,11 +957,7 @@ async fn handle_file_frame(
         eprintln!("grammar: remote file chunk for `{id}` has unsafe dest `{dest}`; dropped");
         return;
     }
-    let landed = match channel_inbox().await {
-        Ok(inbox) => land_file_chunk(recv, &inbox, &id, &dest, seq, &bytes, last),
-        Err(e) => Err(e),
-    };
-    match landed {
+    match land_file_chunk(recv, &id, &dest, seq, &bytes, last) {
         Ok(true) => record_file_done(recv, &id, &dest),
         Ok(false) => {}
         Err(e) => eprintln!("grammar: remote file chunk write failed for `{id}`/`{dest}`: {e}"),
@@ -984,7 +973,7 @@ type InitFramedWrite = tku::FramedWrite<InitWriteHalf, BitcodeCodec<InitiatorToA
 async fn connect_conn(
     connector: &tls::TlsConnector,
     addr: std::net::SocketAddr,
-    self_mcp_nom: &datum::NomPair,
+    self_mcp_nom: &str,
     stream: RemoteStream,
 ) -> io::Result<(String, InitFramedRead, InitFramedWrite)> {
     let tcp = tk::TcpStream::connect(addr).await?;
@@ -995,7 +984,7 @@ async fn connect_conn(
     let mut framed_write = tku::FramedWrite::new(write, BitcodeCodec::<InitiatorToAcceptor>::new());
     framed_write
         .send(InitiatorToAcceptor::Hello {
-            mcp_nom: self_mcp_nom.as_str().to_string(),
+            mcp_nom: self_mcp_nom.to_string(),
             stream,
         })
         .await?;
@@ -1093,7 +1082,7 @@ async fn run_initiator_file(
                 None => break,
             },
             incoming = framed_read.next() => match incoming {
-                Some(Ok(AcceptorToInitiator::File(frame))) => handle_file_frame(&recv, frame).await,
+                Some(Ok(AcceptorToInitiator::File(frame))) => handle_file_frame(&recv, frame),
                 Some(Ok(AcceptorToInitiator::Close)) => {
                     let _ = framed_write.send(InitiatorToAcceptor::Close).await;
                     break;
@@ -1136,7 +1125,7 @@ type AcceptFramedWrite = tku::FramedWrite<AcceptWriteHalf, BitcodeCodec<Acceptor
 /// Accept one mTLS connection and answer the McpNom handshake.
 async fn accept_conn(
     acceptor: &tls::TlsAcceptor,
-    self_mcp_nom: &datum::NomPair,
+    self_mcp_nom: &str,
     tcp: tk::TcpStream,
 ) -> io::Result<(String, RemoteStream, AcceptFramedRead, AcceptFramedWrite)> {
     let tls = acceptor.accept(tcp).await?;
@@ -1154,7 +1143,7 @@ async fn accept_conn(
     }
     framed_write
         .send(AcceptorToInitiator::Hello {
-            mcp_nom: self_mcp_nom.as_str().to_string(),
+            mcp_nom: self_mcp_nom.to_string(),
         })
         .await?;
     Ok((remote, stream, framed_read, framed_write))
@@ -1242,7 +1231,7 @@ async fn run_acceptor_file(
                 None => break,
             },
             incoming = framed_read.next() => match incoming {
-                Some(Ok(InitiatorToAcceptor::File(frame))) => handle_file_frame(&recv, frame).await,
+                Some(Ok(InitiatorToAcceptor::File(frame))) => handle_file_frame(&recv, frame),
                 Some(Ok(InitiatorToAcceptor::Close)) => {
                     let _ = framed_write.send(AcceptorToInitiator::Close).await;
                     break;
